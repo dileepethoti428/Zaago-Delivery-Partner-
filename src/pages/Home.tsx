@@ -552,12 +552,7 @@ const Home = () => {
                 <CardContent className="p-8 text-center">
                   <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">No orders found</h3>
-                  <p className="text-muted-foreground mb-4">
-                    {isOnline 
-                      ? "New orders will appear here" 
-                      : "Go online to see available orders"
-                    }
-                  </p>
+                  <p className="text-muted-foreground mb-4">No orders currently, enjoy</p>
                   {!isOnline && (
                     <Button
                       onClick={() => setIsOnline(true)}

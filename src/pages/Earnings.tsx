@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -792,58 +793,60 @@ const Earnings = () => {
           <CardTitle>Recent Deliveries</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {recentEarnings.length > 0 ? recentEarnings.map((earning) => (
-              <div key={earning.id} className="p-4 bg-secondary/50 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                      <Truck className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{earning.customer_name}</p>
-                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        <span>{earning.time}</span>
-                        <span>•</span>
-                        <span>#{earning.order_id.slice(0, 8)}</span>
+          <ScrollArea className="h-80">
+            <div className="space-y-3 pr-4">
+              {recentEarnings.length > 0 ? recentEarnings.map((earning) => (
+                <div key={earning.id} className="p-4 bg-secondary/50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+                        <Truck className="w-5 h-5 text-primary" />
                       </div>
+                      <div>
+                        <p className="font-medium text-foreground">{earning.customer_name}</p>
+                        <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                          <Clock className="w-3 h-3" />
+                          <span>{earning.time}</span>
+                          <span>•</span>
+                          <span>#{earning.order_id.slice(0, 8)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="text-right">
+                      <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
                     </div>
                   </div>
                   
-                  <div className="text-right">
-                    <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
-                  </div>
-                </div>
-                
-                {/* Payout Breakdown */}
-                {earning.breakdown && (
-                  <div className="mt-3 p-3 bg-background/50 rounded-lg">
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="text-center">
-                        <p className="text-muted-foreground">Base Pay</p>
-                        <p className="font-semibold">₹{earning.breakdown.base_pay}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-muted-foreground">Distance</p>
-                        <p className="font-semibold">₹{earning.breakdown.distance_pay.toFixed(2)}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-muted-foreground">Peak Bonus</p>
-                        <p className="font-semibold">₹{earning.breakdown.peak_bonus}</p>
+                  {/* Payout Breakdown */}
+                  {earning.breakdown && (
+                    <div className="mt-3 p-3 bg-background/50 rounded-lg">
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="text-center">
+                          <p className="text-muted-foreground">Base Pay</p>
+                          <p className="font-semibold">₹{earning.breakdown.base_pay}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-muted-foreground">Distance</p>
+                          <p className="font-semibold">₹{earning.breakdown.distance_pay.toFixed(2)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-muted-foreground">Peak Bonus</p>
+                          <p className="font-semibold">₹{earning.breakdown.peak_bonus}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )) : (
-              <div className="text-center py-8">
-                <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No recent earnings</p>
-                <p className="text-sm text-muted-foreground">Complete deliveries to start earning</p>
-              </div>
-            )}
-          </div>
+                  )}
+                </div>
+              )) : (
+                <div className="text-center py-8">
+                  <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No recent earnings</p>
+                  <p className="text-sm text-muted-foreground">Complete deliveries to start earning</p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
