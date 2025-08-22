@@ -150,12 +150,28 @@ const DeliveryDetails = () => {
     
     setIsCancelling(true);
     try {
-      const agentId = localStorage.getItem('userId');
+      // Get current user and then find agent ID
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user?.email) {
+        throw new Error('User not authenticated');
+      }
+
+      // Get agent ID from delivery_agents table
+      const { data: agentData, error: agentError } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.user.email)
+        .eq('is_active', true)
+        .single();
+
+      if (agentError || !agentData?.id) {
+        throw new Error('Agent not found or not active');
+      }
       
       const { data, error } = await supabase.functions.invoke('cancel-delivery', {
         body: {
           order_id: order.id,
-          agent_id: agentId,
+          agent_id: agentData.id,
           cancellation_reason: 'Agent cancelled delivery'
         }
       });
