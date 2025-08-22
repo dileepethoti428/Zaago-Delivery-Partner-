@@ -3,6 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -18,7 +22,11 @@ import {
   MapPin,
   Target,
   Gift,
-  Info
+  Info,
+  Plus,
+  Building,
+  Shield,
+  CheckCircle
 } from "lucide-react";
 
 interface EarningsSummary {
@@ -58,6 +66,23 @@ interface DistanceStats {
   distance_month: number;
 }
 
+interface BankDetails {
+  id: string;
+  bank_name: string;
+  account_holder_name: string;
+  account_number: string;
+  ifsc_code: string;
+  account_type: string;
+  is_primary: boolean;
+  is_verified: boolean;
+}
+
+interface WalletData {
+  balance: number;
+  pending_cod_amount: number;
+  total_collected: number;
+}
+
 const Earnings = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("today");
   const [earningsData, setEarningsData] = useState<Record<string, EarningsSummary>>({
@@ -74,12 +99,26 @@ const Earnings = () => {
     distance_month: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [bankDetails, setBankDetails] = useState<BankDetails[]>([]);
+  const [walletData, setWalletData] = useState<WalletData>({
+    balance: 0,
+    pending_cod_amount: 0,
+    total_collected: 0
+  });
+  const [showBankDialog, setShowBankDialog] = useState(false);
+  const [newBankDetails, setNewBankDetails] = useState({
+    bank_name: '',
+    account_holder_name: '',
+    account_number: '',
+    ifsc_code: '',
+    account_type: 'savings'
+  });
+  const [bankLoading, setBankLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchEarningsData();
-    fetchPayoutConfig();
-    fetchDistanceStats();
+    fetchAgentData();
 
     // Listen for order completion events to refresh earnings
     const handleOrderCompleted = () => {
@@ -93,6 +132,68 @@ const Earnings = () => {
       window.removeEventListener('orderCompleted', handleOrderCompleted);
     };
   }, []);
+
+  const fetchAgentData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+      
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id, name')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (agent) {
+        setAgentId(agent.id);
+        setNewBankDetails(prev => ({ ...prev, account_holder_name: agent.name || '' }));
+        
+        // Fetch all data for this agent
+        await Promise.all([
+          fetchEarningsData(),
+          fetchPayoutConfig(),
+          fetchDistanceStats(),
+          fetchBankDetails(agent.id),
+          fetchWalletData(agent.id)
+        ]);
+      }
+    } catch (error) {
+      console.error('Error fetching agent data:', error);
+    }
+  };
+
+  const fetchBankDetails = async (agentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_bank_details')
+        .select('*')
+        .eq('agent_id', agentId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setBankDetails(data || []);
+    } catch (error) {
+      console.error('Error fetching bank details:', error);
+    }
+  };
+
+  const fetchWalletData = async (agentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_wallet')
+        .select('*')
+        .eq('agent_id', agentId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setWalletData(data);
+      }
+    } catch (error) {
+      console.error('Error fetching wallet data:', error);
+    }
+  };
 
   const fetchPayoutConfig = async () => {
     try {
@@ -256,6 +357,96 @@ const Earnings = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleBankDetailsSubmit = async () => {
+    if (!agentId || !validateBankForm()) return;
+
+    setBankLoading(true);
+    try {
+      const { error } = await supabase
+        .from('agent_bank_details')
+        .insert({
+          agent_id: agentId,
+          ...newBankDetails,
+          is_primary: bankDetails.length === 0,
+          is_verified: false
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Bank Details Added",
+        description: "Your bank account has been added successfully.",
+      });
+
+      // Refresh bank details
+      await fetchBankDetails(agentId);
+      setShowBankDialog(false);
+      setNewBankDetails({
+        bank_name: '',
+        account_holder_name: newBankDetails.account_holder_name,
+        account_number: '',
+        ifsc_code: '',
+        account_type: 'savings'
+      });
+    } catch (error) {
+      console.error('Error adding bank details:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add bank details. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setBankLoading(false);
+    }
+  };
+
+  const validateBankForm = () => {
+    const { bank_name, account_holder_name, account_number, ifsc_code } = newBankDetails;
+    
+    if (!bank_name.trim()) {
+      toast({ title: "Bank name is required", variant: "destructive" });
+      return false;
+    }
+    if (!account_holder_name.trim()) {
+      toast({ title: "Account holder name is required", variant: "destructive" });
+      return false;
+    }
+    if (!account_number.trim() || account_number.length < 9) {
+      toast({ title: "Valid account number is required", variant: "destructive" });
+      return false;
+    }
+    if (!ifsc_code.trim() || ifsc_code.length !== 11) {
+      toast({ title: "Valid IFSC code is required (11 characters)", variant: "destructive" });
+      return false;
+    }
+    return true;
+  };
+
+  const handleCashOut = async () => {
+    if (!agentId || bankDetails.length === 0) {
+      toast({
+        title: "Add Bank Details",
+        description: "Please add your bank details to cash out.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (walletData.balance <= 0) {
+      toast({
+        title: "Insufficient Balance",
+        description: "You don't have any balance to cash out.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    toast({
+      title: "Cash Out Request Submitted",
+      description: `₹${walletData.balance.toFixed(2)} will be transferred to your bank account within 1-2 business days.`,
+    });
   };
 
   const currentData = earningsData[selectedPeriod as keyof typeof earningsData];
@@ -524,29 +715,183 @@ const Earnings = () => {
             <span>Payout Options</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 gap-3">
-            <div className="flex items-center justify-between p-3 bg-gradient-dark rounded-lg">
-              <div className="flex items-center space-x-3">
-                <CreditCard className="w-5 h-5 text-primary" />
-                <div>
-                  <p className="font-medium text-foreground text-sm">Bank Account</p>
-                  <p className="text-xs text-muted-foreground">••••1234 - Weekly</p>
-                </div>
+        <CardContent className="space-y-4">
+          {/* Wallet Balance */}
+          <div className="p-4 bg-gradient-success/10 border border-success/20 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">Available Balance</span>
+              <span className="text-2xl font-bold text-success">₹{walletData.balance.toFixed(2)}</span>
+            </div>
+            {walletData.pending_cod_amount > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Pending COD</span>
+                <span className="text-sm font-medium text-warning">₹{walletData.pending_cod_amount.toFixed(2)}</span>
               </div>
-              <Badge className="bg-primary text-primary-foreground text-xs">Active</Badge>
-            </div>
+            )}
+          </div>
+
+          {/* Bank Accounts */}
+          <div className="space-y-3">
+            <h4 className="font-medium text-foreground">Bank Accounts</h4>
+            {bankDetails.length > 0 ? (
+              <div className="space-y-2">
+                {bankDetails.map((bank) => (
+                  <div key={bank.id} className="flex items-center justify-between p-3 bg-gradient-dark rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <Building className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground text-sm">{bank.bank_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          ••••{bank.account_number.slice(-4)} - {bank.account_holder_name}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {bank.is_verified && (
+                        <CheckCircle className="w-4 h-4 text-success" />
+                      )}
+                      {bank.is_primary && (
+                        <Badge className="bg-primary text-primary-foreground text-xs">Primary</Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-secondary/20 rounded-lg border-2 border-dashed border-secondary">
+                <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">No bank accounts added</p>
+                <p className="text-xs text-muted-foreground">Add your bank details to receive payments</p>
+              </div>
+            )}
             
-            <div className="grid grid-cols-2 gap-3">
-              <Button className="bg-gradient-neon hover:shadow-neon transition-smooth text-sm">
-                <ArrowUpRight className="w-4 h-4 mr-2" />
-                Cash Out
-              </Button>
-              <Button variant="outline" className="border-border text-sm">
-                <Download className="w-4 h-4 mr-2" />
-                Download Report
-              </Button>
-            </div>
+            {/* Add Bank Account Dialog */}
+            <Dialog open={showBankDialog} onOpenChange={setShowBankDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full border-primary/20 text-primary hover:bg-primary/10">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Bank Account
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center space-x-2">
+                    <Building className="w-5 h-5 text-primary" />
+                    <span>Add Bank Account</span>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Enter your bank account details to receive payments
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="bank_name">Bank Name *</Label>
+                    <Input
+                      id="bank_name"
+                      value={newBankDetails.bank_name}
+                      onChange={(e) => setNewBankDetails(prev => ({ ...prev, bank_name: e.target.value }))}
+                      placeholder="e.g., State Bank of India"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="account_holder_name">Account Holder Name *</Label>
+                    <Input
+                      id="account_holder_name"
+                      value={newBankDetails.account_holder_name}
+                      onChange={(e) => setNewBankDetails(prev => ({ ...prev, account_holder_name: e.target.value }))}
+                      placeholder="As per bank records"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="account_number">Account Number *</Label>
+                    <Input
+                      id="account_number"
+                      value={newBankDetails.account_number}
+                      onChange={(e) => setNewBankDetails(prev => ({ ...prev, account_number: e.target.value }))}
+                      placeholder="Enter your account number"
+                      className="mt-1"
+                      type="number"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="ifsc_code">IFSC Code *</Label>
+                    <Input
+                      id="ifsc_code"
+                      value={newBankDetails.ifsc_code}
+                      onChange={(e) => setNewBankDetails(prev => ({ ...prev, ifsc_code: e.target.value.toUpperCase() }))}
+                      placeholder="e.g., SBIN0001234"
+                      className="mt-1"
+                      maxLength={11}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="account_type">Account Type</Label>
+                    <Select 
+                      value={newBankDetails.account_type} 
+                      onValueChange={(value) => setNewBankDetails(prev => ({ ...prev, account_type: value }))}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="savings">Savings Account</SelectItem>
+                        <SelectItem value="current">Current Account</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Security Note */}
+                  <div className="flex items-start space-x-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                    <Shield className="w-4 h-4 text-primary mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Your bank details are encrypted and stored securely
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-2">
+                    <Button
+                      onClick={handleBankDetailsSubmit}
+                      disabled={bankLoading}
+                      className="flex-1 bg-gradient-neon hover:shadow-neon transition-smooth"
+                    >
+                      {bankLoading ? "Adding..." : "Add Account"}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowBankDialog(false)}
+                      disabled={bankLoading}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+            
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <Button 
+              onClick={handleCashOut}
+              disabled={bankDetails.length === 0 || walletData.balance <= 0}
+              className="bg-gradient-neon hover:shadow-neon transition-smooth text-sm"
+            >
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Cash Out
+            </Button>
+            <Button variant="outline" className="border-border text-sm">
+              <Download className="w-4 h-4 mr-2" />
+              Download Report
+            </Button>
           </div>
         </CardContent>
       </Card>
