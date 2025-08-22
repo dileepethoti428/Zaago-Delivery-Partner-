@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -179,7 +180,6 @@ const Home = () => {
     }
   }, [orders, location.latitude, location.longitude]);
 
-  // Fetch orders on component mount and listen for order completion
   useEffect(() => {
     fetchOrders();
     
@@ -207,7 +207,7 @@ const Home = () => {
     });
   };
 
-  // Accept order
+  // Accept order - Updated with better error handling and RLS compliance
   const handleAcceptOrder = async (orderId: string) => {
     setAcceptingOrders(prev => ({ ...prev, [orderId]: true }));
     
@@ -229,15 +229,21 @@ const Home = () => {
         throw new Error(`Agent not found for email: ${user.email}. Please contact admin for activation.`);
       }
 
+      // Update order with specific conditions to work with RLS policies
       const { error } = await supabase
         .from('orders')
         .update({ 
           status: 'assigned',
           agent_id: agent.id
         })
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .eq('status', 'placed')  // Only accept orders that are still 'placed'
+        .is('agent_id', null);   // Only accept unassigned orders
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database error:', error);
+        throw new Error(error.message || 'Failed to accept order');
+      }
 
       // Update order in state to show as assigned
       setOrders(prev => prev.map(order => 
@@ -252,16 +258,19 @@ const Home = () => {
           : order
       ));
       
+      // Refresh orders to get latest state
+      await fetchOrders();
+      
       toast({
         title: "Order Accepted!",
         description: "You can now manage this delivery",
       });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accepting order:', error);
       toast({
         title: "Error",
-        description: "Failed to accept order",
+        description: error.message || "Failed to accept order",
         variant: "destructive"
       });
     } finally {
@@ -305,8 +314,6 @@ const Home = () => {
   // Show available orders (no filtering needed anymore)
   const availableOrders = ordersWithDistance;
 
-
-  // Loading skeleton
   const LoadingSkeleton = () => (
     <div className="space-y-4">
       {[1, 2, 3].map(i => (
@@ -499,7 +506,6 @@ const Home = () => {
                           </div>
                         </div>
 
-                        {/* Order Details */}
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center text-sm text-muted-foreground">
                             <MapPin className="w-4 h-4 mr-2 text-primary" />
@@ -525,7 +531,6 @@ const Home = () => {
                             </div>
                           </div>
                           
-                           {/* Agent Payout */}
                            <div className="flex items-center justify-between text-sm mt-2">
                              <div className="flex items-center text-green-600 font-medium">
                                <IndianRupee className="w-4 h-4 mr-1" />
