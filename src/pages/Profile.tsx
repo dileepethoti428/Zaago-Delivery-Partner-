@@ -70,53 +70,65 @@ const Profile = () => {
   const fetchProfileData = async () => {
     try {
       setIsLoading(true);
-      const agentEmail = localStorage.getItem('agent_email') || 'seshethoti@gmail.com';
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('No authenticated user found');
+      }
       
       // Get agent data with stats
       const { data: agent, error: agentError } = await supabase
         .from('delivery_agents')
         .select('*')
-        .eq('email', agentEmail)
-        .single();
+        .eq('email', user.email)
+        .maybeSingle();
 
       if (agentError) throw agentError;
 
-      if (agent) {
-        // Set agent stats
-        setAgentStats({
-          total_deliveries: agent.total_deliveries || 0,
-          average_rating: agent.average_rating || 0,
-          total_earnings: agent.total_earnings || 0,
-          performance_score: agent.performance_score || 100,
-          is_active: agent.is_active || false,
-          last_delivery_at: agent.last_delivery_at
+      if (!agent) {
+        // No agent record exists, show message and redirect to setup
+        toast({
+          title: "Profile Setup Required",
+          description: "Please complete your delivery agent setup first.",
+          variant: "destructive"
         });
-
-        // Try to get profile data (if exists)
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', agent.agent_id)
-          .single();
-
-        const profileInfo = {
-          full_name: profile?.full_name || agent.name,
-          phone: profile?.phone || agent.phone,
-          email: agent.email,
-          photo_url: profile?.photo_url,
-          address: profile?.address || '',
-          emergency_contact: profile?.emergency_contact || '',
-          user_id: agent.agent_id
-        };
-
-        setProfileData(profileInfo);
-        setEditData(profileInfo);
+        navigate('/bank-details-setup');
+        return;
       }
+
+      // Set agent stats
+      setAgentStats({
+        total_deliveries: agent.total_deliveries || 0,
+        average_rating: agent.average_rating || 0,
+        total_earnings: agent.total_earnings || 0,
+        performance_score: agent.performance_score || 100,
+        is_active: agent.is_active || false,
+        last_delivery_at: agent.last_delivery_at
+      });
+
+      // Try to get profile data (if exists)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', agent.agent_id)
+        .maybeSingle();
+
+      const profileInfo = {
+        full_name: profile?.full_name || agent.name,
+        phone: profile?.phone || agent.phone,
+        email: agent.email,
+        photo_url: profile?.photo_url,
+        address: profile?.address || '',
+        emergency_contact: profile?.emergency_contact || '',
+        user_id: agent.agent_id
+      };
+
+      setProfileData(profileInfo);
+      setEditData(profileInfo);
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast({
         title: "Error",
-        description: "Failed to load profile data",
+        description: `Failed to load profile data: ${error.message || 'Please try again.'}`,
         variant: "destructive"
       });
     } finally {
