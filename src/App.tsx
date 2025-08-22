@@ -16,6 +16,8 @@ import Profile from "./pages/Profile";
 import Earnings from "./pages/Earnings";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
+import PrivacySecurity from "./pages/PrivacySecurity";
+import PayoutSettings from "./pages/PayoutSettings";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 
@@ -42,6 +44,8 @@ const App = () => (
             <Route path="/earnings" element={<Earnings />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/privacy-security" element={<PrivacySecurity />} />
+            <Route path="/payout-settings" element={<PayoutSettings />} />
             <Route path="/help" element={<Help />} />
             
             {/* Redirect old index route */}

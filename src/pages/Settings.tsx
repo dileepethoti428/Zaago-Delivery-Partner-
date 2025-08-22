@@ -1,6 +1,13 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { 
   Bell, 
   Shield, 
@@ -16,10 +23,206 @@ import {
   Globe,
   Truck,
   CreditCard,
-  Star
+  Star,
+  Edit
 } from "lucide-react";
 
 const Settings = () => {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [settings, setSettings] = useState({
+    push_notifications: true,
+    sound_alerts: true,
+    vibration: false,
+    location_services: true,
+    personal_info: {
+      name: '',
+      phone: '',
+      email: '',
+      vehicle: 'Honda Civic 2020'
+    }
+  });
+
+  useEffect(() => {
+    fetchAgentSettings();
+  }, []);
+
+  const fetchAgentSettings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+
+      // Get agent details
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id, name, phone, email')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (agent) {
+        setAgentId(agent.id);
+        
+        // Get agent settings
+        const { data: agentSettings } = await supabase
+          .from('agent_settings')
+          .select('*')
+          .eq('agent_id', agent.id)
+          .maybeSingle();
+
+        if (agentSettings) {
+          setSettings({
+            push_notifications: agentSettings.push_notifications,
+            sound_alerts: agentSettings.sound_alerts,
+            vibration: agentSettings.vibration,
+            location_services: agentSettings.location_services,
+            personal_info: {
+              name: agent.name || '',
+              phone: agent.phone || '',
+              email: agent.email || '',
+              vehicle: (agentSettings.vehicle_info as any)?.model || 'Honda Civic 2020'
+            }
+          });
+        } else {
+          // Set default with agent info
+          setSettings(prev => ({
+            ...prev,
+            personal_info: {
+              name: agent.name || '',
+              phone: agent.phone || '',
+              email: agent.email || '',
+              vehicle: 'Honda Civic 2020'
+            }
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching agent settings:', error);
+    }
+  };
+
+  const updateSetting = async (key: string, value: boolean) => {
+    if (!agentId) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('agent_settings')
+        .upsert({
+          agent_id: agentId,
+          [key]: value
+        }, {
+          onConflict: 'agent_id'
+        });
+
+      if (error) throw error;
+
+      setSettings(prev => ({ ...prev, [key]: value }));
+      toast({
+        title: "Settings Updated",
+        description: "Your preferences have been saved.",
+      });
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update settings. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const savePersonalInfo = async () => {
+    if (!agentId) return;
+
+    setLoading(true);
+    try {
+      // Update agent basic info
+      const { error: agentError } = await supabase
+        .from('delivery_agents')
+        .update({
+          name: settings.personal_info.name,
+          phone: settings.personal_info.phone
+        })
+        .eq('id', agentId);
+
+      if (agentError) throw agentError;
+
+      // Update agent settings with vehicle info
+      const { error: settingsError } = await supabase
+        .from('agent_settings')
+        .upsert({
+          agent_id: agentId,
+          personal_info: settings.personal_info,
+          vehicle_info: { model: settings.personal_info.vehicle }
+        }, {
+          onConflict: 'agent_id'
+        });
+
+      if (settingsError) throw settingsError;
+
+      setShowEditDialog(false);
+      toast({
+        title: "Profile Updated",
+        description: "Your personal information has been saved.",
+      });
+    } catch (error) {
+      console.error('Error saving personal info:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      toast({
+        title: "Signed Out",
+        description: "You have been successfully signed out.",
+      });
+      
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleNavigation = (item: any) => {
+    switch (item.title) {
+      case "Personal Information":
+        setShowEditDialog(true);
+        break;
+      case "Privacy & Security":
+        navigate('/privacy-security');
+        break;
+      case "Payment Methods":
+        navigate('/payout-settings');
+        break;
+      default:
+        toast({
+          title: "Coming Soon",
+          description: `${item.title} feature is coming soon!`,
+        });
+    }
+  };
+
   const settingsGroups = [
     {
       title: "Account",
@@ -56,7 +259,8 @@ const Settings = () => {
           description: "Push notifications enabled",
           action: "toggle",
           color: "text-primary",
-          enabled: true
+          enabled: settings.push_notifications,
+          key: "push_notifications"
         },
         {
           icon: Volume2,
@@ -64,7 +268,8 @@ const Settings = () => {
           description: "Play sounds for new orders",
           action: "toggle",
           color: "text-primary",
-          enabled: true
+          enabled: settings.sound_alerts,
+          key: "sound_alerts"
         },
         {
           icon: Vibrate,
@@ -72,7 +277,8 @@ const Settings = () => {
           description: "Vibrate on new notifications",
           action: "toggle",
           color: "text-primary",
-          enabled: false
+          enabled: settings.vibration,
+          key: "vibration"
         },
         {
           icon: MapPin,
@@ -80,7 +286,8 @@ const Settings = () => {
           description: "Always track location",
           action: "toggle",
           color: "text-primary",
-          enabled: true
+          enabled: settings.location_services,
+          key: "location_services"
         }
       ]
     },
@@ -90,7 +297,7 @@ const Settings = () => {
         {
           icon: Truck,
           title: "Vehicle Information",
-          description: "Honda Civic 2020",
+          description: settings.personal_info.vehicle,
           action: "navigate",
           color: "text-primary"
         },
@@ -160,6 +367,7 @@ const Settings = () => {
                   <div
                     key={itemIndex}
                     className="flex items-center justify-between p-3 hover:bg-secondary/50 rounded-lg transition-smooth cursor-pointer"
+                    onClick={() => item.action === "navigate" && handleNavigation(item)}
                   >
                     <div className="flex items-center space-x-3">
                       <div className="p-2 bg-primary/10 rounded-lg">
@@ -173,11 +381,16 @@ const Settings = () => {
                     
                     {item.action === "toggle" ? (
                       <Switch 
-                        defaultChecked={item.enabled}
+                        checked={item.enabled}
+                        onCheckedChange={(checked) => updateSetting(item.key, checked)}
+                        disabled={loading}
                         className="data-[state=checked]:bg-primary"
                       />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      <ChevronRight 
+                        className="w-5 h-5 text-muted-foreground" 
+                        onClick={() => handleNavigation(item)}
+                      />
                     )}
                   </div>
                 );
@@ -195,7 +408,7 @@ const Settings = () => {
               <Truck className="w-8 h-8 text-primary" />
             </div>
             <h3 className="font-semibold text-foreground">Zaago Delivery Agent</h3>
-            <p className="text-sm text-muted-foreground">Version 2.1.0</p>
+            <p className="text-sm text-muted-foreground">Version 1.0.0</p>
             <p className="text-xs text-muted-foreground">
               © 2024 Zaago Technologies. All rights reserved.
             </p>
@@ -209,12 +422,78 @@ const Settings = () => {
           <Button 
             variant="outline" 
             className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            onClick={handleSignOut}
+            disabled={loading}
           >
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
           </Button>
         </CardContent>
       </Card>
+
+      {/* Edit Personal Information Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Personal Information</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                value={settings.personal_info.name}
+                onChange={(e) => setSettings(prev => ({
+                  ...prev,
+                  personal_info: { ...prev.personal_info, name: e.target.value }
+                }))}
+                placeholder="Enter your full name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                value={settings.personal_info.phone}
+                onChange={(e) => setSettings(prev => ({
+                  ...prev,
+                  personal_info: { ...prev.personal_info, phone: e.target.value }
+                }))}
+                placeholder="Enter your phone number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                value={settings.personal_info.email}
+                disabled
+                placeholder="Email cannot be changed"
+              />
+            </div>
+            <div>
+              <Label htmlFor="vehicle">Vehicle Information</Label>
+              <Input
+                id="vehicle"
+                value={settings.personal_info.vehicle}
+                onChange={(e) => setSettings(prev => ({
+                  ...prev,
+                  personal_info: { ...prev.personal_info, vehicle: e.target.value }
+                }))}
+                placeholder="e.g., Honda Civic 2020"
+              />
+            </div>
+            <Button 
+              onClick={savePersonalInfo} 
+              disabled={loading}
+              className="w-full"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

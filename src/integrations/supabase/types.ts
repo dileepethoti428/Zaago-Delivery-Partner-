@@ -80,6 +80,56 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_bank_details: {
+        Row: {
+          account_holder_name: string
+          account_number: string
+          account_type: string | null
+          agent_id: string
+          bank_name: string
+          created_at: string | null
+          id: string
+          ifsc_code: string
+          is_primary: boolean | null
+          is_verified: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number: string
+          account_type?: string | null
+          agent_id: string
+          bank_name: string
+          created_at?: string | null
+          id?: string
+          ifsc_code: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string
+          account_type?: string | null
+          agent_id?: string
+          bank_name?: string
+          created_at?: string | null
+          id?: string
+          ifsc_code?: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_bank_details_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_notifications: {
         Row: {
           agent_id: string
@@ -120,6 +170,158 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_settings: {
+        Row: {
+          agent_id: string
+          created_at: string | null
+          id: string
+          language: string | null
+          location_services: boolean | null
+          personal_info: Json | null
+          preferred_areas: Json | null
+          push_notifications: boolean | null
+          sound_alerts: boolean | null
+          updated_at: string | null
+          vehicle_info: Json | null
+          vibration: boolean | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string | null
+          id?: string
+          language?: string | null
+          location_services?: boolean | null
+          personal_info?: Json | null
+          preferred_areas?: Json | null
+          push_notifications?: boolean | null
+          sound_alerts?: boolean | null
+          updated_at?: string | null
+          vehicle_info?: Json | null
+          vibration?: boolean | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string | null
+          id?: string
+          language?: string | null
+          location_services?: boolean | null
+          personal_info?: Json | null
+          preferred_areas?: Json | null
+          push_notifications?: boolean | null
+          sound_alerts?: boolean | null
+          updated_at?: string | null
+          vehicle_info?: Json | null
+          vibration?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_settings_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_wallet: {
+        Row: {
+          agent_id: string
+          balance: number | null
+          created_at: string | null
+          id: string
+          last_settlement_date: string | null
+          pending_cod_amount: number | null
+          total_collected: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id: string
+          balance?: number | null
+          created_at?: string | null
+          id?: string
+          last_settlement_date?: string | null
+          pending_cod_amount?: number | null
+          total_collected?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string
+          balance?: number | null
+          created_at?: string | null
+          id?: string
+          last_settlement_date?: string | null
+          pending_cod_amount?: number | null
+          total_collected?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_wallet_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_wallet_transactions: {
+        Row: {
+          agent_id: string
+          amount: number
+          created_at: string | null
+          description: string | null
+          id: string
+          order_id: string | null
+          status: string | null
+          transaction_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id: string
+          amount: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          order_id?: string | null
+          status?: string | null
+          transaction_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string
+          amount?: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          order_id?: string | null
+          status?: string | null
+          transaction_type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_wallet_transactions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_wallet_transactions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_wallet_transactions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_with_agents"
             referencedColumns: ["id"]
           },
         ]
