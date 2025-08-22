@@ -608,85 +608,8 @@ const Earnings = () => {
       {/* Header */}
       <div className="animate-fade-in">
         <h1 className="text-2xl font-bold text-foreground">Earnings</h1>
-        <p className="text-muted-foreground">Track your delivery income with our new payout structure</p>
+        <p className="text-muted-foreground">Track your delivery income and manage your wallet</p>
       </div>
-
-      {/* Payout Structure Information */}
-      {payoutConfig && (
-        <Card className="bg-gradient-dark border-primary/20 animate-fade-in">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Info className="w-5 h-5 text-primary" />
-              <span>New Payout Structure</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-secondary/50 p-3 rounded-lg">
-                <div className="flex items-center space-x-2 mb-1">
-                  <Target className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-sm">Base Pay</span>
-                </div>
-                <p className="text-lg font-bold text-primary">₹{payoutConfig.base_pay_amount}</p>
-                <p className="text-xs text-muted-foreground">
-                  Within {payoutConfig.base_pay_distance_km} km
-                </p>
-              </div>
-              
-              <div className="bg-secondary/50 p-3 rounded-lg">
-                <div className="flex items-center space-x-2 mb-1">
-                  <MapPin className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-sm">Per KM</span>
-                </div>
-                <p className="text-lg font-bold text-primary">
-                  ₹{payoutConfig.per_km_min_rate}-₹{payoutConfig.per_km_max_rate}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Beyond {payoutConfig.base_pay_distance_km} km
-                </p>
-              </div>
-              
-              <div className="bg-secondary/50 p-3 rounded-lg">
-                <div className="flex items-center space-x-2 mb-1">
-                  <Gift className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-sm">Peak Bonus</span>
-                </div>
-                <p className="text-lg font-bold text-primary">₹{payoutConfig.peak_hour_bonus_amount}</p>
-                <p className="text-xs text-muted-foreground">
-                  {payoutConfig.peak_hour_order_threshold} orders ({payoutConfig.peak_hour_start}-{payoutConfig.peak_hour_end})
-                </p>
-              </div>
-            </div>
-            
-            {/* Peak Hour Progress */}
-            <div className="bg-primary/10 p-3 rounded-lg border border-primary/20">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-sm flex items-center space-x-2">
-                  <Clock className="w-4 h-4" />
-                  <span>Peak Hour Progress</span>
-                </h4>
-                <Badge variant={peakOrdersToday >= (payoutConfig.peak_hour_order_threshold || 14) ? "default" : "secondary"} className="text-xs">
-                  {peakOrdersToday}/{payoutConfig.peak_hour_order_threshold || 14}
-                </Badge>
-              </div>
-              <div className="w-full bg-secondary rounded-full h-1.5">
-                <div 
-                  className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                  style={{ 
-                    width: `${Math.min(100, (peakOrdersToday / (payoutConfig.peak_hour_order_threshold || 14)) * 100)}%` 
-                  }}
-                ></div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {peakOrdersToday >= (payoutConfig.peak_hour_order_threshold || 14) 
-                  ? `🎉 ₹${payoutConfig.peak_hour_bonus_amount} bonus earned!`
-                  : `${(payoutConfig.peak_hour_order_threshold || 14) - peakOrdersToday} more for ₹${payoutConfig.peak_hour_bonus_amount}`
-                }
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Quick Stats */}
       <Card className="bg-gradient-success border-success/20 animate-slide-up">
