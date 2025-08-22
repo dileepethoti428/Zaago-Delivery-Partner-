@@ -34,11 +34,11 @@ serve(async (req) => {
       );
     }
 
-    // Start transaction by updating order status back to pending and removing agent assignment
+    // Start transaction by updating order status back to placed and removing agent assignment
     const { data: orderUpdate, error: orderError } = await supabase
       .from('orders')
       .update({
-        status: 'pending',
+        status: 'placed',  // Set back to 'placed' so other agents can see it
         agent_id: null,
         updated_at: new Date().toISOString()
       })

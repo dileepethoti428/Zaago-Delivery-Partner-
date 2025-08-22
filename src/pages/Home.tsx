@@ -188,10 +188,76 @@ const Home = () => {
       fetchOrders();
     };
     
+    // Listen for order cancellation events
+    const handleOrderCancelled = () => {
+      fetchOrders();
+    };
+    
     window.addEventListener('orderCompleted', handleOrderCompleted);
+    window.addEventListener('orderCancelled', handleOrderCancelled);
+    
+    // Set up real-time subscription for orders table
+    const channel = supabase
+      .channel('orders-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('Order updated:', payload);
+          
+           // If an order status changed to 'placed' (released back to all agents)
+          if (payload.new.status === 'placed' && payload.old.status === 'assigned') {
+            toast({
+              title: "New Order Available!",
+              description: `Order from ${payload.new.customer_name} is now available`,
+            });
+            // Refresh orders to show the newly available order
+            fetchOrders();
+          }
+          
+          // If an order was assigned to someone else, remove it from current view
+          if (payload.new.status === 'assigned' && payload.old.status === 'placed') {
+            setOrders(prev => prev.filter(order => order.id !== payload.new.id));
+            setOrdersWithDistance(prev => prev.filter(order => order.id !== payload.new.id));
+          }
+          
+          // If an order was delivered or cancelled, remove it
+          if (payload.new.status === 'delivered' || payload.new.status === 'cancelled') {
+            setOrders(prev => prev.filter(order => order.id !== payload.new.id));
+            setOrdersWithDistance(prev => prev.filter(order => order.id !== payload.new.id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('New order created:', payload);
+          
+          // If a new order is placed, add it to the list
+          if (payload.new.status === 'placed') {
+            toast({
+              title: "New Order Available!",
+              description: `New order from ${payload.new.customer_name}`,
+            });
+            fetchOrders();
+          }
+        }
+      )
+      .subscribe();
     
     return () => {
       window.removeEventListener('orderCompleted', handleOrderCompleted);
+      window.removeEventListener('orderCancelled', handleOrderCancelled);
+      supabase.removeChannel(channel);
     };
   }, []);
 
