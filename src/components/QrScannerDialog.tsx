@@ -143,9 +143,11 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
                 <Scanner
                   onScan={handleScan}
                   onError={handleError}
-                  style={{
-                    width: '100%',
-                    height: '100%'
+                  styles={{
+                    container: {
+                      width: '100%',
+                      height: '100%'
+                    }
                   }}
                 />
               )}

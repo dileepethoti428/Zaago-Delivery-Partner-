@@ -7,6 +7,20 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  MapPin, 
+  Clock, 
+  DollarSign, 
+  Package, 
+  Navigation,
+  Zap,
+  Bell,
+  User,
+  RefreshCw,
+  CheckCircle,
+  X,
+  QrCode
+} from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 
 // Mock data matching the requirements
