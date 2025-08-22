@@ -18,7 +18,8 @@ import {
   Package,
   User,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  X
 } from "lucide-react";
 
 interface Order {
@@ -47,6 +48,7 @@ const DeliveryDetails = () => {
   const [distance, setDistance] = useState<number>(0);
   const [payout, setPayout] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     if (orderId) {
@@ -140,6 +142,48 @@ const DeliveryDetails = () => {
     } else {
       // Show payment options for non-prepaid orders
       setShowPaymentDialog(true);
+    }
+  };
+
+  const handleCancelDelivery = async () => {
+    if (!order) return;
+    
+    setIsCancelling(true);
+    try {
+      const agentId = localStorage.getItem('userId');
+      
+      const { data, error } = await supabase.functions.invoke('cancel-delivery', {
+        body: {
+          order_id: order.id,
+          agent_id: agentId,
+          cancellation_reason: 'Agent cancelled delivery'
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        toast({
+          title: "Delivery Cancelled",
+          description: "Order has been released back to all agents",
+        });
+        // Notify other screens to refresh
+        window.dispatchEvent(new CustomEvent('orderCancelled'));
+        navigate('/home');
+      } else {
+        throw new Error(data?.error || 'Failed to cancel delivery');
+      }
+    } catch (error: any) {
+      console.error('Cancel delivery error:', error);
+      toast({
+        title: "Cancellation Failed",
+        description: error?.message || "Unable to cancel delivery. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -415,23 +459,35 @@ const DeliveryDetails = () => {
               <span>DELIVERY ACTIONS</span>
             </h3>
             
-            <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                className="flex items-center justify-center space-x-2 h-8 border-border hover:bg-secondary"
-                onClick={handleNavigation}
-              >
-                <Navigation className="w-3 h-3" />
-                <span className="text-sm">Navigate to Customer</span>
-              </Button>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex items-center justify-center space-x-2 h-8 border-border hover:bg-secondary"
+                  onClick={handleNavigation}
+                >
+                  <Navigation className="w-3 h-3" />
+                  <span className="text-sm">Navigate to Customer</span>
+                </Button>
+                
+                <Button 
+                  className="flex items-center justify-center space-x-2 h-8 bg-gradient-neon hover:shadow-neon transition-smooth"
+                  onClick={handleMarkAsDelivery}
+                  disabled={isProcessing}
+                >
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span className="text-sm">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                </Button>
+              </div>
               
               <Button 
-                className="flex items-center justify-center space-x-2 h-8 bg-gradient-neon hover:shadow-neon transition-smooth"
-                onClick={handleMarkAsDelivery}
-                disabled={isProcessing}
+                variant="destructive" 
+                className="w-full flex items-center justify-center space-x-2 h-8"
+                onClick={handleCancelDelivery}
+                disabled={isCancelling}
               >
-                <CheckCircle2 className="w-3 h-3" />
-                <span className="text-sm">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                <X className="w-3 h-3" />
+                <span className="text-sm">{isCancelling ? 'Cancelling...' : 'Cancel Delivery'}</span>
               </Button>
             </div>
           </div>
