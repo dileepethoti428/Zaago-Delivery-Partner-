@@ -54,6 +54,8 @@ const Home = () => {
   const [notificationCount] = useState(3);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [ordersWithDistance, setOrdersWithDistance] = useState<Order[]>([]);
+  const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
+  const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
   
   // Calculate agent payout (base 20 + 5 per km + 2 per product)
   const calculateAgentPayout = (distance: number, products: number) => {
@@ -175,27 +177,51 @@ const Home = () => {
 
   // Accept order
   const handleAcceptOrder = async (orderId: string) => {
+    setAcceptingOrders(prev => ({ ...prev, [orderId]: true }));
+    
     try {
-      // Update order status to 'confirmed' and assign to agent
+      // Update order status to 'assigned' and assign to agent
+      const agentEmail = localStorage.getItem('agent_email') || 'seshethoti@gmail.com';
+      
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', agentEmail)
+        .eq('is_active', true)
+        .single();
+
+      if (!agent) {
+        throw new Error('Agent not found');
+      }
+
       const { error } = await supabase
         .from('orders')
         .update({ 
-          status: 'confirmed',
-          agent_id: '7da1881e-50e8-4f88-86ad-9c8dd74b9e5e' // Mock agent ID
+          status: 'assigned',
+          agent_id: agent.id
         })
         .eq('id', orderId);
 
       if (error) throw error;
 
-      // Remove from local orders list
-      setOrders(prev => prev.filter(order => order.id !== orderId));
-      setOrdersWithDistance(prev => prev.filter(order => order.id !== orderId));
+      // Update order in state to show as assigned
+      setOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: 'assigned' }
+          : order
+      ));
+      
+      setOrdersWithDistance(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: 'assigned' }
+          : order
+      ));
       
       toast({
         title: "Order Accepted!",
-        description: `Order has been assigned to you`,
+        description: "You can now manage this delivery",
       });
-      navigate('/history');
+      
     } catch (error) {
       console.error('Error accepting order:', error);
       toast({
@@ -203,11 +229,15 @@ const Home = () => {
         description: "Failed to accept order",
         variant: "destructive"
       });
+    } finally {
+      setAcceptingOrders(prev => ({ ...prev, [orderId]: false }));
     }
   };
 
   // Reject order
   const handleRejectOrder = async (orderId: string) => {
+    setRejectingOrders(prev => ({ ...prev, [orderId]: true }));
+    
     try {
       const { error } = await supabase
         .from('orders')
@@ -232,6 +262,8 @@ const Home = () => {
         description: "Failed to reject order",
         variant: "destructive"
       });
+    } finally {
+      setRejectingOrders(prev => ({ ...prev, [orderId]: false }));
     }
   };
 
@@ -444,24 +476,56 @@ const Home = () => {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex space-x-2">
-                          <Button 
-                            onClick={() => handleAcceptOrder(order.id)}
-                            className="flex-1 bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Accept
-                          </Button>
-                          
-                          <Button 
-                            variant="outline"
-                            onClick={() => handleRejectOrder(order.id)}
-                            className="flex-1 border-destructive/50 text-destructive hover:bg-destructive/10 hover:shadow-neon transition-all duration-300"
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            Reject
-                          </Button>
-                        </div>
+                        {order.status === 'assigned' ? (
+                          <div className="flex space-x-2">
+                            <Button 
+                              onClick={() => navigate(`/delivery-details/${order.id}`)}
+                              className="flex-1 bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300"
+                            >
+                              <Settings className="w-4 h-4 mr-2" />
+                              Manage Delivery
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex space-x-2">
+                            <Button 
+                              onClick={() => handleAcceptOrder(order.id)}
+                              className="flex-1 bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300"
+                              disabled={acceptingOrders[order.id]}
+                            >
+                              {acceptingOrders[order.id] ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
+                                  Accepting...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Accept
+                                </>
+                              )}
+                            </Button>
+                            
+                            <Button 
+                              variant="outline"
+                              onClick={() => handleRejectOrder(order.id)}
+                              className="flex-1 border-destructive/50 text-destructive hover:bg-destructive/10 hover:shadow-neon transition-all duration-300"
+                              disabled={rejectingOrders[order.id]}
+                            >
+                              {rejectingOrders[order.id] ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-destructive border-t-transparent mr-2" />
+                                  Rejecting...
+                                </>
+                              ) : (
+                                <>
+                                  <X className="w-4 h-4 mr-2" />
+                                  Reject
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   );

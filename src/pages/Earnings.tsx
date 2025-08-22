@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   DollarSign, 
   TrendingUp, 
@@ -16,23 +18,147 @@ import {
   Download
 } from "lucide-react";
 
+interface EarningsSummary {
+  amount: number;
+  deliveries: number;
+  hours: number;
+}
+
+interface RecentEarning {
+  id: string;
+  order_id: string;
+  restaurant: string;
+  amount: number;
+  time: string;
+  customer_name: string;
+  delivery_date: string;
+}
+
 const Earnings = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("today");
+  const [earningsData, setEarningsData] = useState<Record<string, EarningsSummary>>({
+    today: { amount: 0, deliveries: 0, hours: 0 },
+    week: { amount: 0, deliveries: 0, hours: 0 },
+    month: { amount: 0, deliveries: 0, hours: 0 }
+  });
+  const [recentEarnings, setRecentEarnings] = useState<RecentEarning[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  const earningsData = {
-    today: { amount: 127.50, deliveries: 12, hours: 6.5 },
-    week: { amount: 892.35, deliveries: 87, hours: 42.3 },
-    month: { amount: 3567.80, deliveries: 342, hours: 168.7 }
+  useEffect(() => {
+    fetchEarningsData();
+  }, []);
+
+  const fetchEarningsData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get current agent
+      const agentEmail = localStorage.getItem('agent_email') || 'seshethoti@gmail.com';
+      
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', agentEmail)
+        .eq('is_active', true)
+        .single();
+
+      if (!agent) {
+        toast({
+          title: "Error",
+          description: "Agent profile not found",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Fetch earnings with delivery history
+      const { data: earnings, error: earningsError } = await supabase
+        .from('earnings')
+        .select(`
+          *,
+          delivery_history (
+            customer_name,
+            completed_at,
+            delivery_date,
+            total_amount
+          )
+        `)
+        .eq('agent_id', agent.id)
+        .order('created_at', { ascending: false });
+
+      if (earningsError) throw earningsError;
+
+      if (earnings) {
+        // Calculate earnings by period
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const calculatePeriodData = (startDate: Date, endDate: Date = now) => {
+          const periodEarnings = earnings.filter(earning => {
+            const earningDate = new Date(earning.created_at);
+            return earningDate >= startDate && earningDate <= endDate;
+          });
+
+          return {
+            amount: periodEarnings.reduce((sum, e) => sum + (e.amount || 0), 0),
+            deliveries: periodEarnings.length,
+            hours: periodEarnings.length * 0.5 // Estimate 30 minutes per delivery
+          };
+        };
+
+        setEarningsData({
+          today: calculatePeriodData(todayStart),
+          week: calculatePeriodData(weekStart),
+          month: calculatePeriodData(monthStart)
+        });
+
+        // Format recent earnings for display
+        const recentData = earnings.slice(0, 10).map(earning => {
+          const historyData = Array.isArray(earning.delivery_history) ? earning.delivery_history[0] : null;
+          return {
+            id: earning.id,
+            order_id: earning.order_id,
+            restaurant: historyData?.customer_name || 'Customer',
+            amount: earning.amount || 0,
+            time: new Date(earning.created_at).toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            }),
+            customer_name: historyData?.customer_name || 'Customer',
+            delivery_date: historyData?.delivery_date || earning.created_at
+          };
+        });
+
+        setRecentEarnings(recentData);
+      }
+    } catch (error) {
+      console.error('Error fetching earnings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load earnings data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const recentEarnings = [
-    { id: "ORD001", restaurant: "Pizza Palace", amount: 24.50, time: "2:45 PM", tip: 5.00 },
-    { id: "ORD002", restaurant: "Burger Hub", amount: 18.75, time: "2:15 PM", tip: 3.25 },
-    { id: "ORD003", restaurant: "Thai Garden", amount: 32.10, time: "1:30 PM", tip: 6.50 },
-    { id: "ORD004", restaurant: "Coffee Corner", amount: 12.25, time: "12:45 PM", tip: 2.00 }
-  ];
-
   const currentData = earningsData[selectedPeriod as keyof typeof earningsData];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground mt-2">Loading earnings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 space-y-6">
@@ -122,34 +248,38 @@ const Earnings = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {recentEarnings.map((earning) => (
+            {recentEarnings.length > 0 ? recentEarnings.map((earning) => (
               <div key={earning.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
                     <Truck className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">{earning.restaurant}</p>
+                    <p className="font-medium text-foreground">{earning.customer_name}</p>
                     <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                       <Clock className="w-3 h-3" />
                       <span>{earning.time}</span>
                       <span>•</span>
-                      <span>#{earning.id}</span>
+                      <span>#{earning.order_id.slice(0, 8)}</span>
                     </div>
                   </div>
                 </div>
                 
                 <div className="text-right">
-                  <p className="font-bold text-foreground">${earning.amount}</p>
-                  {earning.tip > 0 && (
-                    <div className="flex items-center space-x-1 text-sm">
-                      <Star className="w-3 h-3 text-primary" />
-                      <span className="text-primary">+${earning.tip}</span>
-                    </div>
-                  )}
+                  <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
+                  <div className="flex items-center space-x-1 text-sm">
+                    <Star className="w-3 h-3 text-primary" />
+                    <span className="text-primary">Commission</span>
+                  </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-8">
+                <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No recent earnings</p>
+                <p className="text-sm text-muted-foreground">Complete deliveries to start earning</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

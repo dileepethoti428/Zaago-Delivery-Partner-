@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import Tracking from "./pages/Tracking";
+import DeliveryDetails from "./pages/DeliveryDetails";
 import Profile from "./pages/Profile";
 import Earnings from "./pages/Earnings";
 import Notifications from "./pages/Notifications";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/home" element={<Home />} />
             <Route path="/history" element={<History />} />
             <Route path="/tracking" element={<Tracking />} />
+            <Route path="/delivery-details/:orderId" element={<DeliveryDetails />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/earnings" element={<Earnings />} />
             <Route path="/notifications" element={<Notifications />} />
