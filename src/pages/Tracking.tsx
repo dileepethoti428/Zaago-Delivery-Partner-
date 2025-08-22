@@ -1,8 +1,11 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import TrackingMap from "@/components/TrackingMap";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft, 
   Navigation, 
@@ -12,236 +15,216 @@ import {
   Clock,
   CheckCircle,
   Package,
-  Truck
+  Truck,
+  AlertTriangle,
+  Settings
 } from "lucide-react";
+
+// Define delivery status type
+type DeliveryStatus = 'Pending' | 'On the Way' | 'Arrived' | 'Delivered';
+
+// Mock data matching the requirements from the prompt
+const mockTrackingData = {
+  order_id: "ORD123",
+  customer_name: "Rohit Sharma",
+  customer_address: "Sector 21, Phagwara",
+  agent_location: { lat: 31.3240, lng: 75.5625 }, // Phagwara coordinates
+  customer_location: { lat: 31.3346, lng: 75.5726 }, // Near Phagwara
+  distance_km: 2.5,
+  estimated_time: "25 mins",
+  delivery_status: 'On the Way' as DeliveryStatus,
+  special_instructions: "Leave at door. Ring bell twice.",
+  priority_level: 'High' as const,
+  total_amount: 130
+};
 
 const Tracking = () => {
   const navigate = useNavigate();
-  const [deliveryStatus, setDeliveryStatus] = useState("en_route"); // picked_up, en_route, delivered
+  const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const orderId = searchParams.get('id');
+  
+  // State management
+  const [orderData, setOrderData] = useState(mockTrackingData);
+  const [mapboxToken, setMapboxToken] = useState<string>('');
+  const [isLoadingToken, setIsLoadingToken] = useState(true);
 
-  const handleStatusUpdate = (status: string) => {
-    setDeliveryStatus(status);
-  };
+  // Fetch Mapbox token from Supabase secrets
+  useEffect(() => {
+    const fetchMapboxToken = async () => {
+      try {
+        setIsLoadingToken(true);
+        
+        // Call Supabase Edge Function to get Mapbox token
+        const { data, error } = await supabase.functions.invoke('get-mapbox-token');
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data?.token) {
+          setMapboxToken(data.token);
+        } else {
+          throw new Error('No token received from server');
+        }
+        
+        setIsLoadingToken(false);
+      } catch (error) {
+        console.error('Error fetching Mapbox token:', error);
+        setIsLoadingToken(false);
+        toast({
+          title: "Map Token Error",
+          description: "Please ensure your Mapbox token is configured in Supabase secrets",
+          variant: "destructive",
+        });
+      }
+    };
 
-  const getStatusConfig = () => {
-    switch (deliveryStatus) {
-      case "picked_up":
-        return {
-          title: "Order Picked Up",
-          subtitle: "Heading to customer",
-          icon: Package,
-          color: "text-warning",
-          bgColor: "bg-warning/10"
-        };
-      case "en_route":
-        return {
-          title: "On the Way",
-          subtitle: "Delivering to customer",
-          icon: Truck,
-          color: "text-primary",
-          bgColor: "bg-primary/10"
-        };
-      case "delivered":
-        return {
-          title: "Delivered",
-          subtitle: "Order completed successfully",
-          icon: CheckCircle,
-          color: "text-success",
-          bgColor: "bg-success/10"
-        };
-      default:
-        return {
-          title: "En Route",
-          subtitle: "On the way",
-          icon: Navigation,
-          color: "text-primary",
-          bgColor: "bg-primary/10"
-        };
+    fetchMapboxToken();
+  }, [toast]);
+
+  // Handle status updates
+  const handleStatusUpdate = (newStatus: string) => {
+    setOrderData(prev => ({
+      ...prev,
+      delivery_status: newStatus as any
+    }));
+
+    // Show appropriate toast message
+    let message = '';
+    switch (newStatus) {
+      case 'On the Way':
+        message = 'Delivery started! Customer will be notified.';
+        break;
+      case 'Arrived':
+        message = 'Marked as arrived. Ready for delivery!';
+        break;
+      case 'Delivered':
+        message = 'Order completed successfully!';
+        break;
+    }
+
+    toast({
+      title: "Status Updated",
+      description: message,
+    });
+
+    // If delivered, navigate back after delay
+    if (newStatus === 'Delivered') {
+      setTimeout(() => {
+        navigate('/home');
+      }, 3000);
     }
   };
 
-  const statusConfig = getStatusConfig();
-  const StatusIcon = statusConfig.icon;
+  // Handle real-time location updates (simulated)
+  useEffect(() => {
+    if (orderData.delivery_status === 'Delivered') return;
+
+    const interval = setInterval(() => {
+      setOrderData(prev => {
+        // Simulate moving towards customer
+        const deltaLat = (prev.customer_location.lat - prev.agent_location.lat) * 0.02;
+        const deltaLng = (prev.customer_location.lng - prev.agent_location.lng) * 0.02;
+        
+        return {
+          ...prev,
+          agent_location: {
+            lat: prev.agent_location.lat + deltaLat,
+            lng: prev.agent_location.lng + deltaLng
+          }
+        };
+      });
+    }, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [orderData.delivery_status]);
+
+  if (isLoadingToken) {
+    return (
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
+        <Card className="bg-card/80 backdrop-blur-lg border-primary/20">
+          <CardContent className="p-8 text-center">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">Loading Map...</h3>
+            <p className="text-muted-foreground">Initializing live tracking</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!mapboxToken || mapboxToken === 'pk.your-mapbox-token-here') {
+    return (
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-card/80 backdrop-blur-lg border-destructive/20">
+          <CardContent className="p-6 text-center">
+            <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">Mapbox Token Required</h3>
+            <p className="text-muted-foreground mb-4">
+              To enable live tracking, please add your Mapbox public token to Supabase secrets.
+            </p>
+            <div className="space-y-3">
+              <Button
+                onClick={() => window.open('https://mapbox.com', '_blank')}
+                className="w-full bg-gradient-neon hover:shadow-neon transition-smooth"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Get Mapbox Token
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate('/home')}
+                className="w-full border-border"
+              >
+                Return to Home
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              Add the token as 'MAPBOX_PUBLIC_TOKEN' in your Supabase Edge Function secrets.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 animate-fade-in">
-        <div className="flex items-center space-x-4">
+    <div className="min-h-screen bg-gradient-dark flex flex-col">
+      {/* Header - minimal for map view */}
+      <div className="bg-gray-900/95 backdrop-blur-lg border-b border-gray-700 p-3 flex items-center justify-between z-20">
+        <div className="flex items-center space-x-3">
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => navigate('/order-details')}
-            className="hover:bg-secondary"
+            onClick={() => navigate('/home')}
+            className="text-white hover:bg-gray-800"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-lg font-semibold text-foreground">Live Tracking</h1>
-            <p className="text-sm text-muted-foreground">Order #ORD001</p>
-          </div>
-          <div className="ml-auto">
-            <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0`}>
-              {deliveryStatus.replace('_', ' ')}
-            </Badge>
+            <h1 className="text-lg font-bold text-white">Live Tracking</h1>
+            <p className="text-sm text-gray-300">#{orderData.order_id}</p>
           </div>
         </div>
-      </div>
-
-      {/* Map Placeholder */}
-      <div className="h-96 bg-gradient-dark relative overflow-hidden animate-fade-in">
-        <div className="absolute inset-0 bg-grid-pattern opacity-10" />
         
-        {/* Mock Map Interface */}
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center space-y-4">
-            <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto animate-glow-pulse">
-              <Navigation className="w-10 h-10 text-primary" />
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-foreground">Live Map View</p>
-              <p className="text-sm text-muted-foreground">GPS tracking in progress</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Controls */}
-        <div className="absolute bottom-4 right-4 space-y-2">
-          <Button size="icon" className="bg-card/90 hover:bg-card border-border shadow-lg">
-            <MapPin className="w-4 h-4" />
-          </Button>
-          <Button size="icon" className="bg-card/90 hover:bg-card border-border shadow-lg">
-            <Navigation className="w-4 h-4" />
-          </Button>
-        </div>
+        <Badge className={`${
+          orderData.delivery_status === 'Delivered' ? 'bg-green-500' :
+          orderData.delivery_status === 'Arrived' ? 'bg-orange-500' :
+          orderData.delivery_status === 'On the Way' ? 'bg-blue-500' :
+          'bg-yellow-500'
+        } text-white animate-pulse`}>
+          {orderData.delivery_status}
+        </Badge>
       </div>
 
-      <div className="p-4 space-y-6">
-        {/* Current Status */}
-        <Card className="bg-gradient-dark border-primary/20 animate-slide-up">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-4">
-              <div className={`p-3 ${statusConfig.bgColor} rounded-lg`}>
-                <StatusIcon className={`w-6 h-6 ${statusConfig.color}`} />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-foreground">{statusConfig.title}</h3>
-                <p className="text-sm text-muted-foreground">{statusConfig.subtitle}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-primary">ETA: 8 min</p>
-                <p className="text-xs text-muted-foreground">1.2 km left</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Delivery Progress */}
-        <Card className="bg-card border-border animate-slide-up">
-          <CardContent className="p-4">
-            <h3 className="font-semibold text-foreground mb-4">Delivery Progress</h3>
-            
-            <div className="space-y-4">
-              {/* Step 1: Pickup */}
-              <div className="flex items-center space-x-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  deliveryStatus !== "picked_up" ? "bg-primary text-primary-foreground" : "bg-muted"
-                }`}>
-                  <Package className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">Picked up from restaurant</p>
-                  <p className="text-sm text-muted-foreground">Pizza Palace - 2:15 PM</p>
-                </div>
-                <CheckCircle className={`w-5 h-5 ${
-                  deliveryStatus !== "picked_up" ? "text-primary" : "text-muted-foreground"
-                }`} />
-              </div>
-
-              {/* Step 2: En Route */}
-              <div className="flex items-center space-x-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  deliveryStatus === "en_route" ? "bg-primary text-primary-foreground animate-glow-pulse" : "bg-muted"
-                }`}>
-                  <Truck className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">En route to customer</p>
-                  <p className="text-sm text-muted-foreground">123 Main St, Apt 4B</p>
-                </div>
-                {deliveryStatus === "en_route" && (
-                  <Clock className="w-5 h-5 text-primary animate-pulse" />
-                )}
-              </div>
-
-              {/* Step 3: Delivered */}
-              <div className="flex items-center space-x-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  deliveryStatus === "delivered" ? "bg-success text-white" : "bg-muted"
-                }`}>
-                  <CheckCircle className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">Delivered to customer</p>
-                  <p className="text-sm text-muted-foreground">
-                    {deliveryStatus === "delivered" ? "Completed at 2:32 PM" : "Pending"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Customer Contact */}
-        <Card className="bg-card border-border animate-slide-up">
-          <CardContent className="p-4">
-            <h3 className="font-semibold text-foreground mb-3">Customer Contact</h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-foreground">John Smith</p>
-                <p className="text-sm text-muted-foreground">123 Main St, Apt 4B</p>
-              </div>
-              <div className="flex space-x-2">
-                <Button size="icon" variant="outline" className="border-border">
-                  <Phone className="w-4 h-4" />
-                </Button>
-                <Button size="icon" variant="outline" className="border-border">
-                  <MessageCircle className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Action Buttons */}
-        <div className="space-y-3 animate-slide-up">
-          {deliveryStatus === "en_route" && (
-            <Button 
-              onClick={() => handleStatusUpdate("delivered")}
-              className="w-full bg-gradient-neon hover:shadow-neon transition-smooth"
-            >
-              Mark as Delivered
-            </Button>
-          )}
-          
-          {deliveryStatus === "delivered" && (
-            <Button 
-              onClick={() => navigate('/home')}
-              className="w-full bg-gradient-neon hover:shadow-neon transition-smooth"
-            >
-              Complete Delivery
-            </Button>
-          )}
-          
-          <div className="flex space-x-2">
-            <Button variant="outline" className="flex-1 border-border">
-              Report Issue
-            </Button>
-            <Button variant="outline" className="flex-1 border-border">
-              Get Help
-            </Button>
-          </div>
-        </div>
+      {/* Full-screen Map */}
+      <div className="flex-1 relative">
+        <TrackingMap
+          orderData={orderData}
+          onStatusUpdate={handleStatusUpdate}
+          mapboxToken={mapboxToken}
+        />
       </div>
     </div>
   );
