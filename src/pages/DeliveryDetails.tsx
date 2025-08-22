@@ -146,10 +146,12 @@ const DeliveryDetails = () => {
   const completeDeliveryDirect = async (paymentMethod: string) => {
     setIsProcessing(true);
     try {
+      console.log('DeliveryDetails: Starting delivery completion with method:', paymentMethod);
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
       
       // Map payment methods to function input ('COD' or 'Online')
       const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
+      console.log('DeliveryDetails: Calling complete-delivery with:', { order_id: order?.id, payment_method: methodParam });
       
       const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: {
@@ -159,24 +161,31 @@ const DeliveryDetails = () => {
         }
       });
 
-      if (error) throw error;
+      console.log('DeliveryDetails: Edge function response:', { data, error });
 
-      if (data.success) {
+      if (error) {
+        console.error('DeliveryDetails: Edge function error:', error);
+        throw error;
+      }
+
+      if (data?.success) {
         toast({
           title: "Successfully Delivered! ✅",
-          description: `Order completed. Distance: ${data.order.distance_km?.toFixed(2)}km, Earned: ₹${data.order.payout_amount}`,
+          description: `Order completed. Distance: ${data.order?.distance_km?.toFixed(2) || 0}km, Earned: ₹${data.order?.payout_amount || 0}`,
         });
         // Notify other screens to refresh
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
-        throw new Error(data.error || 'Failed to complete delivery');
+        const errorMsg = data?.error || 'Failed to complete delivery';
+        console.error('DeliveryDetails: Server error:', errorMsg);
+        throw new Error(errorMsg);
       }
-    } catch (error) {
-      console.error('Delivery completion error:', error);
+    } catch (error: any) {
+      console.error('DeliveryDetails: Delivery completion error:', error);
       toast({
         title: "Delivery Failed",
-        description: "Unable to complete delivery. Please try again.",
+        description: error?.message || "Unable to complete delivery. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -248,42 +257,42 @@ const DeliveryDetails = () => {
 
       {/* Customer Information */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center space-x-2">
-            <User className="w-5 h-5 text-primary" />
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center space-x-2 text-sm">
+            <User className="w-4 h-4 text-primary" />
             <span>Customer Information</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        <CardContent className="space-y-2 p-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-sm text-muted-foreground">Customer Name</p>
-              <p className="font-medium text-foreground">{order.customer_name}</p>
+              <p className="text-xs text-muted-foreground">Customer Name</p>
+              <p className="text-sm font-medium text-foreground">{order.customer_name}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Delivery Address</p>
-              <div className="flex items-start space-x-2">
-                <MapPin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                <p className="font-medium text-foreground">
+              <p className="text-xs text-muted-foreground">Delivery Address</p>
+              <div className="flex items-start space-x-1">
+                <MapPin className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
+                <p className="text-sm font-medium text-foreground">
                   {order.address?.addressLine1}, {order.address?.city} - {order.address?.pincode}
                 </p>
               </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-sm text-muted-foreground">Contact Number</p>
-              <div className="flex items-center space-x-2">
-                <Phone className="w-4 h-4 text-primary" />
-                <p className="font-medium text-foreground">{order.customer_phone}</p>
+              <p className="text-xs text-muted-foreground">Contact Number</p>
+              <div className="flex items-center space-x-1">
+                <Phone className="w-3 h-3 text-primary" />
+                <p className="text-sm font-medium text-foreground">{order.customer_phone}</p>
               </div>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Order Date</p>
-              <div className="flex items-center space-x-2">
-                <Calendar className="w-4 h-4 text-primary" />
-                <p className="font-medium text-foreground">
+              <p className="text-xs text-muted-foreground">Order Date</p>
+              <div className="flex items-center space-x-1">
+                <Calendar className="w-3 h-3 text-primary" />
+                <p className="text-sm font-medium text-foreground">
                   {new Date(order.created_at).toLocaleDateString()}
                 </p>
               </div>
@@ -292,10 +301,10 @@ const DeliveryDetails = () => {
 
           {order.delivery_time_slot && (
             <div>
-              <p className="text-sm text-muted-foreground">Time Slot</p>
-              <div className="flex items-center space-x-2">
-                <Clock className="w-4 h-4 text-primary" />
-                <p className="font-medium text-foreground">{order.delivery_time_slot}</p>
+              <p className="text-xs text-muted-foreground">Time Slot</p>
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3 text-primary" />
+                <p className="text-sm font-medium text-foreground">{order.delivery_time_slot}</p>
               </div>
             </div>
           )}
@@ -304,32 +313,32 @@ const DeliveryDetails = () => {
 
       {/* Order Details */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center space-x-2">
-            <Package className="w-5 h-5 text-primary" />
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center space-x-2 text-sm">
+            <Package className="w-4 h-4 text-primary" />
             <span>Order Details</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2 p-3">
           {order.items?.map((item: any, index: number) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                  <Package className="w-5 h-5 text-primary" />
+            <div key={index} className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
+                  <Package className="w-3 h-3 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{item.name || 'Product'}</p>
-                  <p className="text-sm text-muted-foreground">Qty: {item.quantity || 1}</p>
+                  <p className="text-sm font-medium text-foreground">{item.name || 'Product'}</p>
+                  <p className="text-xs text-muted-foreground">Qty: {item.quantity || 1}</p>
                 </div>
               </div>
-              <p className="font-bold text-foreground">₹{item.price || item.total || order.total}</p>
+              <p className="text-sm font-bold text-foreground">₹{item.price || item.total || order.total}</p>
             </div>
           ))}
           
-          <div className="border-t border-border pt-3">
+          <div className="border-t border-border pt-2">
             <div className="flex justify-between items-center">
-              <p className="text-base font-semibold text-foreground">Total Amount</p>
-              <p className="text-lg font-bold text-primary">₹{order.total}</p>
+              <p className="text-sm font-semibold text-foreground">Total Amount</p>
+              <p className="text-base font-bold text-primary">₹{order.total}</p>
             </div>
           </div>
         </CardContent>
@@ -337,25 +346,25 @@ const DeliveryDetails = () => {
 
       {/* Distance & Payout Details */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground flex items-center space-x-2">
-              <Navigation className="w-4 h-4 text-primary" />
+        <CardContent className="p-3">
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center space-x-1">
+              <Navigation className="w-3 h-3 text-primary" />
               <span>DELIVERY DETAILS</span>
             </h3>
             
-            <div className="grid grid-cols-2 gap-3">
-              <div className="text-center p-2.5 bg-secondary/20 rounded-lg">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="text-center p-2 bg-secondary/20 rounded-lg">
                 <p className="text-xs text-muted-foreground">Distance</p>
-                <p className="text-lg font-bold text-primary">{distance.toFixed(2)} km</p>
+                <p className="text-sm font-bold text-primary">{distance.toFixed(2)} km</p>
               </div>
-              <div className="text-center p-2.5 bg-secondary/20 rounded-lg">
+              <div className="text-center p-2 bg-secondary/20 rounded-lg">
                 <p className="text-xs text-muted-foreground">Your Payout</p>
-                <p className="text-lg font-bold text-green-500">₹{payout}</p>
+                <p className="text-sm font-bold text-green-500">₹{payout}</p>
               </div>
             </div>
 
-            <div className="p-2.5 bg-primary/10 rounded-lg border border-primary/20">
+            <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
               <p className="text-xs text-primary">
                 Fair pricing: ₹20 base + ₹15/km beyond 1km
               </p>
@@ -366,29 +375,29 @@ const DeliveryDetails = () => {
 
       {/* Payment Details */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground flex items-center space-x-2">
-              <CreditCard className="w-4 h-4 text-primary" />
+        <CardContent className="p-3">
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center space-x-1">
+              <CreditCard className="w-3 h-3 text-primary" />
               <span>PAYMENT DETAILS</span>
             </h3>
             
             <div className="flex justify-between items-center">
-              <span className="font-medium text-foreground">Payment Status:</span>
-              <Badge className={`${getPaymentStatusColor(order.payment_status)} border-0`}>
+              <span className="text-sm font-medium text-foreground">Payment Status:</span>
+              <Badge className={`${getPaymentStatusColor(order.payment_status)} border-0 text-xs`}>
                 {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? 'PREPAID' : 'PENDING'}
               </Badge>
             </div>
 
             {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? (
-              <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
-                <p className="text-sm text-green-600 dark:text-green-400">
+              <div className="p-2 bg-green-500/10 rounded-lg border border-green-500/20">
+                <p className="text-xs text-green-600 dark:text-green-400">
                   Order is already paid online
                 </p>
               </div>
             ) : (
-              <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                <p className="text-sm text-amber-600 dark:text-amber-400">
+              <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                <p className="text-xs text-amber-600 dark:text-amber-400">
                   Payment pending - collect on delivery
                 </p>
               </div>
@@ -399,30 +408,30 @@ const DeliveryDetails = () => {
 
       {/* Action Buttons */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground flex items-center space-x-2">
-              <CheckCircle2 className="w-4 h-4 text-primary" />
+        <CardContent className="p-3">
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center space-x-1">
+              <CheckCircle2 className="w-3 h-3 text-primary" />
               <span>DELIVERY ACTIONS</span>
             </h3>
             
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-2">
               <Button 
                 variant="outline" 
-                className="flex items-center justify-center space-x-2 h-10 border-border hover:bg-secondary"
+                className="flex items-center justify-center space-x-2 h-8 border-border hover:bg-secondary"
                 onClick={handleNavigation}
               >
-                <Navigation className="w-4 h-4" />
-                <span>Navigate to Customer</span>
+                <Navigation className="w-3 h-3" />
+                <span className="text-sm">Navigate to Customer</span>
               </Button>
               
               <Button 
-                className="flex items-center justify-center space-x-2 h-10 bg-gradient-neon hover:shadow-neon transition-smooth"
+                className="flex items-center justify-center space-x-2 h-8 bg-gradient-neon hover:shadow-neon transition-smooth"
                 onClick={handleMarkAsDelivery}
                 disabled={isProcessing}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                <CheckCircle2 className="w-3 h-3" />
+                <span className="text-sm">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
               </Button>
             </div>
           </div>
@@ -444,6 +453,7 @@ const DeliveryDetails = () => {
         <PaymentMethodDialog 
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
+          selectionOnly={true}
           order={{
             order_id: order.id,
             customer_name: order.customer_name,
@@ -451,6 +461,7 @@ const DeliveryDetails = () => {
             payment_status: order.payment_status
           }}
           onSuccess={async (paymentMethod) => {
+            console.log('DeliveryDetails: Payment method selected:', paymentMethod);
             setShowPaymentDialog(false);
             await completeDeliveryDirect(paymentMethod);
           }}
