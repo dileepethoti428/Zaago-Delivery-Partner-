@@ -28,19 +28,51 @@ interface DeliveryHistoryItem {
   customer_rating?: number;
   delivery_notes?: string;
   distance_traveled?: number;
+  delivery_payout?: number;
 }
 
 const History = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [deliveries, setDeliveries] = useState<DeliveryHistoryItem[]>([]);
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
 
-  // Fetch delivery history from backend
+  // Get current agent ID
+  const getCurrentAgent = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .single();
+
+      return agent?.id || null;
+    } catch (error) {
+      console.error('Error getting current agent:', error);
+      return null;
+    }
+  };
+
+  // Fetch delivery history from backend for current agent only
   const fetchDeliveryHistory = async () => {
     try {
+      const agentId = await getCurrentAgent();
+      if (!agentId) {
+        setDeliveries([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setCurrentAgentId(agentId);
+
       const { data, error } = await supabase
         .from('delivery_history')
         .select('*')
+        .eq('agent_id', agentId)
         .order('completed_at', { ascending: false });
 
       if (error) throw error;
@@ -60,6 +92,64 @@ const History = () => {
 
   useEffect(() => {
     fetchDeliveryHistory();
+
+    // Set up real-time subscription for new deliveries
+    let channel: any = null;
+    
+    const setupRealtimeSubscription = async () => {
+      const agentId = await getCurrentAgent();
+      if (!agentId) return;
+
+      channel = supabase
+        .channel('delivery-history-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'delivery_history',
+            filter: `agent_id=eq.${agentId}`
+          },
+          (payload) => {
+            console.log('New delivery added:', payload);
+            const newDelivery = payload.new as DeliveryHistoryItem;
+            setDeliveries(prev => [newDelivery, ...prev]);
+            
+            toast({
+              title: "New Delivery Added! ✅",
+              description: `Delivery for ${newDelivery.customer_name} added to history`,
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'delivery_history',
+            filter: `agent_id=eq.${agentId}`
+          },
+          (payload) => {
+            console.log('Delivery updated:', payload);
+            const updatedDelivery = payload.new as DeliveryHistoryItem;
+            setDeliveries(prev => 
+              prev.map(delivery => 
+                delivery.id === updatedDelivery.id ? updatedDelivery : delivery
+              )
+            );
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   // Calculate agent payout (base 20 + 15 per km beyond 1km)
@@ -195,7 +285,7 @@ const History = () => {
                         {/* Agent Payout */}
                         <div className="flex items-center text-sm text-green-600 font-medium mt-2">
                           <IndianRupee className="w-4 h-4 mr-1" />
-                          Earned: ₹{calculateAgentPayout(delivery.distance_traveled || 2.5)}
+                          Earned: ₹{delivery.delivery_payout || calculateAgentPayout(delivery.distance_traveled || 2.5)}
                         </div>
 
                         {/* Delivery Notes */}
