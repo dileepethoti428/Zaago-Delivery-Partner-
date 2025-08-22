@@ -265,21 +265,11 @@ const Notifications = () => {
   return (
     <div className="min-h-screen bg-background p-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between animate-fade-in">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-          <p className="text-muted-foreground">
-            {unreadCount > 0 ? `${unreadCount} unread notifications` : "All caught up!"}
-          </p>
-        </div>
-        
-        <Button
-          variant="outline"
-          size="icon"
-          className="border-border hover:bg-secondary"
-        >
-          <Settings className="w-4 h-4" />
-        </Button>
+      <div className="animate-fade-in">
+        <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
+        <p className="text-muted-foreground">
+          {unreadCount > 0 ? `${unreadCount} unread notifications` : "All caught up!"}
+        </p>
       </div>
 
       {/* Action Buttons */}
