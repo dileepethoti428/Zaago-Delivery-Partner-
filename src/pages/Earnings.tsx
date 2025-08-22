@@ -434,19 +434,51 @@ const Earnings = () => {
       return;
     }
 
-    if (walletData.balance <= 0) {
+    const minWithdrawal = 100;
+    if (walletData.balance < minWithdrawal) {
       toast({
-        title: "Insufficient Balance",
-        description: "You don't have any balance to cash out.",
+        title: "Minimum Withdrawal Amount",
+        description: `Minimum withdrawal amount is ₹${minWithdrawal}. Your current balance is ₹${walletData.balance.toFixed(2)}.`,
         variant: "destructive"
       });
       return;
     }
 
-    toast({
-      title: "Cash Out Request Submitted",
-      description: `₹${walletData.balance.toFixed(2)} will be transferred to your bank account within 1-2 business days.`,
-    });
+    try {
+      // Create withdrawal request in backend
+      const { data, error } = await supabase
+        .from('agent_wallet_transactions')
+        .insert({
+          agent_id: agentId,
+          amount: -walletData.balance, // Negative for withdrawal
+          transaction_type: 'withdrawal',
+          description: 'Cash out to bank account',
+          status: 'pending'
+        });
+
+      if (error) throw error;
+
+      // Update wallet balance to 0 (since all money is being withdrawn)
+      await supabase
+        .from('agent_wallet')
+        .update({ balance: 0 })
+        .eq('agent_id', agentId);
+
+      // Refresh wallet data
+      await fetchWalletData(agentId);
+
+      toast({
+        title: "Cash Out Request Submitted",
+        description: `₹${walletData.balance.toFixed(2)} will be transferred to your primary bank account within 1-2 business days.`,
+      });
+    } catch (error) {
+      console.error('Error processing cash out:', error);
+      toast({
+        title: "Cash Out Failed",
+        description: "There was an error processing your withdrawal. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const currentData = earningsData[selectedPeriod as keyof typeof earningsData];
@@ -784,6 +816,17 @@ const Earnings = () => {
                   </DialogDescription>
                 </DialogHeader>
                 
+                {/* Available Balance Info */}
+                <div className="p-3 bg-success/10 border border-success/20 rounded-lg mb-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-success">Available for Withdrawal</span>
+                    <span className="text-lg font-bold text-success">₹{walletData.balance.toFixed(2)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Minimum withdrawal: ₹100 • Processing time: 1-2 business days
+                  </p>
+                </div>
+                
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="bank_name">Bank Name *</Label>
@@ -852,7 +895,7 @@ const Earnings = () => {
                     <Shield className="w-4 h-4 text-primary mt-0.5" />
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        Your bank details are encrypted and stored securely
+                        Your bank details are encrypted and stored securely. Bank verification may take 24-48 hours.
                       </p>
                     </div>
                   </div>
@@ -878,21 +921,21 @@ const Earnings = () => {
             </Dialog>
           </div>
             
-          {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <Button 
-              onClick={handleCashOut}
-              disabled={bankDetails.length === 0 || walletData.balance <= 0}
-              className="bg-gradient-neon hover:shadow-neon transition-smooth text-sm"
-            >
-              <ArrowUpRight className="w-4 h-4 mr-2" />
-              Cash Out
-            </Button>
-            <Button variant="outline" className="border-border text-sm">
-              <Download className="w-4 h-4 mr-2" />
-              Download Report
-            </Button>
-          </div>
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button 
+                onClick={handleCashOut}
+                disabled={bankDetails.length === 0 || walletData.balance < 100}
+                className="bg-gradient-neon hover:shadow-neon transition-smooth text-sm"
+              >
+                <ArrowUpRight className="w-4 h-4 mr-2" />
+                {walletData.balance < 100 ? `Min ₹100` : 'Cash Out'}
+              </Button>
+              <Button variant="outline" className="border-border text-sm">
+                <Download className="w-4 h-4 mr-2" />
+                Download Report
+              </Button>
+            </div>
         </CardContent>
       </Card>
     </div>
