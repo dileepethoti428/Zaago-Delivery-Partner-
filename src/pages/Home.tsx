@@ -337,9 +337,9 @@ const Home = () => {
               variant="ghost"
               size="icon"
               className="hover:bg-primary/10"
-              onClick={() => navigate('/settings')}
+              onClick={() => navigate('/profile')}
             >
-              <Settings className="w-5 h-5 text-foreground" />
+              <User className="w-5 h-5 text-foreground" />
             </Button>
           </div>
         </div>

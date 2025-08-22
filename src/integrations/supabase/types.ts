@@ -1837,6 +1837,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           admin_verification_photo: string | null
           approval_status: string | null
           approved_at: string | null
@@ -1846,6 +1847,7 @@ export type Database = {
           created_at: string
           date_of_birth: string | null
           default_address: Json | null
+          emergency_contact: string | null
           full_name: string | null
           id: string
           notification_preferences: Json | null
@@ -1858,6 +1860,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          address?: string | null
           admin_verification_photo?: string | null
           approval_status?: string | null
           approved_at?: string | null
@@ -1867,6 +1870,7 @@ export type Database = {
           created_at?: string
           date_of_birth?: string | null
           default_address?: Json | null
+          emergency_contact?: string | null
           full_name?: string | null
           id?: string
           notification_preferences?: Json | null
@@ -1879,6 +1883,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          address?: string | null
           admin_verification_photo?: string | null
           approval_status?: string | null
           approved_at?: string | null
@@ -1888,6 +1893,7 @@ export type Database = {
           created_at?: string
           date_of_birth?: string | null
           default_address?: Json | null
+          emergency_contact?: string | null
           full_name?: string | null
           id?: string
           notification_preferences?: Json | null

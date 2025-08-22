@@ -104,8 +104,8 @@ const Profile = () => {
           phone: profile?.phone || agent.phone,
           email: agent.email,
           photo_url: profile?.photo_url,
-          address: profile?.address,
-          emergency_contact: profile?.emergency_contact,
+          address: profile?.address || '',
+          emergency_contact: profile?.emergency_contact || '',
           user_id: agent.agent_id
         };
 
