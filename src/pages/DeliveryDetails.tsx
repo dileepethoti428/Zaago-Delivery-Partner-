@@ -415,7 +415,7 @@ const DeliveryDetails = () => {
               <span>DELIVERY ACTIONS</span>
             </h3>
             
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button 
                 variant="outline" 
                 className="flex items-center justify-center space-x-2 h-8 border-border hover:bg-secondary"
