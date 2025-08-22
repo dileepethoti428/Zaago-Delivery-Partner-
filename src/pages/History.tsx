@@ -27,6 +27,7 @@ interface DeliveryHistoryItem {
   completed_at: string;
   customer_rating?: number;
   delivery_notes?: string;
+  distance_traveled?: number;
 }
 
 const History = () => {
@@ -61,9 +62,14 @@ const History = () => {
     fetchDeliveryHistory();
   }, []);
 
-  // Calculate agent payout (base 20 + 5 per km + 2 per product)
+  // Calculate agent payout (base 20 + 15 per km beyond 1km)
   const calculateAgentPayout = (distance: number = 1, products: number = 1) => {
-    return 20 + (5 * distance) + (2 * products);
+    const basePay = 20; // Base pay for first 1 km
+    const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
+    const perKmRate = 15; // Rate per km for fair pricing
+    const distancePay = additionalDistance * perKmRate;
+    
+    return basePay + distancePay;
   };
 
   // Loading skeleton
@@ -189,7 +195,7 @@ const History = () => {
                         {/* Agent Payout */}
                         <div className="flex items-center text-sm text-green-600 font-medium mt-2">
                           <IndianRupee className="w-4 h-4 mr-1" />
-                          Earned: ₹{calculateAgentPayout(2.5, Array.isArray(delivery.items) ? delivery.items.length : 1)}
+                          Earned: ₹{calculateAgentPayout(delivery.distance_traveled || 2.5)}
                         </div>
 
                         {/* Delivery Notes */}

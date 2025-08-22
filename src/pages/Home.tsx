@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   MapPin, 
@@ -20,7 +21,8 @@ import {
   CheckCircle,
   X,
   User,
-  QrCode
+  QrCode,
+  Loader2
 } from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 
@@ -47,6 +49,13 @@ const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
+  // Get current location with auto-refresh and backend saving
+  const location = useGeolocation({
+    enableHighAccuracy: true,
+    saveToBackend: true,
+    refreshInterval: 10000, // Refresh every 10 seconds
+  });
+  
   // State management
   const [isOnline, setIsOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,11 +67,11 @@ const Home = () => {
   const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
   const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
   
-  // Calculate agent payout based on new structure
+  // Calculate agent payout based on real distance (updated rates)
   const calculateAgentPayout = (distance: number) => {
-    const basePay = 15; // Base pay for orders within 1 km
+    const basePay = 20; // Increased base pay for first 1 km
     const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
-    const perKmRate = 12; // Average of ₹10-₹14 per km
+    const perKmRate = 15; // Increased rate per km for fair pricing
     const distancePay = additionalDistance * perKmRate;
     
     return basePay + distancePay;
@@ -113,7 +122,10 @@ const Home = () => {
 
   // Calculate distance and ETA for orders using backend service
   const calculateDistanceETA = async (orders: Order[]) => {
-    const agentLocation = { lat: 31.2556, lng: 75.7045 }; // Mock agent location
+    // Use real agent location if available, fallback to default
+    const agentLocation = location.latitude && location.longitude 
+      ? { lat: location.latitude, lng: location.longitude }
+      : { lat: 31.2556, lng: 75.7045 }; // Fallback location
     
     const updatedOrders = await Promise.all(
       orders.map(async (order) => {
@@ -158,12 +170,12 @@ const Home = () => {
     setOrdersWithDistance(updatedOrders);
   };
 
-  // Calculate distances on component mount and when orders change
+  // Calculate distances when orders change or location updates
   useEffect(() => {
-    if (orders.length > 0) {
+    if (orders.length > 0 && (location.latitude && location.longitude)) {
       calculateDistanceETA(orders);
     }
-  }, [orders]);
+  }, [orders, location.latitude, location.longitude]);
 
   // Fetch orders on component mount and listen for order completion
   useEffect(() => {
@@ -330,9 +342,24 @@ const Home = () => {
             <h1 className="text-xl font-bold text-foreground">
               Zaago Delivery Agent
             </h1>
-            <p className="text-sm text-muted-foreground">
-              {isOnline ? "You're online and ready!" : "Ready to serve"}
-            </p>
+            <div className="flex items-center text-sm text-muted-foreground">
+              {location.loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Getting location...
+                </>
+              ) : location.error ? (
+                <>
+                  <MapPin className="w-4 h-4 mr-2 text-destructive" />
+                  Location unavailable
+                </>
+              ) : (
+                <>
+                  <MapPin className="w-4 h-4 mr-2 text-primary" />
+                  {location.address || 'Location detected'}
+                </>
+              )}
+            </div>
           </div>
           
           <div className="flex items-center space-x-3">
