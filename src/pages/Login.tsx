@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { Smartphone, Mail, Lock, User, Truck, Eye, EyeOff, Chrome, Facebook } from "lucide-react";
 
 // Validation schemas
@@ -78,19 +79,25 @@ const Login = () => {
   const onLoginSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (error) throw error;
+
       toast({
         title: "Login Successful",
         description: "Welcome back to Zaago!",
       });
       
-      navigate('/home');
-    } catch (error) {
+      // Check if user has bank details
+      await checkBankDetailsAndRedirect(authData.user.email!);
+    } catch (error: any) {
+      console.error('Login error:', error);
       toast({
         title: "Login Failed",
-        description: "Invalid credentials. Please try again.",
+        description: error.message || "Invalid credentials. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -101,23 +108,87 @@ const Login = () => {
   const onSignupSubmit = async (data: SignupFormData) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            full_name: data.name,
+            phone: data.phone,
+          },
+          emailRedirectTo: `${window.location.origin}/bank-details-setup`
+        }
+      });
+
+      if (error) throw error;
+
+      if (authData.user && !authData.session) {
+        toast({
+          title: "Check Your Email",
+          description: "We've sent you a confirmation link to complete your registration.",
+        });
+        return;
+      }
       
       toast({
         title: "Account Created",
-        description: "Welcome to Zaago! Please verify your email.",
+        description: "Welcome to Zaago!",
       });
       
-      navigate('/home');
-    } catch (error) {
+      // Redirect to bank details setup for new users
+      navigate('/bank-details-setup');
+    } catch (error: any) {
+      console.error('Signup error:', error);
       toast({
         title: "Signup Failed",
-        description: "Email already exists or server error.",
+        description: error.message || "Failed to create account. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkBankDetailsAndRedirect = async (email: string) => {
+    try {
+      // Check if user is an active agent with bank details
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select(`
+          id,
+          is_active,
+          agent_bank_details (id)
+        `)
+        .eq('email', email)
+        .maybeSingle();
+
+      if (!agent) {
+        toast({
+          title: "Account Not Activated",
+          description: "Please contact support to activate your delivery agent account.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!agent.is_active) {
+        toast({
+          title: "Account Pending Approval",
+          description: "Your account is pending admin approval. Please wait for activation.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Check if agent has bank details
+      if (!agent.agent_bank_details || agent.agent_bank_details.length === 0) {
+        navigate('/bank-details-setup');
+      } else {
+        navigate('/home');
+      }
+    } catch (error) {
+      console.error('Error checking bank details:', error);
+      navigate('/home'); // Fallback to home
     }
   };
 
