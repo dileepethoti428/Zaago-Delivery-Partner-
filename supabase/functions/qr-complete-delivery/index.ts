@@ -100,14 +100,20 @@ serve(async (req) => {
     }
 
     // Mark QR as scanned
-    await supabaseClient
+    const { error: scanUpdateError } = await supabaseClient
       .from('order_qr_codes')
       .update({
         is_scanned: true,
         scanned_at: new Date().toISOString(),
-        scanned_by: user.id
+        // Use delivery agent's id to satisfy FK (not auth user id)
+        scanned_by: agent.id
       })
       .eq('qr_code_data', qr_code_data);
+
+    if (scanUpdateError) {
+      console.error('Failed to mark QR as scanned:', scanUpdateError);
+      // Continue; do not block delivery completion on QR update issues
+    }
 
     // Update order status to delivered
     await supabaseClient
@@ -115,7 +121,7 @@ serve(async (req) => {
       .update({
         status: 'delivered',
         delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'cash_collected' : order.payment_status
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
       })
       .eq('id', order.id);
 
