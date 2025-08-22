@@ -80,6 +80,44 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_autopay_settings: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          is_enabled: boolean
+          minimum_balance: number
+          topup_amount: number
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          minimum_balance?: number
+          topup_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          minimum_balance?: number
+          topup_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_autopay_settings_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_bank_details: {
         Row: {
           account_holder_name: string
@@ -334,6 +372,63 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_withdrawal_requests: {
+        Row: {
+          admin_notes: string | null
+          agent_id: string
+          amount: number
+          bank_id: string
+          created_at: string
+          id: string
+          processed_at: string | null
+          processed_by: string | null
+          requested_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          agent_id: string
+          amount: number
+          bank_id: string
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          requested_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          agent_id?: string
+          amount?: number
+          bank_id?: string
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          requested_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_withdrawal_requests_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_withdrawal_requests_bank_id_fkey"
+            columns: ["bank_id"]
+            isOneToOne: false
+            referencedRelation: "agent_bank_details"
             referencedColumns: ["id"]
           },
         ]
