@@ -136,7 +136,7 @@ const DeliveryDetails = () => {
     
     // If prepaid, complete directly
     if (order.payment_status === 'paid' || order.payment_status === 'paid_online') {
-      await completeDeliveryDirect('paid_online');
+      await completeDeliveryDirect('Online');
     } else {
       // Show payment options for non-prepaid orders
       setShowPaymentDialog(true);
@@ -148,13 +148,13 @@ const DeliveryDetails = () => {
     try {
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
       
-      // Map payment methods to valid database values
-      const validPaymentStatus = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
+      // Map payment methods to function input ('COD' or 'Online')
+      const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
       
       const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: {
           order_id: order?.id,
-          payment_method: validPaymentStatus,
+          payment_method: methodParam,
           agent_location: agentLocation
         }
       });
@@ -166,6 +166,8 @@ const DeliveryDetails = () => {
           title: "Successfully Delivered! ✅",
           description: `Order completed. Distance: ${data.order.distance_km?.toFixed(2)}km, Earned: ₹${data.order.payout_amount}`,
         });
+        // Notify other screens to refresh
+        window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
         throw new Error(data.error || 'Failed to complete delivery');
@@ -229,7 +231,7 @@ const DeliveryDetails = () => {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Delivery Details</h1>
+          <h1 className="text-xl font-bold text-foreground">Delivery Details</h1>
           <p className="text-muted-foreground">Order #{order.id.slice(0, 8)}</p>
         </div>
       </div>
@@ -252,8 +254,8 @@ const DeliveryDetails = () => {
             <span>Customer Information</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-sm text-muted-foreground">Customer Name</p>
               <p className="font-medium text-foreground">{order.customer_name}</p>
@@ -269,7 +271,7 @@ const DeliveryDetails = () => {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-sm text-muted-foreground">Contact Number</p>
               <div className="flex items-center space-x-2">
@@ -308,7 +310,7 @@ const DeliveryDetails = () => {
             <span>Order Details</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           {order.items?.map((item: any, index: number) => (
             <div key={index} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
               <div className="flex items-center space-x-3">
@@ -324,10 +326,10 @@ const DeliveryDetails = () => {
             </div>
           ))}
           
-          <div className="border-t border-border pt-4">
+          <div className="border-t border-border pt-3">
             <div className="flex justify-between items-center">
-              <p className="text-lg font-bold text-foreground">Total Amount</p>
-              <p className="text-xl font-bold text-primary">₹{order.total}</p>
+              <p className="text-base font-semibold text-foreground">Total Amount</p>
+              <p className="text-lg font-bold text-primary">₹{order.total}</p>
             </div>
           </div>
         </CardContent>
@@ -335,26 +337,26 @@ const DeliveryDetails = () => {
 
       {/* Distance & Payout Details */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardContent className="p-6">
-          <div className="space-y-4">
+        <CardContent className="p-4">
+          <div className="space-y-3">
             <h3 className="font-semibold text-foreground flex items-center space-x-2">
-              <Navigation className="w-5 h-5 text-primary" />
+              <Navigation className="w-4 h-4 text-primary" />
               <span>DELIVERY DETAILS</span>
             </h3>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-secondary/20 rounded-lg">
-                <p className="text-sm text-muted-foreground">Distance</p>
-                <p className="text-xl font-bold text-primary">{distance.toFixed(2)} km</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center p-2.5 bg-secondary/20 rounded-lg">
+                <p className="text-xs text-muted-foreground">Distance</p>
+                <p className="text-lg font-bold text-primary">{distance.toFixed(2)} km</p>
               </div>
-              <div className="text-center p-3 bg-secondary/20 rounded-lg">
-                <p className="text-sm text-muted-foreground">Your Payout</p>
-                <p className="text-xl font-bold text-green-500">₹{payout}</p>
+              <div className="text-center p-2.5 bg-secondary/20 rounded-lg">
+                <p className="text-xs text-muted-foreground">Your Payout</p>
+                <p className="text-lg font-bold text-green-500">₹{payout}</p>
               </div>
             </div>
 
-            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-              <p className="text-sm text-primary">
+            <div className="p-2.5 bg-primary/10 rounded-lg border border-primary/20">
+              <p className="text-xs text-primary">
                 Fair pricing: ₹20 base + ₹15/km beyond 1km
               </p>
             </div>
@@ -364,10 +366,10 @@ const DeliveryDetails = () => {
 
       {/* Payment Details */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardContent className="p-6">
-          <div className="space-y-4">
+        <CardContent className="p-4">
+          <div className="space-y-3">
             <h3 className="font-semibold text-foreground flex items-center space-x-2">
-              <CreditCard className="w-5 h-5 text-primary" />
+              <CreditCard className="w-4 h-4 text-primary" />
               <span>PAYMENT DETAILS</span>
             </h3>
             
@@ -397,29 +399,29 @@ const DeliveryDetails = () => {
 
       {/* Action Buttons */}
       <Card className="bg-card border-border animate-slide-up">
-        <CardContent className="p-6">
-          <div className="space-y-4">
+        <CardContent className="p-4">
+          <div className="space-y-3">
             <h3 className="font-semibold text-foreground flex items-center space-x-2">
-              <CheckCircle2 className="w-5 h-5 text-primary" />
+              <CheckCircle2 className="w-4 h-4 text-primary" />
               <span>DELIVERY ACTIONS</span>
             </h3>
             
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-3">
               <Button 
                 variant="outline" 
-                className="flex items-center justify-center space-x-2 h-12 border-border hover:bg-secondary"
+                className="flex items-center justify-center space-x-2 h-10 border-border hover:bg-secondary"
                 onClick={handleNavigation}
               >
-                <Navigation className="w-5 h-5" />
+                <Navigation className="w-4 h-4" />
                 <span>Navigate to Customer</span>
               </Button>
               
               <Button 
-                className="flex items-center justify-center space-x-2 h-12 bg-gradient-neon hover:shadow-neon transition-smooth"
+                className="flex items-center justify-center space-x-2 h-10 bg-gradient-neon hover:shadow-neon transition-smooth"
                 onClick={handleMarkAsDelivery}
                 disabled={isProcessing}
               >
-                <CheckCircle2 className="w-5 h-5" />
+                <CheckCircle2 className="w-4 h-4" />
                 <span>{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
               </Button>
             </div>
