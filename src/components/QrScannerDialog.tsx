@@ -229,6 +229,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
           order={scannedOrder}
+          selectionOnly={true}
           onSuccess={async (paymentMethod) => {
             const qrCodeData = localStorage.getItem('last_scanned_qr') || '';
             await completeDelivery(qrCodeData, paymentMethod);

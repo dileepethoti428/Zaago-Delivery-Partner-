@@ -131,7 +131,7 @@ serve(async (req) => {
         items: order.items,
         total_amount: order.total,
         payment_method: payment_method,
-        payment_status: payment_method === 'COD' ? 'cash_collected' : 'prepaid',
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
         delivery_date: new Date().toISOString().split('T')[0],
         completed_at: new Date().toISOString(),
         special_instructions: order.special_instructions,
@@ -164,16 +164,24 @@ serve(async (req) => {
       // Continue execution - don't fail delivery for payout issues
     }
 
-    // Update agent statistics
-    await supabaseClient
+    // Update agent statistics - get current values first
+    const { data: currentAgent } = await supabaseClient
       .from('delivery_agents')
-      .update({
-        total_deliveries: supabaseClient.raw('total_deliveries + 1'),
-        deliveries_today: supabaseClient.raw('deliveries_today + 1'),
-        total_earnings: supabaseClient.raw(`total_earnings + ${order.total}`),
-        last_delivery_at: new Date().toISOString()
-      })
-      .eq('id', agent.id);
+      .select('total_deliveries, deliveries_today, total_earnings')
+      .eq('id', agent.id)
+      .single();
+
+    if (currentAgent) {
+      await supabaseClient
+        .from('delivery_agents')
+        .update({
+          total_deliveries: (currentAgent.total_deliveries || 0) + 1,
+          deliveries_today: (currentAgent.deliveries_today || 0) + 1,
+          total_earnings: (currentAgent.total_earnings || 0) + order.total,
+          last_delivery_at: new Date().toISOString()
+        })
+        .eq('id', agent.id);
+    }
 
     // Create order tracking record
     await supabaseClient

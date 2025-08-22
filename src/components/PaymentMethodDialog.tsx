@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CreditCard, Banknote, CheckCircle } from "lucide-react";
@@ -15,9 +15,10 @@ interface PaymentMethodDialogProps {
     payment_status?: string;
   };
   onSuccess?: (paymentMethod: string) => void;
+  selectionOnly?: boolean; // New prop for QR flow
 }
 
-export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: PaymentMethodDialogProps) => {
+export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, selectionOnly = false }: PaymentMethodDialogProps) => {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -25,7 +26,14 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
     setIsProcessing(true);
     
     try {
-      // Get current agent
+      // If in selection-only mode (QR flow), just return the selection
+      if (selectionOnly) {
+        onOpenChange(false);
+        onSuccess?.(method);
+        return;
+      }
+
+      // Normal flow - handle database operations for non-QR deliveries
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast({
@@ -36,7 +44,6 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
         return;
       }
 
-      // Get agent details
       const { data: agent } = await supabase
         .from('delivery_agents')
         .select('id')
@@ -53,12 +60,12 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
         return;
       }
 
-      // Update order status to delivered
+      // Update order with valid payment status values
       const { error: orderError } = await supabase
         .from('orders')
         .update({
           status: 'delivered',
-          payment_status: method === 'COD' ? 'COD' : 'Paid',
+          payment_status: method === 'COD' ? 'cash_collected' : 'prepaid',
           delivered: true,
           delivered_at: new Date().toISOString()
         })
@@ -68,7 +75,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
         throw orderError;
       }
 
-      // Create delivery history record
+      // Create delivery history record with valid payment status
       const { error: historyError } = await supabase
         .from('delivery_history')
         .insert({
@@ -76,31 +83,30 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
           agent_id: agent.id,
           customer_name: order.customer_name,
           total_amount: order.total_amount,
-          payment_status: method === 'COD' ? 'COD' : 'Paid',
+          payment_status: method === 'COD' ? 'paid_cod' : 'paid_online',
           payment_method: method,
           delivery_date: new Date().toISOString().split('T')[0],
           completed_at: new Date().toISOString(),
-          delivery_address: { address: 'Customer Address' }, // Placeholder
-          items: { items: [] } // Placeholder
+          delivery_address: { address: 'Customer Address' },
+          items: { items: [] }
         });
 
       if (historyError) {
         throw historyError;
       }
 
-      // Calculate payout using new system
-      const distance = 2.0; // Default distance - should be calculated from actual route
+      // Calculate payout
+      const distance = 2.0;
       const { data: payoutData, error: payoutError } = await supabase.rpc('calculate_delivery_payout', {
         distance_km: distance,
         delivery_time: new Date().toISOString(),
         agent_id_param: agent?.id || null
       });
 
-      let totalEarning = 15; // Default base pay
+      let totalEarning = 15;
       
       if (payoutError) {
         console.error('Payout calculation error:', payoutError);
-        // Fallback to base pay
         const { error: earningsError } = await supabase
           .from('earnings')
           .insert({
@@ -114,8 +120,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
           throw earningsError;
         }
       } else {
-        // Process payout with breakdown
-        const payout = payoutData as any; // Type assertion for JSON response
+        const payout = payoutData as any;
         totalEarning = payout?.total_payout || 15;
         
         const { error: processError } = await supabase.rpc('process_delivery_payout', {
@@ -127,7 +132,6 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
 
         if (processError) {
           console.error('Payout processing error:', processError);
-          // Fallback to manual earnings insert
           const { error: earningsError } = await supabase
             .from('earnings')
             .insert({
@@ -143,7 +147,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
         }
       }
 
-      // Update delivery agent stats
+      // Update agent stats properly
       const { data: currentAgent } = await supabase
         .from('delivery_agents')
         .select('total_deliveries, deliveries_today, total_earnings')
@@ -164,7 +168,6 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
         console.error('Agent update error:', agentUpdateError);
       }
 
-      // Add order tracking record
       await supabase
         .from('order_tracking')
         .insert({
@@ -176,7 +179,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
 
       toast({
         title: "Order Completed!",
-        description: `Payment via ${method} confirmed. You earned ₹${totalEarning.toFixed(2)}${payoutData ? ` (Base: ₹${(payoutData as any).base_pay}, Distance: ₹${(payoutData as any).distance_pay}, Bonus: ₹${(payoutData as any).peak_bonus})` : ''}`,
+        description: `Payment via ${method} confirmed. You earned ₹${totalEarning.toFixed(2)}`,
       });
 
       onOpenChange(false);
@@ -202,6 +205,9 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
             <CheckCircle className="w-8 h-8 mx-auto mb-2 text-success" />
             Order Delivered Successfully!
           </DialogTitle>
+          <DialogDescription className="text-center">
+            Select payment method to complete the delivery
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
