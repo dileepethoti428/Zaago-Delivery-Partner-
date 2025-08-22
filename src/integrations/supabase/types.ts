@@ -1289,6 +1289,45 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          admin_notifications: boolean
+          created_at: string
+          email_notifications: boolean
+          id: string
+          marketing_notifications: boolean
+          order_notifications: boolean
+          push_notifications: boolean
+          sms_notifications: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notifications?: boolean
+          created_at?: string
+          email_notifications?: boolean
+          id?: string
+          marketing_notifications?: boolean
+          order_notifications?: boolean
+          push_notifications?: boolean
+          sms_notifications?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notifications?: boolean
+          created_at?: string
+          email_notifications?: boolean
+          id?: string
+          marketing_notifications?: boolean
+          order_notifications?: boolean
+          push_notifications?: boolean
+          sms_notifications?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notification_recipients: {
         Row: {
           created_at: string
@@ -3183,6 +3222,21 @@ export type Database = {
           successful_deliveries: number
           total_deliveries: number
         }[]
+      }
+      get_or_create_notification_preferences: {
+        Args: { target_user_id: string }
+        Returns: {
+          admin_notifications: boolean
+          created_at: string
+          email_notifications: boolean
+          id: string
+          marketing_notifications: boolean
+          order_notifications: boolean
+          push_notifications: boolean
+          sms_notifications: boolean
+          updated_at: string
+          user_id: string
+        }
       }
       get_order_analytics_series: {
         Args: { p_period: string }
