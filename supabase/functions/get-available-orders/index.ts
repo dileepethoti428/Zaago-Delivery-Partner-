@@ -39,13 +39,7 @@ serve(async (req) => {
       .from('orders')
       .select('*')
       .in('status', ['placed', 'assigned'])
-      .neq('status', 'delivered')
-      .not('id', 'in', `(
-        SELECT order_id 
-        FROM order_exclusions 
-        WHERE agent_id = '${agent_id}'
-      )`)
-      .order('created_at', { ascending: false });
+      .neq('status', 'delivered');
 
     if (error) {
       console.error('Failed to fetch orders:', error);
@@ -58,12 +52,26 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Found ${orders?.length || 0} available orders for agent:`, agent_id);
+    // Get excluded order IDs for this agent
+    const { data: exclusions, error: exclusionError } = await supabase
+      .from('order_exclusions')
+      .select('order_id')
+      .eq('agent_id', agent_id);
+
+    if (exclusionError) {
+      console.warn('Failed to fetch exclusions:', exclusionError);
+    }
+
+    // Filter out excluded orders
+    const excludedOrderIds = exclusions?.map(ex => ex.order_id) || [];
+    const filteredOrders = orders?.filter(order => !excludedOrderIds.includes(order.id)) || [];
+
+    console.log(`Found ${filteredOrders?.length || 0} available orders for agent:`, agent_id);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
-        orders: orders || []
+        orders: filteredOrders || []
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
