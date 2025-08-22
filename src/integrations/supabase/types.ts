@@ -880,6 +880,7 @@ export type Database = {
       delivery_history: {
         Row: {
           agent_id: string | null
+          agent_location: Json | null
           completed_at: string
           created_at: string
           customer_name: string
@@ -889,6 +890,7 @@ export type Database = {
           delivery_date: string
           delivery_duration: number | null
           delivery_notes: string | null
+          delivery_payout: number | null
           delivery_proof: Json | null
           delivery_time_slot: string | null
           distance_traveled: number | null
@@ -903,6 +905,7 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          agent_location?: Json | null
           completed_at?: string
           created_at?: string
           customer_name: string
@@ -912,6 +915,7 @@ export type Database = {
           delivery_date: string
           delivery_duration?: number | null
           delivery_notes?: string | null
+          delivery_payout?: number | null
           delivery_proof?: Json | null
           delivery_time_slot?: string | null
           distance_traveled?: number | null
@@ -926,6 +930,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          agent_location?: Json | null
           completed_at?: string
           created_at?: string
           customer_name?: string
@@ -935,6 +940,7 @@ export type Database = {
           delivery_date?: string
           delivery_duration?: number | null
           delivery_notes?: string | null
+          delivery_payout?: number | null
           delivery_proof?: Json | null
           delivery_time_slot?: string | null
           distance_traveled?: number | null
@@ -1158,8 +1164,11 @@ export type Database = {
           agent_id: string
           amount: number
           created_at: string
+          description: string | null
+          distance_km: number | null
           id: string
           order_id: string
+          payment_method: string | null
           status: string
           updated_at: string
         }
@@ -1167,8 +1176,11 @@ export type Database = {
           agent_id: string
           amount?: number
           created_at?: string
+          description?: string | null
+          distance_km?: number | null
           id?: string
           order_id: string
+          payment_method?: string | null
           status?: string
           updated_at?: string
         }
@@ -1176,8 +1188,11 @@ export type Database = {
           agent_id?: string
           amount?: number
           created_at?: string
+          description?: string | null
+          distance_km?: number | null
           id?: string
           order_id?: string
+          payment_method?: string | null
           status?: string
           updated_at?: string
         }
