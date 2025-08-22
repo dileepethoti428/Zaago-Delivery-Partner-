@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
+import noOrdersIllustration from "@/assets/no-orders-illustration.jpg";
 
 interface Order {
   id: string;
@@ -550,9 +551,15 @@ const Home = () => {
             ) : availableOrders.length === 0 ? (
               <Card className="bg-card/50 border-border">
                 <CardContent className="p-8 text-center">
-                  <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <div className="mb-6">
+                    <img 
+                      src={noOrdersIllustration} 
+                      alt="No orders available - delivery person taking a peaceful break" 
+                      className="w-64 h-40 mx-auto rounded-lg object-cover shadow-lg"
+                    />
+                  </div>
                   <h3 className="text-lg font-medium text-foreground mb-2">No orders found</h3>
-                  <p className="text-muted-foreground mb-4">No orders currently, enjoy</p>
+                  <p className="text-muted-foreground mb-4">No orders currently, enjoy your break! 🌟</p>
                   {!isOnline && (
                     <Button
                       onClick={() => setIsOnline(true)}
