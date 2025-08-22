@@ -72,15 +72,14 @@ serve(async (req) => {
     // Check if order is already delivered
     if (order.status === 'delivered') {
       return new Response(
-        JSON.stringify({ success: false, error: 'Order already delivered' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        JSON.stringify({ success: true, message: 'Order already delivered' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Use safe payout processing that won't block delivery completion
+    // Calculate distance first (before any database operations)
     let distance_km = 2.0;
     let payout_amount = 35;
-    let payoutResult = null;
 
     if (agent_location && order.address?.coordinates) {
       try {
@@ -99,7 +98,26 @@ serve(async (req) => {
       }
     }
 
-    // Process payout safely
+    // Update order status to delivered FIRST (main operation - must succeed)
+    const { error: updateError } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'delivered',
+        delivered_at: new Date().toISOString(),
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
+      })
+      .eq('id', order_id);
+
+    if (updateError) {
+      console.error('Failed to update order:', updateError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Failed to update order status' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    // NOW process payout safely (after order is delivered)
+    let payoutResult = null;
     try {
       const { data: payoutData, error: payoutError } = await supabaseClient.rpc('process_delivery_payout_safe', {
         p_agent_id: agent.id,
@@ -117,24 +135,6 @@ serve(async (req) => {
       }
     } catch (error) {
       console.error('Payout processing failed:', error);
-    }
-
-    // Update order status to delivered (main operation - must succeed)
-    const { error: updateError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-      })
-      .eq('id', order_id);
-
-    if (updateError) {
-      console.error('Failed to update order:', updateError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Failed to update order status' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
     }
 
     // The trigger will handle delivery_history creation, but let's also try to update it with more details
