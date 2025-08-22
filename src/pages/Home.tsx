@@ -80,21 +80,41 @@ const Home = () => {
     return basePay + distancePay;
   };
 
-  // Fetch orders from backend
+  // Fetch orders from backend (filtered by agent exclusions)
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .in('status', ['placed', 'assigned'])
-        .neq('status', 'delivered') // Exclude delivered orders
-        .order('created_at', { ascending: false });
+      
+      // Get current agent ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('Not authenticated');
+      }
+      
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!agent) {
+        throw new Error('Agent not found');
+      }
+
+      // Use edge function to get filtered orders
+      const { data: response, error } = await supabase.functions.invoke('get-available-orders', {
+        body: { agent_id: agent.id }
+      });
 
       if (error) throw error;
 
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch orders');
+      }
+
       // Transform backend data to match our interface
-      const transformedOrders: Order[] = (data || []).map(order => ({
+      const transformedOrders: Order[] = (response.orders || []).map(order => ({
         id: order.id,
         customer_name: order.customer_name,
         customer_phone: order.customer_phone,

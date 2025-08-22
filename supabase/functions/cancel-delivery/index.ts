@@ -87,6 +87,20 @@ serve(async (req) => {
       // Don't fail the request for logging errors
     }
 
+    // Add order exclusion to prevent agent from seeing this order again
+    const { error: exclusionError } = await supabase
+      .from('order_exclusions')
+      .insert({
+        order_id: order_id,
+        agent_id: agent_id,
+        reason: cancellation_reason || 'Agent cancelled delivery'
+      });
+
+    if (exclusionError) {
+      console.warn('Failed to log order exclusion:', exclusionError);
+      // Don't fail the request for exclusion errors
+    }
+
     console.log('Delivery cancelled successfully for order:', order_id);
     
     return new Response(
