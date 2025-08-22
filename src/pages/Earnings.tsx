@@ -812,19 +812,59 @@ const Earnings = () => {
                     <span>Add Bank Account</span>
                   </DialogTitle>
                   <DialogDescription>
-                    Enter your bank account details to receive payments
+                    Add your bank details to withdraw your earnings
                   </DialogDescription>
                 </DialogHeader>
                 
-                {/* Available Balance Info */}
-                <div className="p-3 bg-success/10 border border-success/20 rounded-lg mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-success">Available for Withdrawal</span>
-                    <span className="text-lg font-bold text-success">₹{walletData.balance.toFixed(2)}</span>
+                {/* Prominent Balance and Withdrawal Info */}
+                <div className="space-y-3">
+                  <div className="p-4 bg-gradient-success border border-success/30 rounded-lg">
+                    <div className="text-center mb-3">
+                      <p className="text-sm font-medium text-success/80 mb-1">Available to Withdraw</p>
+                      <p className="text-3xl font-bold text-success">₹{walletData.balance.toFixed(2)}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 text-center">
+                      <div className="p-2 bg-background/50 rounded">
+                        <p className="text-xs text-muted-foreground">Minimum</p>
+                        <p className="font-semibold text-sm">₹100</p>
+                      </div>
+                      <div className="p-2 bg-background/50 rounded">
+                        <p className="text-xs text-muted-foreground">Processing</p>
+                        <p className="font-semibold text-sm">1-2 days</p>
+                      </div>
+                    </div>
+                    
+                    {walletData.balance < 100 && (
+                      <div className="mt-3 p-2 bg-warning/10 border border-warning/20 rounded text-center">
+                        <p className="text-xs text-warning">
+                          Need ₹{(100 - walletData.balance).toFixed(2)} more to withdraw
+                        </p>
+                      </div>
+                    )}
+                    
+                    {walletData.pending_cod_amount > 0 && (
+                      <div className="mt-3 p-2 bg-info/10 border border-info/20 rounded text-center">
+                        <p className="text-xs text-info">
+                          ₹{walletData.pending_cod_amount.toFixed(2)} pending COD settlement
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Minimum withdrawal: ₹100 • Processing time: 1-2 business days
-                  </p>
+                  
+                  {walletData.balance >= 100 ? (
+                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
+                      <CheckCircle className="w-6 h-6 text-primary mx-auto mb-2" />
+                      <p className="text-sm font-medium text-primary">Ready to withdraw!</p>
+                      <p className="text-xs text-muted-foreground">Add your bank details to cash out ₹{walletData.balance.toFixed(2)}</p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-muted/50 border border-muted rounded-lg text-center">
+                      <Clock className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm font-medium text-muted-foreground">Complete more deliveries</p>
+                      <p className="text-xs text-muted-foreground">Earn ₹{(100 - walletData.balance).toFixed(2)} more to reach minimum withdrawal</p>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-4">
