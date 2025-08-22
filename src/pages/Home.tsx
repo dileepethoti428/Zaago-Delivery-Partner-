@@ -212,18 +212,21 @@ const Home = () => {
     setAcceptingOrders(prev => ({ ...prev, [orderId]: true }));
     
     try {
-      // Update order status to 'assigned' and assign to agent
-      const agentEmail = localStorage.getItem('agent_email') || 'seshethoti@gmail.com';
+      // Get current authenticated user's email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('Not authenticated');
+      }
       
       const { data: agent } = await supabase
         .from('delivery_agents')
         .select('id')
-        .eq('email', agentEmail)
+        .eq('email', user.email)
         .eq('is_active', true)
         .maybeSingle();
 
       if (!agent) {
-        throw new Error('Agent not found');
+        throw new Error(`Agent not found for email: ${user.email}. Please contact admin for activation.`);
       }
 
       const { error } = await supabase
