@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -30,10 +31,9 @@ serve(async (req) => {
     // Get authenticated user
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
-    const { data: userData } = await supabaseClient.auth.getUser(token);
-    const user = userData.user;
-
-    if (!user) {
+    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError || !userData.user) {
       return new Response(
         JSON.stringify({ success: false, error: 'Authentication required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
@@ -41,14 +41,14 @@ serve(async (req) => {
     }
 
     // Get agent info
-    const { data: agent } = await supabaseClient
+    const { data: agent, error: agentError } = await supabaseClient
       .from('delivery_agents')
       .select('id, email, name')
-      .eq('email', user.email)
+      .eq('email', userData.user.email)
       .eq('is_active', true)
       .single();
 
-    if (!agent) {
+    if (agentError || !agent) {
       return new Response(
         JSON.stringify({ success: false, error: 'Agent not found or inactive' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -69,9 +69,17 @@ serve(async (req) => {
       );
     }
 
-    // Calculate distance between agent and customer
-    let distance_km = 2.0; // Default fallback
-    let payout_amount = 35; // Base amount
+    // Check if order is already delivered
+    if (order.status === 'delivered') {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order already delivered' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Calculate distance and payout
+    let distance_km = 2.0;
+    let payout_amount = 35;
 
     if (agent_location && order.address?.coordinates) {
       try {
@@ -84,8 +92,6 @@ serve(async (req) => {
 
         if (distanceData?.distance_km) {
           distance_km = distanceData.distance_km;
-          
-          // Calculate fair payout: ₹20 base + ₹15/km beyond 1km
           if (distance_km <= 1) {
             payout_amount = 20;
           } else {
@@ -97,8 +103,8 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered with correct payment status values
-    await supabaseClient
+    // Update order status to delivered
+    const { error: updateError } = await supabaseClient
       .from('orders')
       .update({
         status: 'delivered',
@@ -107,70 +113,91 @@ serve(async (req) => {
       })
       .eq('id', order_id);
 
-    // Create delivery history record
-    await supabaseClient
-      .from('delivery_history')
-      .insert({
-        order_id: order_id,
-        agent_id: agent.id,
-        customer_name: order.customer_name,
-        customer_phone: order.customer_phone,
-        delivery_address: order.address,
-        items: order.items,
-        total_amount: order.total,
-        payment_method: payment_method,
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-        delivery_date: new Date().toISOString().split('T')[0],
-        completed_at: new Date().toISOString(),
-        special_instructions: order.special_instructions,
-        delivery_time_slot: order.delivery_time_slot,
-        distance_traveled: distance_km,
-        delivery_payout: payout_amount,
-        agent_location: agent_location
-      });
+    if (updateError) {
+      console.error('Failed to update order:', updateError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Failed to update order status' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    // The trigger will handle delivery_history creation, but let's also try to update it with more details
+    try {
+      const { error: historyUpdateError } = await supabaseClient
+        .from('delivery_history')
+        .update({
+          distance_traveled: distance_km,
+          delivery_payout: payout_amount,
+          agent_location: agent_location,
+          delivery_notes: `Completed via manual delivery by ${agent.name}. Distance: ${distance_km.toFixed(2)}km`
+        })
+        .eq('order_id', order_id);
+
+      if (historyUpdateError) {
+        console.warn('Could not update delivery history details:', historyUpdateError);
+      }
+    } catch (historyError) {
+      console.warn('Delivery history update failed:', historyError);
+    }
 
     // Create earnings record
-    await supabaseClient
-      .from('earnings')
-      .insert({
-        agent_id: agent.id,
-        order_id: order_id,
-        amount: payout_amount,
-        distance_km: distance_km,
-        payment_method: payment_method,
-        status: 'completed',
-        description: `Delivery payout for order ${order_id.slice(0, 8)}`
-      });
+    try {
+      const { error: earningsError } = await supabaseClient
+        .from('earnings')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: payout_amount,
+          distance_km: distance_km,
+          payment_method: payment_method,
+          status: 'completed',
+          description: `Delivery payout for order ${order_id.slice(0, 8)}`
+        });
+
+      if (earningsError) {
+        console.warn('Failed to create earnings record:', earningsError);
+      }
+    } catch (earningsCreateError) {
+      console.warn('Earnings creation failed:', earningsCreateError);
+    }
 
     // Update agent statistics
-    const { data: currentAgent } = await supabaseClient
-      .from('delivery_agents')
-      .select('total_deliveries, deliveries_today, total_earnings')
-      .eq('id', agent.id)
-      .single();
-
-    if (currentAgent) {
-      await supabaseClient
+    try {
+      const { data: currentAgent } = await supabaseClient
         .from('delivery_agents')
-        .update({
-          total_deliveries: (currentAgent.total_deliveries || 0) + 1,
-          deliveries_today: (currentAgent.deliveries_today || 0) + 1,
-          total_earnings: (currentAgent.total_earnings || 0) + payout_amount,
-          last_delivery_at: new Date().toISOString()
-        })
-        .eq('id', agent.id);
+        .select('total_deliveries, deliveries_today, total_earnings')
+        .eq('id', agent.id)
+        .single();
+
+      if (currentAgent) {
+        await supabaseClient
+          .from('delivery_agents')
+          .update({
+            total_deliveries: (currentAgent.total_deliveries || 0) + 1,
+            deliveries_today: (currentAgent.deliveries_today || 0) + 1,
+            total_earnings: (currentAgent.total_earnings || 0) + payout_amount,
+            last_delivery_at: new Date().toISOString()
+          })
+          .eq('id', agent.id);
+      }
+    } catch (statsError) {
+      console.warn('Agent stats update failed:', statsError);
     }
 
     // Create order tracking record
-    await supabaseClient
-      .from('order_tracking')
-      .insert({
-        order_id: order_id,
-        status: 'delivered',
-        timestamp: new Date().toISOString(),
-        location: agent_location || null,
-        notes: `Order delivered by ${agent.name}. Distance: ${distance_km.toFixed(2)}km, Payout: ₹${payout_amount}`
-      });
+    try {
+      await supabaseClient
+        .from('order_tracking')
+        .insert({
+          order_id: order_id,
+          status: 'delivered',
+          timestamp: new Date().toISOString(),
+          location: agent_location || null,
+          notes: `Order delivered by ${agent.name}. Distance: ${distance_km.toFixed(2)}km, Payout: ₹${payout_amount}`
+        });
+    } catch (trackingError) {
+      console.warn('Order tracking creation failed:', trackingError);
+    }
 
     return new Response(
       JSON.stringify({

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -30,10 +31,9 @@ serve(async (req) => {
     // Get authenticated user
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
-    const { data: userData } = await supabaseClient.auth.getUser(token);
-    const user = userData.user;
-
-    if (!user) {
+    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError || !userData.user) {
       return new Response(
         JSON.stringify({ success: false, error: 'Authentication required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
@@ -41,14 +41,14 @@ serve(async (req) => {
     }
 
     // Get agent info
-    const { data: agent } = await supabaseClient
+    const { data: agent, error: agentError } = await supabaseClient
       .from('delivery_agents')
       .select('id, email, name')
-      .eq('email', user.email)
+      .eq('email', userData.user.email)
       .eq('is_active', true)
       .single();
 
-    if (!agent) {
+    if (agentError || !agent) {
       return new Response(
         JSON.stringify({ success: false, error: 'Agent not found or inactive' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -99,24 +99,34 @@ serve(async (req) => {
       );
     }
 
+    // Check if order is already delivered
+    if (order.status === 'delivered') {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order already delivered' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
     // Mark QR as scanned
     const { error: scanUpdateError } = await supabaseClient
       .from('order_qr_codes')
       .update({
         is_scanned: true,
         scanned_at: new Date().toISOString(),
-        // Use delivery agent's id to satisfy FK (not auth user id)
         scanned_by: agent.id
       })
       .eq('qr_code_data', qr_code_data);
 
     if (scanUpdateError) {
       console.error('Failed to mark QR as scanned:', scanUpdateError);
-      // Continue; do not block delivery completion on QR update issues
+      return new Response(
+        JSON.stringify({ success: false, error: 'Failed to process QR code' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
     // Update order status to delivered
-    await supabaseClient
+    const { error: updateError } = await supabaseClient
       .from('orders')
       .update({
         status: 'delivered',
@@ -125,157 +135,93 @@ serve(async (req) => {
       })
       .eq('id', order.id);
 
-    // Create delivery history record with distance data
-    await supabaseClient
-      .from('delivery_history')
-      .insert({
-        order_id: order.id,
-        agent_id: agent.id,
-        customer_name: order.customer_name,
-        customer_phone: order.customer_phone,
-        delivery_address: order.address,
-        items: order.items,
-        total_amount: order.total,
-        payment_method: payment_method,
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-        delivery_date: new Date().toISOString().split('T')[0],
-        completed_at: new Date().toISOString(),
-        special_instructions: order.special_instructions,
-        delivery_time_slot: order.delivery_time_slot,
-        delivery_notes: `Completed via QR scan by ${agent.name}`,
-        distance_traveled: 2.5, // Default distance - could be enhanced to get actual distance
-        delivery_payout: 27.5 // Base pay + distance pay (15 + 12.5 for 1.5km extra)
-      });
-
-    // Calculate and process payout
-    try {
-      const { data: payoutData } = await supabaseClient.functions.invoke('calculate-delivery-payout', {
-        body: {
-          distance_km: 2.5, // Default distance - could be enhanced to get actual
-          delivery_time: new Date().toISOString(),
-          agent_id: agent.id
-        }
-      });
-
-      if (payoutData?.total_payout) {
-        // Create earnings record with proper status
-        await supabaseClient
-          .from('earnings')
-          .insert({
-            agent_id: agent.id,
-            order_id: order.id,
-            amount: payoutData.total_payout,
-            status: 'completed', // Using 'completed' as valid status
-            distance_km: 2.5,
-            payment_method: payment_method === 'COD' ? 'COD' : 'Online',
-            description: `Delivery payout for order ${order.id.substring(0, 8)}`
-          });
-      }
-    } catch (payoutError) {
-      console.error('Payout processing failed:', payoutError);
-      // Continue execution - don't fail delivery for payout issues
+    if (updateError) {
+      console.error('Failed to update order:', updateError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Failed to update order status' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    // Update agent statistics - get current values first
-    const { data: currentAgent } = await supabaseClient
-      .from('delivery_agents')
-      .select('total_deliveries, deliveries_today, total_earnings')
-      .eq('id', agent.id)
-      .single();
+    // The trigger will handle delivery_history creation, but let's update it with QR-specific details
+    const distance_km = 2.5;
+    const payout_amount = 27.5;
 
-    if (currentAgent) {
-      await supabaseClient
-        .from('delivery_agents')
+    try {
+      const { error: historyUpdateError } = await supabaseClient
+        .from('delivery_history')
         .update({
-          total_deliveries: (currentAgent.total_deliveries || 0) + 1,
-          deliveries_today: (currentAgent.deliveries_today || 0) + 1,
-          total_earnings: (currentAgent.total_earnings || 0) + order.total,
-          last_delivery_at: new Date().toISOString()
+          delivery_notes: `Completed via QR scan by ${agent.name}`,
+          distance_traveled: distance_km,
+          delivery_payout: payout_amount
         })
-        .eq('id', agent.id);
+        .eq('order_id', order.id);
+
+      if (historyUpdateError) {
+        console.warn('Could not update delivery history details:', historyUpdateError);
+      }
+    } catch (historyError) {
+      console.warn('Delivery history update failed:', historyError);
+    }
+
+    // Create earnings record
+    try {
+      const { error: earningsError } = await supabaseClient
+        .from('earnings')
+        .insert({
+          agent_id: agent.id,
+          order_id: order.id,
+          amount: payout_amount,
+          status: 'completed',
+          distance_km: distance_km,
+          payment_method: payment_method === 'COD' ? 'COD' : 'Online',
+          description: `Delivery payout for order ${order.id.substring(0, 8)}`
+        });
+
+      if (earningsError) {
+        console.warn('Failed to create earnings record:', earningsError);
+      }
+    } catch (earningsCreateError) {
+      console.warn('Earnings creation failed:', earningsCreateError);
+    }
+
+    // Update agent statistics
+    try {
+      const { data: currentAgent } = await supabaseClient
+        .from('delivery_agents')
+        .select('total_deliveries, deliveries_today, total_earnings')
+        .eq('id', agent.id)
+        .single();
+
+      if (currentAgent) {
+        await supabaseClient
+          .from('delivery_agents')
+          .update({
+            total_deliveries: (currentAgent.total_deliveries || 0) + 1,
+            deliveries_today: (currentAgent.deliveries_today || 0) + 1,
+            total_earnings: (currentAgent.total_earnings || 0) + order.total,
+            last_delivery_at: new Date().toISOString()
+          })
+          .eq('id', agent.id);
+      }
+    } catch (statsError) {
+      console.warn('Agent stats update failed:', statsError);
     }
 
     // Create order tracking record
-    await supabaseClient
-      .from('order_tracking')
-      .insert({
-        order_id: order.id,
-        status: 'delivered',
-        timestamp: new Date().toISOString(),
-        location: order.address?.coordinates || null,
-        notes: `Order delivered via QR scan by ${agent.name}`
-      });
-
-      // Get order details from orders table to get user_id
-      const { data: orderData } = await supabaseClient
-        .from('orders')
-        .select('user_id')
-        .eq('id', order.id)
-        .single();
-
-      // Create notifications for seller, admin, and customer
-      try {
-        // Notify customer
-        if (orderData?.user_id) {
-          await supabaseClient
-            .from('notifications')
-            .insert({
-              user_id: orderData.user_id,
-              title: 'Order Delivered',
-              message: `Your order #${order.id.substring(0, 8)} has been delivered successfully by ${agent.name}`,
-              type: 'delivery_completed',
-              role: 'user',
-              order_id: order.id
-            });
-        }
-
-        // Notify seller (if order has seller products)
-        const { data: orderItems } = await supabaseClient
-          .from('order_items')
-          .select('product_id, products(seller_id)')
-          .eq('order_id', order.id);
-
-        if (orderItems && orderItems.length > 0) {
-          const sellerIds = [...new Set(orderItems.map(item => item.products?.seller_id).filter(Boolean))];
-          
-          for (const sellerId of sellerIds) {
-            await supabaseClient
-              .from('notifications')
-              .insert({
-                user_id: sellerId,
-                title: 'Order Delivered',
-                message: `Order #${order.id.substring(0, 8)} for ${order.customer_name} has been delivered`,
-                type: 'order_delivered',
-                role: 'user',
-                order_id: order.id
-              });
-          }
-        }
-
-        // Notify admin
-        const { data: admins } = await supabaseClient
-          .from('user_roles')
-          .select('user_id')
-          .eq('role', 'admin');
-
-        if (admins && admins.length > 0) {
-          for (const admin of admins) {
-            await supabaseClient
-              .from('notifications')
-              .insert({
-                user_id: admin.user_id,
-                title: 'Delivery Completed',
-                message: `Agent ${agent.name} completed delivery for order #${order.id.substring(0, 8)}`,
-                type: 'delivery_completed',
-                role: 'admin',
-                order_id: order.id
-              });
-          }
-        }
-      } catch (notificationError) {
-        console.error('Failed to send notifications:', notificationError);
-        // Don't fail the delivery for notification issues
-      }
+    try {
+      await supabaseClient
+        .from('order_tracking')
+        .insert({
+          order_id: order.id,
+          status: 'delivered',
+          timestamp: new Date().toISOString(),
+          location: order.address?.coordinates || null,
+          notes: `Order delivered via QR scan by ${agent.name}`
+        });
+    } catch (trackingError) {
+      console.warn('Order tracking creation failed:', trackingError);
+    }
 
     return new Response(
       JSON.stringify({
