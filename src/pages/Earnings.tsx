@@ -83,6 +83,11 @@ interface WalletData {
   total_collected: number;
 }
 
+interface WithdrawalForm {
+  amount: number;
+  bank_id: string;
+}
+
 const Earnings = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("today");
   const [earningsData, setEarningsData] = useState<Record<string, EarningsSummary>>({
@@ -115,6 +120,12 @@ const Earnings = () => {
     account_type: 'savings'
   });
   const [bankLoading, setBankLoading] = useState(false);
+  const [withdrawalForm, setWithdrawalForm] = useState<WithdrawalForm>({
+    amount: 0,
+    bank_id: ''
+  });
+  const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false);
+  const [withdrawalLoading, setWithdrawalLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -444,38 +455,135 @@ const Earnings = () => {
       return;
     }
 
+    // Set default withdrawal amount and open dialog
+    const primaryBank = bankDetails.find(bank => bank.is_primary) || bankDetails[0];
+    setWithdrawalForm({
+      amount: walletData.balance,
+      bank_id: primaryBank.id
+    });
+    setShowWithdrawalDialog(true);
+  };
+
+  const handleWithdrawalSubmit = async () => {
+    if (!agentId || !withdrawalForm.bank_id) return;
+
+    const minWithdrawal = 100;
+    if (withdrawalForm.amount < minWithdrawal) {
+      toast({
+        title: "Minimum Withdrawal Amount",
+        description: `Minimum withdrawal amount is ₹${minWithdrawal}.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (withdrawalForm.amount > walletData.balance) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You can withdraw maximum ₹${walletData.balance.toFixed(2)}.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setWithdrawalLoading(true);
     try {
       // Create withdrawal request in backend
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('agent_wallet_transactions')
         .insert({
           agent_id: agentId,
-          amount: -walletData.balance, // Negative for withdrawal
+          amount: -withdrawalForm.amount, // Negative for withdrawal
           transaction_type: 'withdrawal',
-          description: 'Cash out to bank account',
+          description: `Withdrawal to bank account`,
           status: 'pending'
         });
 
       if (error) throw error;
 
-      // Update wallet balance to 0 (since all money is being withdrawn)
+      // Update wallet balance
       await supabase
         .from('agent_wallet')
-        .update({ balance: 0 })
+        .update({ balance: walletData.balance - withdrawalForm.amount })
         .eq('agent_id', agentId);
 
       // Refresh wallet data
       await fetchWalletData(agentId);
 
       toast({
-        title: "Cash Out Request Submitted",
-        description: `₹${walletData.balance.toFixed(2)} will be transferred to your primary bank account within 1-2 business days.`,
+        title: "Withdrawal Request Submitted",
+        description: `₹${withdrawalForm.amount.toFixed(2)} will be transferred to your bank account within 1-2 business days.`,
+      });
+
+      setShowWithdrawalDialog(false);
+    } catch (error) {
+      console.error('Error processing withdrawal:', error);
+      toast({
+        title: "Withdrawal Failed",
+        description: "There was an error processing your withdrawal. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setWithdrawalLoading(false);
+    }
+  };
+
+  const handleClearWallet = async () => {
+    if (!agentId) return;
+
+    const minClearAmount = 500;
+    if (walletData.pending_cod_amount < minClearAmount) {
+      toast({
+        title: "Minimum Clear Amount",
+        description: `Minimum amount to clear wallet is ₹${minClearAmount}. Current pending COD: ₹${walletData.pending_cod_amount.toFixed(2)}.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Call Razorpay settlement function
+      const { data, error } = await supabase.functions.invoke('settle-cod-amount', {
+        body: { 
+          agent_id: agentId,
+          amount: walletData.pending_cod_amount 
+        }
+      });
+
+      if (error) throw error;
+
+      // Update wallet to clear pending COD
+      await supabase
+        .from('agent_wallet')
+        .update({ 
+          pending_cod_amount: 0,
+          last_settlement_date: new Date().toISOString()
+        })
+        .eq('agent_id', agentId);
+
+      // Create transaction record
+      await supabase
+        .from('agent_wallet_transactions')
+        .insert({
+          agent_id: agentId,
+          amount: -walletData.pending_cod_amount,
+          transaction_type: 'cod_settlement',
+          description: 'COD amount settled to admin',
+          status: 'completed'
+        });
+
+      // Refresh wallet data
+      await fetchWalletData(agentId);
+
+      toast({
+        title: "COD Amount Settled",
+        description: `₹${walletData.pending_cod_amount.toFixed(2)} COD amount has been transferred to admin via Razorpay.`,
       });
     } catch (error) {
-      console.error('Error processing cash out:', error);
+      console.error('Error clearing wallet:', error);
       toast({
-        title: "Cash Out Failed",
-        description: "There was an error processing your withdrawal. Please try again.",
+        title: "Settlement Failed",
+        description: "There was an error settling COD amount. Please try again.",
         variant: "destructive"
       });
     }
@@ -754,12 +862,28 @@ const Earnings = () => {
               <span className="text-sm text-muted-foreground">Available Balance</span>
               <span className="text-2xl font-bold text-success">₹{walletData.balance.toFixed(2)}</span>
             </div>
-            {walletData.pending_cod_amount > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Pending COD</span>
-                <span className="text-sm font-medium text-warning">₹{walletData.pending_cod_amount.toFixed(2)}</span>
+            <div className="grid grid-cols-2 gap-3">
+              {walletData.pending_cod_amount > 0 && (
+                <div className="p-2 bg-warning/10 border border-warning/20 rounded">
+                  <div className="text-center">
+                    <span className="text-xs text-muted-foreground block">Pending COD</span>
+                    <span className="text-sm font-medium text-warning">₹{walletData.pending_cod_amount.toFixed(2)}</span>
+                  </div>
+                  <Button
+                    onClick={handleClearWallet}
+                    disabled={walletData.pending_cod_amount < 500}
+                    className="w-full mt-2 h-6 text-xs bg-warning/20 hover:bg-warning/30 text-warning"
+                    variant="ghost"
+                  >
+                    {walletData.pending_cod_amount >= 500 ? 'Clear Wallet' : 'Min ₹500'}
+                  </Button>
+                </div>
+              )}
+              <div className="p-2 bg-info/10 border border-info/20 rounded text-center">
+                <span className="text-xs text-muted-foreground block">Total Collected</span>
+                <span className="text-sm font-medium text-info">₹{walletData.total_collected.toFixed(2)}</span>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Bank Accounts */}
@@ -852,20 +976,20 @@ const Earnings = () => {
                     )}
                   </div>
                   
-                  {walletData.balance >= 100 ? (
-                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
-                      <CheckCircle className="w-6 h-6 text-primary mx-auto mb-2" />
-                      <p className="text-sm font-medium text-primary">Ready to withdraw!</p>
-                      <p className="text-xs text-muted-foreground">Add your bank details to cash out ₹{walletData.balance.toFixed(2)}</p>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-muted/50 border border-muted rounded-lg text-center">
-                      <Clock className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm font-medium text-muted-foreground">Complete more deliveries</p>
-                      <p className="text-xs text-muted-foreground">Earn ₹{(100 - walletData.balance).toFixed(2)} more to reach minimum withdrawal</p>
-                    </div>
-                  )}
-                </div>
+                    {walletData.balance >= 100 ? (
+                      <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
+                        <CheckCircle className="w-6 h-6 text-primary mx-auto mb-2" />
+                        <p className="text-sm font-medium text-primary">Ready to withdraw!</p>
+                        <p className="text-xs text-muted-foreground">Add your bank details to withdraw any amount from ₹100 to ₹{walletData.balance.toFixed(2)}</p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-muted/50 border border-muted rounded-lg text-center">
+                        <Clock className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm font-medium text-muted-foreground">Complete more deliveries</p>
+                        <p className="text-xs text-muted-foreground">Earn ₹{(100 - walletData.balance).toFixed(2)} more to reach minimum withdrawal</p>
+                      </div>
+                    )}
+                  </div>
                 
                 <div className="space-y-4">
                   <div>
@@ -969,13 +1093,127 @@ const Earnings = () => {
                 className="bg-gradient-neon hover:shadow-neon transition-smooth text-sm"
               >
                 <ArrowUpRight className="w-4 h-4 mr-2" />
-                {walletData.balance < 100 ? `Min ₹100` : 'Cash Out'}
+                {walletData.balance < 100 ? `Min ₹100` : 'Withdraw'}
               </Button>
               <Button variant="outline" className="border-border text-sm">
                 <Download className="w-4 h-4 mr-2" />
                 Download Report
               </Button>
             </div>
+
+            {/* Withdrawal Amount Dialog */}
+            <Dialog open={showWithdrawalDialog} onOpenChange={setShowWithdrawalDialog}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center space-x-2">
+                    <Wallet className="w-5 h-5 text-primary" />
+                    <span>Withdraw Earnings</span>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Enter the amount you want to withdraw
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  {/* Available Balance */}
+                  <div className="p-3 bg-success/10 border border-success/20 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">Available Balance</p>
+                    <p className="text-2xl font-bold text-success">₹{walletData.balance.toFixed(2)}</p>
+                  </div>
+
+                  {/* Withdrawal Amount */}
+                  <div>
+                    <Label htmlFor="withdrawal_amount">Withdrawal Amount *</Label>
+                    <Input
+                      id="withdrawal_amount"
+                      type="number"
+                      value={withdrawalForm.amount}
+                      onChange={(e) => setWithdrawalForm(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                      placeholder="Enter amount"
+                      className="mt-1"
+                      min="100"
+                      max={walletData.balance}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Min: ₹100 • Max: ₹{walletData.balance.toFixed(2)}
+                    </p>
+                  </div>
+
+                  {/* Bank Selection */}
+                  {bankDetails.length > 1 && (
+                    <div>
+                      <Label htmlFor="bank_selection">Select Bank Account</Label>
+                      <Select 
+                        value={withdrawalForm.bank_id} 
+                        onValueChange={(value) => setWithdrawalForm(prev => ({ ...prev, bank_id: value }))}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Choose bank account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bankDetails.map((bank) => (
+                            <SelectItem key={bank.id} value={bank.id}>
+                              {bank.bank_name} - ••••{bank.account_number.slice(-4)}
+                              {bank.is_primary && ' (Primary)'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Quick Amount Buttons */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: Math.min(500, walletData.balance) }))}
+                    >
+                      ₹500
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: Math.min(1000, walletData.balance) }))}
+                    >
+                      ₹1000
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: walletData.balance }))}
+                    >
+                      All
+                    </Button>
+                  </div>
+
+                  {/* Processing Info */}
+                  <div className="p-3 bg-info/10 border border-info/20 rounded-lg">
+                    <p className="text-xs text-muted-foreground text-center">
+                      Processing time: 1-2 business days • No additional fees
+                    </p>
+                  </div>
+
+                  <div className="flex space-x-2">
+                    <Button
+                      onClick={handleWithdrawalSubmit}
+                      disabled={withdrawalLoading || withdrawalForm.amount < 100 || withdrawalForm.amount > walletData.balance}
+                      className="flex-1 bg-gradient-neon hover:shadow-neon transition-smooth"
+                    >
+                      {withdrawalLoading ? "Processing..." : `Withdraw ₹${withdrawalForm.amount}`}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowWithdrawalDialog(false)}
+                      disabled={withdrawalLoading}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardContent>
       </Card>
     </div>
