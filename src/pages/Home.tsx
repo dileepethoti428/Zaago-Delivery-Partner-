@@ -25,6 +25,7 @@ import {
   Loader2
 } from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
+import { LocationPicker } from "@/components/LocationPicker";
 
 interface Order {
   id: string;
@@ -42,6 +43,7 @@ interface Order {
   delivery_time?: string;
   products_count?: number;
   restaurant?: string;
+  backend_calculated?: boolean;
 }
 
 
@@ -342,24 +344,31 @@ const Home = () => {
             <h1 className="text-xl font-bold text-foreground">
               Zaago Delivery Agent
             </h1>
-            <div className="flex items-center text-sm text-muted-foreground">
-              {location.loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Getting location...
-                </>
-              ) : location.error ? (
-                <>
-                  <MapPin className="w-4 h-4 mr-2 text-destructive" />
-                  Location unavailable
-                </>
-              ) : (
-                <>
-                  <MapPin className="w-4 h-4 mr-2 text-primary" />
-                  {location.address || 'Location detected'}
-                </>
-              )}
-            </div>
+            <LocationPicker onLocationSelected={(loc) => {
+              toast({
+                title: "Location Updated",
+                description: `Location set to: ${loc.address}`,
+              });
+            }}>
+              <div className="flex items-center text-sm text-muted-foreground cursor-pointer hover:text-primary transition-colors">
+                {location.loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Getting location...
+                  </>
+                ) : location.error ? (
+                  <>
+                    <MapPin className="w-4 h-4 mr-2 text-destructive" />
+                    Tap to set location
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="w-4 h-4 mr-2 text-primary" />
+                    {location.address || 'Tap to update location'}
+                  </>
+                )}
+              </div>
+            </LocationPicker>
           </div>
           
           <div className="flex items-center space-x-3">
@@ -494,14 +503,14 @@ const Home = () => {
                             {address}
                           </div>
                           
-                          <div className="grid grid-cols-4 gap-2 text-sm">
+                           <div className="grid grid-cols-4 gap-2 text-sm">
                             <div className="flex items-center text-muted-foreground">
                               <Navigation className="w-4 h-4 mr-1 text-primary" />
-                              {order.distance_km} km
+                              {order.distance_km?.toFixed(1) || '0.0'} km
                             </div>
                             <div className="flex items-center text-muted-foreground">
                               <Clock className="w-4 h-4 mr-1 text-primary" />
-                              {order.delivery_time}
+                              {order.delivery_time || 'Calculating...'}
                             </div>
                             <div className="flex items-center text-muted-foreground">
                               <Package className="w-4 h-4 mr-1 text-primary" />
@@ -514,9 +523,16 @@ const Home = () => {
                           </div>
                           
                            {/* Agent Payout */}
-                           <div className="flex items-center text-sm text-green-600 font-medium mt-2">
-                             <IndianRupee className="w-4 h-4 mr-1" />
-                             Agent payout: ₹{calculateAgentPayout(order.distance_km || 2.5).toFixed(0)}
+                           <div className="flex items-center justify-between text-sm mt-2">
+                             <div className="flex items-center text-green-600 font-medium">
+                               <IndianRupee className="w-4 h-4 mr-1" />
+                               Agent payout: ₹{calculateAgentPayout(order.distance_km || 0).toFixed(0)}
+                             </div>
+                             {order.backend_calculated && (
+                               <Badge variant="secondary" className="text-xs">
+                                 Real-time distance
+                               </Badge>
+                             )}
                            </div>
                         </div>
 

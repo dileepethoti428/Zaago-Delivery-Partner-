@@ -41,22 +41,27 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
   // Reverse geocoding to get address from coordinates
   const getAddressFromCoordinates = async (lat: number, lng: number): Promise<string> => {
     try {
+      // Try using a free geocoding service
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=pk.eyJ1IjoiemFhZ28tZGVsaXZlcnkiLCJhIjoiY2w5cHF3eXdxMDNxazNvbzltb2pzeWdxbSJ9.xxx&types=address,poi`
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
       );
       
       if (response.ok) {
         const data = await response.json();
-        if (data.features && data.features.length > 0) {
-          return data.features[0].place_name;
+        if (data.locality && data.city) {
+          return `${data.locality}, ${data.city}`;
+        } else if (data.city) {
+          return data.city;
+        } else if (data.countryName) {
+          return data.countryName;
         }
       }
     } catch (error) {
       console.warn('Failed to get address from coordinates:', error);
     }
     
-    // Fallback to basic lat/lng display
-    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    // Fallback to readable format
+    return `Near ${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`;
   };
 
   // Save location to backend
