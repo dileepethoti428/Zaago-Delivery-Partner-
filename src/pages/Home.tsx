@@ -7,25 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  MapPin, 
-  Clock, 
-  DollarSign, 
-  Package, 
-  Navigation,
-  Star,
-  Zap,
-  Bell,
-  User,
-  Search,
-  Filter,
-  RefreshCw,
-  Eye,
-  CheckCircle,
-  AlertTriangle,
-  TrendingUp,
-  Route
-} from "lucide-react";
+import { QrScannerDialog } from "@/components/QrScannerDialog";
 
 // Mock data matching the requirements
 const mockOrders = [
@@ -79,12 +61,6 @@ const mockOrders = [
   }
 ];
 
-const filterOptions = [
-  { id: 'nearest', label: 'Nearest', icon: Navigation },
-  { id: 'priority', label: 'Priority', icon: AlertTriangle },
-  { id: 'high-value', label: 'High-value', icon: TrendingUp },
-  { id: 'express', label: 'Express', icon: Zap }
-];
 
 const Home = () => {
   const navigate = useNavigate();
@@ -94,42 +70,12 @@ const Home = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [orders, setOrders] = useState(mockOrders);
   const [notificationCount] = useState(3);
+  const [showQrScanner, setShowQrScanner] = useState(false);
 
-  // Get current time greeting
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
-  };
-
-  // Filter orders based on search and active filter
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         order.customer_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         order.order_id.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (!matchesSearch) return false;
-    
-    if (!activeFilter) return true;
-    
-    switch (activeFilter) {
-      case 'nearest':
-        return order.distance_km <= 2;
-      case 'priority':
-        return order.priority_level === 'High';
-      case 'high-value':
-        return order.order_value >= 300;
-      case 'express':
-        return parseInt(order.delivery_time) <= 20;
-      default:
-        return true;
-    }
-  });
+  // Show available orders (no filtering needed anymore)
+  const availableOrders = orders;
 
   // Pull to refresh functionality
   const handleRefresh = async () => {
@@ -170,14 +116,14 @@ const Home = () => {
     navigate('/order-details');
   };
 
-  // View order details
-  const handleViewDetails = (orderId: string) => {
-    navigate(`/order-details?id=${orderId}`);
-  };
-
-  // Track order
-  const handleTrackOrder = (orderId: string) => {
-    navigate(`/tracking?id=${orderId}`);
+  // Reject order
+  const handleRejectOrder = (orderId: string) => {
+    setOrders(prev => prev.filter(order => order.order_id !== orderId));
+    toast({
+      title: "Order Rejected",
+      description: `Order ${orderId} has been rejected`,
+      variant: "destructive"
+    });
   };
 
   // Priority badge color
@@ -233,10 +179,10 @@ const Home = () => {
         <div className="flex items-center justify-between p-4">
           <div className="animate-fade-in">
             <h1 className="text-xl font-bold text-foreground">
-              {getGreeting()}, Agent!
+              Zaago Delivery Agent
             </h1>
             <p className="text-sm text-muted-foreground">
-              {isOnline ? "You're online and ready!" : "Tap to go online"}
+              {isOnline ? "You're online and ready!" : "Ready to serve"}
             </p>
           </div>
           
@@ -269,122 +215,66 @@ const Home = () => {
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
-          {/* Online Status Toggle */}
+          {/* Quick Services */}
           <Card className="bg-gradient-to-r from-card to-card/50 border-primary/20 animate-slide-up">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-success animate-pulse' : 'bg-muted'}`} />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {isOnline ? "Online" : "Offline"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {isOnline ? "Receiving orders" : "Tap to start earning"}
-                    </p>
-                  </div>
-                </div>
-                
+              <h3 className="text-sm font-medium text-foreground mb-3">Quick Services</h3>
+              <div className="grid grid-cols-3 gap-3">
                 <Button
                   onClick={() => setIsOnline(!isOnline)}
                   className={`${
                     isOnline 
                       ? "bg-destructive hover:bg-destructive/80" 
                       : "bg-gradient-neon hover:shadow-neon hover:scale-105"
-                  } transition-all duration-300`}
+                  } transition-all duration-300 flex-col h-16`}
                 >
-                  <Zap className="w-4 h-4 mr-2" />
-                  {isOnline ? "Go Offline" : "Go Online"}
+                  <Zap className="w-5 h-5 mb-1" />
+                  <span className="text-xs">
+                    {isOnline ? "Go Offline" : "Go Online"}
+                  </span>
+                </Button>
+                
+                <Button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  variant="outline"
+                  className="border-border hover:bg-secondary hover:shadow-neon transition-all duration-300 flex-col h-16"
+                >
+                  <RefreshCw className={`w-5 h-5 mb-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span className="text-xs">Refresh</span>
+                </Button>
+                
+                <Button
+                  onClick={() => setShowQrScanner(true)}
+                  variant="outline"
+                  className="border-border hover:bg-secondary hover:shadow-neon transition-all duration-300 flex-col h-16"
+                >
+                  <QrCode className="w-5 h-5 mb-1" />
+                  <span className="text-xs">Scan QR</span>
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Search Bar */}
-          <div className="relative animate-slide-up">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search orders by customer, address, or order ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-input/50 border-border focus:border-primary focus:shadow-neon transition-all duration-300"
-            />
-          </div>
-
-          {/* Filters */}
-          <div className="animate-slide-up">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-foreground">Filters</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="text-primary hover:bg-primary/10"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
-              </Button>
-            </div>
-            
-            <ScrollArea className="w-full">
-              <div className="flex space-x-2 pb-2">
-                {filterOptions.map((filter) => {
-                  const IconComponent = filter.icon;
-                  const isActive = activeFilter === filter.id;
-                  
-                  return (
-                    <Button
-                      key={filter.id}
-                      variant={isActive ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setActiveFilter(isActive ? null : filter.id)}
-                      className={`${
-                        isActive 
-                          ? "bg-gradient-neon shadow-neon text-primary-foreground" 
-                          : "bg-input/30 border-border hover:bg-input/50 hover:shadow-neon"
-                      } transition-all duration-300 whitespace-nowrap`}
-                    >
-                      <IconComponent className="w-4 h-4 mr-2" />
-                      {filter.label}
-                    </Button>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          </div>
-
           {/* Orders List */}
           <div className="animate-slide-up">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-foreground">
-                Available Orders ({filteredOrders.length})
+                Available Orders ({availableOrders.length})
               </h2>
-              {activeFilter && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setActiveFilter(null)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  Clear filter
-                </Button>
-              )}
             </div>
 
             {isLoading ? (
               <LoadingSkeleton />
-            ) : filteredOrders.length === 0 ? (
+            ) : availableOrders.length === 0 ? (
               <Card className="bg-card/50 border-border">
                 <CardContent className="p-8 text-center">
                   <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">No orders found</h3>
                   <p className="text-muted-foreground mb-4">
-                    {searchQuery || activeFilter 
-                      ? "Try adjusting your search or filters" 
-                      : isOnline 
-                        ? "New orders will appear here" 
-                        : "Go online to see available orders"
+                    {isOnline 
+                      ? "New orders will appear here" 
+                      : "Go online to see available orders"
                     }
                   </p>
                   {!isOnline && (
@@ -400,7 +290,7 @@ const Home = () => {
               </Card>
             ) : (
               <div className="space-y-4">
-                {filteredOrders.map((order, index) => (
+                {availableOrders.map((order, index) => (
                   <Card 
                     key={order.order_id} 
                     className={`${
@@ -458,25 +348,16 @@ const Home = () => {
                           className="flex-1 bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300"
                         >
                           <CheckCircle className="w-4 h-4 mr-2" />
-                          Accept Order
+                          Accept
                         </Button>
                         
                         <Button 
                           variant="outline"
-                          size="icon"
-                          onClick={() => handleViewDetails(order.order_id)}
-                          className="border-border hover:bg-secondary hover:shadow-neon transition-all duration-300"
+                          onClick={() => handleRejectOrder(order.order_id)}
+                          className="flex-1 border-destructive/50 text-destructive hover:bg-destructive/10 hover:shadow-neon transition-all duration-300"
                         >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        
-                        <Button 
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleTrackOrder(order.order_id)}
-                          className="border-border hover:bg-secondary hover:shadow-neon transition-all duration-300"
-                        >
-                          <Route className="w-4 h-4" />
+                          <X className="w-4 h-4 mr-2" />
+                          Reject
                         </Button>
                       </div>
                     </CardContent>
@@ -487,6 +368,12 @@ const Home = () => {
           </div>
         </div>
       </ScrollArea>
+
+      {/* QR Scanner Dialog */}
+      <QrScannerDialog 
+        open={showQrScanner} 
+        onOpenChange={setShowQrScanner} 
+      />
     </div>
   );
 };
