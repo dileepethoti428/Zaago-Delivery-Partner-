@@ -24,7 +24,9 @@ import {
   Truck,
   CreditCard,
   Star,
-  Edit
+  Edit,
+  Save,
+  X
 } from "lucide-react";
 
 const Settings = () => {
@@ -33,6 +35,19 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [originalSettings, setOriginalSettings] = useState({
+    push_notifications: true,
+    sound_alerts: true,
+    vibration: false,
+    location_services: true,
+    personal_info: {
+      name: '',
+      phone: '',
+      email: '',
+      vehicle: 'Honda Civic 2020'
+    }
+  });
   const [settings, setSettings] = useState({
     push_notifications: true,
     sound_alerts: true,
@@ -74,7 +89,7 @@ const Settings = () => {
           .maybeSingle();
 
         if (agentSettings) {
-          setSettings({
+          const newSettings = {
             push_notifications: agentSettings.push_notifications,
             sound_alerts: agentSettings.sound_alerts,
             vibration: agentSettings.vibration,
@@ -85,18 +100,25 @@ const Settings = () => {
               email: agent.email || '',
               vehicle: (agentSettings.vehicle_info as any)?.model || 'Honda Civic 2020'
             }
-          });
+          };
+          setSettings(newSettings);
+          setOriginalSettings(newSettings);
         } else {
           // Set default with agent info
-          setSettings(prev => ({
-            ...prev,
+          const defaultSettings = {
+            push_notifications: true,
+            sound_alerts: true,
+            vibration: false,
+            location_services: true,
             personal_info: {
               name: agent.name || '',
               phone: agent.phone || '',
               email: agent.email || '',
               vehicle: 'Honda Civic 2020'
             }
-          }));
+          };
+          setSettings(defaultSettings);
+          setOriginalSettings(defaultSettings);
         }
       }
     } catch (error) {
@@ -204,7 +226,72 @@ const Settings = () => {
     }
   };
 
+  const handleEditToggle = () => {
+    if (isEditMode) {
+      // Cancel edit mode - restore original settings
+      setSettings(originalSettings);
+      setIsEditMode(false);
+    } else {
+      // Enter edit mode - save current settings as original
+      setOriginalSettings({ ...settings });
+      setIsEditMode(true);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    if (!agentId) return;
+
+    setLoading(true);
+    try {
+      // Update agent basic info
+      const { error: agentError } = await supabase
+        .from('delivery_agents')
+        .update({
+          name: settings.personal_info.name,
+          phone: settings.personal_info.phone
+        })
+        .eq('id', agentId);
+
+      if (agentError) throw agentError;
+
+      // Update agent settings
+      const { error: settingsError } = await supabase
+        .from('agent_settings')
+        .upsert({
+          agent_id: agentId,
+          push_notifications: settings.push_notifications,
+          sound_alerts: settings.sound_alerts,
+          vibration: settings.vibration,
+          location_services: settings.location_services,
+          personal_info: settings.personal_info,
+          vehicle_info: { model: settings.personal_info.vehicle }
+        }, {
+          onConflict: 'agent_id'
+        });
+
+      if (settingsError) throw settingsError;
+
+      setOriginalSettings({ ...settings });
+      setIsEditMode(false);
+      toast({
+        title: "Settings Saved",
+        description: "All your settings have been updated successfully.",
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNavigation = (item: any) => {
+    if (isEditMode) return; // Disable navigation in edit mode
+    
     switch (item.title) {
       case "Personal Information":
         setShowEditDialog(true);
@@ -348,9 +435,25 @@ const Settings = () => {
   return (
     <div className="min-h-screen bg-background p-4 space-y-6">
       {/* Header */}
-      <div className="animate-fade-in">
-        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground">Customize your app experience</p>
+      <div className="animate-fade-in flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+          <p className="text-muted-foreground">
+            {isEditMode ? "Edit your settings" : "Customize your app experience"}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleEditToggle}
+          className="h-10 w-10"
+        >
+          {isEditMode ? (
+            <X className="h-5 w-5 text-muted-foreground" />
+          ) : (
+            <Edit className="h-5 w-5 text-muted-foreground" />
+          )}
+        </Button>
       </div>
 
       {/* Settings Groups */}
@@ -366,32 +469,75 @@ const Settings = () => {
                 return (
                   <div
                     key={itemIndex}
-                    className="flex items-center justify-between p-3 hover:bg-secondary/50 rounded-lg transition-smooth cursor-pointer"
-                    onClick={() => item.action === "navigate" && handleNavigation(item)}
+                    className={`flex items-center justify-between p-3 rounded-lg transition-smooth ${
+                      !isEditMode && item.action === "navigate" 
+                        ? "hover:bg-secondary/50 cursor-pointer" 
+                        : ""
+                    }`}
+                    onClick={() => !isEditMode && item.action === "navigate" && handleNavigation(item)}
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 flex-1">
                       <div className="p-2 bg-primary/10 rounded-lg">
                         <IconComponent className={`w-5 h-5 ${item.color}`} />
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium text-foreground">{item.title}</p>
-                        <p className="text-sm text-muted-foreground">{item.description}</p>
+                        {item.title === "Personal Information" && isEditMode ? (
+                          <div className="space-y-2 mt-2">
+                            <Input
+                              value={settings.personal_info.name}
+                              onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                personal_info: { ...prev.personal_info, name: e.target.value }
+                              }))}
+                              placeholder="Full Name"
+                              className="h-8"
+                            />
+                            <Input
+                              value={settings.personal_info.phone}
+                              onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                personal_info: { ...prev.personal_info, phone: e.target.value }
+                              }))}
+                              placeholder="Phone Number"
+                              className="h-8"
+                            />
+                          </div>
+                        ) : item.title === "Vehicle Information" && isEditMode ? (
+                          <Input
+                            value={settings.personal_info.vehicle}
+                            onChange={(e) => setSettings(prev => ({
+                              ...prev,
+                              personal_info: { ...prev.personal_info, vehicle: e.target.value }
+                            }))}
+                            placeholder="Vehicle Information"
+                            className="h-8 mt-2"
+                          />
+                        ) : (
+                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                        )}
                       </div>
                     </div>
                     
                     {item.action === "toggle" ? (
                       <Switch 
                         checked={item.enabled}
-                        onCheckedChange={(checked) => updateSetting(item.key, checked)}
+                        onCheckedChange={(checked) => {
+                          if (isEditMode) {
+                            setSettings(prev => ({ ...prev, [item.key]: checked }));
+                          } else {
+                            updateSetting(item.key, checked);
+                          }
+                        }}
                         disabled={loading}
                         className="data-[state=checked]:bg-primary"
                       />
-                    ) : (
+                    ) : !isEditMode ? (
                       <ChevronRight 
                         className="w-5 h-5 text-muted-foreground" 
                         onClick={() => handleNavigation(item)}
                       />
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
@@ -416,20 +562,38 @@ const Settings = () => {
         </CardContent>
       </Card>
 
+      {/* Save Button - Only show in edit mode */}
+      {isEditMode && (
+        <Card className="bg-card border-border animate-slide-up">
+          <CardContent className="p-4">
+            <Button 
+              onClick={handleSaveAll}
+              disabled={loading}
+              className="w-full"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save All Changes
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Danger Zone */}
-      <Card className="bg-card border-destructive/20 animate-slide-up">
-        <CardContent className="p-4">
-          <Button 
-            variant="outline" 
-            className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-            onClick={handleSignOut}
-            disabled={loading}
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
-        </CardContent>
-      </Card>
+      {!isEditMode && (
+        <Card className="bg-card border-destructive/20 animate-slide-up">
+          <CardContent className="p-4">
+            <Button 
+              variant="outline" 
+              className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              onClick={handleSignOut}
+              disabled={loading}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Edit Personal Information Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
