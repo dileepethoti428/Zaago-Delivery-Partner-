@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
-import noOrdersIllustration from "@/assets/no-orders-illustration.jpg";
 
 interface Order {
   id: string;
@@ -553,7 +552,7 @@ const Home = () => {
                 <CardContent className="p-8 text-center">
                   <div className="mb-6">
                     <img 
-                      src={noOrdersIllustration} 
+                      src="/src/assets/no-orders-illustration.jpg" 
                       alt="No orders available - delivery person taking a peaceful break" 
                       className="w-64 h-40 mx-auto rounded-lg object-cover shadow-lg"
                     />
