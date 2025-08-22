@@ -58,9 +58,14 @@ const Home = () => {
   const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
   const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
   
-  // Calculate agent payout (base 20 + 5 per km + 2 per product)
-  const calculateAgentPayout = (distance: number, products: number) => {
-    return 20 + (5 * distance) + (2 * products);
+  // Calculate agent payout based on new structure
+  const calculateAgentPayout = (distance: number) => {
+    const basePay = 15; // Base pay for orders within 1 km
+    const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
+    const perKmRate = 12; // Average of ₹10-₹14 per km
+    const distancePay = additionalDistance * perKmRate;
+    
+    return basePay + distancePay;
   };
 
   // Fetch orders from backend
@@ -189,7 +194,7 @@ const Home = () => {
         .select('id')
         .eq('email', agentEmail)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       if (!agent) {
         throw new Error('Agent not found');
@@ -469,11 +474,11 @@ const Home = () => {
                             </div>
                           </div>
                           
-                          {/* Agent Payout */}
-                          <div className="flex items-center text-sm text-green-600 font-medium mt-2">
-                            <IndianRupee className="w-4 h-4 mr-1" />
-                            Agent payout: ₹{calculateAgentPayout(order.distance_km || 2.5, order.products_count || 1)}
-                          </div>
+                           {/* Agent Payout */}
+                           <div className="flex items-center text-sm text-green-600 font-medium mt-2">
+                             <IndianRupee className="w-4 h-4 mr-1" />
+                             Agent payout: ₹{calculateAgentPayout(order.distance_km || 2.5).toFixed(0)}
+                           </div>
                         </div>
 
                         {/* Action Buttons */}

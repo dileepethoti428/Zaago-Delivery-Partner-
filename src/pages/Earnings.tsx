@@ -113,20 +113,12 @@ const Earnings = () => {
         return;
       }
 
-      // Fetch earnings with delivery history
+      // Fetch earnings
       const { data: earnings, error: earningsError } = await supabase
         .from('earnings')
-        .select(`
-          *,
-          delivery_history (
-            customer_name,
-            completed_at,
-            delivery_date,
-            total_amount
-          )
-        `)
+        .select('*')
         .eq('agent_id', agent.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
 
       if (earningsError) throw earningsError;
 
@@ -163,9 +155,16 @@ const Earnings = () => {
           month: calculatePeriodData(monthStart)
         });
 
+        // Fetch delivery history for customer names
+        const { data: deliveryHistory } = await supabase
+          .from('delivery_history')
+          .select('order_id, customer_name, delivery_date, total_amount')
+          .eq('agent_id', agent.id)
+          .order('completed_at', { ascending: false });
+
         // Format recent earnings for display
         const recentData = earnings.slice(0, 10).map(earning => {
-          const historyData = Array.isArray(earning.delivery_history) ? earning.delivery_history[0] : null;
+          const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
           
           // Find related transactions for breakdown
           const relatedTransactions = transactions?.filter(t => t.order_id === earning.order_id) || [];
