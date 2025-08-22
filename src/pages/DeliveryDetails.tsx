@@ -390,6 +390,38 @@ const DeliveryDetails = () => {
             )}
           </div>
         </CardContent>
+       </Card>
+
+      {/* Action Buttons */}
+      <Card className="bg-card border-border animate-slide-up">
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <h3 className="font-semibold text-foreground flex items-center space-x-2">
+              <CheckCircle2 className="w-5 h-5 text-primary" />
+              <span>DELIVERY ACTIONS</span>
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-4">
+              <Button 
+                variant="outline" 
+                className="flex items-center justify-center space-x-2 h-12 border-border hover:bg-secondary"
+                onClick={handleNavigation}
+              >
+                <Navigation className="w-5 h-5" />
+                <span>Navigate to Customer</span>
+              </Button>
+              
+              <Button 
+                className="flex items-center justify-center space-x-2 h-12 bg-gradient-neon hover:shadow-neon transition-smooth"
+                onClick={handleMarkAsDelivery}
+                disabled={isProcessing}
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                <span>{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Special Instructions */}
@@ -401,27 +433,6 @@ const DeliveryDetails = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Action Buttons */}
-      <div className="fixed bottom-4 left-4 right-4 flex gap-4 animate-slide-up">
-        <Button 
-          variant="outline" 
-          className="flex-1 border-border"
-          onClick={handleNavigation}
-        >
-          <Navigation className="w-4 h-4 mr-2" />
-          Navigate
-        </Button>
-        
-        <Button 
-          className="flex-1 bg-gradient-neon hover:shadow-neon transition-smooth"
-          onClick={handleMarkAsDelivery}
-          disabled={isProcessing}
-        >
-          <CheckCircle2 className="w-4 h-4 mr-2" />
-          {isProcessing ? 'Processing...' : 'Mark as Delivered'}
-        </Button>
-      </div>
 
       {/* Payment Method Dialog */}
       {order && (
@@ -440,9 +451,6 @@ const DeliveryDetails = () => {
           }}
         />
       )}
-
-      {/* Add bottom padding to account for fixed buttons */}
-      <div className="h-20"></div>
     </div>
   );
 };
