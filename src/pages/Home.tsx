@@ -75,7 +75,7 @@ const Home = () => {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
-        .eq('status', 'placed')
+        .in('status', ['placed', 'assigned'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;

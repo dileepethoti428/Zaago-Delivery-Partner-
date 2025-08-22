@@ -12,10 +12,12 @@ interface PaymentMethodDialogProps {
     order_id: string;
     customer_name: string;
     total_amount: number;
+    payment_status?: string;
   };
+  onSuccess?: () => void;
 }
 
-export const PaymentMethodDialog = ({ open, onOpenChange, order }: PaymentMethodDialogProps) => {
+export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: PaymentMethodDialogProps) => {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -178,6 +180,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order }: PaymentMethod
       });
 
       onOpenChange(false);
+      onSuccess?.();
       
     } catch (error) {
       console.error('Payment processing error:', error);
@@ -215,23 +218,37 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order }: PaymentMethod
           </div>
 
           <div className="space-y-3">
-            <Button
-              onClick={() => handlePaymentMethod('COD')}
-              disabled={isProcessing}
-              className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
-            >
-              <Banknote className="w-5 h-5 mr-2" />
-              Cash on Delivery (COD)
-            </Button>
-            
-            <Button
-              onClick={() => handlePaymentMethod('Online')}
-              disabled={isProcessing}
-              className="w-full h-12 bg-gradient-neon hover:shadow-neon"
-            >
-              <CreditCard className="w-5 h-5 mr-2" />
-              Online Payment (Razorpay)
-            </Button>
+            {/* Show only Online option if prepaid */}
+            {order.payment_status === 'paid' || order.payment_status === 'prepaid' ? (
+              <Button
+                onClick={() => handlePaymentMethod('Online')}
+                disabled={isProcessing}
+                className="w-full h-12 bg-gradient-neon hover:shadow-neon"
+              >
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Online Payment (Already Paid)
+              </Button>
+            ) : (
+              <>
+                <Button
+                  onClick={() => handlePaymentMethod('COD')}
+                  disabled={isProcessing}
+                  className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+                >
+                  <Banknote className="w-5 h-5 mr-2" />
+                  Cash on Delivery (COD)
+                </Button>
+                
+                <Button
+                  onClick={() => handlePaymentMethod('Online')}
+                  disabled={isProcessing}
+                  className="w-full h-12 bg-gradient-neon hover:shadow-neon"
+                >
+                  <CreditCard className="w-5 h-5 mr-2" />
+                  Online Payment (Razorpay)
+                </Button>
+              </>
+            )}
           </div>
 
           <Button

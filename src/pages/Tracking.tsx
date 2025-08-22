@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,11 +41,25 @@ const mockTrackingData = {
 const Tracking = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const orderId = searchParams.get('id');
+  const orderId = searchParams.get('orderId');
   
   // State management
-  const [orderData, setOrderData] = useState(mockTrackingData);
+  const [orderData, setOrderData] = useState(() => {
+    // Use passed location data if available
+    const locationState = location.state as any;
+    if (locationState?.customerLocation) {
+      return {
+        ...mockTrackingData,
+        order_id: orderId || mockTrackingData.order_id,
+        customer_name: locationState.customerName || mockTrackingData.customer_name,
+        customer_address: locationState.customerAddress || mockTrackingData.customer_address,
+        customer_location: locationState.customerLocation,
+      };
+    }
+    return mockTrackingData;
+  });
   const [mapboxToken, setMapboxToken] = useState<string>('');
   const [isLoadingToken, setIsLoadingToken] = useState(true);
 

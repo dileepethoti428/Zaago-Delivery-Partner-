@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -40,7 +41,7 @@ const DeliveryDetails = () => {
   const { toast } = useToast();
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMarkingDelivered, setIsMarkingDelivered] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
   useEffect(() => {
     if (orderId) {
@@ -77,86 +78,29 @@ const DeliveryDetails = () => {
     }
   };
 
-  const handleMarkDelivered = async () => {
-    if (!order) return;
-    
-    setIsMarkingDelivered(true);
-    try {
-      // Get current agent
-      const agentEmail = localStorage.getItem('agent_email') || 'seshethoti@gmail.com';
-      
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', agentEmail)
-        .eq('is_active', true)
-        .single();
-
-      if (!agent) {
-        throw new Error('Agent not found');
-      }
-
-      // Update order as delivered
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({ 
-          delivered: true, 
-          delivered_at: new Date().toISOString(),
-          status: 'delivered'
-        })
-        .eq('id', order.id);
-
-      if (orderError) throw orderError;
-
-      // Create delivery history entry
-      const { error: historyError } = await supabase
-        .from('delivery_history')
-        .insert({
-          order_id: order.id,
-          agent_id: agent.id,
-          customer_name: order.customer_name,
-          customer_phone: order.customer_phone,
-          delivery_address: order.address,
-          items: order.items,
-          total_amount: order.total,
-          payment_status: order.payment_status,
-          delivery_date: order.delivery_date,
-          delivery_time_slot: order.delivery_time_slot,
-          special_instructions: order.special_instructions,
-          completed_at: new Date().toISOString()
-        });
-
-      if (historyError) throw historyError;
-
-      // Create earnings entry
-      const earningAmount = Math.round(order.total * 0.15 * 100) / 100; // 15% commission
-      const { error: earningsError } = await supabase
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order.id,
-          amount: earningAmount,
-          status: 'confirmed'
-        });
-
-      if (earningsError) throw earningsError;
-
+  const handleNavigation = () => {
+    if (!order?.address?.coordinates) {
       toast({
-        title: "Success",
-        description: "Order marked as delivered successfully!",
-      });
-
-      navigate('/history');
-    } catch (error) {
-      console.error('Error marking order as delivered:', error);
-      toast({
-        title: "Error",
-        description: "Failed to mark order as delivered",
+        title: "Location Error",
+        description: "Customer location not available",
         variant: "destructive"
       });
-    } finally {
-      setIsMarkingDelivered(false);
+      return;
     }
+
+    // Navigate to tracking page with customer location
+    navigate(`/tracking?orderId=${order.id}`, {
+      state: {
+        customerLocation: order.address.coordinates,
+        customerAddress: `${order.address.addressLine1}, ${order.address.city}`,
+        customerName: order.customer_name
+      }
+    });
+  };
+
+  const handleMarkAsDelivery = () => {
+    if (!order) return;
+    setShowPaymentDialog(true);
   };
 
   if (isLoading) {
@@ -200,7 +144,7 @@ const DeliveryDetails = () => {
         <Button 
           variant="ghost" 
           size="icon"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/home')}
           className="hover:bg-secondary"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -355,13 +299,7 @@ const DeliveryDetails = () => {
         <Button 
           variant="outline" 
           className="flex-1 border-border"
-          onClick={() => {
-            // Navigate to map/tracking
-            toast({
-              title: "Navigation",
-              description: "Opening navigation...",
-            });
-          }}
+          onClick={handleNavigation}
         >
           <Navigation className="w-4 h-4 mr-2" />
           Navigate
@@ -369,13 +307,30 @@ const DeliveryDetails = () => {
         
         <Button 
           className="flex-1 bg-gradient-neon hover:shadow-neon transition-smooth"
-          onClick={handleMarkDelivered}
-          disabled={isMarkingDelivered}
+          onClick={handleMarkAsDelivery}
         >
           <CheckCircle2 className="w-4 h-4 mr-2" />
-          {isMarkingDelivered ? "Marking..." : "Mark as Delivered"}
+          Mark as Delivery
         </Button>
       </div>
+
+      {/* Payment Method Dialog */}
+      {order && (
+        <PaymentMethodDialog 
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          order={{
+            order_id: order.id,
+            customer_name: order.customer_name,
+            total_amount: order.total,
+            payment_status: order.payment_status
+          }}
+          onSuccess={() => {
+            setShowPaymentDialog(false);
+            navigate('/home');
+          }}
+        />
+      )}
 
       {/* Add bottom padding to account for fixed buttons */}
       <div className="h-20"></div>
