@@ -325,8 +325,12 @@ const DeliveryDetails = () => {
             total_amount: order.total,
             payment_status: order.payment_status
           }}
-          onSuccess={() => {
+          onSuccess={(paymentMethod) => {
             setShowPaymentDialog(false);
+            toast({
+              title: "Order Completed! ✅",
+              description: `Delivery completed with ${paymentMethod} payment`,
+            });
             navigate('/home');
           }}
         />
