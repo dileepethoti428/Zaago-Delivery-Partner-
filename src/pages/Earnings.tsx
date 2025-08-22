@@ -80,6 +80,18 @@ const Earnings = () => {
     fetchEarningsData();
     fetchPayoutConfig();
     fetchDistanceStats();
+
+    // Listen for order completion events to refresh earnings
+    const handleOrderCompleted = () => {
+      console.log('Order completed, refreshing earnings...');
+      fetchEarningsData();
+    };
+
+    window.addEventListener('orderCompleted', handleOrderCompleted);
+
+    return () => {
+      window.removeEventListener('orderCompleted', handleOrderCompleted);
+    };
   }, []);
 
   const fetchPayoutConfig = async () => {
@@ -288,66 +300,66 @@ const Earnings = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-secondary/50 p-4 rounded-lg">
-                <div className="flex items-center space-x-2 mb-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-secondary/50 p-3 rounded-lg">
+                <div className="flex items-center space-x-2 mb-1">
                   <Target className="w-4 h-4 text-primary" />
-                  <span className="font-semibold">Base Pay</span>
+                  <span className="font-medium text-sm">Base Pay</span>
                 </div>
-                <p className="text-2xl font-bold text-primary">₹{payoutConfig.base_pay_amount}</p>
-                <p className="text-sm text-muted-foreground">
-                  For deliveries within {payoutConfig.base_pay_distance_km} km
+                <p className="text-xl font-bold text-primary">₹{payoutConfig.base_pay_amount}</p>
+                <p className="text-xs text-muted-foreground">
+                  Within {payoutConfig.base_pay_distance_km} km
                 </p>
               </div>
               
-              <div className="bg-secondary/50 p-4 rounded-lg">
-                <div className="flex items-center space-x-2 mb-2">
+              <div className="bg-secondary/50 p-3 rounded-lg">
+                <div className="flex items-center space-x-2 mb-1">
                   <MapPin className="w-4 h-4 text-primary" />
-                  <span className="font-semibold">Per Kilometer</span>
+                  <span className="font-medium text-sm">Per KM</span>
                 </div>
-                <p className="text-2xl font-bold text-primary">
+                <p className="text-xl font-bold text-primary">
                   ₹{payoutConfig.per_km_min_rate}-₹{payoutConfig.per_km_max_rate}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  Additional pay per km beyond {payoutConfig.base_pay_distance_km} km
+                <p className="text-xs text-muted-foreground">
+                  Beyond {payoutConfig.base_pay_distance_km} km
                 </p>
               </div>
               
-              <div className="bg-secondary/50 p-4 rounded-lg">
-                <div className="flex items-center space-x-2 mb-2">
+              <div className="bg-secondary/50 p-3 rounded-lg">
+                <div className="flex items-center space-x-2 mb-1">
                   <Gift className="w-4 h-4 text-primary" />
-                  <span className="font-semibold">Peak Hour Bonus</span>
+                  <span className="font-medium text-sm">Peak Bonus</span>
                 </div>
-                <p className="text-2xl font-bold text-primary">₹{payoutConfig.peak_hour_bonus_amount}</p>
-                <p className="text-sm text-muted-foreground">
-                  For {payoutConfig.peak_hour_order_threshold} orders during {payoutConfig.peak_hour_start}-{payoutConfig.peak_hour_end}
+                <p className="text-xl font-bold text-primary">₹{payoutConfig.peak_hour_bonus_amount}</p>
+                <p className="text-xs text-muted-foreground">
+                  {payoutConfig.peak_hour_order_threshold} orders ({payoutConfig.peak_hour_start}-{payoutConfig.peak_hour_end})
                 </p>
               </div>
             </div>
             
             {/* Peak Hour Progress */}
-            <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
+            <div className="bg-primary/10 p-3 rounded-lg border border-primary/20">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-semibold flex items-center space-x-2">
+                <h4 className="font-medium text-sm flex items-center space-x-2">
                   <Clock className="w-4 h-4" />
-                  <span>Today's Peak Hour Progress</span>
+                  <span>Peak Hour Progress</span>
                 </h4>
-                <Badge variant={peakOrdersToday >= (payoutConfig.peak_hour_order_threshold || 14) ? "default" : "secondary"}>
-                  {peakOrdersToday}/{payoutConfig.peak_hour_order_threshold || 14} orders
+                <Badge variant={peakOrdersToday >= (payoutConfig.peak_hour_order_threshold || 14) ? "default" : "secondary"} className="text-xs">
+                  {peakOrdersToday}/{payoutConfig.peak_hour_order_threshold || 14}
                 </Badge>
               </div>
-              <div className="w-full bg-secondary rounded-full h-2">
+              <div className="w-full bg-secondary rounded-full h-1.5">
                 <div 
-                  className="bg-primary h-2 rounded-full transition-all duration-500"
+                  className="bg-primary h-1.5 rounded-full transition-all duration-500"
                   style={{ 
                     width: `${Math.min(100, (peakOrdersToday / (payoutConfig.peak_hour_order_threshold || 14)) * 100)}%` 
                   }}
                 ></div>
               </div>
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground mt-1">
                 {peakOrdersToday >= (payoutConfig.peak_hour_order_threshold || 14) 
-                  ? `🎉 Bonus unlocked! You've earned ₹${payoutConfig.peak_hour_bonus_amount}`
-                  : `${(payoutConfig.peak_hour_order_threshold || 14) - peakOrdersToday} more orders to unlock ₹${payoutConfig.peak_hour_bonus_amount} bonus`
+                  ? `🎉 ₹${payoutConfig.peak_hour_bonus_amount} bonus earned!`
+                  : `${(payoutConfig.peak_hour_order_threshold || 14) - peakOrdersToday} more for ₹${payoutConfig.peak_hour_bonus_amount}`
                 }
               </p>
             </div>
@@ -357,27 +369,27 @@ const Earnings = () => {
 
       {/* Quick Stats */}
       <Card className="bg-gradient-success border-success/20 animate-slide-up">
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           <div className="text-center">
             <div className="flex items-center justify-center space-x-2 mb-2">
-              <DollarSign className="w-8 h-8 text-success animate-glow-pulse" />
-              <span className="text-3xl font-bold text-success">
+              <DollarSign className="w-6 h-6 text-success animate-glow-pulse" />
+              <span className="text-2xl font-bold text-success">
                 ₹{currentData.amount.toFixed(2)}
               </span>
             </div>
-            <p className="text-success/80 mb-4">
+            <p className="text-success/80 mb-3 text-sm">
               {selectedPeriod === "today" ? "Today's Earnings" : 
                selectedPeriod === "week" ? "This Week" : "This Month"}
             </p>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div className="text-center">
-                <p className="text-2xl font-bold text-success">{currentData.deliveries}</p>
-                <p className="text-sm text-success/70">Deliveries</p>
+                <p className="text-xl font-bold text-success">{currentData.deliveries}</p>
+                <p className="text-xs text-success/70">Deliveries</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-success">{currentData.hours.toFixed(1)}</p>
-                <p className="text-sm text-success/70">Hours</p>
+                <p className="text-xl font-bold text-success">{currentData.hours.toFixed(1)}</p>
+                <p className="text-xs text-success/70">Hours</p>
               </div>
             </div>
           </div>
@@ -394,16 +406,16 @@ const Earnings = () => {
       </Tabs>
 
       {/* Performance Metrics */}
-      <div className="grid grid-cols-2 gap-4 animate-slide-up">
+      <div className="grid grid-cols-2 gap-3 animate-slide-up">
         <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-primary" />
+          <CardContent className="p-3">
+            <div className="flex items-center space-x-2">
+              <div className="p-1.5 bg-primary/10 rounded-lg">
+                <TrendingUp className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Avg per Hour</p>
-                <p className="text-xl font-bold text-foreground">
+                <p className="text-xs text-muted-foreground">Avg per Hour</p>
+                <p className="text-lg font-bold text-foreground">
                   ₹{((currentData.hours ? currentData.amount / currentData.hours : 0)).toFixed(2)}
                 </p>
               </div>
@@ -412,14 +424,14 @@ const Earnings = () => {
         </Card>
         
         <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Truck className="w-5 h-5 text-primary" />
+          <CardContent className="p-3">
+            <div className="flex items-center space-x-2">
+              <div className="p-1.5 bg-primary/10 rounded-lg">
+                <Truck className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Per Delivery</p>
-                <p className="text-xl font-bold text-foreground">
+                <p className="text-xs text-muted-foreground">Per Delivery</p>
+                <p className="text-lg font-bold text-foreground">
                   ₹{((currentData.deliveries ? currentData.amount / currentData.deliveries : 0)).toFixed(2)}
                 </p>
               </div>
@@ -436,19 +448,19 @@ const Earnings = () => {
             <span>Distance Traveled</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-secondary/20 rounded-lg">
-              <p className="text-2xl font-bold text-primary">{distanceStats.distance_today} km</p>
-              <p className="text-sm text-muted-foreground">Today</p>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center p-3 bg-secondary/20 rounded-lg">
+              <p className="text-lg font-bold text-primary">{distanceStats.distance_today} km</p>
+              <p className="text-xs text-muted-foreground">Today</p>
             </div>
-            <div className="text-center p-4 bg-secondary/20 rounded-lg">
-              <p className="text-2xl font-bold text-primary">{distanceStats.distance_week} km</p>
-              <p className="text-sm text-muted-foreground">This Week</p>
+            <div className="text-center p-3 bg-secondary/20 rounded-lg">
+              <p className="text-lg font-bold text-primary">{distanceStats.distance_week} km</p>
+              <p className="text-xs text-muted-foreground">This Week</p>
             </div>
-            <div className="text-center p-4 bg-secondary/20 rounded-lg">
-              <p className="text-2xl font-bold text-primary">{distanceStats.distance_month} km</p>
-              <p className="text-sm text-muted-foreground">This Month</p>
+            <div className="text-center p-3 bg-secondary/20 rounded-lg">
+              <p className="text-lg font-bold text-primary">{distanceStats.distance_month} km</p>
+              <p className="text-xs text-muted-foreground">This Month</p>
             </div>
           </div>
         </CardContent>
@@ -523,27 +535,29 @@ const Earnings = () => {
             <span>Payout Options</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gradient-dark rounded-lg">
-            <div className="flex items-center space-x-3">
-              <CreditCard className="w-6 h-6 text-primary" />
-              <div>
-                <p className="font-medium text-foreground">Bank Account</p>
-                <p className="text-sm text-muted-foreground">••••1234 - Weekly</p>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 gap-3">
+            <div className="flex items-center justify-between p-3 bg-gradient-dark rounded-lg">
+              <div className="flex items-center space-x-3">
+                <CreditCard className="w-5 h-5 text-primary" />
+                <div>
+                  <p className="font-medium text-foreground text-sm">Bank Account</p>
+                  <p className="text-xs text-muted-foreground">••••1234 - Weekly</p>
+                </div>
               </div>
+              <Badge className="bg-primary text-primary-foreground text-xs">Active</Badge>
             </div>
-            <Badge className="bg-primary text-primary-foreground">Active</Badge>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <Button className="bg-gradient-neon hover:shadow-neon transition-smooth">
-              <ArrowUpRight className="w-4 h-4 mr-2" />
-              Cash Out
-            </Button>
-            <Button variant="outline" className="border-border">
-              <Download className="w-4 h-4 mr-2" />
-              Download Report
-            </Button>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <Button className="bg-gradient-neon hover:shadow-neon transition-smooth text-sm">
+                <ArrowUpRight className="w-4 h-4 mr-2" />
+                Cash Out
+              </Button>
+              <Button variant="outline" className="border-border text-sm">
+                <Download className="w-4 h-4 mr-2" />
+                Download Report
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

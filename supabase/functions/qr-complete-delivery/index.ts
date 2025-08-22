@@ -194,6 +194,77 @@ serve(async (req) => {
         notes: `Order delivered via QR scan by ${agent.name}`
       });
 
+      // Get order details from orders table to get user_id
+      const { data: orderData } = await supabaseClient
+        .from('orders')
+        .select('user_id')
+        .eq('id', order.id)
+        .single();
+
+      // Create notifications for seller, admin, and customer
+      try {
+        // Notify customer
+        if (orderData?.user_id) {
+          await supabaseClient
+            .from('notifications')
+            .insert({
+              user_id: orderData.user_id,
+              title: 'Order Delivered',
+              message: `Your order #${order.id.substring(0, 8)} has been delivered successfully by ${agent.name}`,
+              type: 'delivery_completed',
+              role: 'user',
+              order_id: order.id
+            });
+        }
+
+        // Notify seller (if order has seller products)
+        const { data: orderItems } = await supabaseClient
+          .from('order_items')
+          .select('product_id, products(seller_id)')
+          .eq('order_id', order.id);
+
+        if (orderItems && orderItems.length > 0) {
+          const sellerIds = [...new Set(orderItems.map(item => item.products?.seller_id).filter(Boolean))];
+          
+          for (const sellerId of sellerIds) {
+            await supabaseClient
+              .from('notifications')
+              .insert({
+                user_id: sellerId,
+                title: 'Order Delivered',
+                message: `Order #${order.id.substring(0, 8)} for ${order.customer_name} has been delivered`,
+                type: 'order_delivered',
+                role: 'seller',
+                order_id: order.id
+              });
+          }
+        }
+
+        // Notify admin
+        const { data: admins } = await supabaseClient
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'admin');
+
+        if (admins && admins.length > 0) {
+          for (const admin of admins) {
+            await supabaseClient
+              .from('notifications')
+              .insert({
+                user_id: admin.user_id,
+                title: 'Delivery Completed',
+                message: `Agent ${agent.name} completed delivery for order #${order.id.substring(0, 8)}`,
+                type: 'delivery_completed',
+                role: 'admin',
+                order_id: order.id
+              });
+          }
+        }
+      } catch (notificationError) {
+        console.error('Failed to send notifications:', notificationError);
+        // Don't fail the delivery for notification issues
+      }
+
     return new Response(
       JSON.stringify({
         success: true,

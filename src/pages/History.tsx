@@ -93,6 +93,14 @@ const History = () => {
   useEffect(() => {
     fetchDeliveryHistory();
 
+    // Listen for order completion events from QR scanner and other delivery methods
+    const handleOrderCompleted = () => {
+      console.log('Order completed event received, refreshing history...');
+      fetchDeliveryHistory();
+    };
+
+    window.addEventListener('orderCompleted', handleOrderCompleted);
+
     // Set up real-time subscription for new deliveries
     let channel: any = null;
     
@@ -146,6 +154,7 @@ const History = () => {
 
     // Cleanup subscription on unmount
     return () => {
+      window.removeEventListener('orderCompleted', handleOrderCompleted);
       if (channel) {
         supabase.removeChannel(channel);
       }
