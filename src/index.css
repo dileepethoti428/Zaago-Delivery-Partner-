@@ -171,4 +171,22 @@
       opacity: 1;
     }
   }
+
+  /* Enhanced neon effects for priority-based styling */
+  .shadow-neon-strong {
+    box-shadow: 0 0 30px hsl(158 100% 50% / 0.6), 0 0 60px hsl(158 100% 50% / 0.4);
+  }
+
+  /* Priority-specific glow effects */
+  .shadow-red-500\/30 {
+    box-shadow: 0 0 20px hsl(0 100% 60% / 0.3);
+  }
+
+  .shadow-yellow-500\/30 {
+    box-shadow: 0 0 20px hsl(45 100% 50% / 0.3);
+  }
+
+  .shadow-green-500\/30 {
+    box-shadow: 0 0 20px hsl(142 76% 36% / 0.3);
+  }
 }
