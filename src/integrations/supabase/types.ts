@@ -1359,7 +1359,7 @@ export type Database = {
           link?: string | null
           message: string
           order_id?: string | null
-          role: string
+          role?: string
           title: string
           type: string
           user_id: string
@@ -2031,6 +2031,51 @@ export type Database = {
           verified?: boolean | null
         }
         Relationships: []
+      }
+      product_stock_notifications: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_notified: boolean
+          notified_at: string | null
+          product_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_notified?: boolean
+          notified_at?: string | null
+          product_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_notified?: boolean
+          notified_at?: string | null
+          product_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_stock_notifications_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_stock_notifications_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
