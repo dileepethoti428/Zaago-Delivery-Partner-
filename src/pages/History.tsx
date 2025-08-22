@@ -3,6 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -11,7 +13,10 @@ import {
   IndianRupee, 
   Package, 
   CheckCircle,
-  Star
+  Star,
+  Search,
+  Filter,
+  X
 } from "lucide-react";
 
 interface DeliveryHistoryItem {
@@ -36,6 +41,53 @@ const History = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [deliveries, setDeliveries] = useState<DeliveryHistoryItem[]>([]);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
+  
+  // Search and Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+
+  // Filter deliveries based on search and filters
+  const filteredDeliveries = deliveries.filter(delivery => {
+    // Search filter
+    const matchesSearch = searchTerm === "" || 
+      delivery.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      delivery.order_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      delivery.delivery_address?.addressLine1?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      delivery.delivery_address?.city?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Payment filter
+    const matchesPayment = paymentFilter === "all" || 
+      (paymentFilter === "online" && delivery.payment_status === "paid_online") ||
+      (paymentFilter === "cod" && delivery.payment_status === "paid_cod") ||
+      (paymentFilter === "pending" && !["paid_online", "paid_cod"].includes(delivery.payment_status));
+
+    // Date filter
+    const deliveryDate = new Date(delivery.completed_at);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+    const matchesDate = dateFilter === "all" ||
+      (dateFilter === "today" && deliveryDate.toDateString() === today.toDateString()) ||
+      (dateFilter === "yesterday" && deliveryDate.toDateString() === yesterday.toDateString()) ||
+      (dateFilter === "week" && deliveryDate >= weekAgo) ||
+      (dateFilter === "month" && deliveryDate >= monthAgo);
+
+    return matchesSearch && matchesPayment && matchesDate;
+  });
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setPaymentFilter("all");
+    setDateFilter("all");
+    setShowFilters(false);
+  };
 
   // Get current agent ID
   const getCurrentAgent = async () => {
@@ -223,23 +275,146 @@ const History = () => {
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
+          {/* Search and Filter Section */}
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by customer name, order ID, or address..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-card/50 border-border"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2 top-2 h-6 w-6 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant={showFilters ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Filters
+              </Button>
+              
+              {(searchTerm || paymentFilter !== "all" || dateFilter !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Clear all
+                </Button>
+              )}
+              
+              <span className="text-sm text-muted-foreground ml-auto">
+                {filteredDeliveries.length} of {deliveries.length} deliveries
+              </span>
+            </div>
+
+            {/* Filter Options */}
+            {showFilters && (
+              <Card className="bg-card/50 border-border animate-slide-down">
+                <CardContent className="p-4 space-y-4">
+                  {/* Payment Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Payment Status
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { value: "all", label: "All" },
+                        { value: "online", label: "Online" },
+                        { value: "cod", label: "COD" },
+                        { value: "pending", label: "Pending" }
+                      ].map((option) => (
+                        <Button
+                          key={option.value}
+                          variant={paymentFilter === option.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setPaymentFilter(option.value)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Date Filter */}
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Time Period
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { value: "all", label: "All Time" },
+                        { value: "today", label: "Today" },
+                        { value: "yesterday", label: "Yesterday" },
+                        { value: "week", label: "This Week" },
+                        { value: "month", label: "This Month" }
+                      ].map((option) => (
+                        <Button
+                          key={option.value}
+                          variant={dateFilter === option.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setDateFilter(option.value)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
           {/* Delivery History List */}
           <div className="animate-slide-up">
             {isLoading ? (
               <LoadingSkeleton />
-            ) : deliveries.length === 0 ? (
+            ) : filteredDeliveries.length === 0 ? (
               <Card className="bg-card/50 border-border">
                 <CardContent className="p-8 text-center">
                   <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">No deliveries yet</h3>
+                  <h3 className="text-lg font-medium text-foreground mb-2">
+                    {deliveries.length === 0 ? "No deliveries yet" : "No matching deliveries"}
+                  </h3>
                   <p className="text-muted-foreground">
-                    Your completed deliveries will appear here
+                    {deliveries.length === 0 
+                      ? "Your completed deliveries will appear here"
+                      : "Try adjusting your search or filters"
+                    }
                   </p>
+                  {deliveries.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={clearFilters}
+                      className="mt-4"
+                    >
+                      Clear filters
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-4">
-                {deliveries.map((delivery, index) => (
+                {filteredDeliveries.map((delivery, index) => (
                   <Card 
                     key={delivery.id} 
                     className="bg-card border-border hover:shadow-neon transition-all duration-300 animate-fade-in"
