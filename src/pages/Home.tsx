@@ -19,6 +19,7 @@ import {
   RefreshCw,
   CheckCircle,
   X,
+  User,
   QrCode
 } from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
