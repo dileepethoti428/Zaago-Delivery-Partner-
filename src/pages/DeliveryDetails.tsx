@@ -42,12 +42,49 @@ const DeliveryDetails = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [distance, setDistance] = useState<number>(0);
+  const [payout, setPayout] = useState<number>(0);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (orderId) {
       fetchOrderDetails();
     }
   }, [orderId]);
+
+  useEffect(() => {
+    if (order) {
+      calculateDistanceAndPayout();
+    }
+  }, [order]);
+
+  const calculateDistanceAndPayout = async () => {
+    try {
+      // Get current agent location
+      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
+      if (!agentLocation || !order?.address?.coordinates) {
+        return;
+      }
+
+      const { data: distanceData } = await supabase.functions.invoke('calculate-distance-eta', {
+        body: {
+          origin: agentLocation,
+          destination: order.address.coordinates
+        }
+      });
+
+      if (distanceData?.distance_km) {
+        const dist = distanceData.distance_km;
+        setDistance(dist);
+        
+        // Calculate fair payout: ₹20 base + ₹15/km beyond 1km
+        const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
+        setPayout(calculatedPayout);
+      }
+    } catch (error) {
+      console.error('Distance calculation error:', error);
+    }
+  };
 
   const fetchOrderDetails = async () => {
     try {
@@ -88,19 +125,58 @@ const DeliveryDetails = () => {
       return;
     }
 
-    // Navigate to tracking page with customer location
-    navigate(`/tracking?orderId=${order.id}`, {
-      state: {
-        customerLocation: order.address.coordinates,
-        customerAddress: `${order.address.addressLine1}, ${order.address.city}`,
-        customerName: order.customer_name
-      }
-    });
+    // Open Google Maps for navigation
+    const { lat, lng } = order.address.coordinates;
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+    window.open(googleMapsUrl, '_blank');
   };
 
-  const handleMarkAsDelivery = () => {
+  const handleMarkAsDelivery = async () => {
     if (!order) return;
-    setShowPaymentDialog(true);
+    
+    // If prepaid, complete directly
+    if (order.payment_status === 'prepaid' || order.payment_status === 'paid') {
+      await completeDeliveryDirect('Online');
+    } else {
+      // Show payment options for non-prepaid orders
+      setShowPaymentDialog(true);
+    }
+  };
+
+  const completeDeliveryDirect = async (paymentMethod: string) => {
+    setIsProcessing(true);
+    try {
+      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
+      
+      const { data, error } = await supabase.functions.invoke('complete-delivery', {
+        body: {
+          order_id: order?.id,
+          payment_method: paymentMethod,
+          agent_location: agentLocation
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: "Successfully Delivered! ✅",
+          description: `Order completed. Distance: ${data.order.distance_km?.toFixed(2)}km, Earned: ₹${data.order.payout_amount}`,
+        });
+        navigate('/home');
+      } else {
+        throw new Error(data.error || 'Failed to complete delivery');
+      }
+    } catch (error) {
+      console.error('Delivery completion error:', error);
+      toast({
+        title: "Delivery Failed",
+        description: "Unable to complete delivery. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (isLoading) {
@@ -254,6 +330,35 @@ const DeliveryDetails = () => {
         </CardContent>
       </Card>
 
+      {/* Distance & Payout Details */}
+      <Card className="bg-card border-border animate-slide-up">
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <h3 className="font-semibold text-foreground flex items-center space-x-2">
+              <Navigation className="w-5 h-5 text-primary" />
+              <span>DELIVERY DETAILS</span>
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-3 bg-secondary/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">Distance</p>
+                <p className="text-xl font-bold text-primary">{distance.toFixed(2)} km</p>
+              </div>
+              <div className="text-center p-3 bg-secondary/20 rounded-lg">
+                <p className="text-sm text-muted-foreground">Your Payout</p>
+                <p className="text-xl font-bold text-green-500">₹{payout}</p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
+              <p className="text-sm text-primary">
+                Fair pricing: ₹20 base + ₹15/km beyond 1km
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Payment Details */}
       <Card className="bg-card border-border animate-slide-up">
         <CardContent className="p-6">
@@ -264,22 +369,25 @@ const DeliveryDetails = () => {
             </h3>
             
             <div className="flex justify-between items-center">
-              <span className="font-medium text-foreground">Payment Method:</span>
-              <Badge variant="outline" className="border-border">
-                PENDING
+              <span className="font-medium text-foreground">Payment Status:</span>
+              <Badge className={`${getPaymentStatusColor(order.payment_status)} border-0`}>
+                {order.payment_status === 'prepaid' || order.payment_status === 'paid' ? 'PREPAID' : 'PENDING'}
               </Badge>
             </div>
 
-            <div className="flex items-center space-x-2 text-amber-500">
-              <AlertCircle className="w-4 h-4" />
-              <span className="text-sm">Payment status pending confirmation</span>
-            </div>
-
-            <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-              <p className="text-sm text-amber-600 dark:text-amber-400">
-                Payment pending - collect on delivery
-              </p>
-            </div>
+            {order.payment_status === 'prepaid' || order.payment_status === 'paid' ? (
+              <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                <p className="text-sm text-green-600 dark:text-green-400">
+                  Order is already paid online
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Payment pending - collect on delivery
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -308,9 +416,10 @@ const DeliveryDetails = () => {
         <Button 
           className="flex-1 bg-gradient-neon hover:shadow-neon transition-smooth"
           onClick={handleMarkAsDelivery}
+          disabled={isProcessing}
         >
           <CheckCircle2 className="w-4 h-4 mr-2" />
-          Mark as Delivery
+          {isProcessing ? 'Processing...' : 'Mark as Delivered'}
         </Button>
       </div>
 
@@ -325,13 +434,9 @@ const DeliveryDetails = () => {
             total_amount: order.total,
             payment_status: order.payment_status
           }}
-          onSuccess={(paymentMethod) => {
+          onSuccess={async (paymentMethod) => {
             setShowPaymentDialog(false);
-            toast({
-              title: "Order Completed! ✅",
-              description: `Delivery completed with ${paymentMethod} payment`,
-            });
-            navigate('/home');
+            await completeDeliveryDirect(paymentMethod);
           }}
         />
       )}

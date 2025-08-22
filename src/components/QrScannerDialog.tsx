@@ -91,8 +91,12 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       onOpenChange(false);
 
       // For prepaid orders, complete delivery directly
-      if (order.payment_status === 'prepaid') {
-        await completeDelivery(result, 'prepaid');
+      if (order.payment_status === 'prepaid' || order.payment_status === 'paid') {
+        await completeDelivery(result, 'Online');
+        toast({
+          title: "Product Delivered! ✅",
+          description: `Successfully delivered to ${order.customer_name}`,
+        });
       } else {
         // For COD orders, show payment options
         setShowPaymentDialog(true);
@@ -132,8 +136,8 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
 
       if (data.success) {
         toast({
-          title: "Order Completed! ✅",
-          description: `Delivery completed for ${data.order.customer_name}`,
+          title: "Product Delivered! ✅",
+          description: `Successfully delivered to ${data.order.customer_name}`,
         });
         
         // Reset states
