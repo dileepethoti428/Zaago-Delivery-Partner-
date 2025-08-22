@@ -145,13 +145,34 @@ serve(async (req) => {
 
     // The trigger will handle delivery_history creation, but let's update it with QR-specific details
     const distance_km = 2.5;
-    const payout_amount = 27.5;
+    let payout_amount = 27.5;
+    let payoutResult = null;
+
+    // Process payout safely
+    try {
+      const { data: payoutData, error: payoutError } = await supabaseClient.rpc('process_delivery_payout_safe', {
+        p_agent_id: agent.id,
+        p_order_id: order.id,
+        p_distance_km: distance_km,
+        p_delivery_time: new Date().toISOString()
+      });
+
+      if (payoutError) {
+        console.error('Payout processing error:', payoutError);
+      } else {
+        payoutResult = payoutData;
+        payout_amount = payoutResult?.payout_details?.total_payout || payout_amount;
+        console.log('Payout processed:', payoutResult);
+      }
+    } catch (error) {
+      console.error('Payout processing failed:', error);
+    }
 
     try {
       const { error: historyUpdateError } = await supabaseClient
         .from('delivery_history')
         .update({
-          delivery_notes: `Completed via QR scan by ${agent.name}`,
+          delivery_notes: `Completed via QR scan by ${agent.name}${payoutResult ? ' - Payout: ₹' + payout_amount : ''}`,
           distance_traveled: distance_km,
           delivery_payout: payout_amount
         })
@@ -164,25 +185,27 @@ serve(async (req) => {
       console.warn('Delivery history update failed:', historyError);
     }
 
-    // Create earnings record
-    try {
-      const { error: earningsError } = await supabaseClient
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order.id,
-          amount: payout_amount,
-          status: 'completed',
-          distance_km: distance_km,
-          payment_method: payment_method === 'COD' ? 'COD' : 'Online',
-          description: `Delivery payout for order ${order.id.substring(0, 8)}`
-        });
+    // Skip duplicate earnings - the safe payout function handles this
+    if (!payoutResult || !payoutResult.success) {
+      try {
+        const { error: earningsError } = await supabaseClient
+          .from('earnings')
+          .insert({
+            agent_id: agent.id,
+            order_id: order.id,
+            amount: payout_amount,
+            status: 'completed',
+            distance_km: distance_km,
+            payment_method: payment_method === 'COD' ? 'COD' : 'Online',
+            description: `Delivery payout for order ${order.id.substring(0, 8)}`
+          });
 
-      if (earningsError) {
-        console.warn('Failed to create earnings record:', earningsError);
+        if (earningsError) {
+          console.warn('Failed to create earnings record:', earningsError);
+        }
+      } catch (earningsCreateError) {
+        console.warn('Earnings creation failed:', earningsCreateError);
       }
-    } catch (earningsCreateError) {
-      console.warn('Earnings creation failed:', earningsCreateError);
     }
 
     // Update agent statistics

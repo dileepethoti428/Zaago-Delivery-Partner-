@@ -77,9 +77,10 @@ serve(async (req) => {
       );
     }
 
-    // Calculate distance and payout
+    // Use safe payout processing that won't block delivery completion
     let distance_km = 2.0;
     let payout_amount = 35;
+    let payoutResult = null;
 
     if (agent_location && order.address?.coordinates) {
       try {
@@ -92,18 +93,33 @@ serve(async (req) => {
 
         if (distanceData?.distance_km) {
           distance_km = distanceData.distance_km;
-          if (distance_km <= 1) {
-            payout_amount = 20;
-          } else {
-            payout_amount = 20 + ((distance_km - 1) * 15);
-          }
         }
       } catch (distanceError) {
         console.error('Distance calculation failed:', distanceError);
       }
     }
 
-    // Update order status to delivered
+    // Process payout safely
+    try {
+      const { data: payoutData, error: payoutError } = await supabaseClient.rpc('process_delivery_payout_safe', {
+        p_agent_id: agent.id,
+        p_order_id: order_id,
+        p_distance_km: distance_km,
+        p_delivery_time: new Date().toISOString()
+      });
+
+      if (payoutError) {
+        console.error('Payout processing error:', payoutError);
+      } else {
+        payoutResult = payoutData;
+        payout_amount = payoutResult?.payout_details?.total_payout || payout_amount;
+        console.log('Payout processed:', payoutResult);
+      }
+    } catch (error) {
+      console.error('Payout processing failed:', error);
+    }
+
+    // Update order status to delivered (main operation - must succeed)
     const { error: updateError } = await supabaseClient
       .from('orders')
       .update({
@@ -129,7 +145,7 @@ serve(async (req) => {
           distance_traveled: distance_km,
           delivery_payout: payout_amount,
           agent_location: agent_location,
-          delivery_notes: `Completed via manual delivery by ${agent.name}. Distance: ${distance_km.toFixed(2)}km`
+          delivery_notes: `Completed via manual delivery by ${agent.name}. Distance: ${distance_km.toFixed(2)}km${payoutResult ? ' - Payout: ₹' + payout_amount : ''}`
         })
         .eq('order_id', order_id);
 
@@ -140,25 +156,28 @@ serve(async (req) => {
       console.warn('Delivery history update failed:', historyError);
     }
 
+    // Skip duplicate earnings - the safe payout function handles this
     // Create earnings record
-    try {
-      const { error: earningsError } = await supabaseClient
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: payout_amount,
-          distance_km: distance_km,
-          payment_method: payment_method,
-          status: 'completed',
-          description: `Delivery payout for order ${order_id.slice(0, 8)}`
-        });
+    if (!payoutResult || !payoutResult.success) {
+      try {
+        const { error: earningsError } = await supabaseClient
+          .from('earnings')
+          .insert({
+            agent_id: agent.id,
+            order_id: order_id,
+            amount: payout_amount,
+            distance_km: distance_km,
+            payment_method: payment_method,
+            status: 'completed',
+            description: `Delivery payout for order ${order_id.slice(0, 8)}`
+          });
 
-      if (earningsError) {
-        console.warn('Failed to create earnings record:', earningsError);
+        if (earningsError) {
+          console.warn('Failed to create earnings record:', earningsError);
+        }
+      } catch (earningsCreateError) {
+        console.warn('Earnings creation failed:', earningsCreateError);
       }
-    } catch (earningsCreateError) {
-      console.warn('Earnings creation failed:', earningsCreateError);
     }
 
     // Update agent statistics

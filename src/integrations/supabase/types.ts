@@ -3393,6 +3393,15 @@ export type Database = {
         }
         Returns: Json
       }
+      process_delivery_payout_safe: {
+        Args: {
+          p_agent_id: string
+          p_delivery_time?: string
+          p_distance_km?: number
+          p_order_id: string
+        }
+        Returns: Json
+      }
       process_due_existing_subscriptions: {
         Args: Record<PropertyKey, never>
         Returns: number
