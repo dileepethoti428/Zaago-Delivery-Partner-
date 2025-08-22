@@ -7,15 +7,16 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   MapPin, 
   Clock, 
-  DollarSign, 
+  IndianRupee, 
   Package, 
   Navigation,
   Zap,
   Bell,
-  User,
+  Settings,
   RefreshCw,
   CheckCircle,
   X,
@@ -31,11 +32,11 @@ const mockOrders = [
     customer_address: "Sector 21, Phagwara",
     distance_km: 2.5,
     order_value: 250,
-    priority_level: "High",
     status: "Pending",
-    delivery_time: "30 min",
-    items_count: 3,
-    restaurant: "Pizza Corner"
+    delivery_time: "5 min",
+    products_count: 3,
+    restaurant: "Pizza Corner",
+    coordinates: { lat: 31.2338, lng: 75.6415 }
   },
   {
     order_id: "ORD124",
@@ -43,11 +44,11 @@ const mockOrders = [
     customer_address: "Civil Lines, Jalandhar",
     distance_km: 1.8,
     order_value: 180,
-    priority_level: "Medium",
     status: "Pending",
-    delivery_time: "25 min",
-    items_count: 2,
-    restaurant: "Burger House"
+    delivery_time: "4 min",
+    products_count: 2,
+    restaurant: "Burger House",
+    coordinates: { lat: 31.3260, lng: 75.5762 }
   },
   {
     order_id: "ORD125",
@@ -55,11 +56,11 @@ const mockOrders = [
     customer_address: "Model Town, Phagwara",
     distance_km: 3.2,
     order_value: 420,
-    priority_level: "High",
     status: "Pending",
-    delivery_time: "40 min",
-    items_count: 5,
-    restaurant: "Royal Dine"
+    delivery_time: "6 min",
+    products_count: 5,
+    restaurant: "Royal Dine",
+    coordinates: { lat: 31.2180, lng: 75.7781 }
   },
   {
     order_id: "ORD126",
@@ -67,11 +68,11 @@ const mockOrders = [
     customer_address: "Urban Estate, Jalandhar",
     distance_km: 0.8,
     order_value: 95,
-    priority_level: "Low",
     status: "Pending",
-    delivery_time: "15 min",
-    items_count: 1,
-    restaurant: "Cafe Delight"
+    delivery_time: "2 min",
+    products_count: 1,
+    restaurant: "Cafe Delight",
+    coordinates: { lat: 31.3157, lng: 75.5851 }
   }
 ];
 
@@ -87,9 +88,55 @@ const Home = () => {
   const [orders, setOrders] = useState(mockOrders);
   const [notificationCount] = useState(3);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [ordersWithDistance, setOrdersWithDistance] = useState(mockOrders);
+  
+  // Calculate agent payout (base 20 + 5 per km + 2 per product)
+  const calculateAgentPayout = (distance: number, products: number) => {
+    return 20 + (5 * distance) + (2 * products);
+  };
+
+  // Calculate distance and ETA for orders using backend service
+  const calculateDistanceETA = async (orders: typeof mockOrders) => {
+    const agentLocation = { lat: 31.2556, lng: 75.7045 }; // Mock agent location
+    
+    const updatedOrders = await Promise.all(
+      orders.map(async (order) => {
+        try {
+          const { data, error } = await supabase.functions.invoke('calculate-distance-eta', {
+            body: {
+              origin: agentLocation,
+              destination: order.coordinates
+            }
+          });
+
+          if (error) throw error;
+
+          return {
+            ...order,
+            distance_km: data.distance_km,
+            delivery_time: `${data.eta_mins} min`,
+            backend_calculated: true
+          };
+        } catch (error) {
+          console.error('Failed to calculate distance for order:', order.order_id, error);
+          // Keep original values on error
+          return order;
+        }
+      })
+    );
+    
+    setOrdersWithDistance(updatedOrders);
+  };
+
+  // Calculate distances on component mount and when orders change
+  useEffect(() => {
+    if (orders.length > 0) {
+      calculateDistanceETA(orders);
+    }
+  }, [orders]);
 
   // Show available orders (no filtering needed anymore)
-  const availableOrders = orders;
+  const availableOrders = ordersWithDistance;
 
   // Pull to refresh functionality
   const handleRefresh = async () => {
@@ -104,11 +151,11 @@ const Home = () => {
       customer_address: "Fresh Location",
       distance_km: 1.5,
       order_value: 200,
-      priority_level: "Medium" as const,
       status: "Pending" as const,
-      delivery_time: "20 min",
-      items_count: 2,
-      restaurant: "New Restaurant"
+      delivery_time: "3 min",
+      products_count: 2,
+      restaurant: "New Restaurant",
+      coordinates: { lat: 31.2556, lng: 75.7045 }
     };
     
     setOrders(prev => [newOrder, ...prev]);
@@ -140,19 +187,6 @@ const Home = () => {
     });
   };
 
-  // Priority badge color
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High':
-        return 'bg-destructive text-destructive-foreground animate-pulse';
-      case 'Medium':
-        return 'bg-warning text-warning-foreground';
-      case 'Low':
-        return 'bg-muted text-muted-foreground';
-      default:
-        return 'bg-secondary text-secondary-foreground';
-    }
-  };
 
   // Loading skeleton
   const LoadingSkeleton = () => (
@@ -219,9 +253,9 @@ const Home = () => {
               variant="ghost"
               size="icon"
               className="hover:bg-primary/10"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate('/settings')}
             >
-              <User className="w-5 h-5 text-foreground" />
+              <Settings className="w-5 h-5 text-foreground" />
             </Button>
           </div>
         </div>
@@ -307,11 +341,7 @@ const Home = () => {
                 {availableOrders.map((order, index) => (
                   <Card 
                     key={order.order_id} 
-                    className={`${
-                      order.priority_level === 'High' 
-                        ? 'bg-gradient-to-r from-card to-destructive/5 border-destructive/30 shadow-lg' 
-                        : 'bg-card border-border'
-                    } hover:shadow-neon hover:scale-[1.02] transition-all duration-300 animate-fade-in`}
+                    className="bg-card border-border hover:shadow-neon hover:scale-[1.02] transition-all duration-300 animate-fade-in"
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
                     <CardContent className="p-4">
@@ -323,9 +353,6 @@ const Home = () => {
                             {order.restaurant} • Order #{order.order_id}
                           </p>
                         </div>
-                        <Badge className={getPriorityColor(order.priority_level)}>
-                          {order.priority_level}
-                        </Badge>
                       </div>
 
                       {/* Order Details */}
@@ -346,12 +373,18 @@ const Home = () => {
                           </div>
                           <div className="flex items-center text-muted-foreground">
                             <Package className="w-4 h-4 mr-1 text-primary" />
-                            {order.items_count} items
+                            {order.products_count} products
                           </div>
                           <div className="flex items-center text-primary font-semibold">
-                            <DollarSign className="w-4 h-4 mr-1" />
+                            <IndianRupee className="w-4 h-4 mr-1" />
                             ₹{order.order_value}
                           </div>
+                        </div>
+                        
+                        {/* Agent Payout */}
+                        <div className="flex items-center text-sm text-green-600 font-medium mt-2">
+                          <IndianRupee className="w-4 h-4 mr-1" />
+                          Agent payout: ₹{calculateAgentPayout(order.distance_km, order.products_count)}
                         </div>
                       </div>
 

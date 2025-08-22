@@ -3,7 +3,7 @@ import {
   Home, 
   Package, 
   DollarSign, 
-  User,
+  Settings,
   Bell
 } from "lucide-react";
 
@@ -37,10 +37,10 @@ const BottomNavigation = () => {
       path: "/notifications"
     },
     {
-      id: "profile",
-      label: "Profile",
-      icon: User,
-      path: "/profile"
+      id: "settings",
+      label: "Settings",
+      icon: Settings,
+      path: "/settings"
     }
   ];
 

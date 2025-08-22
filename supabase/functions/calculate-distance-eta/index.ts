@@ -1,0 +1,117 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// Haversine formula to calculate distance between two points
+function calculateHaversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371 // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLng/2) * Math.sin(dLng/2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
+}
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const { origin, destination } = await req.json()
+    
+    if (!origin || !destination || !origin.lat || !origin.lng || !destination.lat || !destination.lng) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Missing required coordinates',
+          message: 'Please provide origin and destination with lat/lng values'
+        }),
+        { 
+          status: 400, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json' 
+          } 
+        }
+      )
+    }
+
+    // Get Mapbox token from environment
+    const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN')
+    
+    let distance_km = 0
+    let eta_mins = 0
+    let source = 'fallback'
+
+    if (mapboxToken) {
+      try {
+        // Try Mapbox Directions API first
+        const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?access_token=${mapboxToken}&geometries=geojson`
+        
+        const mapboxResponse = await fetch(mapboxUrl)
+        const mapboxData = await mapboxResponse.json()
+        
+        if (mapboxData.routes && mapboxData.routes.length > 0) {
+          const route = mapboxData.routes[0]
+          distance_km = (route.distance / 1000) // Convert meters to km
+          // Use our custom ETA: 2 minutes per km (ignoring Mapbox duration)
+          eta_mins = Math.ceil(distance_km * 2)
+          source = 'mapbox'
+          
+          console.log('Mapbox route found:', { distance_km, eta_mins })
+        } else {
+          throw new Error('No routes found from Mapbox')
+        }
+      } catch (mapboxError) {
+        console.log('Mapbox failed, using fallback:', mapboxError.message)
+        // Fall back to Haversine calculation
+        distance_km = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng)
+        eta_mins = Math.ceil(distance_km * 2) // 2 minutes per km
+        source = 'fallback'
+      }
+    } else {
+      console.log('No Mapbox token, using Haversine fallback')
+      // Use Haversine distance if no Mapbox token
+      distance_km = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng)
+      eta_mins = Math.ceil(distance_km * 2) // 2 minutes per km
+      source = 'fallback'
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        distance_km: Math.round(distance_km * 10) / 10, // Round to 1 decimal
+        eta_mins,
+        source,
+        success: true 
+      }),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
+    )
+  } catch (error) {
+    console.error('Error in calculate-distance-eta:', error)
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to calculate distance',
+        message: error.message 
+      }),
+      { 
+        status: 500, 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
+    )
+  }
+})
