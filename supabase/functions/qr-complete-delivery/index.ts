@@ -246,7 +246,7 @@ serve(async (req) => {
                 title: 'Order Delivered',
                 message: `Order #${order.id.substring(0, 8)} for ${order.customer_name} has been delivered`,
                 type: 'order_delivered',
-                role: 'seller',
+                role: 'user',
                 order_id: order.id
               });
           }
