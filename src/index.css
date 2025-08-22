@@ -38,7 +38,9 @@
     --destructive-foreground: 0 0% 98%;
 
     --success: 142 76% 36%;    /* Green for success states */
+    --success-foreground: 0 0% 98%;
     --warning: 45 93% 47%;     /* Amber for warnings */
+    --warning-foreground: 0 0% 8%;
 
     /* Borders and inputs */
     --border: 0 0% 25%;        /* #404040 */
@@ -126,5 +128,47 @@
   
   .bg-gradient-dark {
     background: var(--gradient-dark);
+  }
+
+  /* Additional animations for enhanced UX */
+  .animate-glow-pulse {
+    animation: glow-pulse 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow-pulse {
+    from {
+      box-shadow: 0 0 10px hsl(158 100% 50% / 0.3);
+    }
+    to {
+      box-shadow: 0 0 20px hsl(158 100% 50% / 0.6);
+    }
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out;
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
