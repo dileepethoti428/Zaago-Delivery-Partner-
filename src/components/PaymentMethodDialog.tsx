@@ -86,47 +86,81 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order }: PaymentMethod
         throw historyError;
       }
 
-      // Calculate commission and create earnings record
-      const { data: commissionConfig } = await supabase
-        .from('commission_config')
-        .select('commission_rate')
-        .order('effective_from', { ascending: false })
-        .limit(1)
-        .single();
+      // Calculate payout using new system
+      const distance = 2.0; // Default distance - should be calculated from actual route
+      const { data: payoutData, error: payoutError } = await supabase.rpc('calculate_delivery_payout', {
+        distance_km: distance,
+        delivery_time: new Date().toISOString(),
+        agent_id_param: agent?.id || null
+      });
 
-      const commissionRate = commissionConfig?.commission_rate || 0.05; // Default 5%
-      const earningsAmount = order.total_amount * commissionRate;
+      let totalEarning = 15; // Default base pay
+      
+      if (payoutError) {
+        console.error('Payout calculation error:', payoutError);
+        // Fallback to base pay
+        const { error: earningsError } = await supabase
+          .from('earnings')
+          .insert({
+            agent_id: agent?.id,
+            order_id: order.order_id,
+            amount: totalEarning,
+            status: 'completed'
+          });
 
-      const { error: earningsError } = await supabase
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order.order_id,
-          amount: earningsAmount,
-          status: 'completed'
+        if (earningsError) {
+          throw earningsError;
+        }
+      } else {
+        // Process payout with breakdown
+        const payout = payoutData as any; // Type assertion for JSON response
+        totalEarning = payout?.total_payout || 15;
+        
+        const { error: processError } = await supabase.rpc('process_delivery_payout', {
+          p_agent_id: agent?.id,
+          p_order_id: order.order_id,
+          p_distance_km: distance,
+          p_delivery_time: new Date().toISOString()
         });
 
-      if (earningsError) {
-        throw earningsError;
+        if (processError) {
+          console.error('Payout processing error:', processError);
+          // Fallback to manual earnings insert
+          const { error: earningsError } = await supabase
+            .from('earnings')
+            .insert({
+              agent_id: agent?.id,
+              order_id: order.order_id,
+              amount: totalEarning,
+              status: 'completed'
+            });
+
+          if (earningsError) {
+            throw earningsError;
+          }
+        }
       }
 
-      // Get current agent stats first
+      // Update delivery agent stats
       const { data: currentAgent } = await supabase
         .from('delivery_agents')
         .select('total_deliveries, deliveries_today, total_earnings')
         .eq('id', agent.id)
-        .single();
+        .maybeSingle();
 
-      // Update agent stats
-      await supabase
+      const { error: agentUpdateError } = await supabase
         .from('delivery_agents')
         .update({
           total_deliveries: (currentAgent?.total_deliveries || 0) + 1,
           deliveries_today: (currentAgent?.deliveries_today || 0) + 1,
-          total_earnings: (currentAgent?.total_earnings || 0) + earningsAmount,
+          total_earnings: (currentAgent?.total_earnings || 0) + totalEarning,
           last_delivery_at: new Date().toISOString()
         })
         .eq('id', agent.id);
+
+      if (agentUpdateError) {
+        console.error('Agent update error:', agentUpdateError);
+      }
 
       // Add order tracking record
       await supabase
@@ -140,7 +174,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order }: PaymentMethod
 
       toast({
         title: "Order Completed!",
-        description: `Payment via ${method} confirmed. You earned ₹${earningsAmount.toFixed(2)}`,
+        description: `Payment via ${method} confirmed. You earned ₹${totalEarning.toFixed(2)}${payoutData ? ` (Base: ₹${(payoutData as any).base_pay}, Distance: ₹${(payoutData as any).distance_pay}, Bonus: ₹${(payoutData as any).peak_bonus})` : ''}`,
       });
 
       onOpenChange(false);

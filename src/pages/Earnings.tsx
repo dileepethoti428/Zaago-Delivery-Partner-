@@ -8,14 +8,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { 
   DollarSign, 
   TrendingUp, 
-  Calendar, 
   Clock, 
   Truck,
   Star,
   ArrowUpRight,
   Wallet,
   CreditCard,
-  Download
+  Download,
+  MapPin,
+  Target,
+  Gift,
+  Info
 } from "lucide-react";
 
 interface EarningsSummary {
@@ -27,11 +30,26 @@ interface EarningsSummary {
 interface RecentEarning {
   id: string;
   order_id: string;
-  restaurant: string;
+  customer_name: string;
   amount: number;
   time: string;
-  customer_name: string;
   delivery_date: string;
+  breakdown?: {
+    base_pay: number;
+    distance_pay: number;
+    peak_bonus: number;
+  };
+}
+
+interface PayoutConfig {
+  base_pay_amount: number;
+  base_pay_distance_km: number;
+  per_km_min_rate: number;
+  per_km_max_rate: number;
+  peak_hour_start: string;
+  peak_hour_end: string;
+  peak_hour_order_threshold: number;
+  peak_hour_bonus_amount: number;
 }
 
 const Earnings = () => {
@@ -42,32 +60,55 @@ const Earnings = () => {
     month: { amount: 0, deliveries: 0, hours: 0 }
   });
   const [recentEarnings, setRecentEarnings] = useState<RecentEarning[]>([]);
+  const [payoutConfig, setPayoutConfig] = useState<PayoutConfig | null>(null);
+  const [peakOrdersToday, setPeakOrdersToday] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchEarningsData();
+    fetchPayoutConfig();
   }, []);
+
+  const fetchPayoutConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('payout_config')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        setPayoutConfig(data);
+      }
+    } catch (error) {
+      console.error('Error fetching payout config:', error);
+    }
+  };
 
   const fetchEarningsData = async () => {
     try {
       setIsLoading(true);
       
-      // Get current agent
-      const agentEmail = localStorage.getItem('agent_email') || 'seshethoti@gmail.com';
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
       
       const { data: agent } = await supabase
         .from('delivery_agents')
         .select('id')
-        .eq('email', agentEmail)
+        .eq('email', user.email)
         .eq('is_active', true)
         .maybeSingle();
 
       if (!agent) {
-        // No active agent found; show empty stats gracefully
         toast({
           title: "No active agent profile",
-          description: "We couldn't find an active agent linked to your email. Showing empty earnings.",
+          description: "Please complete your agent setup first.",
         });
         return;
       }
@@ -88,6 +129,13 @@ const Earnings = () => {
         .order('created_at', { ascending: false });
 
       if (earningsError) throw earningsError;
+
+      // Fetch wallet transactions for breakdown
+      const { data: transactions } = await supabase
+        .from('agent_wallet_transactions')
+        .select('*')
+        .eq('agent_id', agent.id)
+        .order('created_at', { ascending: false });
 
       if (earnings) {
         // Calculate earnings by period
@@ -118,22 +166,43 @@ const Earnings = () => {
         // Format recent earnings for display
         const recentData = earnings.slice(0, 10).map(earning => {
           const historyData = Array.isArray(earning.delivery_history) ? earning.delivery_history[0] : null;
+          
+          // Find related transactions for breakdown
+          const relatedTransactions = transactions?.filter(t => t.order_id === earning.order_id) || [];
+          const deliveryPayment = relatedTransactions.find(t => t.transaction_type === 'delivery_payment');
+          const peakBonus = relatedTransactions.find(t => t.transaction_type === 'peak_bonus');
+          
           return {
             id: earning.id,
             order_id: earning.order_id,
-            restaurant: historyData?.customer_name || 'Customer',
+            customer_name: historyData?.customer_name || 'Customer',
             amount: earning.amount || 0,
             time: new Date(earning.created_at).toLocaleTimeString('en-US', { 
               hour: 'numeric', 
               minute: '2-digit',
               hour12: true 
             }),
-            customer_name: historyData?.customer_name || 'Customer',
-            delivery_date: historyData?.delivery_date || earning.created_at
+            delivery_date: historyData?.delivery_date || earning.created_at,
+            breakdown: {
+              base_pay: 15, // Default base pay
+              distance_pay: Math.max(0, (earning.amount || 0) - 15 - (peakBonus?.amount || 0)),
+              peak_bonus: peakBonus?.amount || 0
+            }
           };
         });
 
         setRecentEarnings(recentData);
+
+        // Count today's peak hour orders
+        const todayPeakOrders = earnings.filter(earning => {
+          const earningDate = new Date(earning.created_at);
+          const earningTime = earningDate.toTimeString().substring(0, 5);
+          return earningDate >= todayStart && 
+                 earningTime >= '06:00' && 
+                 earningTime <= '12:00';
+        }).length;
+
+        setPeakOrdersToday(todayPeakOrders);
       }
     } catch (error) {
       console.error('Error fetching earnings:', error);
@@ -165,32 +234,109 @@ const Earnings = () => {
       {/* Header */}
       <div className="animate-fade-in">
         <h1 className="text-2xl font-bold text-foreground">Earnings</h1>
-        <p className="text-muted-foreground">Track your delivery income</p>
+        <p className="text-muted-foreground">Track your delivery income with our new payout structure</p>
       </div>
 
+      {/* Payout Structure Information */}
+      {payoutConfig && (
+        <Card className="bg-gradient-dark border-primary/20 animate-fade-in">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Info className="w-5 h-5 text-primary" />
+              <span>New Payout Structure</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-secondary/50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Target className="w-4 h-4 text-primary" />
+                  <span className="font-semibold">Base Pay</span>
+                </div>
+                <p className="text-2xl font-bold text-primary">₹{payoutConfig.base_pay_amount}</p>
+                <p className="text-sm text-muted-foreground">
+                  For deliveries within {payoutConfig.base_pay_distance_km} km
+                </p>
+              </div>
+              
+              <div className="bg-secondary/50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <span className="font-semibold">Per Kilometer</span>
+                </div>
+                <p className="text-2xl font-bold text-primary">
+                  ₹{payoutConfig.per_km_min_rate}-₹{payoutConfig.per_km_max_rate}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Additional pay per km beyond {payoutConfig.base_pay_distance_km} km
+                </p>
+              </div>
+              
+              <div className="bg-secondary/50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Gift className="w-4 h-4 text-primary" />
+                  <span className="font-semibold">Peak Hour Bonus</span>
+                </div>
+                <p className="text-2xl font-bold text-primary">₹{payoutConfig.peak_hour_bonus_amount}</p>
+                <p className="text-sm text-muted-foreground">
+                  For {payoutConfig.peak_hour_order_threshold} orders during {payoutConfig.peak_hour_start}-{payoutConfig.peak_hour_end}
+                </p>
+              </div>
+            </div>
+            
+            {/* Peak Hour Progress */}
+            <div className="bg-primary/10 p-4 rounded-lg border border-primary/20">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold flex items-center space-x-2">
+                  <Clock className="w-4 h-4" />
+                  <span>Today's Peak Hour Progress</span>
+                </h4>
+                <Badge variant={peakOrdersToday >= (payoutConfig.peak_hour_order_threshold || 14) ? "default" : "secondary"}>
+                  {peakOrdersToday}/{payoutConfig.peak_hour_order_threshold || 14} orders
+                </Badge>
+              </div>
+              <div className="w-full bg-secondary rounded-full h-2">
+                <div 
+                  className="bg-primary h-2 rounded-full transition-all duration-500"
+                  style={{ 
+                    width: `${Math.min(100, (peakOrdersToday / (payoutConfig.peak_hour_order_threshold || 14)) * 100)}%` 
+                  }}
+                ></div>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                {peakOrdersToday >= (payoutConfig.peak_hour_order_threshold || 14) 
+                  ? `🎉 Bonus unlocked! You've earned ₹${payoutConfig.peak_hour_bonus_amount}`
+                  : `${(payoutConfig.peak_hour_order_threshold || 14) - peakOrdersToday} more orders to unlock ₹${payoutConfig.peak_hour_bonus_amount} bonus`
+                }
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Quick Stats */}
-      <Card className="bg-gradient-dark border-primary/20 animate-slide-up">
+      <Card className="bg-gradient-success border-success/20 animate-slide-up">
         <CardContent className="p-6">
           <div className="text-center">
             <div className="flex items-center justify-center space-x-2 mb-2">
-              <DollarSign className="w-8 h-8 text-primary animate-glow-pulse" />
-              <span className="text-3xl font-bold text-foreground">
-                ${currentData.amount.toFixed(2)}
+              <DollarSign className="w-8 h-8 text-success animate-glow-pulse" />
+              <span className="text-3xl font-bold text-success">
+                ₹{currentData.amount.toFixed(2)}
               </span>
             </div>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-success/80 mb-4">
               {selectedPeriod === "today" ? "Today's Earnings" : 
                selectedPeriod === "week" ? "This Week" : "This Month"}
             </p>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-primary">{currentData.deliveries}</p>
-                <p className="text-sm text-muted-foreground">Deliveries</p>
+                <p className="text-2xl font-bold text-success">{currentData.deliveries}</p>
+                <p className="text-sm text-success/70">Deliveries</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-primary">{currentData.hours}</p>
-                <p className="text-sm text-muted-foreground">Hours</p>
+                <p className="text-2xl font-bold text-success">{currentData.hours.toFixed(1)}</p>
+                <p className="text-sm text-success/70">Hours</p>
               </div>
             </div>
           </div>
@@ -217,7 +363,7 @@ const Earnings = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Avg per Hour</p>
                 <p className="text-xl font-bold text-foreground">
-                  ${((currentData.hours ? currentData.amount / currentData.hours : 0)).toFixed(2)}
+                  ₹{((currentData.hours ? currentData.amount / currentData.hours : 0)).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -233,7 +379,7 @@ const Earnings = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Per Delivery</p>
                 <p className="text-xl font-bold text-foreground">
-                  ${((currentData.deliveries ? currentData.amount / currentData.deliveries : 0)).toFixed(2)}
+                  ₹{((currentData.deliveries ? currentData.amount / currentData.deliveries : 0)).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -249,29 +395,47 @@ const Earnings = () => {
         <CardContent>
           <div className="space-y-3">
             {recentEarnings.length > 0 ? recentEarnings.map((earning) => (
-              <div key={earning.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                    <Truck className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">{earning.customer_name}</p>
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                      <Clock className="w-3 h-3" />
-                      <span>{earning.time}</span>
-                      <span>•</span>
-                      <span>#{earning.order_id.slice(0, 8)}</span>
+              <div key={earning.id} className="p-4 bg-secondary/50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
+                      <Truck className="w-5 h-5 text-primary" />
                     </div>
+                    <div>
+                      <p className="font-medium text-foreground">{earning.customer_name}</p>
+                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        <span>{earning.time}</span>
+                        <span>•</span>
+                        <span>#{earning.order_id.slice(0, 8)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right">
+                    <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
                   </div>
                 </div>
                 
-                <div className="text-right">
-                  <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
-                  <div className="flex items-center space-x-1 text-sm">
-                    <Star className="w-3 h-3 text-primary" />
-                    <span className="text-primary">Commission</span>
+                {/* Payout Breakdown */}
+                {earning.breakdown && (
+                  <div className="mt-3 p-3 bg-background/50 rounded-lg">
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="text-center">
+                        <p className="text-muted-foreground">Base Pay</p>
+                        <p className="font-semibold">₹{earning.breakdown.base_pay}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-muted-foreground">Distance</p>
+                        <p className="font-semibold">₹{earning.breakdown.distance_pay.toFixed(2)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-muted-foreground">Peak Bonus</p>
+                        <p className="font-semibold">₹{earning.breakdown.peak_bonus}</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )) : (
               <div className="text-center py-8">

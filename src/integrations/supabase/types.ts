@@ -1886,6 +1886,51 @@ export type Database = {
           },
         ]
       }
+      payout_config: {
+        Row: {
+          base_pay_amount: number | null
+          base_pay_distance_km: number | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          peak_hour_bonus_amount: number | null
+          peak_hour_end: string | null
+          peak_hour_order_threshold: number | null
+          peak_hour_start: string | null
+          per_km_max_rate: number | null
+          per_km_min_rate: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          base_pay_amount?: number | null
+          base_pay_distance_km?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          peak_hour_bonus_amount?: number | null
+          peak_hour_end?: string | null
+          peak_hour_order_threshold?: number | null
+          peak_hour_start?: string | null
+          per_km_max_rate?: number | null
+          per_km_min_rate?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          base_pay_amount?: number | null
+          base_pay_distance_km?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          peak_hour_bonus_amount?: number | null
+          peak_hour_end?: string | null
+          peak_hour_order_threshold?: number | null
+          peak_hour_start?: string | null
+          per_km_max_rate?: number | null
+          per_km_min_rate?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       payouts: {
         Row: {
           amount: number | null
@@ -2862,6 +2907,14 @@ export type Database = {
         Args: { _agent_id: string; _order_id: string }
         Returns: undefined
       }
+      calculate_delivery_payout: {
+        Args: {
+          agent_id_param?: string
+          delivery_time?: string
+          distance_km: number
+        }
+        Returns: Json
+      }
       calculate_next_delivery_date: {
         Args: {
           p_current_date: string
@@ -3212,6 +3265,15 @@ export type Database = {
       mark_payout_paid: {
         Args: { payout_id: string }
         Returns: undefined
+      }
+      process_delivery_payout: {
+        Args: {
+          p_agent_id: string
+          p_delivery_time?: string
+          p_distance_km: number
+          p_order_id: string
+        }
+        Returns: Json
       }
       process_due_existing_subscriptions: {
         Args: Record<PropertyKey, never>
