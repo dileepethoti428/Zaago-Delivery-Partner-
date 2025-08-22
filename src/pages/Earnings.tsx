@@ -52,6 +52,12 @@ interface PayoutConfig {
   peak_hour_bonus_amount: number;
 }
 
+interface DistanceStats {
+  distance_today: number;
+  distance_week: number;
+  distance_month: number;
+}
+
 const Earnings = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("today");
   const [earningsData, setEarningsData] = useState<Record<string, EarningsSummary>>({
@@ -62,12 +68,18 @@ const Earnings = () => {
   const [recentEarnings, setRecentEarnings] = useState<RecentEarning[]>([]);
   const [payoutConfig, setPayoutConfig] = useState<PayoutConfig | null>(null);
   const [peakOrdersToday, setPeakOrdersToday] = useState(0);
+  const [distanceStats, setDistanceStats] = useState<DistanceStats>({
+    distance_today: 0,
+    distance_week: 0,
+    distance_month: 0
+  });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchEarningsData();
     fetchPayoutConfig();
+    fetchDistanceStats();
   }, []);
 
   const fetchPayoutConfig = async () => {
@@ -87,6 +99,36 @@ const Earnings = () => {
       }
     } catch (error) {
       console.error('Error fetching payout config:', error);
+    }
+  };
+
+  const fetchDistanceStats = async () => {
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+      
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!agent) return;
+
+      // Call the database function to get distance stats
+      const { data, error } = await supabase.rpc('get_agent_distance_stats', {
+        agent_uuid: agent.id
+      });
+
+      if (error) throw error;
+
+      if (data) {
+        setDistanceStats(data as unknown as DistanceStats);
+      }
+    } catch (error) {
+      console.error('Error fetching distance stats:', error);
     }
   };
 
@@ -385,6 +427,32 @@ const Earnings = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Distance Statistics */}
+      <Card className="bg-card border-border animate-slide-up">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <MapPin className="w-5 h-5 text-primary" />
+            <span>Distance Traveled</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-secondary/20 rounded-lg">
+              <p className="text-2xl font-bold text-primary">{distanceStats.distance_today} km</p>
+              <p className="text-sm text-muted-foreground">Today</p>
+            </div>
+            <div className="text-center p-4 bg-secondary/20 rounded-lg">
+              <p className="text-2xl font-bold text-primary">{distanceStats.distance_week} km</p>
+              <p className="text-sm text-muted-foreground">This Week</p>
+            </div>
+            <div className="text-center p-4 bg-secondary/20 rounded-lg">
+              <p className="text-2xl font-bold text-primary">{distanceStats.distance_month} km</p>
+              <p className="text-sm text-muted-foreground">This Month</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Earnings */}
       <Card className="bg-card border-border animate-slide-up">

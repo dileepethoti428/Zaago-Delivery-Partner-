@@ -3025,6 +3025,10 @@ export type Database = {
         Args: { order_uuid: string }
         Returns: string
       }
+      get_agent_distance_stats: {
+        Args: { agent_uuid: string }
+        Returns: Json
+      }
       get_agent_hours_today: {
         Args: { agent_uuid: string }
         Returns: number
