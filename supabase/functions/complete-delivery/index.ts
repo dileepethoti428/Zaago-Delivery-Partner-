@@ -97,13 +97,13 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered
+    // Update order status to delivered with correct payment status values
     await supabaseClient
       .from('orders')
       .update({
         status: 'delivered',
         delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'cash_collected' : 'prepaid'
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
       })
       .eq('id', order_id);
 

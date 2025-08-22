@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
+import { NavigationMap } from "@/components/NavigationMap";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -42,6 +43,7 @@ const DeliveryDetails = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showNavigationMap, setShowNavigationMap] = useState(false);
   const [distance, setDistance] = useState<number>(0);
   const [payout, setPayout] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -125,18 +127,16 @@ const DeliveryDetails = () => {
       return;
     }
 
-    // Open Google Maps for navigation
-    const { lat, lng } = order.address.coordinates;
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-    window.open(googleMapsUrl, '_blank');
+    // Show in-app navigation instead of external map
+    setShowNavigationMap(true);
   };
 
   const handleMarkAsDelivery = async () => {
     if (!order) return;
     
     // If prepaid, complete directly
-    if (order.payment_status === 'prepaid' || order.payment_status === 'paid') {
-      await completeDeliveryDirect('Online');
+    if (order.payment_status === 'paid' || order.payment_status === 'paid_online') {
+      await completeDeliveryDirect('paid_online');
     } else {
       // Show payment options for non-prepaid orders
       setShowPaymentDialog(true);
@@ -148,10 +148,13 @@ const DeliveryDetails = () => {
     try {
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
       
+      // Map payment methods to valid database values
+      const validPaymentStatus = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
+      
       const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: {
           order_id: order?.id,
-          payment_method: paymentMethod,
+          payment_method: validPaymentStatus,
           agent_location: agentLocation
         }
       });
@@ -371,11 +374,11 @@ const DeliveryDetails = () => {
             <div className="flex justify-between items-center">
               <span className="font-medium text-foreground">Payment Status:</span>
               <Badge className={`${getPaymentStatusColor(order.payment_status)} border-0`}>
-                {order.payment_status === 'prepaid' || order.payment_status === 'paid' ? 'PREPAID' : 'PENDING'}
+                {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? 'PREPAID' : 'PENDING'}
               </Badge>
             </div>
 
-            {order.payment_status === 'prepaid' || order.payment_status === 'paid' ? (
+            {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? (
               <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/20">
                 <p className="text-sm text-green-600 dark:text-green-400">
                   Order is already paid online
@@ -449,6 +452,18 @@ const DeliveryDetails = () => {
             setShowPaymentDialog(false);
             await completeDeliveryDirect(paymentMethod);
           }}
+        />
+      )}
+
+      {/* Navigation Map */}
+      {order && (
+        <NavigationMap
+          open={showNavigationMap}
+          onOpenChange={setShowNavigationMap}
+          customerLocation={order.address?.coordinates || { lat: 0, lng: 0 }}
+          customerAddress={`${order.address?.addressLine1}, ${order.address?.city}`}
+          customerName={order.customer_name}
+          customerPhone={order.customer_phone}
         />
       )}
     </div>

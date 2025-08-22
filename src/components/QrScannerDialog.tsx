@@ -119,8 +119,8 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       onOpenChange(false);
 
       // For prepaid orders, complete delivery directly
-      if (order.payment_status === 'prepaid' || order.payment_status === 'paid') {
-        await completeDelivery(result, 'Online');
+      if (order.payment_status === 'paid' || order.payment_status === 'paid_online') {
+        await completeDelivery(result, 'paid_online');
         toast({
           title: "Product Delivered! ✅",
           description: `Successfully delivered to ${order.customer_name}`,
@@ -256,7 +256,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         </DialogContent>
       </Dialog>
 
-      {scannedOrder && scannedOrder.payment_status !== 'prepaid' && (
+      {scannedOrder && scannedOrder.payment_status !== 'paid' && scannedOrder.payment_status !== 'paid_online' && (
         <PaymentMethodDialog
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}

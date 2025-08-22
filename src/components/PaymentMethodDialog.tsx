@@ -60,12 +60,15 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
         return;
       }
 
+      // Map to valid database payment status values
+      const validPaymentStatus = method === 'COD' ? 'paid_cod' : 'paid_online';
+
       // Update order with valid payment status values
       const { error: orderError } = await supabase
         .from('orders')
         .update({
           status: 'delivered',
-          payment_status: method === 'COD' ? 'cash_collected' : 'prepaid',
+          payment_status: validPaymentStatus,
           delivered: true,
           delivered_at: new Date().toISOString()
         })
@@ -83,7 +86,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
           agent_id: agent.id,
           customer_name: order.customer_name,
           total_amount: order.total_amount,
-          payment_status: method === 'COD' ? 'paid_cod' : 'paid_online',
+          payment_status: validPaymentStatus,
           payment_method: method,
           delivery_date: new Date().toISOString().split('T')[0],
           completed_at: new Date().toISOString(),
@@ -225,7 +228,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
 
           <div className="space-y-3">
             {/* Show only Online option if prepaid */}
-            {order.payment_status === 'paid' || order.payment_status === 'prepaid' ? (
+            {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? (
               <Button
                 onClick={() => handlePaymentMethod('Online')}
                 disabled={isProcessing}
