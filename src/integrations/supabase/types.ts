@@ -282,6 +282,8 @@ export type Database = {
           description: string | null
           id: string
           order_id: string | null
+          razorpay_transaction_id: string | null
+          settlement_reference: string | null
           status: string | null
           transaction_type: string
           updated_at: string | null
@@ -293,6 +295,8 @@ export type Database = {
           description?: string | null
           id?: string
           order_id?: string | null
+          razorpay_transaction_id?: string | null
+          settlement_reference?: string | null
           status?: string | null
           transaction_type: string
           updated_at?: string | null
@@ -304,6 +308,8 @@ export type Database = {
           description?: string | null
           id?: string
           order_id?: string | null
+          razorpay_transaction_id?: string | null
+          settlement_reference?: string | null
           status?: string | null
           transaction_type?: string
           updated_at?: string | null
@@ -3491,6 +3497,10 @@ export type Database = {
       send_birthday_messages: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      settle_cod_to_admin: {
+        Args: { p_agent_id: string; p_amount: number }
+        Returns: Json
       }
       should_skip_delivery_for_vacation: {
         Args: { p_delivery_date: string; p_subscription_id: string }

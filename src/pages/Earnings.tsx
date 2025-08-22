@@ -1101,121 +1101,121 @@ const Earnings = () => {
               </Button>
             </div>
 
-            {/* Withdrawal Amount Dialog */}
-            <Dialog open={showWithdrawalDialog} onOpenChange={setShowWithdrawalDialog}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center space-x-2">
-                    <Wallet className="w-5 h-5 text-primary" />
-                    <span>Withdraw Earnings</span>
-                  </DialogTitle>
-                  <DialogDescription>
-                    Enter the amount you want to withdraw
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="space-y-4">
-                  {/* Available Balance */}
-                  <div className="p-3 bg-success/10 border border-success/20 rounded-lg text-center">
-                    <p className="text-sm text-muted-foreground">Available Balance</p>
-                    <p className="text-2xl font-bold text-success">₹{walletData.balance.toFixed(2)}</p>
-                  </div>
-
-                  {/* Withdrawal Amount */}
-                  <div>
-                    <Label htmlFor="withdrawal_amount">Withdrawal Amount *</Label>
-                    <Input
-                      id="withdrawal_amount"
-                      type="number"
-                      value={withdrawalForm.amount}
-                      onChange={(e) => setWithdrawalForm(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
-                      placeholder="Enter amount"
-                      className="mt-1"
-                      min="100"
-                      max={walletData.balance}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Min: ₹100 • Max: ₹{walletData.balance.toFixed(2)}
-                    </p>
-                  </div>
-
-                  {/* Bank Selection */}
-                  {bankDetails.length > 1 && (
-                    <div>
-                      <Label htmlFor="bank_selection">Select Bank Account</Label>
-                      <Select 
-                        value={withdrawalForm.bank_id} 
-                        onValueChange={(value) => setWithdrawalForm(prev => ({ ...prev, bank_id: value }))}
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Choose bank account" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {bankDetails.map((bank) => (
-                            <SelectItem key={bank.id} value={bank.id}>
-                              {bank.bank_name} - ••••{bank.account_number.slice(-4)}
-                              {bank.is_primary && ' (Primary)'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {/* Quick Amount Buttons */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button
-                      variant="outline"
-                      className="text-xs"
-                      onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: Math.min(500, walletData.balance) }))}
-                    >
-                      ₹500
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="text-xs"
-                      onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: Math.min(1000, walletData.balance) }))}
-                    >
-                      ₹1000
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="text-xs"
-                      onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: walletData.balance }))}
-                    >
-                      All
-                    </Button>
-                  </div>
-
-                  {/* Processing Info */}
-                  <div className="p-3 bg-info/10 border border-info/20 rounded-lg">
-                    <p className="text-xs text-muted-foreground text-center">
-                      Processing time: 1-2 business days • No additional fees
-                    </p>
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <Button
-                      onClick={handleWithdrawalSubmit}
-                      disabled={withdrawalLoading || withdrawalForm.amount < 100 || withdrawalForm.amount > walletData.balance}
-                      className="flex-1 bg-gradient-neon hover:shadow-neon transition-smooth"
-                    >
-                      {withdrawalLoading ? "Processing..." : `Withdraw ₹${withdrawalForm.amount}`}
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setShowWithdrawalDialog(false)}
-                      disabled={withdrawalLoading}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
         </CardContent>
       </Card>
+
+      {/* Withdrawal Amount Dialog */}
+      <Dialog open={showWithdrawalDialog} onOpenChange={setShowWithdrawalDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Wallet className="w-5 h-5 text-primary" />
+              <span>Withdraw Earnings</span>
+            </DialogTitle>
+            <DialogDescription>
+              Enter the amount you want to withdraw
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Available Balance */}
+            <div className="p-3 bg-success/10 border border-success/20 rounded-lg text-center">
+              <p className="text-sm text-muted-foreground">Available Balance</p>
+              <p className="text-2xl font-bold text-success">₹{walletData.balance.toFixed(2)}</p>
+            </div>
+
+            {/* Withdrawal Amount */}
+            <div>
+              <Label htmlFor="withdrawal_amount">Withdrawal Amount *</Label>
+              <Input
+                id="withdrawal_amount"
+                type="number"
+                value={withdrawalForm.amount}
+                onChange={(e) => setWithdrawalForm(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                placeholder="Enter amount"
+                className="mt-1"
+                min="100"
+                max={walletData.balance}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Min: ₹100 • Max: ₹{walletData.balance.toFixed(2)}
+              </p>
+            </div>
+
+            {/* Bank Selection */}
+            {bankDetails.length > 1 && (
+              <div>
+                <Label htmlFor="bank_selection">Select Bank Account</Label>
+                <Select 
+                  value={withdrawalForm.bank_id} 
+                  onValueChange={(value) => setWithdrawalForm(prev => ({ ...prev, bank_id: value }))}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Choose bank account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bankDetails.map((bank) => (
+                      <SelectItem key={bank.id} value={bank.id}>
+                        {bank.bank_name} - ••••{bank.account_number.slice(-4)}
+                        {bank.is_primary && ' (Primary)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Quick Amount Buttons */}
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant="outline"
+                className="text-xs"
+                onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: Math.min(500, walletData.balance) }))}
+              >
+                ₹500
+              </Button>
+              <Button
+                variant="outline"
+                className="text-xs"
+                onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: Math.min(1000, walletData.balance) }))}
+              >
+                ₹1000
+              </Button>
+              <Button
+                variant="outline"
+                className="text-xs"
+                onClick={() => setWithdrawalForm(prev => ({ ...prev, amount: walletData.balance }))}
+              >
+                All
+              </Button>
+            </div>
+
+            {/* Processing Info */}
+            <div className="p-3 bg-info/10 border border-info/20 rounded-lg">
+              <p className="text-xs text-muted-foreground text-center">
+                Processing time: 1-2 business days • No additional fees
+              </p>
+            </div>
+
+            <div className="flex space-x-2">
+              <Button
+                onClick={handleWithdrawalSubmit}
+                disabled={withdrawalLoading || withdrawalForm.amount < 100 || withdrawalForm.amount > walletData.balance}
+                className="flex-1 bg-gradient-neon hover:shadow-neon transition-smooth"
+              >
+                {withdrawalLoading ? "Processing..." : `Withdraw ₹${withdrawalForm.amount}`}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowWithdrawalDialog(false)}
+                disabled={withdrawalLoading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
