@@ -63,6 +63,21 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
       // Map to valid database payment status values
       const validPaymentStatus = method === 'COD' ? 'paid_cod' : 'paid_online';
 
+      // Calculate payout first
+      const distance = 2.0;
+      let totalEarning = 15; // Default base pay
+
+      const { data: payoutData, error: payoutError } = await supabase.rpc('calculate_delivery_payout', {
+        distance_km: distance,
+        delivery_time: new Date().toISOString(),
+        agent_id_param: agent?.id || null
+      });
+
+      if (!payoutError && payoutData) {
+        const payout = payoutData as any;
+        totalEarning = payout?.total_payout || 15;
+      }
+
       // Update order with valid payment status values
       const { error: orderError } = await supabase
         .from('orders')
@@ -78,7 +93,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
         throw orderError;
       }
 
-      // Create delivery history record with valid payment status
+      // Create delivery history record with valid payment status and distance
       const { error: historyError } = await supabase
         .from('delivery_history')
         .insert({
@@ -91,63 +106,30 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
           delivery_date: new Date().toISOString().split('T')[0],
           completed_at: new Date().toISOString(),
           delivery_address: { address: 'Customer Address' },
-          items: { items: [] }
+          items: { items: [] },
+          distance_traveled: distance,
+          delivery_payout: totalEarning
         });
 
       if (historyError) {
         throw historyError;
       }
 
-      // Calculate payout
-      const distance = 2.0;
-      const { data: payoutData, error: payoutError } = await supabase.rpc('calculate_delivery_payout', {
-        distance_km: distance,
-        delivery_time: new Date().toISOString(),
-        agent_id_param: agent?.id || null
-      });
-
-      let totalEarning = 15;
-      
-      if (payoutError) {
-        console.error('Payout calculation error:', payoutError);
-        const { error: earningsError } = await supabase
-          .from('earnings')
-          .insert({
-            agent_id: agent?.id,
-            order_id: order.order_id,
-            amount: totalEarning,
-            status: 'completed'
-          });
-
-        if (earningsError) {
-          throw earningsError;
-        }
-      } else {
-        const payout = payoutData as any;
-        totalEarning = payout?.total_payout || 15;
-        
-        const { error: processError } = await supabase.rpc('process_delivery_payout', {
-          p_agent_id: agent?.id,
-          p_order_id: order.order_id,
-          p_distance_km: distance,
-          p_delivery_time: new Date().toISOString()
+      // Create earnings record
+      const { error: earningsError } = await supabase
+        .from('earnings')
+        .insert({
+          agent_id: agent?.id,
+          order_id: order.order_id,
+          amount: totalEarning,
+          status: 'completed', // Using valid status
+          distance_km: distance,
+          payment_method: method === 'COD' ? 'COD' : 'Online',
+          description: `Delivery completed - Order ${order.order_id.substring(0, 8)}`
         });
 
-        if (processError) {
-          console.error('Payout processing error:', processError);
-          const { error: earningsError } = await supabase
-            .from('earnings')
-            .insert({
-              agent_id: agent?.id,
-              order_id: order.order_id,
-              amount: totalEarning,
-              status: 'completed'
-            });
-
-          if (earningsError) {
-            throw earningsError;
-          }
-        }
+      if (earningsError) {
+        console.error('Earnings creation error:', earningsError);
       }
 
       // Update agent stats properly

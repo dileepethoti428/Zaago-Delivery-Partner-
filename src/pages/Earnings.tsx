@@ -167,7 +167,7 @@ const Earnings = () => {
         return;
       }
 
-      // Fetch earnings
+      // Fetch earnings with proper date filtering
       const { data: earnings, error: earningsError } = await supabase
         .from('earnings')
         .select('*')
@@ -176,87 +176,76 @@ const Earnings = () => {
 
       if (earningsError) throw earningsError;
 
-      // Fetch wallet transactions for breakdown
-      const { data: transactions } = await supabase
-        .from('agent_wallet_transactions')
-        .select('*')
-        .eq('agent_id', agent.id)
-        .order('created_at', { ascending: false });
+      // Calculate earnings by period with proper date ranges
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekStart = new Date(now.setDate(now.getDate() - now.getDay())); // Start of current week
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      if (earnings) {
-        // Calculate earnings by period
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        const calculatePeriodData = (startDate: Date, endDate: Date = now) => {
-          const periodEarnings = earnings.filter(earning => {
-            const earningDate = new Date(earning.created_at);
-            return earningDate >= startDate && earningDate <= endDate;
-          });
-
-          return {
-            amount: periodEarnings.reduce((sum, e) => sum + (e.amount || 0), 0),
-            deliveries: periodEarnings.length,
-            hours: periodEarnings.length * 0.5 // Estimate 30 minutes per delivery
-          };
-        };
-
-        setEarningsData({
-          today: calculatePeriodData(todayStart),
-          week: calculatePeriodData(weekStart),
-          month: calculatePeriodData(monthStart)
-        });
-
-        // Fetch delivery history for customer names
-        const { data: deliveryHistory } = await supabase
-          .from('delivery_history')
-          .select('order_id, customer_name, delivery_date, total_amount')
-          .eq('agent_id', agent.id)
-          .order('completed_at', { ascending: false });
-
-        // Format recent earnings for display
-        const recentData = earnings.slice(0, 10).map(earning => {
-          const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
-          
-          // Find related transactions for breakdown
-          const relatedTransactions = transactions?.filter(t => t.order_id === earning.order_id) || [];
-          const deliveryPayment = relatedTransactions.find(t => t.transaction_type === 'delivery_payment');
-          const peakBonus = relatedTransactions.find(t => t.transaction_type === 'peak_bonus');
-          
-          return {
-            id: earning.id,
-            order_id: earning.order_id,
-            customer_name: historyData?.customer_name || 'Customer',
-            amount: earning.amount || 0,
-            time: new Date(earning.created_at).toLocaleTimeString('en-US', { 
-              hour: 'numeric', 
-              minute: '2-digit',
-              hour12: true 
-            }),
-            delivery_date: historyData?.delivery_date || earning.created_at,
-            breakdown: {
-              base_pay: 15, // Default base pay
-              distance_pay: Math.max(0, (earning.amount || 0) - 15 - (peakBonus?.amount || 0)),
-              peak_bonus: peakBonus?.amount || 0
-            }
-          };
-        });
-
-        setRecentEarnings(recentData);
-
-        // Count today's peak hour orders
-        const todayPeakOrders = earnings.filter(earning => {
+      const calculatePeriodData = (startDate: Date, endDate: Date = new Date()) => {
+        const periodEarnings = (earnings || []).filter(earning => {
           const earningDate = new Date(earning.created_at);
-          const earningTime = earningDate.toTimeString().substring(0, 5);
-          return earningDate >= todayStart && 
-                 earningTime >= '06:00' && 
-                 earningTime <= '12:00';
-        }).length;
+          return earningDate >= startDate && earningDate <= endDate;
+        });
 
-        setPeakOrdersToday(todayPeakOrders);
-      }
+        return {
+          amount: periodEarnings.reduce((sum, e) => sum + (e.amount || 0), 0),
+          deliveries: periodEarnings.length,
+          hours: periodEarnings.length * 0.5 // Estimate 30 minutes per delivery
+        };
+      };
+
+      const newEarningsData = {
+        today: calculatePeriodData(todayStart),
+        week: calculatePeriodData(weekStart),
+        month: calculatePeriodData(monthStart)
+      };
+
+      setEarningsData(newEarningsData);
+
+      // Fetch delivery history for customer names and recent earnings display
+      const { data: deliveryHistory } = await supabase
+        .from('delivery_history')
+        .select('order_id, customer_name, delivery_date, total_amount, distance_traveled')
+        .eq('agent_id', agent.id)
+        .order('completed_at', { ascending: false });
+
+      // Format recent earnings for display
+      const recentData = (earnings || []).slice(0, 10).map(earning => {
+        const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
+        
+        return {
+          id: earning.id,
+          order_id: earning.order_id,
+          customer_name: historyData?.customer_name || 'Customer',
+          amount: earning.amount || 0,
+          time: new Date(earning.created_at).toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+          }),
+          delivery_date: historyData?.delivery_date || earning.created_at,
+          breakdown: {
+            base_pay: 15, // Default base pay
+            distance_pay: Math.max(0, (earning.amount || 0) - 15),
+            peak_bonus: 0 // Will be calculated properly with payout data
+          }
+        };
+      });
+
+      setRecentEarnings(recentData);
+
+      // Count today's peak hour orders (6 AM - 12 PM)
+      const todayPeakOrders = (earnings || []).filter(earning => {
+        const earningDate = new Date(earning.created_at);
+        const earningTime = earningDate.toTimeString().substring(0, 5);
+        return earningDate >= todayStart && 
+               earningTime >= '06:00' && 
+               earningTime <= '12:00';
+      }).length;
+
+      setPeakOrdersToday(todayPeakOrders);
+
     } catch (error) {
       console.error('Error fetching earnings:', error);
       toast({
@@ -306,7 +295,7 @@ const Earnings = () => {
                   <Target className="w-4 h-4 text-primary" />
                   <span className="font-medium text-sm">Base Pay</span>
                 </div>
-                <p className="text-xl font-bold text-primary">₹{payoutConfig.base_pay_amount}</p>
+                <p className="text-lg font-bold text-primary">₹{payoutConfig.base_pay_amount}</p>
                 <p className="text-xs text-muted-foreground">
                   Within {payoutConfig.base_pay_distance_km} km
                 </p>
@@ -317,7 +306,7 @@ const Earnings = () => {
                   <MapPin className="w-4 h-4 text-primary" />
                   <span className="font-medium text-sm">Per KM</span>
                 </div>
-                <p className="text-xl font-bold text-primary">
+                <p className="text-lg font-bold text-primary">
                   ₹{payoutConfig.per_km_min_rate}-₹{payoutConfig.per_km_max_rate}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -330,7 +319,7 @@ const Earnings = () => {
                   <Gift className="w-4 h-4 text-primary" />
                   <span className="font-medium text-sm">Peak Bonus</span>
                 </div>
-                <p className="text-xl font-bold text-primary">₹{payoutConfig.peak_hour_bonus_amount}</p>
+                <p className="text-lg font-bold text-primary">₹{payoutConfig.peak_hour_bonus_amount}</p>
                 <p className="text-xs text-muted-foreground">
                   {payoutConfig.peak_hour_order_threshold} orders ({payoutConfig.peak_hour_start}-{payoutConfig.peak_hour_end})
                 </p>
