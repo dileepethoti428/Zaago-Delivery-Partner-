@@ -239,7 +239,14 @@ const Settings = () => {
   };
 
   const handleSaveAll = async () => {
-    if (!agentId) return;
+    if (!agentId) {
+      toast({
+        title: "Error",
+        description: "Agent ID not found. Please try refreshing the page.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -252,7 +259,10 @@ const Settings = () => {
         })
         .eq('id', agentId);
 
-      if (agentError) throw agentError;
+      if (agentError) {
+        console.error('Agent update error:', agentError);
+        throw agentError;
+      }
 
       // Update agent settings
       const { error: settingsError } = await supabase
@@ -269,19 +279,28 @@ const Settings = () => {
           onConflict: 'agent_id'
         });
 
-      if (settingsError) throw settingsError;
+      if (settingsError) {
+        console.error('Settings update error:', settingsError);
+        throw settingsError;
+      }
 
+      // Update original settings to reflect saved state
       setOriginalSettings({ ...settings });
       setIsEditMode(false);
+      
       toast({
         title: "Settings Saved",
         description: "All your settings have been updated successfully.",
       });
+
+      // Refresh data to ensure UI is in sync
+      await fetchAgentSettings();
+      
     } catch (error) {
       console.error('Error saving settings:', error);
       toast({
         title: "Error",
-        description: "Failed to save settings. Please try again.",
+        description: `Failed to save settings: ${error.message || 'Please try again.'}`,
         variant: "destructive"
       });
     } finally {

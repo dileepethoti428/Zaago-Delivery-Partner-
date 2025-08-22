@@ -138,6 +138,8 @@ export type Database = {
           message: string
           metadata: Json | null
           read: boolean
+          source_id: string | null
+          source_type: string | null
           title: string
           type: string
           updated_at: string
@@ -149,6 +151,8 @@ export type Database = {
           message: string
           metadata?: Json | null
           read?: boolean
+          source_id?: string | null
+          source_type?: string | null
           title: string
           type: string
           updated_at?: string
@@ -160,6 +164,8 @@ export type Database = {
           message?: string
           metadata?: Json | null
           read?: boolean
+          source_id?: string | null
+          source_type?: string | null
           title?: string
           type?: string
           updated_at?: string
@@ -2327,7 +2333,9 @@ export type Database = {
         Row: {
           account_holder_name: string | null
           account_number: string | null
+          account_type: string | null
           address: Json | null
+          bank_branch: string | null
           bank_name: string | null
           business_license: string | null
           business_name: string | null
@@ -2335,6 +2343,7 @@ export type Database = {
           email: string
           id: string
           ifsc_code: string | null
+          is_bank_verified: boolean | null
           name: string
           phone: string | null
           status: string
@@ -2344,7 +2353,9 @@ export type Database = {
         Insert: {
           account_holder_name?: string | null
           account_number?: string | null
+          account_type?: string | null
           address?: Json | null
+          bank_branch?: string | null
           bank_name?: string | null
           business_license?: string | null
           business_name?: string | null
@@ -2352,6 +2363,7 @@ export type Database = {
           email: string
           id?: string
           ifsc_code?: string | null
+          is_bank_verified?: boolean | null
           name: string
           phone?: string | null
           status?: string
@@ -2361,7 +2373,9 @@ export type Database = {
         Update: {
           account_holder_name?: string | null
           account_number?: string | null
+          account_type?: string | null
           address?: Json | null
+          bank_branch?: string | null
           bank_name?: string | null
           business_license?: string | null
           business_name?: string | null
@@ -2369,6 +2383,7 @@ export type Database = {
           email?: string
           id?: string
           ifsc_code?: string | null
+          is_bank_verified?: boolean | null
           name?: string
           phone?: string | null
           status?: string
@@ -2899,6 +2914,27 @@ export type Database = {
         }
         Returns: Json
       }
+      create_admin_notification_for_agent: {
+        Args: {
+          admin_id?: string
+          notification_message: string
+          notification_title: string
+          target_agent_id: string
+        }
+        Returns: string
+      }
+      create_agent_notification: {
+        Args: {
+          notification_message: string
+          notification_metadata?: Json
+          notification_title: string
+          notification_type: string
+          source_id?: string
+          source_type?: string
+          target_agent_id: string
+        }
+        Returns: string
+      }
       create_birthday_coupons: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -2913,6 +2949,15 @@ export type Database = {
       }
       create_payout: {
         Args: { end_date: string; start_date: string; target_seller_id: string }
+        Returns: string
+      }
+      create_seller_notification_for_agent: {
+        Args: {
+          notification_message: string
+          notification_title: string
+          seller_id: string
+          target_agent_id: string
+        }
         Returns: string
       }
       create_validated_payout: {
@@ -3229,12 +3274,12 @@ export type Database = {
         }
         Returns: string
       }
-      validate_bank_details: {
+      validate_bank_details_v2: {
         Args: {
-          p_account_holder_name: string
-          p_account_number: string
-          p_bank_name: string
-          p_ifsc_code: string
+          account_holder_name: string
+          account_number: string
+          bank_name: string
+          ifsc_code: string
         }
         Returns: boolean
       }

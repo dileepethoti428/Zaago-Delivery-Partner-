@@ -53,7 +53,7 @@ const Notifications = () => {
       if (agent) {
         setAgentId(agent.id);
         
-        // Fetch agent notifications
+        // Fetch agent notifications with source information
         const { data: agentNotifications, error } = await supabase
           .from('agent_notifications')
           .select('*')
@@ -73,7 +73,9 @@ const Notifications = () => {
           message: notif.message,
           created_at: notif.created_at,
           read: notif.read,
-          metadata: notif.metadata
+          metadata: notif.metadata,
+          source_type: notif.source_type || 'system',
+          source_id: notif.source_id
         }));
 
         setNotifications(mappedNotifications);
@@ -299,6 +301,11 @@ const Notifications = () => {
         ) : (
           displayNotifications.map((notification) => {
             const IconComponent = getNotificationIcon(notification.type);
+            const sourceType = notification.metadata?.source_type || notification.source_type || 'system';
+            const sourceLabel = sourceType === 'customer' ? 'Customer' : 
+                              sourceType === 'seller' ? 'Seller' : 
+                              sourceType === 'admin' ? 'Admin' : 'System';
+            
             return (
               <Card 
                 key={notification.id} 
@@ -317,11 +324,24 @@ const Notifications = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h4 className={`font-semibold ${
-                            !notification.read ? "text-foreground" : "text-muted-foreground"
-                          }`}>
-                            {notification.title}
-                          </h4>
+                          <div className="flex items-center space-x-2">
+                            <h4 className={`font-semibold ${
+                              !notification.read ? "text-foreground" : "text-muted-foreground"
+                            }`}>
+                              {notification.title}
+                            </h4>
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs ${
+                                sourceType === 'customer' ? 'border-blue-500 text-blue-500' :
+                                sourceType === 'seller' ? 'border-green-500 text-green-500' :
+                                sourceType === 'admin' ? 'border-red-500 text-red-500' :
+                                'border-gray-500 text-gray-500'
+                              }`}
+                            >
+                              {sourceLabel}
+                            </Badge>
+                          </div>
                           <p className={`text-sm mt-1 ${
                             !notification.read ? "text-foreground" : "text-muted-foreground"
                           }`}>
