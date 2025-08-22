@@ -14,7 +14,7 @@ interface PaymentMethodDialogProps {
     total_amount: number;
     payment_status?: string;
   };
-  onSuccess?: () => void;
+  onSuccess?: (paymentMethod: string) => void;
 }
 
 export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: PaymentMethodDialogProps) => {
@@ -180,7 +180,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess }: Pa
       });
 
       onOpenChange(false);
-      onSuccess?.();
+      onSuccess?.(method);
       
     } catch (error) {
       console.error('Payment processing error:', error);

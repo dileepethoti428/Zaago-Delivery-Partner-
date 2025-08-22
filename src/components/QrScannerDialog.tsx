@@ -16,6 +16,7 @@ interface ScannedOrder {
   order_id: string;
   customer_name: string;
   total_amount: number;
+  payment_status: string;
 }
 
 export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) => {
@@ -23,6 +24,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
   const [isScanning, setIsScanning] = useState(true);
   const [scannedOrder, setScannedOrder] = useState<ScannedOrder | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleScan = async (detectedCodes: any[]) => {
     if (!detectedCodes || detectedCodes.length === 0) return;
@@ -40,7 +42,8 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
             id,
             total,
             customer_name,
-            status
+            status,
+            payment_status
           )
         `)
         .eq('qr_code_data', result)
@@ -58,10 +61,10 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       }
 
       const order = qrData.orders as any;
-      if (order.status !== 'out_for_delivery') {
+      if (order.status !== 'assigned') {
         toast({
           title: "Order Not Ready",
-          description: "This order is not ready for delivery yet",
+          description: "This order is not assigned to you yet",
           variant: "destructive"
         });
         onOpenChange(false);
@@ -72,27 +75,28 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       setScannedOrder({
         order_id: order.id,
         customer_name: order.customer_name,
-        total_amount: order.total
+        total_amount: order.total,
+        payment_status: order.payment_status
       });
-
-      // Mark QR as scanned
-      await supabase
-        .from('order_qr_codes')
-        .update({ 
-          is_scanned: true, 
-          scanned_at: new Date().toISOString(),
-          scanned_by: (await supabase.auth.getUser()).data.user?.id 
-        })
-        .eq('qr_code_data', result);
 
       toast({
         title: "QR Code Scanned!",
         description: `Order for ${order.customer_name} - ₹${order.total}`,
       });
 
-      // Close scanner and show payment dialog
+      // Store QR data for later use
+      localStorage.setItem('last_scanned_qr', result);
+
+      // Close scanner
       onOpenChange(false);
-      setShowPaymentDialog(true);
+
+      // For prepaid orders, complete delivery directly
+      if (order.payment_status === 'prepaid') {
+        await completeDelivery(result, 'prepaid');
+      } else {
+        // For COD orders, show payment options
+        setShowPaymentDialog(true);
+      }
 
     } catch (error) {
       console.error('QR Scan error:', error);
@@ -114,9 +118,49 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     });
   };
 
+  const completeDelivery = async (qrCodeData: string, paymentMethod: string) => {
+    setIsProcessing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('qr-complete-delivery', {
+        body: {
+          qr_code_data: qrCodeData,
+          payment_method: paymentMethod
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: "Order Completed! ✅",
+          description: `Delivery completed for ${data.order.customer_name}`,
+        });
+        
+        // Reset states
+        setScannedOrder(null);
+        setShowPaymentDialog(false);
+        
+        // Refresh the orders list by dispatching a custom event
+        window.dispatchEvent(new CustomEvent('orderCompleted'));
+      } else {
+        throw new Error(data.error || 'Failed to complete delivery');
+      }
+    } catch (error) {
+      console.error('Complete delivery error:', error);
+      toast({
+        title: "Delivery Failed",
+        description: "Unable to complete delivery. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const resetScanner = () => {
     setIsScanning(true);
     setScannedOrder(null);
+    setShowPaymentDialog(false);
   };
 
   return (
@@ -180,11 +224,16 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         </DialogContent>
       </Dialog>
 
-      {scannedOrder && (
+      {scannedOrder && scannedOrder.payment_status !== 'prepaid' && (
         <PaymentMethodDialog
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
           order={scannedOrder}
+          onSuccess={async (paymentMethod) => {
+            const qrCodeData = localStorage.getItem('last_scanned_qr') || '';
+            await completeDelivery(qrCodeData, paymentMethod);
+            localStorage.removeItem('last_scanned_qr');
+          }}
         />
       )}
     </>

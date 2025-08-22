@@ -76,6 +76,7 @@ const Home = () => {
         .from('orders')
         .select('*')
         .in('status', ['placed', 'assigned'])
+        .neq('status', 'delivered') // Exclude delivered orders
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -164,9 +165,20 @@ const Home = () => {
     }
   }, [orders]);
 
-  // Fetch orders on component mount
+  // Fetch orders on component mount and listen for order completion
   useEffect(() => {
     fetchOrders();
+    
+    // Listen for order completion events from QR scanner
+    const handleOrderCompleted = () => {
+      fetchOrders();
+    };
+    
+    window.addEventListener('orderCompleted', handleOrderCompleted);
+    
+    return () => {
+      window.removeEventListener('orderCompleted', handleOrderCompleted);
+    };
   }, []);
 
   // Pull to refresh functionality
