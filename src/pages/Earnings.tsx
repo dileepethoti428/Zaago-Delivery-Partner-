@@ -61,13 +61,13 @@ const Earnings = () => {
         .select('id')
         .eq('email', agentEmail)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       if (!agent) {
+        // No active agent found; show empty stats gracefully
         toast({
-          title: "Error",
-          description: "Agent profile not found",
-          variant: "destructive"
+          title: "No active agent profile",
+          description: "We couldn't find an active agent linked to your email. Showing empty earnings.",
         });
         return;
       }
@@ -217,7 +217,7 @@ const Earnings = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Avg per Hour</p>
                 <p className="text-xl font-bold text-foreground">
-                  ${(currentData.amount / currentData.hours).toFixed(2)}
+                  ${((currentData.hours ? currentData.amount / currentData.hours : 0)).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -233,7 +233,7 @@ const Earnings = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Per Delivery</p>
                 <p className="text-xl font-bold text-foreground">
-                  ${(currentData.amount / currentData.deliveries).toFixed(2)}
+                  ${((currentData.deliveries ? currentData.amount / currentData.deliveries : 0)).toFixed(2)}
                 </p>
               </div>
             </div>
