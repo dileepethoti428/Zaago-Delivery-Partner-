@@ -127,6 +127,16 @@ const Earnings = () => {
   });
   const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false);
   const [withdrawalLoading, setWithdrawalLoading] = useState(false);
+  const [showTopupDialog, setShowTopupDialog] = useState(false);
+  const [topupAmount, setTopupAmount] = useState(500);
+  const [topupLoading, setTopupLoading] = useState(false);
+  const [autoPaySettings, setAutoPaySettings] = useState({
+    is_enabled: false,
+    minimum_balance: 500,
+    topup_amount: 500
+  });
+  const [showAutoPayDialog, setShowAutoPayDialog] = useState(false);
+  const [autoPayLoading, setAutoPayLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -167,7 +177,8 @@ const Earnings = () => {
           fetchPayoutConfig(),
           fetchDistanceStats(),
           fetchBankDetails(agent.id),
-          fetchWalletData(agent.id)
+          fetchWalletData(agent.id),
+          fetchAutoPaySettings(agent.id)
         ]);
       }
     } catch (error) {
@@ -590,6 +601,160 @@ const Earnings = () => {
     }
   };
 
+  const fetchAutoPaySettings = async (agentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_autopay_settings')
+        .select('*')
+        .eq('agent_id', agentId)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (data) {
+        setAutoPaySettings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching autopay settings:', error);
+    }
+  };
+
+  const handleTopUp = async () => {
+    if (topupAmount < 500) {
+      toast({
+        title: "Minimum Top-up Amount",
+        description: "Minimum top-up amount is ₹500.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setTopupLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('agent-topup-razorpay', {
+        body: { amount: topupAmount }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: "Top-up Successful",
+          description: `₹${topupAmount} has been added to your wallet.`,
+        });
+        
+        // Refresh wallet data
+        if (agentId) {
+          await fetchWalletData(agentId);
+        }
+        setShowTopupDialog(false);
+      }
+    } catch (error) {
+      console.error('Error processing top-up:', error);
+      toast({
+        title: "Top-up Failed",
+        description: "There was an error processing your top-up. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setTopupLoading(false);
+    }
+  };
+
+  const handleWithdrawalRequest = async () => {
+    if (!agentId || bankDetails.length === 0) {
+      toast({
+        title: "Add Bank Details",
+        description: "Please add your bank details to request withdrawal.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const minWithdrawal = 500;
+    if (withdrawalForm.amount < minWithdrawal) {
+      toast({
+        title: "Minimum Withdrawal Amount",
+        description: `Minimum withdrawal amount is ₹${minWithdrawal}.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (withdrawalForm.amount > walletData.balance) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You can withdraw maximum ₹${walletData.balance.toFixed(2)}.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setWithdrawalLoading(true);
+    try {
+      // Create withdrawal request
+      const { error } = await supabase
+        .from('agent_withdrawal_requests')
+        .insert({
+          agent_id: agentId,
+          bank_id: withdrawalForm.bank_id,
+          amount: withdrawalForm.amount
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Withdrawal Request Submitted",
+        description: `₹${withdrawalForm.amount.toFixed(2)} withdrawal request has been submitted for admin approval.`,
+      });
+
+      setShowWithdrawalDialog(false);
+    } catch (error) {
+      console.error('Error submitting withdrawal request:', error);
+      toast({
+        title: "Request Failed",
+        description: "There was an error submitting your withdrawal request. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setWithdrawalLoading(false);
+    }
+  };
+
+  const handleAutoPayUpdate = async () => {
+    if (!agentId) return;
+
+    setAutoPayLoading(true);
+    try {
+      const { error } = await supabase
+        .from('agent_autopay_settings')
+        .upsert({
+          agent_id: agentId,
+          ...autoPaySettings
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Auto-Pay Settings Updated",
+        description: autoPaySettings.is_enabled 
+          ? `Auto-pay enabled: ₹${autoPaySettings.topup_amount} when balance < ₹${autoPaySettings.minimum_balance}`
+          : "Auto-pay has been disabled.",
+      });
+
+      setShowAutoPayDialog(false);
+    } catch (error) {
+      console.error('Error updating autopay settings:', error);
+      toast({
+        title: "Update Failed",
+        description: "There was an error updating your auto-pay settings. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setAutoPayLoading(false);
+    }
+  };
+
   const currentData = earningsData[selectedPeriod as keyof typeof earningsData];
 
   if (isLoading) {
@@ -610,6 +775,310 @@ const Earnings = () => {
         <h1 className="text-2xl font-bold text-foreground">Earnings</h1>
         <p className="text-muted-foreground">Track your delivery income and manage your wallet</p>
       </div>
+
+      {/* Wallet Management */}
+      <Card className="bg-card border-border animate-slide-up">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Wallet className="w-5 h-5 text-primary" />
+            <span>Wallet Management</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Wallet Balance */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 bg-primary/10 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <DollarSign className="w-5 h-5 text-primary" />
+                <span className="text-sm font-medium text-primary">Wallet Balance</span>
+              </div>
+              <p className="text-2xl font-bold text-foreground">₹{walletData.balance.toFixed(2)}</p>
+            </div>
+            <div className="p-4 bg-orange-500/10 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <CreditCard className="w-5 h-5 text-orange-500" />
+                <span className="text-sm font-medium text-orange-500">Pending COD</span>
+              </div>
+              <p className="text-2xl font-bold text-foreground">₹{walletData.pending_cod_amount.toFixed(2)}</p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-3">
+            <Button 
+              onClick={handleClearWallet}
+              disabled={walletData.pending_cod_amount < 500}
+              className="flex items-center space-x-2"
+              variant="destructive"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              <span>Clear Wallet</span>
+            </Button>
+            
+            <Dialog open={showTopupDialog} onOpenChange={setShowTopupDialog}>
+              <DialogTrigger asChild>
+                <Button className="flex items-center space-x-2" variant="default">
+                  <Plus className="w-4 h-4" />
+                  <span>Top Up</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Top Up Wallet</DialogTitle>
+                  <DialogDescription>
+                    Add money to your wallet using Razorpay (Minimum ₹500)
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="topup-amount">Amount (₹)</Label>
+                    <Input
+                      id="topup-amount"
+                      type="number"
+                      min="500"
+                      value={topupAmount}
+                      onChange={(e) => setTopupAmount(Number(e.target.value))}
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button onClick={() => setTopupAmount(500)} variant="outline" size="sm">₹500</Button>
+                    <Button onClick={() => setTopupAmount(1000)} variant="outline" size="sm">₹1000</Button>
+                    <Button onClick={() => setTopupAmount(2000)} variant="outline" size="sm">₹2000</Button>
+                  </div>
+                  <Button 
+                    onClick={handleTopUp} 
+                    disabled={topupLoading}
+                    className="w-full"
+                  >
+                    {topupLoading ? "Processing..." : `Top Up ₹${topupAmount}`}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Dialog open={showBankDialog} onOpenChange={setShowBankDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="flex items-center space-x-2">
+                  <Building className="w-4 h-4" />
+                  <span>Bank Details</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Bank Details</DialogTitle>
+                  <DialogDescription>
+                    Add your bank account for withdrawals
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="bank-name">Bank Name</Label>
+                    <Input
+                      id="bank-name"
+                      value={newBankDetails.bank_name}
+                      onChange={(e) => setNewBankDetails(prev => ({...prev, bank_name: e.target.value}))}
+                      placeholder="Enter bank name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="account-holder">Account Holder Name</Label>
+                    <Input
+                      id="account-holder"
+                      value={newBankDetails.account_holder_name}
+                      onChange={(e) => setNewBankDetails(prev => ({...prev, account_holder_name: e.target.value}))}
+                      placeholder="Enter account holder name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="account-number">Account Number</Label>
+                    <Input
+                      id="account-number"
+                      value={newBankDetails.account_number}
+                      onChange={(e) => setNewBankDetails(prev => ({...prev, account_number: e.target.value}))}
+                      placeholder="Enter account number"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="ifsc-code">IFSC Code</Label>
+                    <Input
+                      id="ifsc-code"
+                      value={newBankDetails.ifsc_code}
+                      onChange={(e) => setNewBankDetails(prev => ({...prev, ifsc_code: e.target.value.toUpperCase()}))}
+                      placeholder="Enter IFSC code"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="account-type">Account Type</Label>
+                    <Select value={newBankDetails.account_type} onValueChange={(value) => setNewBankDetails(prev => ({...prev, account_type: value}))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="savings">Savings</SelectItem>
+                        <SelectItem value="current">Current</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button 
+                    onClick={handleBankDetailsSubmit} 
+                    disabled={bankLoading}
+                    className="w-full"
+                  >
+                    {bankLoading ? "Adding..." : "Add Bank Account"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showWithdrawalDialog} onOpenChange={setShowWithdrawalDialog}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="flex items-center space-x-2"
+                  disabled={bankDetails.length === 0 || walletData.balance < 500}
+                  onClick={() => {
+                    if (bankDetails.length > 0) {
+                      const primaryBank = bankDetails.find(bank => bank.is_primary) || bankDetails[0];
+                      setWithdrawalForm({
+                        amount: Math.min(walletData.balance, 500),
+                        bank_id: primaryBank.id
+                      });
+                    }
+                  }}
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Withdraw</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Request Withdrawal</DialogTitle>
+                  <DialogDescription>
+                    Submit a withdrawal request for admin approval (Minimum ₹500)
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="withdrawal-amount">Amount (₹)</Label>
+                    <Input
+                      id="withdrawal-amount"
+                      type="number"
+                      min="500"
+                      max={walletData.balance}
+                      value={withdrawalForm.amount}
+                      onChange={(e) => setWithdrawalForm(prev => ({...prev, amount: Number(e.target.value)}))}
+                      placeholder="Enter amount"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Available balance: ₹{walletData.balance.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="bank-select">Bank Account</Label>
+                    <Select value={withdrawalForm.bank_id} onValueChange={(value) => setWithdrawalForm(prev => ({...prev, bank_id: value}))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select bank account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bankDetails.map((bank) => (
+                          <SelectItem key={bank.id} value={bank.id}>
+                            {bank.bank_name} - {bank.account_number.slice(-4)}
+                            {bank.is_primary && " (Primary)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button 
+                    onClick={handleWithdrawalRequest} 
+                    disabled={withdrawalLoading}
+                    className="w-full"
+                  >
+                    {withdrawalLoading ? "Submitting..." : `Request ₹${withdrawalForm.amount} Withdrawal`}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Auto Pay Settings */}
+          <div className="pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Shield className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium">Auto Pay</span>
+                <Badge variant={autoPaySettings.is_enabled ? "default" : "outline"} className="text-xs">
+                  {autoPaySettings.is_enabled ? "Enabled" : "Disabled"}
+                </Badge>
+              </div>
+              <Dialog open={showAutoPayDialog} onOpenChange={setShowAutoPayDialog}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="ghost">
+                    <span>Settings</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Auto Pay Settings</DialogTitle>
+                    <DialogDescription>
+                      Automatically top up your wallet when balance is low
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="enable-autopay"
+                        checked={autoPaySettings.is_enabled}
+                        onChange={(e) => setAutoPaySettings(prev => ({...prev, is_enabled: e.target.checked}))}
+                        className="w-4 h-4"
+                      />
+                      <Label htmlFor="enable-autopay">Enable Auto Pay</Label>
+                    </div>
+                    <div>
+                      <Label htmlFor="min-balance">Minimum Balance (₹)</Label>
+                      <Input
+                        id="min-balance"
+                        type="number"
+                        min="100"
+                        value={autoPaySettings.minimum_balance}
+                        onChange={(e) => setAutoPaySettings(prev => ({...prev, minimum_balance: Number(e.target.value)}))}
+                        placeholder="Minimum balance threshold"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="topup-amount-auto">Top-up Amount (₹)</Label>
+                      <Input
+                        id="topup-amount-auto"
+                        type="number"
+                        min="500"
+                        value={autoPaySettings.topup_amount}
+                        onChange={(e) => setAutoPaySettings(prev => ({...prev, topup_amount: Number(e.target.value)}))}
+                        placeholder="Amount to add when topping up"
+                      />
+                    </div>
+                    <Button 
+                      onClick={handleAutoPayUpdate} 
+                      disabled={autoPayLoading}
+                      className="w-full"
+                    >
+                      {autoPayLoading ? "Updating..." : "Update Settings"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+            {autoPaySettings.is_enabled && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Auto top-up ₹{autoPaySettings.topup_amount} when balance &lt; ₹{autoPaySettings.minimum_balance}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Quick Stats */}
       <Card className="bg-gradient-success border-success/20 animate-slide-up">
