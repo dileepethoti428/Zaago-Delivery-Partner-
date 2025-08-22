@@ -84,6 +84,27 @@ serve(async (req) => {
       );
     }
 
+    const order = qrData.orders as any;
+
+    // If order already delivered, return success (idempotent)
+    if (order && order.status === 'delivered') {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Order already delivered',
+          order: {
+            id: order.id,
+            customer_name: order.customer_name,
+            total: order.total,
+            payment_status: order.payment_status,
+            delivered_at: order.delivered_at
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // If QR already used but order not delivered, block
     if (qrData.is_scanned) {
       return new Response(
         JSON.stringify({ success: false, error: 'QR code already used' }),
@@ -91,18 +112,9 @@ serve(async (req) => {
       );
     }
 
-    const order = qrData.orders as any;
     if (!order || order.status !== 'assigned') {
       return new Response(
         JSON.stringify({ success: false, error: 'Order not ready for delivery' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
-
-    // Check if order is already delivered
-    if (order.status === 'delivered') {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Order already delivered' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
