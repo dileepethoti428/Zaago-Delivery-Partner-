@@ -33,27 +33,29 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     try {
       setIsScanning(false);
       
-      // Validate QR code with backend
+      // First, check if QR code exists (regardless of scan status)
       const { data: qrData, error } = await supabase
         .from('order_qr_codes')
         .select(`
           order_id,
+          is_scanned,
+          scanned_at,
           orders (
             id,
             total,
             customer_name,
             status,
-            payment_status
+            payment_status,
+            delivered_at
           )
         `)
         .eq('qr_code_data', result)
-        .eq('is_scanned', false)
         .single();
 
       if (error || !qrData) {
         toast({
           title: "Invalid QR Code",
-          description: "This QR code is not valid or has already been used",
+          description: "This QR code is not valid",
           variant: "destructive"
         });
         onOpenChange(false);
@@ -61,17 +63,43 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       }
 
       const order = qrData.orders as any;
-      if (order.status !== 'assigned') {
+      
+      // Check if order is already delivered
+      if (order.status === 'delivered') {
+        const deliveredDate = new Date(order.delivered_at).toLocaleDateString();
         toast({
-          title: "Order Not Ready",
-          description: "This order is not assigned to you yet",
+          title: "Product Already Delivered! ✅",
+          description: `This order for ${order.customer_name} was delivered on ${deliveredDate}`,
+          variant: "default"
+        });
+        onOpenChange(false);
+        return;
+      }
+
+      // Check if QR code was already scanned but order not delivered
+      if (qrData.is_scanned) {
+        const scannedDate = new Date(qrData.scanned_at).toLocaleDateString();
+        toast({
+          title: "QR Code Already Used",
+          description: `This QR code was already scanned on ${scannedDate}`,
           variant: "destructive"
         });
         onOpenChange(false);
         return;
       }
 
-      // Set scanned order data
+      // Check if order is ready for delivery
+      if (order.status !== 'assigned') {
+        toast({
+          title: "Order Not Ready",
+          description: "This order is not assigned for delivery yet",
+          variant: "destructive"
+        });
+        onOpenChange(false);
+        return;
+      }
+
+      // Set scanned order data for delivery
       setScannedOrder({
         order_id: order.id,
         customer_name: order.customer_name,
