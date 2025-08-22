@@ -156,9 +156,16 @@ serve(async (req) => {
       console.warn('Delivery history update failed:', historyError);
     }
 
-    // Skip duplicate earnings - the safe payout function handles this
-    // Create earnings record
-    if (!payoutResult || !payoutResult.success) {
+    // Check if earnings already exist to prevent duplicate constraint violations
+    const { data: existingEarning } = await supabaseClient
+      .from('earnings')
+      .select('id')
+      .eq('agent_id', agent.id)
+      .eq('order_id', order_id)
+      .single();
+
+    // Only create earnings if none exist and payout function didn't succeed
+    if (!existingEarning && (!payoutResult || !payoutResult.success)) {
       try {
         const { error: earningsError } = await supabaseClient
           .from('earnings')
