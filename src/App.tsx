@@ -9,7 +9,7 @@ import BottomNavigation from "@/components/BottomNavigation";
 import Splash from "./pages/Splash";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
-import OrderDetails from "./pages/OrderDetails";
+import History from "./pages/History";
 import Tracking from "./pages/Tracking";
 import Profile from "./pages/Profile";
 import Earnings from "./pages/Earnings";
@@ -34,7 +34,7 @@ const App = () => (
             
             {/* Main App Routes */}
             <Route path="/home" element={<Home />} />
-            <Route path="/order-details" element={<OrderDetails />} />
+            <Route path="/history" element={<History />} />
             <Route path="/tracking" element={<Tracking />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/earnings" element={<Earnings />} />

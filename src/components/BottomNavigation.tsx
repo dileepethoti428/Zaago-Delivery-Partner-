@@ -19,10 +19,10 @@ const BottomNavigation = () => {
       path: "/home"
     },
     {
-      id: "orders",
-      label: "Orders",
+      id: "history",
+      label: "History",
       icon: Package,
-      path: "/order-details"
+      path: "/history"
     },
     {
       id: "earnings",
