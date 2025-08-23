@@ -147,8 +147,18 @@ const Help = () => {
       <div className="grid grid-cols-3 gap-3 animate-slide-up">
         {contactOptions.map((option, index) => {
           const IconComponent = option.icon;
+          const handleClick = () => {
+            if (option.title === "Phone Support") {
+              window.open(`tel:+917842343642`, '_self');
+            } else if (option.title === "Live Chat") {
+              window.open(`https://wa.me/917842343642`, '_blank');
+            } else if (option.title === "Email Support") {
+              window.open(`mailto:support@zaago.com`, '_self');
+            }
+          };
+
           return (
-            <Card key={index} className="bg-card border-border hover:shadow-elevated transition-smooth cursor-pointer">
+            <Card key={index} className="bg-card border-border hover:shadow-elevated transition-smooth cursor-pointer" onClick={handleClick}>
               <CardContent className="p-4 text-center">
                 <div className={`w-12 h-12 ${option.bgColor} rounded-lg flex items-center justify-center mx-auto mb-3`}>
                   <IconComponent className={`w-6 h-6 ${option.color}`} />
