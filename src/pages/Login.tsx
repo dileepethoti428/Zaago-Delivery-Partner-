@@ -91,8 +91,8 @@ const Login = () => {
         description: "Welcome back to Zaago!",
       });
       
-      // Check agent status and redirect
-      await checkAgentStatusAndRedirect(authData.user.email!);
+      // Simply redirect to home for existing users
+      navigate('/home');
     } catch (error: any) {
       console.error('Login error:', error);
       toast({
@@ -146,41 +146,6 @@ const Login = () => {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const checkAgentStatusAndRedirect = async (email: string) => {
-    try {
-      // Check if user is an active agent
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('id, is_active')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (!agent) {
-        toast({
-          title: "Account Not Activated",
-          description: "Please contact support to activate your delivery agent account.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if (!agent.is_active) {
-        toast({
-          title: "Account Pending Approval",
-          description: "Your account is pending admin approval. Please wait for activation.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Redirect to home
-      navigate('/home');
-    } catch (error) {
-      console.error('Error checking agent status:', error);
-      navigate('/home'); // Fallback to home
     }
   };
 
