@@ -18,8 +18,6 @@ import Earnings from "./pages/Earnings";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import PrivacySecurity from "./pages/PrivacySecurity";
-import PayoutSettings from "./pages/PayoutSettings";
-import BankDetailsSetup from "./pages/BankDetailsSetup";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 
@@ -46,9 +44,7 @@ const App = () => (
             <Route path="/earnings" element={<RequireAuth><Earnings /></RequireAuth>} />
             <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-            <Route path="/bank-details-setup" element={<RequireAuth><BankDetailsSetup /></RequireAuth>} />
             <Route path="/privacy-security" element={<RequireAuth><PrivacySecurity /></RequireAuth>} />
-            <Route path="/payout-settings" element={<RequireAuth><PayoutSettings /></RequireAuth>} />
             <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />
 
             {/* Redirect old index route */}

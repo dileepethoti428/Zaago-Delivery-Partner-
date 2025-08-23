@@ -318,8 +318,8 @@ const Settings = () => {
       case "Privacy & Security":
         navigate('/privacy-security');
         break;
-      case "Payment Methods":
-        navigate('/payout-settings');
+      case "Help Center":
+        navigate('/help');
         break;
       default:
         toast({
@@ -349,8 +349,8 @@ const Settings = () => {
         },
         {
           icon: CreditCard,
-          title: "Payment Methods",
-          description: "Manage payout options",
+          title: "Help Center",
+          description: "Get help and support",
           action: "navigate",
           color: "text-primary"
         }
