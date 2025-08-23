@@ -9,7 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { supabase } from "@/integrations/supabase/client";
-import noOrdersIllustration from "@/assets/no-orders-illustration.jpg";
 import { 
   MapPin, 
   Clock, 
@@ -24,7 +23,8 @@ import {
   X,
   User,
   QrCode,
-  Loader2
+  Loader2,
+  PackageOpen
 } from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
@@ -552,14 +552,9 @@ const Home = () => {
               <Card className="bg-card/50 border-border">
                 <CardContent className="p-8 text-center">
                   <div className="mb-6">
-                    <img 
-                      src={noOrdersIllustration} 
-                      alt="No orders available - delivery person taking a peaceful break" 
-                      className="w-64 h-40 mx-auto rounded-lg object-cover shadow-lg"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
+                    <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                      <PackageOpen className="w-16 h-16 text-primary/60" />
+                    </div>
                   </div>
                   <h3 className="text-lg font-medium text-foreground mb-2">No orders found</h3>
                   <p className="text-muted-foreground mb-4">No orders currently, enjoy your break! 🌟</p>
