@@ -10,7 +10,8 @@ import {
   TrendingUp, 
   Clock, 
   Truck,
-  MapPin
+  MapPin,
+  Wallet
 } from "lucide-react";
 
 interface EarningsSummary {
