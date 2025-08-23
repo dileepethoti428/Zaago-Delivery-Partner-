@@ -140,10 +140,10 @@ serve(async (req) => {
     // Update order status to delivered
     // Use raw SQL to bypass RLS policies that might interfere
     const { error: updateError } = await supabaseClient.rpc('update_order_status', {
-      order_id: order.id,
-      new_status: 'delivered',
-      new_payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-      agent_id: agent.id
+      p_order_id: order.id,
+      p_new_status: 'delivered',
+      p_new_payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
+      p_agent_id: agent.id
     });
 
     if (updateError) {

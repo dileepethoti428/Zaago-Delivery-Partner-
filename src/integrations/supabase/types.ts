@@ -3670,10 +3670,10 @@ export type Database = {
       }
       update_order_status: {
         Args: {
-          agent_id: string
-          new_payment_status: string
-          new_status: string
-          order_id: string
+          p_agent_id: string
+          p_new_payment_status: string
+          p_new_status: string
+          p_order_id: string
         }
         Returns: undefined
       }
