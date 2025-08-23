@@ -335,6 +335,8 @@ const WalletActions = ({ trigger, showBalance = false }: WalletActionsProps) => 
           topup_amount: autopaySettings.topup_amount,
           minimum_balance: autopaySettings.minimum_balance,
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'agent_id'
         });
 
       if (settingsError) throw settingsError;
