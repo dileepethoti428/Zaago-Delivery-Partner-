@@ -8,6 +8,25 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Wallet, Plus, Download, Building } from "lucide-react";
 
+// Global declaration for Razorpay
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
+// Utility to load Razorpay script on demand
+async function loadRazorpay(): Promise<boolean> {
+  if (typeof window !== 'undefined' && (window as any).Razorpay) return true;
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 interface BankDetails {
   id: string;
   bank_name: string;
@@ -142,22 +161,59 @@ const WalletActions = ({ trigger, showBalance = false }: WalletActionsProps) => 
 
       if (error) throw error;
 
-      if (data?.url) {
-        // Open Razorpay payment in new tab
-        window.open(data.url, '_blank');
-        toast({
-          title: "Payment Initiated",
-          description: "Redirecting to payment gateway...",
-        });
-        setShowAddMoneyDialog(false);
-      } else {
-        toast({
-          title: "Success",
-          description: data?.message || "Top-up completed successfully",
-        });
-        await fetchWalletData(agentId);
-        setShowAddMoneyDialog(false);
+      // If Razorpay order created, open Checkout (supports UPI: PhonePe, GPay, Paytm, etc.)
+      if (data?.order_id && data?.key) {
+        const loaded = await loadRazorpay();
+        if (!loaded) throw new Error('Failed to load Razorpay');
+
+        const { data: { user } } = await supabase.auth.getUser();
+
+        const options: any = {
+          key: data.key,
+          amount: topupAmount * 100,
+          currency: data.currency || 'INR',
+          name: 'Zaago Wallet',
+          description: 'Wallet Top-up',
+          order_id: data.order_id,
+          prefill: {
+            email: user?.email || '',
+          },
+          theme: { color: '#6D28D9' },
+          handler: async (response: any) => {
+            try {
+              const verifyRes = await supabase.functions.invoke('agent-topup-verify', {
+                body: {
+                  order_id: response.razorpay_order_id,
+                  payment_id: response.razorpay_payment_id,
+                  signature: response.razorpay_signature,
+                  amount: topupAmount
+                }
+              });
+
+              if ((verifyRes as any).error) throw (verifyRes as any).error;
+
+              toast({ title: '₹' + topupAmount + ' added successfully.' });
+              if (agentId) await fetchWalletData(agentId);
+              setShowAddMoneyDialog(false);
+            } catch (err: any) {
+              console.error('Verification error:', err);
+              toast({ title: 'Verification failed', description: err.message || 'Please contact support', variant: 'destructive' });
+            }
+          }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+        return;
       }
+
+      // Simulated success when keys not configured
+      toast({
+        title: 'Success',
+        description: data?.message || 'Top-up completed successfully',
+      });
+      if (agentId) await fetchWalletData(agentId);
+      setShowAddMoneyDialog(false);
     } catch (error: any) {
       console.error('Top-up error:', error);
       toast({
