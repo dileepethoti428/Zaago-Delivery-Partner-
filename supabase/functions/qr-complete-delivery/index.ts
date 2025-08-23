@@ -138,14 +138,13 @@ serve(async (req) => {
     }
 
     // Update order status to delivered
-    const { error: updateError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-      })
-      .eq('id', order.id);
+    // Use raw SQL to bypass RLS policies that might interfere
+    const { error: updateError } = await supabaseClient.rpc('update_order_status', {
+      order_id: order.id,
+      new_status: 'delivered',
+      new_payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
+      agent_id: agent.id
+    });
 
     if (updateError) {
       console.error('Failed to update order:', updateError);
