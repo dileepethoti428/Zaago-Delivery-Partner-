@@ -172,8 +172,8 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         setScannedOrder(null);
         setShowPaymentDialog(false);
         
-        // Refresh the orders list by dispatching a custom event
-        window.dispatchEvent(new CustomEvent('orderCompleted'));
+        // Refresh the orders list by dispatching a custom event with order id
+        window.dispatchEvent(new CustomEvent('orderCompleted', { detail: { orderId: data.order.id } }));
       } else {
         throw new Error(data.error || 'Failed to complete delivery');
       }

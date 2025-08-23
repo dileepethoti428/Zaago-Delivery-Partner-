@@ -205,7 +205,13 @@ const Home = () => {
     fetchOrders();
     
     // Listen for order completion events from QR scanner
-    const handleOrderCompleted = () => {
+    const handleOrderCompleted = (e: Event) => {
+      const event = e as CustomEvent<{ orderId?: string }>;
+      const completedId = event.detail?.orderId;
+      if (completedId) {
+        setOrders(prev => prev.filter(o => o.id !== completedId));
+        setOrdersWithDistance(prev => prev.filter(o => o.id !== completedId));
+      }
       fetchOrders();
     };
     
@@ -213,7 +219,6 @@ const Home = () => {
     const handleOrderCancelled = () => {
       fetchOrders();
     };
-    
     window.addEventListener('orderCompleted', handleOrderCompleted);
     window.addEventListener('orderCancelled', handleOrderCancelled);
     
