@@ -181,7 +181,11 @@ const WalletActions = ({ trigger, showBalance = false }: WalletActionsProps) => 
           title: 'Success',
           description: data.message || 'Top-up completed successfully',
         });
-        if (agentId) await fetchWalletData(agentId);
+        // Refresh wallet data and reset form
+        if (agentId) {
+          await fetchWalletData(agentId);
+          setTopupAmount(500);
+        }
         setShowAddMoneyDialog(false);
         return;
       }

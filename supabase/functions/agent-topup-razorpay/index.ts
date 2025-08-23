@@ -206,7 +206,7 @@ serve(async (req) => {
     const orderPayload = {
       amount: amount * 100, // Razorpay amount is in paise
       currency: "INR",
-      receipt: `topup_${agent.id}_${Date.now()}`,
+      receipt: `top_${agent.id.substring(0, 8)}_${Date.now().toString().slice(-8)}`, // Keep within 40 char limit
       notes: {
         agent_id: agent.id,
         agent_name: agent.name,
