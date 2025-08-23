@@ -665,7 +665,7 @@ const Earnings = () => {
     if (!agentId || bankDetails.length === 0) {
       toast({
         title: "Add Bank Details",
-        description: "Please add your bank details to request withdrawal.",
+        description: "Please add your bank details to withdraw money.",
         variant: "destructive"
       });
       return;
@@ -692,28 +692,35 @@ const Earnings = () => {
 
     setWithdrawalLoading(true);
     try {
-      // Create withdrawal request
-      const { error } = await supabase
-        .from('agent_withdrawal_requests')
-        .insert({
+      // Process direct bank transfer
+      const { data, error } = await supabase.functions.invoke('agent-bank-transfer', {
+        body: {
           agent_id: agentId,
-          bank_id: withdrawalForm.bank_id,
-          amount: withdrawalForm.amount
-        });
+          amount: withdrawalForm.amount,
+          bank_id: withdrawalForm.bank_id
+        }
+      });
 
       if (error) throw error;
 
+      if (!data.success) {
+        throw new Error(data.error || 'Transfer failed');
+      }
+
+      // Refresh wallet data
+      await fetchWalletData(agentId);
+
       toast({
-        title: "Withdrawal Request Submitted",
-        description: `₹${withdrawalForm.amount.toFixed(2)} withdrawal request has been submitted for admin approval.`,
+        title: "Transfer Successful",
+        description: `₹${withdrawalForm.amount.toFixed(2)} has been transferred to your ${data.bank_details.bank_name} account ending in ${data.bank_details.account_number}.`,
       });
 
       setShowWithdrawalDialog(false);
     } catch (error) {
-      console.error('Error submitting withdrawal request:', error);
+      console.error('Error processing bank transfer:', error);
       toast({
-        title: "Request Failed",
-        description: "There was an error submitting your withdrawal request. Please try again.",
+        title: "Transfer Failed",
+        description: error.message || "There was an error transferring money to your bank account. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -955,9 +962,9 @@ const Earnings = () => {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Request Withdrawal</DialogTitle>
+                  <DialogTitle>Withdraw Money</DialogTitle>
                   <DialogDescription>
-                    Submit a withdrawal request for admin approval (Minimum ₹500)
+                    Transfer money directly to your bank account (Minimum ₹500)
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
@@ -997,7 +1004,7 @@ const Earnings = () => {
                     disabled={withdrawalLoading}
                     className="w-full"
                   >
-                    {withdrawalLoading ? "Submitting..." : `Request ₹${withdrawalForm.amount} Withdrawal`}
+                    {withdrawalLoading ? "Processing..." : `Transfer ₹${withdrawalForm.amount}`}
                   </Button>
                 </div>
               </DialogContent>
@@ -1079,6 +1086,45 @@ const Earnings = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Saved Bank Accounts */}
+      {bankDetails.length > 0 && (
+        <Card className="bg-card border-border animate-slide-up">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Building className="w-5 h-5 text-primary" />
+              <span>Saved Bank Accounts</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {bankDetails.map((bank) => (
+              <div key={bank.id} className="p-3 bg-secondary/20 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <p className="font-medium text-foreground">{bank.bank_name}</p>
+                      {bank.is_primary && (
+                        <Badge variant="default" className="text-xs">Primary</Badge>
+                      )}
+                      {bank.is_verified && (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{bank.account_holder_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Account: ••••••{bank.account_number.slice(-4)} | IFSC: {bank.ifsc_code}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">{bank.account_type} Account</p>
+                  </div>
+                  <Badge variant={bank.is_verified ? "default" : "outline"} className="text-xs">
+                    {bank.is_verified ? "Verified" : "Pending"}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Stats */}
       <Card className="bg-gradient-success border-success/20 animate-slide-up">
