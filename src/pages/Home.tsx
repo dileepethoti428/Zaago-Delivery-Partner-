@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { supabase } from "@/integrations/supabase/client";
+import noOrdersIllustration from "@/assets/no-orders-illustration.jpg";
 import { 
   MapPin, 
   Clock, 
@@ -552,9 +553,12 @@ const Home = () => {
                 <CardContent className="p-8 text-center">
                   <div className="mb-6">
                     <img 
-                      src="/src/assets/no-orders-illustration.jpg" 
+                      src={noOrdersIllustration} 
                       alt="No orders available - delivery person taking a peaceful break" 
                       className="w-64 h-40 mx-auto rounded-lg object-cover shadow-lg"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   </div>
                   <h3 className="text-lg font-medium text-foreground mb-2">No orders found</h3>
