@@ -2628,6 +2628,7 @@ export type Database = {
           address: Json | null
           bank_branch: string | null
           bank_name: string | null
+          business_description: string | null
           business_license: string | null
           business_name: string | null
           created_at: string
@@ -2648,6 +2649,7 @@ export type Database = {
           address?: Json | null
           bank_branch?: string | null
           bank_name?: string | null
+          business_description?: string | null
           business_license?: string | null
           business_name?: string | null
           created_at?: string
@@ -2668,6 +2670,7 @@ export type Database = {
           address?: Json | null
           bank_branch?: string | null
           bank_name?: string | null
+          business_description?: string | null
           business_license?: string | null
           business_name?: string | null
           created_at?: string
@@ -3664,6 +3667,15 @@ export type Database = {
       trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      update_order_status: {
+        Args: {
+          agent_id: string
+          new_payment_status: string
+          new_status: string
+          order_id: string
+        }
+        Returns: undefined
       }
       upsert_delivery_agent: {
         Args: {
