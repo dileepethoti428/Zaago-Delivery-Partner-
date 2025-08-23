@@ -386,12 +386,36 @@ const Home = () => {
     setRejectingOrders(prev => ({ ...prev, [orderId]: true }));
     
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: 'cancelled' })
-        .eq('id', orderId);
+      // Get current authenticated user's email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('Not authenticated');
+      }
+      
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!agent) {
+        throw new Error('Agent not found');
+      }
+
+      const { data, error } = await supabase.functions.invoke('cancel-delivery', {
+        body: {
+          order_id: orderId,
+          agent_id: agent.id,
+          cancellation_reason: 'Agent rejected delivery'
+        }
+      });
 
       if (error) throw error;
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to reject order');
+      }
 
       // Remove from local orders list
       setOrders(prev => prev.filter(order => order.id !== orderId));
