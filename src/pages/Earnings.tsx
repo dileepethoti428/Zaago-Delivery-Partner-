@@ -130,6 +130,7 @@ const Earnings = () => {
   const [showTopupDialog, setShowTopupDialog] = useState(false);
   const [topupAmount, setTopupAmount] = useState(500);
   const [topupLoading, setTopupLoading] = useState(false);
+  const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
   const [autoPaySettings, setAutoPaySettings] = useState({
     is_enabled: false,
     minimum_balance: 500,
@@ -172,14 +173,15 @@ const Earnings = () => {
         setNewBankDetails(prev => ({ ...prev, account_holder_name: agent.name || '' }));
         
         // Fetch all data for this agent
-        await Promise.all([
-          fetchEarningsData(),
-          fetchPayoutConfig(),
-          fetchDistanceStats(),
-          fetchBankDetails(agent.id),
-          fetchWalletData(agent.id),
-          fetchAutoPaySettings(agent.id)
-        ]);
+          await Promise.all([
+            fetchEarningsData(),
+            fetchPayoutConfig(),
+            fetchDistanceStats(),
+            fetchBankDetails(agent.id),
+            fetchWalletData(agent.id),
+            fetchAutoPaySettings(agent.id),
+            fetchWithdrawalHistory(agent.id)
+          ]);
       }
     } catch (error) {
       console.error('Error fetching agent data:', error);
@@ -198,6 +200,24 @@ const Earnings = () => {
       setBankDetails(data || []);
     } catch (error) {
       console.error('Error fetching bank details:', error);
+    }
+  };
+
+  const fetchWithdrawalHistory = async (agentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('withdrawal_requests')
+        .select(`
+          *,
+          agent_bank_details!inner(bank_name, account_number)
+        `)
+        .eq('agent_id', agentId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setWithdrawalHistory(data || []);
+    } catch (error) {
+      console.error('Error fetching withdrawal history:', error);
     }
   };
 
@@ -1125,6 +1145,62 @@ const Earnings = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Withdrawal History */}
+      <Card className="bg-card border-border animate-slide-up">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Download className="w-5 h-5 text-primary" />
+            <span>Recent Withdrawals</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <ScrollArea className="h-48">
+            {withdrawalHistory.length > 0 ? (
+              withdrawalHistory.map((withdrawal) => (
+                <div key={withdrawal.id} className="flex items-center justify-between p-3 bg-secondary/10 rounded-lg mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2">
+                      <p className="font-medium text-foreground">₹{withdrawal.amount.toFixed(2)}</p>
+                      <Badge 
+                        variant={
+                          withdrawal.status === 'completed' ? 'default' : 
+                          withdrawal.status === 'processing' ? 'outline' : 
+                          withdrawal.status === 'failed' ? 'destructive' : 'outline'
+                        }
+                        className="text-xs"
+                      >
+                        {withdrawal.status}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {withdrawal.agent_bank_details?.bank_name} - ••••{withdrawal.agent_bank_details?.account_number?.slice(-4)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(withdrawal.processed_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">
+                      Ref: {withdrawal.transfer_reference}
+                    </p>
+                    {withdrawal.razorpay_transaction_id && (
+                      <p className="text-xs text-muted-foreground">
+                        ID: {withdrawal.razorpay_transaction_id.slice(0, 12)}...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Download className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No withdrawal history</p>
+              </div>
+            )}
+          </ScrollArea>
+        </CardContent>
+      </Card>
 
       {/* Quick Stats */}
       <Card className="bg-gradient-success border-success/20 animate-slide-up">

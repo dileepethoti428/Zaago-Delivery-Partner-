@@ -2949,6 +2949,66 @@ export type Database = {
         }
         Relationships: []
       }
+      withdrawal_requests: {
+        Row: {
+          admin_notes: string | null
+          agent_id: string
+          amount: number
+          bank_id: string
+          created_at: string | null
+          failure_reason: string | null
+          id: string
+          processed_at: string | null
+          razorpay_transaction_id: string | null
+          status: string
+          transfer_reference: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          agent_id: string
+          amount: number
+          bank_id: string
+          created_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          processed_at?: string | null
+          razorpay_transaction_id?: string | null
+          status?: string
+          transfer_reference?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          agent_id?: string
+          amount?: number
+          bank_id?: string
+          created_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          processed_at?: string | null
+          razorpay_transaction_id?: string | null
+          status?: string
+          transfer_reference?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "withdrawal_requests_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "withdrawal_requests_bank_id_fkey"
+            columns: ["bank_id"]
+            isOneToOne: false
+            referencedRelation: "agent_bank_details"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       order_analytics_mv: {

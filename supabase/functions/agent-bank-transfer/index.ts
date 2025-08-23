@@ -185,6 +185,23 @@ serve(async (req) => {
       );
     }
 
+    // Create withdrawal request record in database
+    const { error: withdrawalError } = await supabase
+      .from('withdrawal_requests')
+      .insert({
+        agent_id: agent_id,
+        bank_id: bank_id,
+        amount: amount,
+        status: transferStatus,
+        transfer_reference: transferRef,
+        razorpay_transaction_id: razorpayTransferId,
+        processed_at: new Date().toISOString()
+      });
+
+    if (withdrawalError) {
+      console.error('Withdrawal record error:', withdrawalError);
+    }
+
     // Create transaction record
     const { error: transactionError } = await supabase
       .from('agent_wallet_transactions')
@@ -192,8 +209,8 @@ serve(async (req) => {
         agent_id: agent_id,
         amount: -amount,
         transaction_type: 'bank_transfer',
-        description: `Bank transfer to ${bankDetails.bank_name} - ${bankDetails.account_number.slice(-4)}`,
-        status: razorpayTransferId ? 'completed' : 'processed',
+        description: `Instant withdrawal to ${bankDetails.bank_name} - ${bankDetails.account_number.slice(-4)}`,
+        status: transferStatus,
         razorpay_transaction_id: razorpayTransferId,
         settlement_reference: transferRef
       });
