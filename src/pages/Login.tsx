@@ -91,8 +91,8 @@ const Login = () => {
         description: "Welcome back to Zaago!",
       });
       
-      // Check if user has bank details
-      await checkBankDetailsAndRedirect(authData.user.email!);
+      // Check agent status and redirect
+      await checkAgentStatusAndRedirect(authData.user.email!);
     } catch (error: any) {
       console.error('Login error:', error);
       toast({
@@ -116,7 +116,7 @@ const Login = () => {
             full_name: data.name,
             phone: data.phone,
           },
-          emailRedirectTo: `${window.location.origin}/bank-details-setup`
+          emailRedirectTo: `${window.location.origin}/home`
         }
       });
 
@@ -135,8 +135,8 @@ const Login = () => {
         description: "Welcome to Zaago!",
       });
       
-      // Redirect to bank details setup for new users
-      navigate('/bank-details-setup');
+      // Redirect to home for new users
+      navigate('/home');
     } catch (error: any) {
       console.error('Signup error:', error);
       toast({
@@ -149,16 +149,12 @@ const Login = () => {
     }
   };
 
-  const checkBankDetailsAndRedirect = async (email: string) => {
+  const checkAgentStatusAndRedirect = async (email: string) => {
     try {
-      // Check if user is an active agent with bank details
+      // Check if user is an active agent
       const { data: agent } = await supabase
         .from('delivery_agents')
-        .select(`
-          id,
-          is_active,
-          agent_bank_details (id)
-        `)
+        .select('id, is_active')
         .eq('email', email)
         .maybeSingle();
 
@@ -180,14 +176,10 @@ const Login = () => {
         return;
       }
 
-      // Check if agent has bank details
-      if (!agent.agent_bank_details || agent.agent_bank_details.length === 0) {
-        navigate('/bank-details-setup');
-      } else {
-        navigate('/home');
-      }
+      // Redirect to home
+      navigate('/home');
     } catch (error) {
-      console.error('Error checking bank details:', error);
+      console.error('Error checking agent status:', error);
       navigate('/home'); // Fallback to home
     }
   };
