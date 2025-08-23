@@ -17,6 +17,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log("Agent topup request started");
+    
     // Create Supabase client using the anon key
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -24,20 +26,42 @@ serve(async (req) => {
     );
 
     // Get authenticated user
-    const authHeader = req.headers.get("Authorization")!;
-    const token = authHeader.replace("Bearer ", "");
-    const { data } = await supabaseClient.auth.getUser(token);
-    const user = data.user;
-    
-    if (!user?.email) {
-      throw new Error("User not authenticated");
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: "No authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
+    const token = authHeader.replace("Bearer ", "");
+    const { data, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError || !data.user?.email) {
+      console.error("Authentication failed:", authError);
+      return new Response(
+        JSON.stringify({ error: "User not authenticated" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const user = data.user;
+    console.log("User authenticated:", user.email);
+
     // Get request body
-    const { amount }: TopupRequest = await req.json();
+    const body = await req.json();
+    const { amount }: TopupRequest = body;
 
     // Validate minimum top-up amount
-    if (amount < 500) {
+    if (!amount || amount < 500) {
+      console.error("Invalid amount:", amount);
       return new Response(
         JSON.stringify({ error: "Minimum top-up amount is ₹500" }),
         {
@@ -47,6 +71,8 @@ serve(async (req) => {
       );
     }
 
+    console.log("Amount validated:", amount);
+
     // Get agent details using service client for reliable access
     const supabaseService = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -54,46 +80,76 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
+    console.log("Looking up agent for email:", user.email);
     const { data: agent, error: agentError } = await supabaseService
       .from('delivery_agents')
-      .select('id, name')
+      .select('id, name, email')
       .eq('email', user.email)
       .eq('is_active', true)
       .maybeSingle();
 
-    if (agentError || !agent) {
-      throw new Error("Agent not found or inactive");
+    if (agentError) {
+      console.error("Agent lookup error:", agentError);
+      return new Response(
+        JSON.stringify({ error: "Error finding agent profile" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
+
+    if (!agent) {
+      console.error("No active agent found for email:", user.email);
+      return new Response(
+        JSON.stringify({ error: "Agent profile not found or inactive. Please contact support." }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log("Agent found:", agent.id, agent.name);
 
     // Initialize Razorpay (using environment variables)
     const razorpayKeyId = Deno.env.get("RAZORPAY_KEY_ID");
     const razorpayKeySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
 
+    console.log("Razorpay credentials check:", { 
+      keyId: razorpayKeyId ? "present" : "missing", 
+      keySecret: razorpayKeySecret ? "present" : "missing" 
+    });
+
     if (!razorpayKeyId || !razorpayKeySecret) {
       // Fallback: Simulate payment for development
       console.log("Razorpay credentials not configured, simulating payment");
       
-      // Create service client for database operations (if not already created)
-      if (!supabaseService) {
-        const supabaseService = createClient(
-          Deno.env.get("SUPABASE_URL") ?? "",
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-          { auth: { persistSession: false } }
-        );
-      }
-
       // Get current wallet balance first
-      const { data: currentWallet } = await supabaseService
+      const { data: currentWallet, error: walletError } = await supabaseService
         .from('agent_wallet')
         .select('balance')
         .eq('agent_id', agent.id)
         .maybeSingle();
 
+      if (walletError) {
+        console.error("Wallet lookup error:", walletError);
+        return new Response(
+          JSON.stringify({ error: "Error accessing wallet" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       const currentBalance = currentWallet?.balance || 0;
       const newBalance = currentBalance + amount;
 
+      console.log("Simulated payment - updating wallet:", { currentBalance, amount, newBalance });
+
       // Update wallet balance
-      await supabaseService
+      const { error: updateError } = await supabaseService
         .from('agent_wallet')
         .upsert({
           agent_id: agent.id,
@@ -101,8 +157,19 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         });
 
+      if (updateError) {
+        console.error("Wallet update error:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Error updating wallet balance" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       // Create transaction record
-      await supabaseService
+      const { error: transactionError } = await supabaseService
         .from('agent_wallet_transactions')
         .insert({
           agent_id: agent.id,
@@ -112,11 +179,19 @@ serve(async (req) => {
           status: 'completed'
         });
 
+      if (transactionError) {
+        console.error("Transaction record error:", transactionError);
+        // Don't fail the whole operation for this
+      }
+
+      console.log("Simulated payment completed successfully");
+
       return new Response(
         JSON.stringify({ 
           success: true, 
           message: "Top-up completed (simulated)",
-          amount: amount
+          amount: amount,
+          new_balance: newBalance
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -125,7 +200,21 @@ serve(async (req) => {
     }
 
     // Create Razorpay order
+    console.log("Creating Razorpay order for amount:", amount);
     const razorpayAuth = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
+    
+    const orderPayload = {
+      amount: amount * 100, // Razorpay amount is in paise
+      currency: "INR",
+      receipt: `topup_${agent.id}_${Date.now()}`,
+      notes: {
+        agent_id: agent.id,
+        agent_name: agent.name,
+        purpose: "wallet_topup"
+      }
+    };
+
+    console.log("Razorpay order payload:", orderPayload);
     
     const orderResponse = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
@@ -133,29 +222,26 @@ serve(async (req) => {
         "Authorization": `Basic ${razorpayAuth}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        amount: amount * 100, // Razorpay amount is in paise
-        currency: "INR",
-        receipt: `topup_${agent.id}_${Date.now()}`,
-        notes: {
-          agent_id: agent.id,
-          agent_name: agent.name,
-          purpose: "wallet_topup"
-        }
-      }),
+      body: JSON.stringify(orderPayload),
     });
 
     if (!orderResponse.ok) {
-      throw new Error("Failed to create Razorpay order");
+      const errorText = await orderResponse.text();
+      console.error("Razorpay order creation failed:", orderResponse.status, errorText);
+      return new Response(
+        JSON.stringify({ error: "Failed to create payment order. Please try again." }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const order = await orderResponse.json();
-
-    // Create service client for database operations (reuse existing one)
-    // const supabaseService = ... (already created above)
+    console.log("Razorpay order created successfully:", order.id);
 
     // Create pending transaction record
-    await supabaseService
+    const { error: transactionError } = await supabaseService
       .from('agent_wallet_transactions')
       .insert({
         agent_id: agent.id,
@@ -165,6 +251,13 @@ serve(async (req) => {
         status: 'pending',
         razorpay_transaction_id: order.id
       });
+
+    if (transactionError) {
+      console.error("Error creating transaction record:", transactionError);
+      // Continue with order creation even if transaction record fails
+    }
+
+    console.log("Returning Razorpay order details");
 
     return new Response(
       JSON.stringify({

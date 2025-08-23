@@ -154,17 +154,45 @@ const WalletActions = ({ trigger, showBalance = false }: WalletActionsProps) => 
     }
 
     setTopupLoading(true);
+    
     try {
+      console.log("Starting top-up process for amount:", topupAmount);
+      
       const { data, error } = await supabase.functions.invoke('agent-topup-razorpay', {
         body: { amount: topupAmount }
       });
 
-      if (error) throw error;
+      console.log("Top-up response:", { data, error });
 
-      // If Razorpay order created, open Checkout (supports UPI: PhonePe, GPay, Paytm, etc.)
+      if (error) {
+        console.error("Top-up API error:", error);
+        throw new Error(error.message || "Failed to create payment order");
+      }
+
+      if (!data?.success) {
+        console.error("Top-up failed:", data);
+        throw new Error(data?.error || "Failed to create payment order");
+      }
+
+      // Handle simulated payment (development mode)
+      if (data.message?.includes("simulated")) {
+        console.log("Simulated payment completed");
+        toast({
+          title: 'Success',
+          description: data.message || 'Top-up completed successfully',
+        });
+        if (agentId) await fetchWalletData(agentId);
+        setShowAddMoneyDialog(false);
+        return;
+      }
+
+      // If Razorpay order created, open Checkout
       if (data?.order_id && data?.key) {
+        console.log("Loading Razorpay for order:", data.order_id);
         const loaded = await loadRazorpay();
-        if (!loaded) throw new Error('Failed to load Razorpay');
+        if (!loaded) {
+          throw new Error('Failed to load Razorpay payment system');
+        }
 
         const { data: { user } } = await supabase.auth.getUser();
 
@@ -181,44 +209,67 @@ const WalletActions = ({ trigger, showBalance = false }: WalletActionsProps) => 
           theme: { color: '#6D28D9' },
           handler: async (response: any) => {
             try {
+              console.log("Payment successful, verifying:", response);
+              
               const verifyRes = await supabase.functions.invoke('agent-topup-verify', {
                 body: {
-                  order_id: response.razorpay_order_id,
-                  payment_id: response.razorpay_payment_id,
-                  signature: response.razorpay_signature,
-                  amount: topupAmount
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature
                 }
               });
 
-              if ((verifyRes as any).error) throw (verifyRes as any).error;
+              console.log("Verification response:", verifyRes);
 
-              toast({ title: '₹' + topupAmount + ' added successfully.' });
+              if (verifyRes.error || !verifyRes.data?.success) {
+                console.error("Payment verification failed:", verifyRes.error || verifyRes.data);
+                throw new Error("Payment verification failed");
+              }
+
+              console.log("Payment verified successfully");
+              toast({ 
+                title: 'Success',
+                description: `₹${topupAmount} added to your wallet successfully!`
+              });
+              
               if (agentId) await fetchWalletData(agentId);
               setShowAddMoneyDialog(false);
+              setTopupAmount(500);
             } catch (err: any) {
               console.error('Verification error:', err);
-              toast({ title: 'Verification failed', description: err.message || 'Please contact support', variant: 'destructive' });
+              toast({ 
+                title: 'Verification Failed', 
+                description: err.message || 'Please contact support if money was debited', 
+                variant: 'destructive' 
+              });
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              console.log("Payment cancelled by user");
+              toast({
+                title: "Payment Cancelled",
+                description: "You cancelled the payment process",
+                variant: "destructive"
+              });
             }
           }
         };
 
+        console.log("Opening Razorpay checkout");
         const rzp = new (window as any).Razorpay(options);
         rzp.open();
         return;
       }
 
-      // Simulated success when keys not configured
-      toast({
-        title: 'Success',
-        description: data?.message || 'Top-up completed successfully',
-      });
-      if (agentId) await fetchWalletData(agentId);
-      setShowAddMoneyDialog(false);
+      // If we reach here, something went wrong
+      throw new Error("Unexpected response from payment service");
+
     } catch (error: any) {
       console.error('Top-up error:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to process top-up",
+        title: "Payment Error",
+        description: error.message || "Failed to process top-up. Please try again.",
         variant: "destructive"
       });
     } finally {
