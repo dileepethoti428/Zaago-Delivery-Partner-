@@ -255,11 +255,19 @@ const Notifications = () => {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'order': return Package;
+      case 'order':
+      case 'new_order':
+      case 'order_assigned': 
+        return Package;
       case 'earning': return DollarSign;
       case 'rating': return Star;
-      case 'alert': return AlertTriangle;
+      case 'alert': 
+      case 'status_update': 
+        return AlertTriangle;
       case 'promotion': return Gift;
+      case 'admin': return Settings;
+      case 'delivery_scheduled':
+      case 'system':
       default: return Bell;
     }
   };
@@ -307,12 +315,16 @@ const Notifications = () => {
                               sourceType === 'admin' ? 'Admin' : 'System';
             
             return (
-              <Card 
-                key={notification.id} 
-                className={`bg-card border-border transition-smooth hover:shadow-elevated ${
-                  !notification.read ? "border-primary/50 shadow-sm" : ""
-                }`}
-              >
+                <Card 
+                  key={notification.id} 
+                  className={`bg-card border-border transition-smooth hover:shadow-elevated ${
+                    !notification.read ? "border-primary/50 shadow-sm" : ""
+                  } ${
+                    (notification.metadata?.source_type === 'admin' || notification.source_type === 'admin') 
+                      ? "ring-2 ring-red-500/20 border-red-500/30" 
+                      : ""
+                  }`}
+                >
                 <CardContent className="p-4">
                   <div className="flex items-start space-x-4">
                     {/* Icon */}
@@ -332,11 +344,11 @@ const Notifications = () => {
                             </h4>
                             <Badge 
                               variant="outline" 
-                              className={`text-xs ${
-                                sourceType === 'customer' ? 'border-blue-500 text-blue-500' :
-                                sourceType === 'seller' ? 'border-green-500 text-green-500' :
-                                sourceType === 'admin' ? 'border-red-500 text-red-500' :
-                                'border-gray-500 text-gray-500'
+                              className={`text-xs font-semibold ${
+                                sourceType === 'customer' ? 'border-blue-500 text-blue-500 bg-blue-50' :
+                                sourceType === 'seller' ? 'border-green-500 text-green-500 bg-green-50' :
+                                sourceType === 'admin' ? 'border-red-500 text-red-500 bg-red-50 animate-pulse' :
+                                'border-gray-500 text-gray-500 bg-gray-50'
                               }`}
                             >
                               {sourceLabel}
