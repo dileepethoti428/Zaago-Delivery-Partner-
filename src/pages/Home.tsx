@@ -128,7 +128,10 @@ const Home = () => {
         payment_status: order.payment_status,
         coordinates: (order.address as any)?.coordinates,
         products_count: Array.isArray(order.items) ? order.items.length : 1,
-        restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant'
+        restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
+        // Use backend-calculated distance if available, otherwise will be calculated later
+        distance_km: order.distance_km || undefined,
+        backend_calculated: order.distance_km ? true : false
       }));
 
       setOrders(transformedOrders);
@@ -144,7 +147,7 @@ const Home = () => {
     }
   };
 
-  // Calculate distance and ETA for orders using backend service
+  // Calculate distance and ETA for orders using backend service (only for orders without backend distance)
   const calculateDistanceETA = async (orders: Order[]) => {
     // Use real agent location if available, fallback to default
     const agentLocation = location.latitude && location.longitude 
@@ -153,6 +156,14 @@ const Home = () => {
     
     const updatedOrders = await Promise.all(
       orders.map(async (order) => {
+        // Skip calculation if backend already provided distance
+        if (order.backend_calculated && order.distance_km !== undefined) {
+          return {
+            ...order,
+            delivery_time: `${Math.ceil(order.distance_km * 2)} min`, // 2 minutes per km
+          };
+        }
+
         try {
           if (!order.coordinates) {
             return {
@@ -546,9 +557,14 @@ const Home = () => {
           {/* Orders List */}
           <div className="animate-slide-up">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-foreground">
-                Available Orders ({availableOrders.length})
-              </h2>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  Available Orders ({availableOrders.length})
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Showing orders within 15km radius
+                </p>
+              </div>
             </div>
 
             {isLoading ? (
@@ -561,8 +577,14 @@ const Home = () => {
                       <PackageOpen className="w-16 h-16 text-primary/60" />
                     </div>
                   </div>
-                  <h3 className="text-lg font-medium text-foreground mb-2">No orders found</h3>
-                  <p className="text-muted-foreground mb-4">No orders currently, enjoy your break! 🌟</p>
+                  <h3 className="text-lg font-medium text-foreground mb-2">No nearby orders</h3>
+                  <p className="text-muted-foreground mb-4">
+                    No orders within 15km radius currently available. 
+                    {location.latitude && location.longitude 
+                      ? " Try moving to a different area or check back later! 🌟" 
+                      : " Enable location access to see nearby orders! 📍"
+                    }
+                  </p>
                   {!isOnline && (
                     <Button
                       onClick={() => setIsOnline(true)}
