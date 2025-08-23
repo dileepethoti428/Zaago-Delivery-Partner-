@@ -1,1 +1,4 @@
 project_id = "amhpjsmubciahslghobw"
+
+[functions.agent-autopay-monitor]
+verify_jwt = false
