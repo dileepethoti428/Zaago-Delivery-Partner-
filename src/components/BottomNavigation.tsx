@@ -5,12 +5,10 @@ import {
   Package, 
   DollarSign, 
   Settings,
-  Wallet,
-  Plus,
-  Download
+  Wallet
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import WalletActions from "./WalletActions";
+import WalletDisplay from "./WalletDisplay";
 
 const BottomNavigation = () => {
   const location = useLocation();
@@ -97,20 +95,20 @@ const BottomNavigation = () => {
         </div>
       </div>
 
-      {/* Wallet Actions Dialog */}
+      {/* Wallet Dialog */}
       <Dialog open={showWalletMenu} onOpenChange={setShowWalletMenu}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Wallet className="w-5 h-5" />
-              <span>Wallet</span>
+              <span>My Wallet</span>
             </DialogTitle>
             <DialogDescription>
-              Add money or withdraw from your wallet
+              Manage your wallet balance and transactions
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <WalletActions showBalance={true} />
+          <div className="mt-4">
+            <WalletDisplay />
           </div>
         </DialogContent>
       </Dialog>

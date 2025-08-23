@@ -47,8 +47,14 @@ serve(async (req) => {
       );
     }
 
-    // Get agent details
-    const { data: agent, error: agentError } = await supabaseClient
+    // Get agent details using service client for reliable access
+    const supabaseService = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    const { data: agent, error: agentError } = await supabaseService
       .from('delivery_agents')
       .select('id, name')
       .eq('email', user.email)
@@ -67,19 +73,31 @@ serve(async (req) => {
       // Fallback: Simulate payment for development
       console.log("Razorpay credentials not configured, simulating payment");
       
-      // Create service client for database operations
-      const supabaseService = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-        { auth: { persistSession: false } }
-      );
+      // Create service client for database operations (if not already created)
+      if (!supabaseService) {
+        const supabaseService = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+          { auth: { persistSession: false } }
+        );
+      }
+
+      // Get current wallet balance first
+      const { data: currentWallet } = await supabaseService
+        .from('agent_wallet')
+        .select('balance')
+        .eq('agent_id', agent.id)
+        .maybeSingle();
+
+      const currentBalance = currentWallet?.balance || 0;
+      const newBalance = currentBalance + amount;
 
       // Update wallet balance
       await supabaseService
         .from('agent_wallet')
         .upsert({
           agent_id: agent.id,
-          balance: amount, // This would be current_balance + amount in real scenario
+          balance: newBalance,
           updated_at: new Date().toISOString()
         });
 
@@ -133,12 +151,8 @@ serve(async (req) => {
 
     const order = await orderResponse.json();
 
-    // Create service client for database operations
-    const supabaseService = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } }
-    );
+    // Create service client for database operations (reuse existing one)
+    // const supabaseService = ... (already created above)
 
     // Create pending transaction record
     await supabaseService
