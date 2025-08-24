@@ -154,6 +154,27 @@ serve(async (req) => {
       );
     }
 
+    // For COD orders, automatically settle the amount from agent wallet to admin
+    let codSettlementResult = null;
+    if (payment_method === 'COD') {
+      try {
+        const { data: settlementData, error: settlementError } = await supabaseClient.rpc('settle_cod_automatically', {
+          p_agent_id: agent.id,
+          p_order_id: order.id,
+          p_cod_amount: order.total
+        });
+
+        if (settlementError) {
+          console.error('COD settlement error:', settlementError);
+        } else {
+          codSettlementResult = settlementData;
+          console.log('COD settlement result:', settlementData);
+        }
+      } catch (error) {
+        console.error('COD settlement failed:', error);
+      }
+    }
+
     // The trigger will handle delivery_history creation, but let's update it with QR-specific details
     const distance_km = 2.5;
     let payout_amount = 27.5;
