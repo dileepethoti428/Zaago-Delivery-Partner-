@@ -81,26 +81,26 @@ const DeliveryTimer = ({
     
     return (
       <Card className={`bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/30 shadow-lg max-w-sm ${className}`}>
-        <CardContent className="p-3">
+        <CardContent className="p-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="p-1.5 bg-blue-500/20 rounded-full">
-                <Calendar className="w-4 h-4 text-blue-400" />
+              <div className="p-1 bg-blue-500/20 rounded-full">
+                <Calendar className="w-3 h-3 text-blue-400" />
               </div>
               <div>
-                <h3 className="font-medium text-foreground text-sm">Scheduled Delivery</h3>
+                <h3 className="font-medium text-foreground text-xs">Scheduled Delivery</h3>
                 <p className="text-xs text-muted-foreground">Arrives at</p>
               </div>
             </div>
-            <Badge className="bg-blue-500 text-white animate-pulse text-xs">
+            <Badge className="bg-blue-500 text-white animate-pulse text-xs px-2 py-0.5">
               Scheduled
             </Badge>
           </div>
           
           {scheduleInfo && (
-            <div className="mt-3 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+            <div className="mt-2 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
               <div className="text-center">
-                <p className="text-xl font-bold text-blue-400">{scheduleInfo.time}</p>
+                <p className="text-lg font-bold text-blue-400">{scheduleInfo.time}</p>
                 <p className="text-xs text-muted-foreground">
                   {scheduleInfo.isToday ? 'Today' : scheduleInfo.date}
                 </p>
@@ -114,44 +114,44 @@ const DeliveryTimer = ({
 
   return (
     <Card className={`bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30 shadow-lg max-w-sm ${className}`}>
-      <CardContent className="p-3">
+      <CardContent className="p-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <div className="p-1.5 bg-green-500/20 rounded-full">
-              <Timer className="w-4 h-4 text-green-400" />
+            <div className="p-1 bg-green-500/20 rounded-full">
+              <Timer className="w-3 h-3 text-green-400" />
             </div>
             <div>
-              <h3 className="font-medium text-foreground text-sm">Delivery Timer</h3>
+              <h3 className="font-medium text-foreground text-xs">Delivery Timer</h3>
               <p className="text-xs text-muted-foreground">Arrives within</p>
             </div>
           </div>
           <Badge className={`${
             timeLeft.isExpired ? 'bg-red-500' : 'bg-green-500'
-          } text-white animate-pulse text-xs`}>
+          } text-white animate-pulse text-xs px-2 py-0.5`}>
             {timeLeft.isExpired ? 'Overdue' : 'On Time'}
           </Badge>
         </div>
         
-        <div className="mt-3 p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+        <div className="mt-2 p-2 bg-green-500/10 rounded-lg border border-green-500/20">
           <div className="text-center">
-            <div className="flex items-center justify-center space-x-2">
-              <Clock className="w-5 h-5 text-green-400" />
-              <div className={`text-2xl font-bold ${
+            <div className="flex items-center justify-center space-x-1">
+              <Clock className="w-4 h-4 text-green-400" />
+              <div className={`text-lg font-bold ${
                 timeLeft.isExpired ? 'text-red-400' : 'text-green-400'
               }`}>
                 {timeLeft.isExpired ? '00:00' : `${formatTime(timeLeft.minutes)}:${formatTime(timeLeft.seconds)}`}
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground">
               {timeLeft.isExpired ? 'Delivery window exceeded' : 'Minutes remaining'}
             </p>
           </div>
           
           {!timeLeft.isExpired && (
-            <div className="mt-2">
-              <div className="w-full bg-muted/20 rounded-full h-1.5">
+            <div className="mt-1">
+              <div className="w-full bg-muted/20 rounded-full h-1">
                 <div 
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-1.5 rounded-full transition-all duration-1000"
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-1 rounded-full transition-all duration-1000"
                   style={{ 
                     width: `${Math.max(0, (timeLeft.minutes * 60 + timeLeft.seconds) / (20 * 60) * 100)}%` 
                   }}
@@ -161,7 +161,7 @@ const DeliveryTimer = ({
           )}
         </div>
         
-        <div className="mt-2 text-center">
+        <div className="mt-1 text-center">
           <p className="text-xs text-muted-foreground">
             {timeLeft.isExpired 
               ? 'Please contact customer service if your order hasn\'t arrived'
