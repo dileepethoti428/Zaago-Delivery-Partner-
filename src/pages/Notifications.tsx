@@ -25,6 +25,9 @@ interface Notification {
   created_at: string;
   read: boolean;
   metadata?: any;
+  source_type?: string;
+  source_id?: string;
+  table?: string;
 }
 
 const Notifications = () => {
@@ -53,32 +56,62 @@ const Notifications = () => {
       if (agent) {
         setAgentId(agent.id);
         
-        // Fetch agent notifications with source information
-        const { data: agentNotifications, error } = await supabase
+        // Fetch agent notifications
+        const { data: agentNotifications, error: agentError } = await supabase
           .from('agent_notifications')
           .select('*')
           .eq('agent_id', agent.id)
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching notifications:', error);
-          return;
+        // Fetch admin notifications (system-wide notifications)
+        const { data: adminNotifications, error: adminError } = await supabase
+          .from('admin_notifications')
+          .select('*')
+          .eq('is_read', false)
+          .order('created_at', { ascending: false });
+
+        if (agentError) {
+          console.error('Error fetching agent notifications:', agentError);
+        }
+        
+        if (adminError) {
+          console.error('Error fetching admin notifications:', adminError);
         }
 
-        // Map to expected format
-        const mappedNotifications = agentNotifications.map(notif => ({
-          id: notif.id,
-          type: notif.type,
-          title: notif.title,
-          message: notif.message,
-          created_at: notif.created_at,
-          read: notif.read,
-          metadata: notif.metadata,
-          source_type: notif.source_type || 'system',
-          source_id: notif.source_id
-        }));
+        // Combine and map notifications
+        const allNotifications = [
+          // Agent-specific notifications
+          ...(agentNotifications || []).map(notif => ({
+            id: notif.id,
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            created_at: notif.created_at,
+            read: notif.read,
+            metadata: notif.metadata,
+            source_type: notif.source_type || 'system',
+            source_id: notif.source_id,
+            table: 'agent_notifications'
+          })),
+          // Admin notifications (system-wide)
+          ...(adminNotifications || []).map(notif => ({
+            id: notif.id,
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            created_at: notif.created_at,
+            read: false, // Admin notifications are always treated as unread for agents
+            metadata: notif.metadata,
+            source_type: 'admin',
+            source_id: notif.user_id,
+            table: 'admin_notifications'
+          }))
+        ];
 
-        setNotifications(mappedNotifications);
+        // Sort by created_at descending
+        allNotifications.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        setNotifications(allNotifications);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -147,6 +180,18 @@ const Notifications = () => {
   const markAsRead = async (id: string) => {
     if (!agentId) return;
 
+    const notification = notifications.find(n => n.id === id);
+    
+    // Only allow marking agent notifications as read, not admin notifications
+    if (notification?.table === 'admin_notifications') {
+      toast({
+        title: "Cannot mark admin notification as read",
+        description: "Admin notifications are system-wide and cannot be marked as read.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const { error } = await supabase
@@ -180,6 +225,18 @@ const Notifications = () => {
 
   const deleteNotification = async (id: string) => {
     if (!agentId) return;
+
+    const notification = notifications.find(n => n.id === id);
+    
+    // Only allow deleting agent notifications, not admin notifications
+    if (notification?.table === 'admin_notifications') {
+      toast({
+        title: "Cannot delete admin notification",
+        description: "Admin notifications are system-wide and cannot be deleted.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -221,10 +278,13 @@ const Notifications = () => {
 
       if (error) throw error;
 
-      setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
+      // Only mark agent notifications as read, keep admin notifications as they are
+      setNotifications(prev => prev.map(notif => 
+        notif.table === 'agent_notifications' ? { ...notif, read: true } : notif
+      ));
 
       toast({
-        title: "All notifications marked as read",
+        title: "All agent notifications marked as read",
       });
     } catch (error) {
       console.error('Error marking all as read:', error);
