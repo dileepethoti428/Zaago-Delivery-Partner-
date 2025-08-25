@@ -96,9 +96,14 @@ const DeliveryDetails = () => {
         .from('orders')
         .select('*')
         .eq('id', orderId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      
+      if (!data) {
+        setOrder(null);
+        return;
+      }
       
       // Transform the data to match our interface
       const transformedOrder = {
