@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import TrackingMap from "@/components/TrackingMap";
+import DeliveryTimer from "@/components/DeliveryTimer";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft, 
@@ -35,7 +36,10 @@ const mockTrackingData = {
   delivery_status: 'On the Way' as DeliveryStatus,
   special_instructions: "Leave at door. Ring bell twice.",
   priority_level: 'High' as const,
-  total_amount: 130
+  total_amount: 130,
+  delivery_type: 'immediate' as 'immediate' | 'scheduled', // New field for delivery type
+  scheduled_time: null as string | null, // For scheduled deliveries
+  order_placed_at: new Date() // When order was placed
 };
 
 const Tracking = () => {
@@ -56,8 +60,26 @@ const Tracking = () => {
         customer_name: locationState.customerName || mockTrackingData.customer_name,
         customer_address: locationState.customerAddress || mockTrackingData.customer_address,
         customer_location: locationState.customerLocation,
+        // Determine delivery type based on URL params or state
+        delivery_type: (locationState.deliveryType || 'immediate') as 'immediate' | 'scheduled',
+        scheduled_time: locationState.scheduledTime || null,
+        order_placed_at: locationState.orderPlacedAt || new Date()
       };
     }
+    
+    // Demo: Show scheduled delivery if orderId contains 'scheduled'
+    if (orderId?.includes('scheduled')) {
+      const scheduledTime = new Date();
+      scheduledTime.setHours(scheduledTime.getHours() + 4); // 4 hours from now
+      return {
+        ...mockTrackingData,
+        order_id: orderId,
+        delivery_type: 'scheduled' as const,
+        scheduled_time: scheduledTime.toISOString(),
+        order_placed_at: new Date()
+      };
+    }
+    
     return mockTrackingData;
   });
   const [mapboxToken, setMapboxToken] = useState<string>('');
@@ -230,6 +252,15 @@ const Tracking = () => {
         } text-white animate-pulse`}>
           {orderData.delivery_status}
         </Badge>
+      </div>
+
+      {/* Delivery Timer - Positioned above map */}
+      <div className="p-4 bg-background/80 backdrop-blur-lg border-b border-border">
+        <DeliveryTimer
+          deliveryType={orderData.delivery_type}
+          scheduledTime={orderData.scheduled_time}
+          orderPlacedAt={orderData.order_placed_at}
+        />
       </div>
 
       {/* Full-screen Map */}

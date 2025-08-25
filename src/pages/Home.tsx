@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
+import DeliveryTimer from "@/components/DeliveryTimer";
 
 interface Order {
   id: string;
@@ -46,6 +47,9 @@ interface Order {
   products_count?: number;
   restaurant?: string;
   backend_calculated?: boolean;
+  delivery_type?: 'immediate' | 'scheduled';
+  scheduled_time?: string;
+  order_placed_at?: Date;
 }
 
 
@@ -152,7 +156,7 @@ const Home = () => {
       }
 
       // Transform backend data to match our interface
-      const transformedOrders: Order[] = (response.orders || []).map(order => ({
+      const transformedOrders: Order[] = (response.orders || []).map((order, index) => ({
         id: order.id,
         customer_name: order.customer_name,
         customer_phone: order.customer_phone,
@@ -168,7 +172,11 @@ const Home = () => {
         restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
         // Use backend-calculated distance if available, otherwise will be calculated later
         distance_km: order.distance_km || undefined,
-        backend_calculated: order.distance_km ? true : false
+        backend_calculated: order.distance_km ? true : false,
+        // Add delivery timing data - demo purposes
+        delivery_type: index % 3 === 0 ? 'scheduled' : 'immediate', // Every 3rd order is scheduled
+        scheduled_time: index % 3 === 0 ? new Date(Date.now() + (2 + index) * 60 * 60 * 1000).toISOString() : null,
+        order_placed_at: new Date(Date.now() - Math.random() * 10 * 60 * 1000) // Random time within last 10 minutes
       }));
 
       setOrders(transformedOrders);
@@ -683,15 +691,27 @@ const Home = () => {
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >
                       <CardContent className="p-4">
-                        {/* Order Header */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h3 className="font-semibold text-foreground">{order.customer_name}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {restaurant} • Order #{order.id.substring(0, 8)}...
-                            </p>
-                          </div>
-                        </div>
+                         {/* Order Header */}
+                         <div className="flex items-center justify-between mb-3">
+                           <div>
+                             <h3 className="font-semibold text-foreground">{order.customer_name}</h3>
+                             <p className="text-sm text-muted-foreground">
+                               {restaurant} • Order #{order.id.substring(0, 8)}...
+                             </p>
+                           </div>
+                         </div>
+
+                         {/* Delivery Timer */}
+                         {(order.delivery_type || order.scheduled_time) && (
+                           <div className="mb-4">
+                             <DeliveryTimer
+                               deliveryType={order.delivery_type || 'immediate'}
+                               scheduledTime={order.scheduled_time || undefined}
+                               orderPlacedAt={order.order_placed_at}
+                               className="text-xs"
+                             />
+                           </div>
+                         )}
 
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center text-sm text-muted-foreground">
