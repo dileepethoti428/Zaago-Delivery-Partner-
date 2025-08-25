@@ -63,20 +63,13 @@ const Notifications = () => {
           .eq('agent_id', agent.id)
           .order('created_at', { ascending: false });
 
-        // Fetch admin notifications (system-wide notifications)
-        const { data: adminNotifications, error: adminError } = await supabase
-          .from('admin_notifications')
-          .select('*')
-          .eq('is_read', false)
-          .order('created_at', { ascending: false });
+        // Admin notifications are restricted by RLS for agents; rely on agent_notifications
+        const adminNotifications: any[] = [];
 
         if (agentError) {
           console.error('Error fetching agent notifications:', agentError);
         }
         
-        if (adminError) {
-          console.error('Error fetching admin notifications:', adminError);
-        }
 
         // Combine and map notifications (filter out stock alerts for agents)
         const allNotifications = [
@@ -129,6 +122,48 @@ const Notifications = () => {
       console.error('Error fetching notifications:', error);
     }
   };
+
+  // Realtime: listen for new agent notifications (including admin-sent ones)
+  useEffect(() => {
+    if (!agentId) return;
+
+    const channel = supabase
+      .channel(`agent-notifs-${agentId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'agent_notifications', filter: `agent_id=eq.${agentId}` },
+        (payload) => {
+          const notif: any = payload.new;
+          const isStock = !!(
+            notif?.type?.includes('stock') ||
+            notif?.title?.toLowerCase?.().includes('stock') ||
+            notif?.message?.toLowerCase?.().includes('stock')
+          );
+          if (isStock) return;
+
+          setNotifications(prev => [
+            {
+              id: notif.id,
+              type: notif.type,
+              title: notif.title,
+              message: notif.message,
+              created_at: notif.created_at,
+              read: notif.read,
+              metadata: notif.metadata,
+              source_type: notif.source_type || 'system',
+              source_id: notif.source_id,
+              table: 'agent_notifications'
+            },
+            ...prev,
+          ]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [agentId]);
 
   // Fallback static notifications for demo
   const [staticNotifications] = useState([
