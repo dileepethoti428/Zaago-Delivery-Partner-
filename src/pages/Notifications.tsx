@@ -73,13 +73,22 @@ const Notifications = () => {
 
         // Combine and map notifications (filter out stock alerts for agents)
         const allNotifications = [
-          // Agent-specific notifications (exclude stock-related notifications)
+          // Agent-specific notifications (exclude stock-related and bug report notifications)
           ...(agentNotifications || [])
-            .filter(notif => 
-              !notif.type?.includes('stock') && 
-              !notif.title?.toLowerCase().includes('stock') &&
-              !notif.message?.toLowerCase().includes('stock')
-            )
+            .filter(notif => {
+              const lowerTitle = notif.title?.toLowerCase() || '';
+              const lowerMessage = notif.message?.toLowerCase() || '';
+              const lowerType = notif.type?.toLowerCase() || '';
+              
+              return !(
+                // Stock alerts
+                (lowerType.includes('stock') || lowerTitle.includes('stock') || lowerMessage.includes('stock')) ||
+                // Bug reports
+                (lowerType.includes('bug') || lowerType.includes('issue') || lowerType.includes('report') ||
+                 lowerTitle.includes('bug') || lowerTitle.includes('issue') || lowerTitle.includes('report') ||
+                 lowerMessage.includes('bug') || lowerMessage.includes('issue') || lowerMessage.includes('report'))
+              );
+            })
             .map(notif => ({
               id: notif.id,
               type: notif.type,
@@ -134,12 +143,18 @@ const Notifications = () => {
         { event: 'INSERT', schema: 'public', table: 'agent_notifications', filter: `agent_id=eq.${agentId}` },
         (payload) => {
           const notif: any = payload.new;
-          const isStock = !!(
-            notif?.type?.includes('stock') ||
-            notif?.title?.toLowerCase?.().includes('stock') ||
-            notif?.message?.toLowerCase?.().includes('stock')
+          // Filter out stock and bug reports
+          const lowerTitle = notif?.title?.toLowerCase() || '';
+          const lowerMessage = notif?.message?.toLowerCase() || '';
+          const lowerType = notif?.type?.toLowerCase() || '';
+          
+          const shouldFilter = (
+            (lowerType.includes('stock') || lowerTitle.includes('stock') || lowerMessage.includes('stock')) ||
+            (lowerType.includes('bug') || lowerType.includes('issue') || lowerType.includes('report') ||
+             lowerTitle.includes('bug') || lowerTitle.includes('issue') || lowerTitle.includes('report') ||
+             lowerMessage.includes('bug') || lowerMessage.includes('issue') || lowerMessage.includes('report'))
           );
-          if (isStock) return;
+          if (shouldFilter) return;
 
           setNotifications(prev => [
             {
