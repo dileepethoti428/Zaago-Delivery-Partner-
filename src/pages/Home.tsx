@@ -516,11 +516,6 @@ const Home = () => {
       <div className="bg-card/80 backdrop-blur-lg border-b border-primary/20 shadow-neon sticky top-0 z-50">
         <div className="flex items-center justify-between p-4">
           <div className="animate-fade-in">
-            {agentName && (
-              <div className="text-lg font-semibold text-primary mb-1">
-                {getGreeting()} {agentName}
-              </div>
-            )}
             <h1 className="text-xl font-bold text-foreground">
               Zaago Delivery Agent
             </h1>
@@ -580,6 +575,18 @@ const Home = () => {
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
+          {/* Greeting */}
+          {agentName && (
+            <div className="text-center animate-fade-in">
+              <div className="text-2xl font-bold text-primary">
+                {getGreeting()} {agentName}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Ready to deliver excellence
+              </div>
+            </div>
+          )}
+          
           {/* Quick Services */}
           <Card className="bg-gradient-to-r from-card to-card/50 border-primary/20 animate-slide-up">
             <CardContent className="p-4">
