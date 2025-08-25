@@ -70,6 +70,43 @@ const Home = () => {
   const [ordersWithDistance, setOrdersWithDistance] = useState<Order[]>([]);
   const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
   const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
+  const [agentName, setAgentName] = useState<string>("");
+
+  // Get greeting based on current time
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
+
+  // Capitalize first letter of each word
+  const capitalizeWords = (str: string) => {
+    return str.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  // Fetch agent name
+  const fetchAgentName = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('name')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (agent?.name) {
+        setAgentName(capitalizeWords(agent.name));
+      }
+    } catch (error) {
+      console.error('Error fetching agent name:', error);
+    }
+  };
   
   // Calculate agent payout based on real distance (updated rates)
   const calculateAgentPayout = (distance: number) => {
@@ -214,6 +251,7 @@ const Home = () => {
 
   useEffect(() => {
     fetchOrders();
+    fetchAgentName();
     
     // Listen for order completion events from QR scanner
     const handleOrderCompleted = (e: Event) => {
@@ -478,6 +516,11 @@ const Home = () => {
       <div className="bg-card/80 backdrop-blur-lg border-b border-primary/20 shadow-neon sticky top-0 z-50">
         <div className="flex items-center justify-between p-4">
           <div className="animate-fade-in">
+            {agentName && (
+              <div className="text-lg font-semibold text-primary mb-1">
+                {getGreeting()} {agentName}
+              </div>
+            )}
             <h1 className="text-xl font-bold text-foreground">
               Zaago Delivery Agent
             </h1>
