@@ -78,34 +78,46 @@ const Notifications = () => {
           console.error('Error fetching admin notifications:', adminError);
         }
 
-        // Combine and map notifications
+        // Combine and map notifications (filter out stock alerts for agents)
         const allNotifications = [
-          // Agent-specific notifications
-          ...(agentNotifications || []).map(notif => ({
-            id: notif.id,
-            type: notif.type,
-            title: notif.title,
-            message: notif.message,
-            created_at: notif.created_at,
-            read: notif.read,
-            metadata: notif.metadata,
-            source_type: notif.source_type || 'system',
-            source_id: notif.source_id,
-            table: 'agent_notifications'
-          })),
-          // Admin notifications (system-wide)
-          ...(adminNotifications || []).map(notif => ({
-            id: notif.id,
-            type: notif.type,
-            title: notif.title,
-            message: notif.message,
-            created_at: notif.created_at,
-            read: false, // Admin notifications are always treated as unread for agents
-            metadata: notif.metadata,
-            source_type: 'admin',
-            source_id: notif.user_id,
-            table: 'admin_notifications'
-          }))
+          // Agent-specific notifications (exclude stock-related notifications)
+          ...(agentNotifications || [])
+            .filter(notif => 
+              !notif.type?.includes('stock') && 
+              !notif.title?.toLowerCase().includes('stock') &&
+              !notif.message?.toLowerCase().includes('stock')
+            )
+            .map(notif => ({
+              id: notif.id,
+              type: notif.type,
+              title: notif.title,
+              message: notif.message,
+              created_at: notif.created_at,
+              read: notif.read,
+              metadata: notif.metadata,
+              source_type: notif.source_type || 'system',
+              source_id: notif.source_id,
+              table: 'agent_notifications'
+            })),
+          // Admin notifications (system-wide, also filter stock alerts)
+          ...(adminNotifications || [])
+            .filter(notif => 
+              !notif.type?.includes('stock') && 
+              !notif.title?.toLowerCase().includes('stock') &&
+              !notif.message?.toLowerCase().includes('stock')
+            )
+            .map(notif => ({
+              id: notif.id,
+              type: notif.type,
+              title: notif.title,
+              message: notif.message,
+              created_at: notif.created_at,
+              read: false, // Admin notifications are always treated as unread for agents
+              metadata: notif.metadata,
+              source_type: 'admin',
+              source_id: notif.user_id,
+              table: 'admin_notifications'
+            }))
         ];
 
         // Sort by created_at descending
