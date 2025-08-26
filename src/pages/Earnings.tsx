@@ -133,16 +133,45 @@ const Earnings = () => {
 
       if (!agent) return;
 
-      // Call the database function to get distance stats
-      const { data, error } = await supabase.rpc('get_agent_distance_stats', {
-        agent_uuid: agent.id
+      // Calculate distance stats directly from delivery_history
+      const today = new Date().toISOString().split('T')[0];
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of current week
+      const monthStart = new Date();
+      monthStart.setDate(1); // Start of current month
+
+      // Get today's deliveries
+      const { data: todayDeliveries } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled')
+        .eq('agent_id', agent.id)
+        .eq('delivery_date', today);
+
+      // Get this week's deliveries
+      const { data: weekDeliveries } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled')
+        .eq('agent_id', agent.id)
+        .gte('delivery_date', weekStart.toISOString().split('T')[0]);
+
+      // Get this month's deliveries
+      const { data: monthDeliveries } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled')
+        .eq('agent_id', agent.id)
+        .gte('delivery_date', monthStart.toISOString().split('T')[0]);
+
+      const calculateDistance = (deliveries: any[]) => {
+        return deliveries?.reduce((sum, delivery) => {
+          return sum + (delivery.distance_traveled || 0);
+        }, 0) || 0;
+      };
+
+      setDistanceStats({
+        distance_today: calculateDistance(todayDeliveries),
+        distance_week: calculateDistance(weekDeliveries),
+        distance_month: calculateDistance(monthDeliveries)
       });
-
-      if (error) throw error;
-
-      if (data) {
-        setDistanceStats(data as unknown as DistanceStats);
-      }
     } catch (error) {
       console.error('Error fetching distance stats:', error);
     }
