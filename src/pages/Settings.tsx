@@ -440,13 +440,6 @@ const Settings = () => {
       title: "Support & Feedback",
       items: [
         {
-          icon: HelpCircle,
-          title: "Help Center",
-          description: "FAQs and support articles",
-          action: "navigate",
-          color: "text-primary"
-        },
-        {
           icon: Star,
           title: "Rate the App",
           description: "Share your feedback",
