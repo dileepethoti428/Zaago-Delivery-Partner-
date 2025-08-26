@@ -22,6 +22,19 @@ import {
   Shield
 } from "lucide-react";
 
+interface FAQItem {
+  question: string;
+  answer: string;
+}
+
+interface FAQCategory {
+  title: string;
+  icon: typeof Book;
+  color: string;
+  bgColor: string;
+  items: FAQItem[];
+}
+
 const Help = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
