@@ -682,7 +682,7 @@ const Settings = () => {
       {/* Floating WhatsApp Button */}
       <Button
         onClick={() => window.open('https://wa.me/917842343642', '_blank')}
-        className="fixed bottom-20 right-4 w-14 h-14 rounded-full bg-success hover:bg-success/90 text-white shadow-lg hover:shadow-xl transition-all duration-300 z-50"
+        className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-success hover:bg-success/90 text-white shadow-lg hover:shadow-xl transition-all duration-300 z-50"
         size="icon"
       >
         <MessageCircle className="w-6 h-6" />
