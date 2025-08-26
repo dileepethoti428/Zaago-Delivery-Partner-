@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { 
   Search, 
@@ -10,15 +8,11 @@ import {
   Phone, 
   Mail, 
   Book, 
-  HelpCircle,
   ChevronRight,
   ChevronDown,
-  Clock,
-  CheckCircle,
   AlertCircle,
   Truck,
   DollarSign,
-  Star,
   Shield
 } from "lucide-react";
 
@@ -168,21 +162,6 @@ const Help = () => {
     }
   ];
 
-  const recentTickets = [
-    {
-      id: "TKT-001",
-      title: "Payment not received for delivery #ORD123",
-      status: "resolved",
-      time: "2 days ago"
-    },
-    {
-      id: "TKT-002", 
-      title: "App crashed during order pickup",
-      status: "in_progress",
-      time: "1 week ago"
-    }
-  ];
-
   const toggleFaq = (categoryIndex: number, itemIndex: number) => {
     const faqKey = `${categoryIndex}-${itemIndex}`;
     setExpandedFaq(expandedFaq === faqKey ? null : faqKey);
@@ -293,72 +272,6 @@ const Help = () => {
           );
         })}
       </div>
-
-      {/* Recent Support Tickets */}
-      {recentTickets.length > 0 && (
-        <Card className="bg-card border-border animate-slide-up">
-          <CardHeader>
-            <CardTitle>Your Recent Tickets</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {recentTickets.map((ticket) => (
-              <div
-                key={ticket.id}
-                className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    {ticket.status === "resolved" ? (
-                      <CheckCircle className="w-4 h-4 text-success" />
-                    ) : (
-                      <Clock className="w-4 h-4 text-warning" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground text-sm">{ticket.title}</p>
-                    <p className="text-xs text-muted-foreground">#{ticket.id} • {ticket.time}</p>
-                  </div>
-                </div>
-                <Badge 
-                  className={
-                    ticket.status === "resolved" 
-                      ? "bg-success/20 text-success" 
-                      : "bg-warning/20 text-warning"
-                  }
-                >
-                  {ticket.status === "resolved" ? "Resolved" : "In Progress"}
-                </Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Contact Form */}
-      <Card className="bg-card border-border animate-slide-up">
-        <CardHeader>
-          <CardTitle>Still Need Help?</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Subject</label>
-            <Input placeholder="Describe your issue briefly" className="bg-input border-border" />
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Message</label>
-            <Textarea 
-              placeholder="Provide more details about your issue..."
-              className="bg-input border-border min-h-[100px]"
-            />
-          </div>
-          
-          <Button className="w-full bg-gradient-neon hover:shadow-neon transition-smooth">
-            <MessageCircle className="w-4 h-4 mr-2" />
-            Submit Ticket
-          </Button>
-        </CardContent>
-      </Card>
 
       {/* Emergency Contact */}
       <Card className="bg-destructive/10 border-destructive/20 animate-slide-up">
