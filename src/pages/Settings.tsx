@@ -5,9 +5,11 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useTheme } from "next-themes";
 import { 
   Bell, 
   Shield, 
@@ -27,12 +29,14 @@ import {
   Edit,
   Save,
   X,
+  Palette,
   MessageCircle
 } from "lucide-react";
 
 const Settings = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -395,6 +399,14 @@ const Settings = () => {
           color: "text-primary",
           enabled: settings.location_services,
           key: "location_services"
+        },
+        {
+          icon: Palette,
+          title: "Theme",
+          description: `${theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light'} theme`,
+          action: "theme",
+          color: "text-primary",
+          theme: theme
         }
       ]
     },
@@ -552,6 +564,17 @@ const Settings = () => {
                         disabled={loading}
                         className="data-[state=checked]:bg-primary"
                       />
+                    ) : item.action === "theme" ? (
+                      <Select value={theme} onValueChange={setTheme}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="light">Light</SelectItem>
+                          <SelectItem value="dark">Dark</SelectItem>
+                          <SelectItem value="system">System</SelectItem>
+                        </SelectContent>
+                      </Select>
                     ) : !isEditMode ? (
                       <ChevronRight 
                         className="w-5 h-5 text-muted-foreground" 
