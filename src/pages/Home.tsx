@@ -173,10 +173,12 @@ const Home = () => {
         // Use backend-calculated distance if available, otherwise will be calculated later
         distance_km: order.distance_km || undefined,
         backend_calculated: order.distance_km ? true : false,
-        // Add delivery timing data - demo purposes
-        delivery_type: index % 3 === 0 ? 'scheduled' : 'immediate', // Every 3rd order is scheduled
-        scheduled_time: index % 3 === 0 ? new Date(Date.now() + (2 + index) * 60 * 60 * 1000).toISOString() : null,
-        order_placed_at: new Date(Date.now() - Math.random() * 10 * 60 * 1000) // Random time within last 10 minutes
+        // Determine delivery type based on actual order data
+        delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
+        scheduled_time: order.delivery_time_slot ? 
+          new Date(order.delivery_date + 'T' + order.delivery_time_slot.split('-')[0] + ':00').toISOString() : 
+          null,
+        order_placed_at: new Date(order.created_at)
       }));
 
       setOrders(transformedOrders);
