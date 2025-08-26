@@ -186,16 +186,33 @@ const Earnings = () => {
       const weekStart = new Date(now.setDate(now.getDate() - now.getDay())); // Start of current week
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+      // Fetch work sessions to calculate actual hours worked
+      const { data: workSessions } = await supabase
+        .from('agent_work_sessions')
+        .select('session_start, session_end, total_hours')
+        .eq('agent_id', agent.id)
+        .order('session_start', { ascending: false });
+
       const calculatePeriodData = (startDate: Date, endDate: Date = new Date()) => {
         const periodEarnings = (earnings || []).filter(earning => {
           const earningDate = new Date(earning.created_at);
           return earningDate >= startDate && earningDate <= endDate;
         });
 
+        // Calculate actual hours worked from work sessions for the period
+        const periodSessions = (workSessions || []).filter(session => {
+          const sessionDate = new Date(session.session_start);
+          return sessionDate >= startDate && sessionDate <= endDate;
+        });
+
+        const totalHours = periodSessions.reduce((sum, session) => {
+          return sum + (session.total_hours || 0);
+        }, 0);
+
         return {
           amount: periodEarnings.reduce((sum, e) => sum + (e.amount || 0), 0),
           deliveries: periodEarnings.length,
-          hours: periodEarnings.length * 0.5 // Estimate 30 minutes per delivery
+          hours: totalHours > 0 ? totalHours : periodEarnings.length * 0.5 // Fallback to estimate if no sessions
         };
       };
 
@@ -217,6 +234,26 @@ const Earnings = () => {
       // Format recent earnings for display
       const recentData = (earnings || []).slice(0, 10).map(earning => {
         const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
+        const distance = historyData?.distance_traveled || 0;
+        
+        // Calculate breakdown using actual payout config
+        const basePay = payoutConfig?.base_pay_amount || 15;
+        const baseDistanceKm = payoutConfig?.base_pay_distance_km || 1;
+        const perKmRate = payoutConfig ? 
+          (payoutConfig.per_km_min_rate + payoutConfig.per_km_max_rate) / 2 : 12;
+        
+        const distancePay = distance > baseDistanceKm ? 
+          (distance - baseDistanceKm) * perKmRate : 0;
+        
+        // Check if this was a peak hour delivery
+        const earningTime = new Date(earning.created_at).toTimeString().substring(0, 5);
+        const isPeakHour = payoutConfig && 
+          earningTime >= payoutConfig.peak_hour_start && 
+          earningTime <= payoutConfig.peak_hour_end;
+        
+        // Calculate if peak bonus was earned (simplified - actual logic is more complex)
+        const peakBonus = isPeakHour && (earning.amount || 0) > (basePay + distancePay) ? 
+          Math.max(0, (earning.amount || 0) - basePay - distancePay) : 0;
         
         return {
           id: earning.id,
@@ -230,22 +267,24 @@ const Earnings = () => {
           }),
           delivery_date: historyData?.delivery_date || earning.created_at,
           breakdown: {
-            base_pay: 15, // Default base pay
-            distance_pay: Math.max(0, (earning.amount || 0) - 15),
-            peak_bonus: 0 // Will be calculated properly with payout data
+            base_pay: basePay,
+            distance_pay: distancePay,
+            peak_bonus: peakBonus
           }
         };
       });
 
       setRecentEarnings(recentData);
 
-      // Count today's peak hour orders (6 AM - 12 PM)
+      // Count today's peak hour orders using config
       const todayPeakOrders = (earnings || []).filter(earning => {
         const earningDate = new Date(earning.created_at);
         const earningTime = earningDate.toTimeString().substring(0, 5);
+        const peakStart = payoutConfig?.peak_hour_start || '06:00';
+        const peakEnd = payoutConfig?.peak_hour_end || '12:00';
         return earningDate >= todayStart && 
-               earningTime >= '06:00' && 
-               earningTime <= '12:00';
+               earningTime >= peakStart && 
+               earningTime <= peakEnd;
       }).length;
 
       setPeakOrdersToday(todayPeakOrders);
