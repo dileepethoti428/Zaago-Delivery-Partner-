@@ -153,7 +153,7 @@ const Help = () => {
             } else if (option.title === "Live Chat") {
               window.open(`https://wa.me/917842343642`, '_blank');
             } else if (option.title === "Email Support") {
-              window.open(`mailto:support@zaago.com`, '_self');
+              window.open(`mailto:customerzaago@gmail.com`, '_self');
             }
           };
 
