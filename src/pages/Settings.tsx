@@ -591,9 +591,6 @@ const Settings = () => {
             </div>
             <h3 className="font-semibold text-foreground">Zaago Delivery Agent</h3>
             <p className="text-sm text-muted-foreground">Version 1.0.0</p>
-            <p className="text-xs text-muted-foreground">
-              © 2024 Zaago Technologies. All rights reserved.
-            </p>
           </div>
         </CardContent>
       </Card>
