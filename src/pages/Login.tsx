@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Smartphone, Mail, Lock, User, Truck, Eye, EyeOff, Chrome, Facebook } from "lucide-react";
+import { Smartphone, Mail, Lock, User, Truck, Eye, EyeOff } from "lucide-react";
 
 // Validation schemas
 const loginSchema = z.object({
@@ -149,12 +149,6 @@ const Login = () => {
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    toast({
-      title: `${provider} Login`,
-      description: "Social login feature coming soon!",
-    });
-  };
 
   const currentPassword = signupForm.watch("password");
   const passwordStrength = currentPassword ? getPasswordStrength(currentPassword) : null;
@@ -458,34 +452,6 @@ const Login = () => {
             </TabsContent>
           </Tabs>
 
-          {/* Social Login */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              onClick={() => handleSocialLogin("Google")}
-              className="bg-input/30 border-border hover:bg-input/50 hover:shadow-neon transition-all duration-300"
-            >
-              <Chrome className="h-4 w-4 mr-2" />
-              Google
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleSocialLogin("Facebook")}
-              className="bg-input/30 border-border hover:bg-input/50 hover:shadow-neon transition-all duration-300"
-            >
-              <Facebook className="h-4 w-4 mr-2" />
-              Facebook
-            </Button>
-          </div>
         </CardContent>
       </Card>
       
