@@ -98,6 +98,37 @@ serve(async (req) => {
       }
     }
 
+    // Check if delivery is late and send apology if needed
+    const { data: orderData } = await supabaseClient
+      .from('orders')
+      .select('delivery_time_slot, delivery_date, customer_name, customer_phone, created_at')
+      .eq('id', order_id)
+      .single();
+
+    let isLateDelivery = false;
+    let delayMinutes = 0;
+
+    if (orderData?.delivery_time_slot && orderData?.delivery_date) {
+      // Parse scheduled delivery time
+      const scheduledTime = new Date(`${orderData.delivery_date}T${orderData.delivery_time_slot.split('-')[1]}:00`);
+      const currentTime = new Date();
+      
+      if (currentTime > scheduledTime) {
+        isLateDelivery = true;
+        delayMinutes = Math.floor((currentTime.getTime() - scheduledTime.getTime()) / (1000 * 60));
+      }
+    } else if (orderData?.created_at) {
+      // For immediate deliveries, check if more than 30 minutes have passed since order creation
+      const orderTime = new Date(orderData.created_at);
+      const currentTime = new Date();
+      const minutesSinceOrder = Math.floor((currentTime.getTime() - orderTime.getTime()) / (1000 * 60));
+      
+      if (minutesSinceOrder > 30) {
+        isLateDelivery = true;
+        delayMinutes = minutesSinceOrder - 30; // Minutes beyond expected 30 min delivery
+      }
+    }
+
     // Update order status to delivered FIRST (main operation - must succeed)
     const { error: updateError } = await supabaseClient
       .from('orders')
@@ -114,6 +145,28 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: 'Failed to update order status' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
+    }
+
+    // Send apology message if delivery is late
+    if (isLateDelivery && orderData?.customer_phone && orderData?.customer_name && delayMinutes > 5) {
+      try {
+        const { error: apologyError } = await supabaseClient.functions.invoke('send-apology-message', {
+          body: {
+            order_id,
+            customer_phone: orderData.customer_phone,
+            customer_name: orderData.customer_name,
+            delay_minutes: delayMinutes
+          }
+        });
+
+        if (apologyError) {
+          console.warn('Failed to send apology message:', apologyError);
+        } else {
+          console.log(`Apology message sent for late delivery: ${delayMinutes} minutes delay`);
+        }
+      } catch (apologyError) {
+        console.warn('Error sending apology message:', apologyError);
+      }
     }
 
     // For COD orders, automatically settle the amount from agent wallet to admin

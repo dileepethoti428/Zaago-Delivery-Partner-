@@ -92,7 +92,7 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders, excluding those the agent has cancelled/rejected
+    // Get available orders, including overdue ones - no time filtering
     const { data: orders, error } = await supabase
       .from('orders')
       .select('*')
