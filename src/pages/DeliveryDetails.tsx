@@ -124,17 +124,74 @@ const DeliveryDetails = () => {
     }
   };
 
-  const handleNavigation = () => {
-    if (!order?.address?.coordinates) {
+  const handleNavigation = async () => {
+    if (!order?.address) {
       toast({
-        title: "Location Error",
-        description: "Customer location not available",
+        title: "Location Error", 
+        description: "Customer address not available",
         variant: "destructive"
       });
       return;
     }
 
-    // Show in-app navigation instead of external map
+    let customerLocation = order.address.coordinates;
+
+    // If no coordinates, try to geocode the address
+    if (!customerLocation) {
+      try {
+        const fullAddress = `${order.address.addressLine1}, ${order.address.city}, ${order.address.state}, ${order.address.pincode}`;
+        
+        // Using a free geocoding service
+        const response = await fetch(
+          `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(fullAddress)}&key=your-api-key&limit=1`
+        );
+        
+        if (!response.ok) {
+          // Fallback: try with OpenStreetMap Nominatim (free)
+          const osmResponse = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`
+          );
+          
+          if (osmResponse.ok) {
+            const osmData = await osmResponse.json();
+            if (osmData && osmData.length > 0) {
+              customerLocation = {
+                lat: parseFloat(osmData[0].lat),
+                lng: parseFloat(osmData[0].lon)
+              };
+            }
+          }
+        } else {
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+            customerLocation = {
+              lat: data.results[0].geometry.lat,
+              lng: data.results[0].geometry.lng
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Geocoding error:', error);
+      }
+    }
+
+    // If still no coordinates, show error
+    if (!customerLocation) {
+      toast({
+        title: "Navigation Unavailable",
+        description: "Unable to get customer location. Please use the address details to navigate manually.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Update order with coordinates for future use
+    if (!order.address.coordinates) {
+      order.address.coordinates = customerLocation;
+      setOrder({...order});
+    }
+
+    // Show in-app navigation
     setShowNavigationMap(true);
   };
 
@@ -550,8 +607,8 @@ const DeliveryDetails = () => {
         <NavigationMap
           open={showNavigationMap}
           onOpenChange={setShowNavigationMap}
-          customerLocation={order.address?.coordinates || { lat: 0, lng: 0 }}
-          customerAddress={`${order.address?.addressLine1}, ${order.address?.city}`}
+          customerLocation={order.address?.coordinates || { lat: 31.33, lng: 75.57 }}
+          customerAddress={`${order.address?.addressLine1}, ${order.address?.city}, ${order.address?.state} - ${order.address?.pincode}`}
           customerName={order.customer_name}
           customerPhone={order.customer_phone}
         />
