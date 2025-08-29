@@ -92,12 +92,18 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders, including overdue ones - no time filtering
+    // Get available orders from individual users only (not restaurants)
+    // Filter by user_role to exclude restaurant/business sellers
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        user_profile:profiles!inner(user_id, full_name),
+        user_roles:user_roles!inner(user_id, role)
+      `)
       .in('status', ['placed', 'assigned'])
-      .neq('status', 'delivered');
+      .neq('status', 'delivered')
+      .eq('user_roles.role', 'user');
 
     if (error) {
       console.error('Failed to fetch orders:', error);
