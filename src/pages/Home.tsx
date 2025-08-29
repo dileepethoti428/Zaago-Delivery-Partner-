@@ -664,10 +664,10 @@ const Home = () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">
-                  Available Orders ({availableOrders.length})
+                  Orders ({availableOrders.length})
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Showing orders within 15km radius
+                  Available orders and your assignments
                 </p>
               </div>
             </div>

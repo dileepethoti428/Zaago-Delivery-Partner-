@@ -85,18 +85,18 @@ serve(async (req) => {
       .eq('is_active', true)
       .order('recorded_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (locationError) {
       console.warn('Failed to get agent location:', locationError);
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders - only show 'placed' orders, exclude assigned, delivered, and cancelled
+    // Get available orders - show 'placed' orders for everyone, and 'assigned' orders for current agent
     const { data: orders, error } = await supabase
       .from('orders')
       .select('*')
-      .eq('status', 'placed');
+      .or(`status.eq.placed,and(status.eq.assigned,agent_id.eq.${agent_id})`);
 
     if (error) {
       console.error('Failed to fetch orders:', error);
@@ -156,6 +156,15 @@ serve(async (req) => {
       const nearbyOrders = [];
       
       for (const order of filteredOrders) {
+        // Skip distance filtering for orders already assigned to this agent
+        if (order.status === 'assigned' && order.agent_id === agent_id) {
+          nearbyOrders.push({
+            ...order,
+            distance_km: order.distance_km || 0 // Keep existing distance or set to 0
+          });
+          continue;
+        }
+        
         // Check if order has address with coordinates
         if (order.address && order.address.coordinates && order.address.coordinates.lat && order.address.coordinates.lng) {
           try {
