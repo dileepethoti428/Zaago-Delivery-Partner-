@@ -92,12 +92,11 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders, including overdue ones - no time filtering
+    // Get available orders - only show 'placed' orders, exclude assigned, delivered, and cancelled
     const { data: orders, error } = await supabase
       .from('orders')
       .select('*')
-      .in('status', ['placed', 'assigned'])
-      .neq('status', 'delivered');
+      .eq('status', 'placed');
 
     if (error) {
       console.error('Failed to fetch orders:', error);
