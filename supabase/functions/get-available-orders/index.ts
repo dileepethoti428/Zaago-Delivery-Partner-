@@ -124,7 +124,7 @@ serve(async (req) => {
     const excludedOrderIds = exclusions?.map(ex => ex.order_id) || [];
     let filteredOrders = orders?.filter(order => !excludedOrderIds.includes(order.id)) || [];
     
-    // Filter out orders from sellers/restaurants - only show orders from regular users
+    // Filter out orders from sellers/restaurants - only exclude pure business sellers
     const userOrdersPromises = filteredOrders.map(async (order) => {
       try {
         const { data: userRoles } = await supabase
@@ -132,12 +132,12 @@ serve(async (req) => {
           .select('role')
           .eq('user_id', order.user_id);
           
-        // Only include orders from users with 'user' role (not 'seller' or 'admin')
-        const hasUserRole = userRoles?.some(ur => ur.role === 'user') || false;
+        // Exclude orders only from users who are pure sellers (have seller role but no other roles)
         const hasSellerRole = userRoles?.some(ur => ur.role === 'seller') || false;
+        const hasOtherRoles = userRoles?.some(ur => ur.role !== 'seller') || false;
         
-        // Show orders only from regular users, not from sellers
-        return hasUserRole && !hasSellerRole ? order : null;
+        // Show orders from everyone except pure business sellers
+        return hasSellerRole && !hasOtherRoles ? null : order;
       } catch (error) {
         console.warn(`Failed to check user role for order ${order.id}, including by default:`, error);
         return order; // Include by default on error
