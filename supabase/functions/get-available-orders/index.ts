@@ -92,18 +92,12 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders from individual users only (not restaurants)
-    // Filter by user_role to exclude restaurant/business sellers
+    // Get available orders, including overdue ones - no time filtering
     const { data: orders, error } = await supabase
       .from('orders')
-      .select(`
-        *,
-        user_profile:profiles!inner(user_id, full_name),
-        user_roles:user_roles!inner(user_id, role)
-      `)
+      .select('*')
       .in('status', ['placed', 'assigned'])
-      .neq('status', 'delivered')
-      .eq('user_roles.role', 'user');
+      .neq('status', 'delivered');
 
     if (error) {
       console.error('Failed to fetch orders:', error);
@@ -126,9 +120,32 @@ serve(async (req) => {
       console.warn('Failed to fetch exclusions:', exclusionError);
     }
 
-    // Filter out excluded orders
+    // Filter out excluded orders and orders from restaurant/business sellers
     const excludedOrderIds = exclusions?.map(ex => ex.order_id) || [];
     let filteredOrders = orders?.filter(order => !excludedOrderIds.includes(order.id)) || [];
+    
+    // Filter out orders from sellers/restaurants - only show orders from regular users
+    const userOrdersPromises = filteredOrders.map(async (order) => {
+      try {
+        const { data: userRoles } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', order.user_id);
+          
+        // Only include orders from users with 'user' role (not 'seller' or 'admin')
+        const hasUserRole = userRoles?.some(ur => ur.role === 'user') || false;
+        const hasSellerRole = userRoles?.some(ur => ur.role === 'seller') || false;
+        
+        // Show orders only from regular users, not from sellers
+        return hasUserRole && !hasSellerRole ? order : null;
+      } catch (error) {
+        console.warn(`Failed to check user role for order ${order.id}, including by default:`, error);
+        return order; // Include by default on error
+      }
+    });
+    
+    const resolvedOrders = await Promise.all(userOrdersPromises);
+    filteredOrders = resolvedOrders.filter(order => order !== null);
 
     // Apply 15km radius filtering if agent location is available
     if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
