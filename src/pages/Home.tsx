@@ -249,7 +249,22 @@ const Home = () => {
       })
     );
     
-    setOrdersWithDistance(updatedOrders);
+    setOrdersWithDistance(prevOrders => {
+      // Deduplicate orders by ID to prevent showing duplicates
+      const newOrderIds = new Set(updatedOrders.map(order => order.id));
+      const existingOrders = prevOrders.filter(order => !newOrderIds.has(order.id));
+      const finalOrders = [...existingOrders, ...updatedOrders];
+      
+      // Additional deduplication just in case
+      const uniqueOrders = finalOrders.reduce((acc, order) => {
+        if (!acc.some(existing => existing.id === order.id)) {
+          acc.push(order);
+        }
+        return acc;
+      }, [] as typeof finalOrders);
+      
+      return uniqueOrders;
+    });
   };
 
   // Calculate distances when orders change or location updates
@@ -327,13 +342,19 @@ const Home = () => {
         (payload) => {
           console.log('New order created:', payload);
           
-          // If a new order is placed, add it to the list
+          // If a new order is placed, check if it's not already in our list to prevent duplicates
           if (payload.new.status === 'placed') {
-            toast({
-              title: "New Order Available!",
-              description: `New order from ${payload.new.customer_name}`,
-            });
-            fetchOrders();
+            // Check if order already exists to prevent duplicates
+            const orderExists = orders.some(order => order.id === payload.new.id) || 
+                              ordersWithDistance.some(order => order.id === payload.new.id);
+            
+            if (!orderExists) {
+              toast({
+                title: "New Order Available!",
+                description: `New order from ${payload.new.customer_name}`,
+              });
+              fetchOrders();
+            }
           }
         }
       )
