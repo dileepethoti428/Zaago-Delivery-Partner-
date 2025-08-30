@@ -409,7 +409,7 @@ const Home = () => {
           agent_id: agent.id
         })
         .eq('id', orderId)
-        .eq('status', 'placed')  // Only accept orders that are still 'placed'
+        .eq('status', 'packed')  // Only accept orders that are still 'packed'
         .is('agent_id', null);   // Only accept unassigned orders
 
       if (error) {
