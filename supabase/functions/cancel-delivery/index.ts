@@ -34,18 +34,86 @@ serve(async (req) => {
       );
     }
 
-    // Start transaction by updating order status back to packed and removing agent assignment
-    const { data: orderUpdate, error: orderError } = await supabase
+    // Determine if this is a rejection (unassigned order) or cancellation (assigned to this agent)
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('id, agent_id, status')
+      .eq('id', order_id)
+      .maybeSingle();
+
+    if (fetchError || !order) {
+      console.error('Order not found:', fetchError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order not found' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404 
+        }
+      );
+    }
+
+    if (!order.agent_id) {
+      // Unassigned -> agent is rejecting the order. Do not change order status.
+      const { error: exclusionError } = await supabase
+        .from('order_exclusions')
+        .insert({
+          order_id,
+          agent_id,
+          reason: cancellation_reason || 'Agent rejected delivery'
+        });
+
+      if (exclusionError) {
+        console.warn('Failed to create order exclusion:', exclusionError);
+      }
+
+      // Log rejection
+      const { error: logError } = await supabase
+        .from('delivery_logs')
+        .insert({
+          order_id,
+          agent_id,
+          action: 'rejected',
+          details: {
+            reason: cancellation_reason || 'Agent rejected delivery',
+            rejected_at: new Date().toISOString()
+          }
+        });
+
+      if (logError) {
+        console.warn('Failed to log rejection:', logError);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: 'Order rejected successfully' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
+
+    // If assigned to a different agent, reject the request
+    if (order.agent_id !== agent_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order is assigned to another agent' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 403 
+        }
+      );
+    }
+
+    // Assigned to this agent -> cancel and release back to pool
+    const { data: updated, error: orderError } = await supabase
       .from('orders')
       .update({
-        status: 'packed',  // Set back to 'packed' so other agents can see it
+        status: 'packed',
         agent_id: null,
         updated_at: new Date().toISOString()
       })
       .eq('id', order_id)
-      .eq('agent_id', agent_id) // Ensure only the assigned agent can cancel
-      .select()
-      .single();
+      .eq('agent_id', agent_id)
+      .select();
 
     if (orderError) {
       console.error('Failed to update order:', orderError);
@@ -58,7 +126,7 @@ serve(async (req) => {
       );
     }
 
-    if (!orderUpdate) {
+    if (!updated || updated.length === 0) {
       console.error('Order not found or not assigned to this agent');
       return new Response(
         JSON.stringify({ success: false, error: 'Order not found or unauthorized' }),
@@ -69,12 +137,12 @@ serve(async (req) => {
       );
     }
 
-    // Log the cancellation for tracking
+    // Log the cancellation
     const { error: logError } = await supabase
       .from('delivery_logs')
       .insert({
-        order_id: order_id,
-        agent_id: agent_id,
+        order_id,
+        agent_id,
         action: 'cancelled',
         details: {
           reason: cancellation_reason || 'Agent cancelled delivery',
@@ -84,30 +152,27 @@ serve(async (req) => {
 
     if (logError) {
       console.warn('Failed to log cancellation:', logError);
-      // Don't fail the request for logging errors
     }
 
-    // Add order exclusion to prevent agent from seeing this order again
-    const { error: exclusionError } = await supabase
+    // Add exclusion to avoid showing it again to this agent
+    const { error: exclusionError2 } = await supabase
       .from('order_exclusions')
       .insert({
-        order_id: order_id,
-        agent_id: agent_id,
+        order_id,
+        agent_id,
         reason: cancellation_reason || 'Agent cancelled delivery'
       });
 
-    if (exclusionError) {
-      console.warn('Failed to log order exclusion:', exclusionError);
-      // Don't fail the request for exclusion errors
+    if (exclusionError2) {
+      console.warn('Failed to log order exclusion:', exclusionError2);
     }
 
     console.log('Delivery cancelled successfully for order:', order_id);
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Delivery cancelled successfully',
-        order: orderUpdate
+      JSON.stringify({
+        success: true,
+        message: 'Delivery cancelled successfully'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
