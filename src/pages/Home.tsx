@@ -402,7 +402,7 @@ const Home = () => {
       }
 
       // Update order with specific conditions to work with RLS policies
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from('orders')
         .update({ 
           status: 'assigned',
@@ -410,11 +410,17 @@ const Home = () => {
         })
         .eq('id', orderId)
         .eq('status', 'packed')  // Only accept orders that are still 'packed'
-        .is('agent_id', null);   // Only accept unassigned orders
+        .is('agent_id', null)   // Only accept unassigned orders
+        .select('id, status, agent_id')
+        .maybeSingle();
 
       if (error) {
         console.error('Database error:', error);
         throw new Error(error.message || 'Failed to accept order');
+      }
+
+      if (!updated || updated.status !== 'assigned' || updated.agent_id !== agent.id) {
+        throw new Error('This order is no longer available. It may have been accepted by another agent.');
       }
 
       // Update order in state to show as assigned
