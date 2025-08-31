@@ -319,10 +319,16 @@ const Home = () => {
             fetchOrders();
           }
           
-          // If an order was assigned to someone else, remove it from current view
-          if (payload.new.status === 'assigned' && payload.old.status === 'placed') {
+          // If an order status changes from 'packed' to 'assigned', remove it from view
+          if (payload.old.status === 'packed' && payload.new.status === 'assigned') {
             setOrders(prev => prev.filter(order => order.id !== payload.new.id));
             setOrdersWithDistance(prev => prev.filter(order => order.id !== payload.new.id));
+            
+            toast({
+              title: "Order Taken",
+              description: "This order was accepted by another agent",
+              variant: "default"
+            });
           }
           
           // If an order was delivered or cancelled, remove it
@@ -342,8 +348,8 @@ const Home = () => {
         (payload) => {
           console.log('New order created:', payload);
           
-          // If a new order is placed, check if it's not already in our list to prevent duplicates
-          if (payload.new.status === 'placed') {
+          // If a new order is packed, check if it's not already in our list to prevent duplicates
+          if (payload.new.status === 'packed') {
             // Check if order already exists to prevent duplicates
             const orderExists = orders.some(order => order.id === payload.new.id) || 
                               ordersWithDistance.some(order => order.id === payload.new.id);
