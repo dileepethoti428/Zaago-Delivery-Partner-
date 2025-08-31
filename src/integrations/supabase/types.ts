@@ -1041,10 +1041,12 @@ export type Database = {
           is_default: boolean | null
           label: string
           landmark: string | null
+          phone: string | null
           pincode: string
           state: string
           updated_at: string
           user_id: string
+          user_name: string | null
         }
         Insert: {
           city: string
@@ -1055,10 +1057,12 @@ export type Database = {
           is_default?: boolean | null
           label: string
           landmark?: string | null
+          phone?: string | null
           pincode: string
           state: string
           updated_at?: string
           user_id: string
+          user_name?: string | null
         }
         Update: {
           city?: string
@@ -1069,10 +1073,12 @@ export type Database = {
           is_default?: boolean | null
           label?: string
           landmark?: string | null
+          phone?: string | null
           pincode?: string
           state?: string
           updated_at?: string
           user_id?: string
+          user_name?: string | null
         }
         Relationships: []
       }
@@ -2418,6 +2424,60 @@ export type Database = {
           },
         ]
       }
+      product_variants: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          price_adjustment: number | null
+          product_id: string
+          stock_quantity: number | null
+          updated_at: string
+          variant_name: string
+          variant_value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          price_adjustment?: number | null
+          product_id: string
+          stock_quantity?: number | null
+          updated_at?: string
+          variant_name: string
+          variant_value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          price_adjustment?: number | null
+          product_id?: string
+          stock_quantity?: number | null
+          updated_at?: string
+          variant_name?: string
+          variant_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           benefits: string[] | null
@@ -2483,6 +2543,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_products_category"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_category_id_fkey"
             columns: ["category_id"]
@@ -2784,6 +2851,9 @@ export type Database = {
           account_number: string | null
           account_type: string | null
           address: Json | null
+          approval_status: string | null
+          approved_at: string | null
+          approved_by: string | null
           bank_branch: string | null
           bank_name: string | null
           business_description: string | null
@@ -2794,8 +2864,12 @@ export type Database = {
           id: string
           ifsc_code: string | null
           is_bank_verified: boolean | null
+          latitude: number | null
+          location_verified: boolean | null
+          longitude: number | null
           name: string
           phone: string | null
+          rejection_reason: string | null
           status: string
           updated_at: string
           user_id: string | null
@@ -2805,6 +2879,9 @@ export type Database = {
           account_number?: string | null
           account_type?: string | null
           address?: Json | null
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           bank_branch?: string | null
           bank_name?: string | null
           business_description?: string | null
@@ -2815,8 +2892,12 @@ export type Database = {
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
+          latitude?: number | null
+          location_verified?: boolean | null
+          longitude?: number | null
           name: string
           phone?: string | null
+          rejection_reason?: string | null
           status?: string
           updated_at?: string
           user_id?: string | null
@@ -2826,6 +2907,9 @@ export type Database = {
           account_number?: string | null
           account_type?: string | null
           address?: Json | null
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           bank_branch?: string | null
           bank_name?: string | null
           business_description?: string | null
@@ -2836,13 +2920,95 @@ export type Database = {
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
+          latitude?: number | null
+          location_verified?: boolean | null
+          longitude?: number | null
           name?: string
           phone?: string | null
+          rejection_reason?: string | null
           status?: string
           updated_at?: string
           user_id?: string | null
         }
         Relationships: []
+      }
+      special_offers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          discount_percentage: number
+          id: string
+          is_active: boolean
+          max_quantity_per_user: number | null
+          offer_description: string | null
+          offer_price: number
+          offer_title: string
+          offer_type: string
+          original_price: number
+          priority_rank: number | null
+          product_id: string
+          quantity_sold: number
+          total_quantity_available: number | null
+          updated_at: string
+          valid_from: string
+          valid_until: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          discount_percentage?: number
+          id?: string
+          is_active?: boolean
+          max_quantity_per_user?: number | null
+          offer_description?: string | null
+          offer_price: number
+          offer_title: string
+          offer_type?: string
+          original_price: number
+          priority_rank?: number | null
+          product_id: string
+          quantity_sold?: number
+          total_quantity_available?: number | null
+          updated_at?: string
+          valid_from?: string
+          valid_until: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          discount_percentage?: number
+          id?: string
+          is_active?: boolean
+          max_quantity_per_user?: number | null
+          offer_description?: string | null
+          offer_price?: number
+          offer_title?: string
+          offer_type?: string
+          original_price?: number
+          priority_rank?: number | null
+          product_id?: string
+          quantity_sold?: number
+          total_quantity_available?: number | null
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "special_offers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "special_offers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscription_autopay_settings: {
         Row: {
@@ -3213,6 +3379,63 @@ export type Database = {
           },
         ]
       }
+      trending_products: {
+        Row: {
+          average_rating: number | null
+          created_at: string
+          id: string
+          last_order_date: string | null
+          popularity_score: number
+          product_id: string
+          revenue_generated: number
+          total_orders: number
+          total_quantity_sold: number
+          trending_rank: number | null
+          updated_at: string
+        }
+        Insert: {
+          average_rating?: number | null
+          created_at?: string
+          id?: string
+          last_order_date?: string | null
+          popularity_score?: number
+          product_id: string
+          revenue_generated?: number
+          total_orders?: number
+          total_quantity_sold?: number
+          trending_rank?: number | null
+          updated_at?: string
+        }
+        Update: {
+          average_rating?: number | null
+          created_at?: string
+          id?: string
+          last_order_date?: string | null
+          popularity_score?: number
+          product_id?: string
+          revenue_generated?: number
+          total_orders?: number
+          total_quantity_sold?: number
+          trending_rank?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trending_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trending_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_locations: {
         Row: {
           address: string | null
@@ -3435,6 +3658,36 @@ export type Database = {
         }
         Relationships: []
       }
+      variant_templates: {
+        Row: {
+          category_name: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          sort_order: number | null
+          template_name: string
+          template_value: string
+        }
+        Insert: {
+          category_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          sort_order?: number | null
+          template_name: string
+          template_value: string
+        }
+        Update: {
+          category_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          sort_order?: number | null
+          template_name?: string
+          template_value?: string
+        }
+        Relationships: []
+      }
       whatsapp_interactions: {
         Row: {
           contact_phone: string
@@ -3599,6 +3852,39 @@ export type Database = {
           type: string | null
           unit: string | null
           updated_at: string | null
+        }
+        Relationships: []
+      }
+      seller_analytics_view: {
+        Row: {
+          business_name: string | null
+          month_stats: Json | null
+          seller_email: string | null
+          seller_id: string | null
+          seller_name: string | null
+          six_month_stats: Json | null
+          week_stats: Json | null
+          year_stats: Json | null
+        }
+        Insert: {
+          business_name?: string | null
+          month_stats?: never
+          seller_email?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          six_month_stats?: never
+          week_stats?: never
+          year_stats?: never
+        }
+        Update: {
+          business_name?: string | null
+          month_stats?: never
+          seller_email?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          six_month_stats?: never
+          week_stats?: never
+          year_stats?: never
         }
         Relationships: []
       }
@@ -3790,6 +4076,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      cleanup_expired_otps: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       clear_user_cart: {
         Args: { cart_user_id: string }
         Returns: undefined
@@ -3827,6 +4117,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      create_delivery_agent: {
+        Args: {
+          agent_email: string
+          agent_name: string
+          agent_phone?: string
+          custom_agent_id?: string
+        }
+        Returns: string
+      }
       create_order_from_existing_subscription: {
         Args: { p_order_type?: string; p_subscription_id: string }
         Returns: string
@@ -3863,6 +4162,10 @@ export type Database = {
       ensure_delivery_data_consistency: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      fix_uncategorized_products: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       generate_order_qr_code: {
         Args: { order_uuid: string }
@@ -3955,6 +4258,26 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      get_delivery_agent_analytics: {
+        Args: { time_period?: string }
+        Returns: {
+          agent_email: string
+          agent_id: string
+          agent_name: string
+          average_rating: number
+          completion_rate: number
+          deliveries_today: number
+          is_active: boolean
+          is_online: boolean
+          last_delivery_at: string
+          period_label: string
+          phone: string
+          successful_deliveries: number
+          total_deliveries: number
+          total_distance: number
+          total_earnings: number
+        }[]
+      }
       get_delivery_performance: {
         Args: { time_period?: string }
         Returns: {
@@ -4015,7 +4338,9 @@ export type Database = {
         }[]
       }
       get_products_within_range: {
-        Args: { customer_lat: number; customer_lon: number; range_km?: number }
+        Args:
+          | { customer_lat: number; customer_lon: number; range_km?: number }
+          | { customer_lat: number; customer_lon: number; range_km?: number }
         Returns: {
           distance_km: number
           product_description: string
@@ -4024,7 +4349,9 @@ export type Database = {
           product_name: string
           product_price: number
           seller_id: string
-          seller_location: Json
+          seller_lat: number
+          seller_lng: number
+          seller_name: string
           stock_quantity: number
         }[]
       }
@@ -4055,6 +4382,10 @@ export type Database = {
         Args: { target_seller_id: string }
         Returns: Json
       }
+      get_seller_sales_analytics: {
+        Args: { target_seller_id: string; time_period?: string }
+        Returns: Json
+      }
       get_seller_stats: {
         Args: { seller_user_id: string }
         Returns: Json
@@ -4072,6 +4403,20 @@ export type Database = {
           seller_name: string
           total_revenue: number
           total_sold: number
+        }[]
+      }
+      get_top_products_analytics: {
+        Args: { limit_count?: number; time_period?: string }
+        Returns: {
+          period_label: string
+          product_id: string
+          product_image_url: string
+          product_name: string
+          seller_id: string
+          seller_name: string
+          total_orders: number
+          total_quantity: number
+          total_revenue: number
         }[]
       }
       get_trending_products_for_new_users: {
@@ -4138,12 +4483,24 @@ export type Database = {
         Args: { user_email: string }
         Returns: boolean
       }
+      is_approved_seller: {
+        Args: { user_uuid?: string }
+        Returns: boolean
+      }
       is_current_user_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
       is_current_user_admin_v2: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_location_serviceable: {
+        Args: {
+          customer_lat: number
+          customer_lon: number
+          max_distance_km?: number
+        }
         Returns: boolean
       }
       is_user_eligible_for_coupon: {
@@ -4264,6 +4621,10 @@ export type Database = {
         Args: { p_delivery_date: string; p_subscription_id: string }
         Returns: boolean
       }
+      sync_special_offers_from_products: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -4275,6 +4636,10 @@ export type Database = {
           p_new_status: string
           p_order_id: string
         }
+        Returns: undefined
+      }
+      update_trending_products: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       upsert_delivery_agent: {
