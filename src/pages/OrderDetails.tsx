@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,30 +28,28 @@ import {
   Zap
 } from "lucide-react";
 
-// Order data matching the requirements from the prompt
-const mockOrderData = {
-  order_id: "ORD123",
-  customer_name: "Rohit Sharma",
-  customer_address: "Sector 21, Phagwara",
-  customer_phone: "+91 98765 43210",
-  distance_km: 2.5,
-  estimated_time: "25 mins",
-  items: [
-    { name: "Milk 1L", quantity: 2, price: 50 },
-    { name: "Bread", quantity: 1, price: 30 },
-    { name: "Eggs (12 pcs)", quantity: 1, price: 60 }
-  ],
-  total_amount: 130,
-  priority_level: "High", // High, Medium, Low
-  status: "Pending",
-  special_instructions: "Leave at door. Ring bell twice.",
-  restaurant: "Fresh Mart",
-  restaurant_address: "Main Market, Phagwara",
-  restaurant_phone: "+91 98765 12345",
-  time_left: "12 mins", // Time left for pickup/delivery
-  customer_rating: 4.8,
-  delivery_fee: 20
-};
+interface OrderData {
+  order_id?: string;
+  customer_name: string;
+  customer_address?: string;
+  customer_phone: string;
+  distance_km?: number;
+  estimated_time?: string;
+  items: any[];
+  total_amount: number;
+  priority_level?: string;
+  status: string;
+  special_instructions?: string;
+  restaurant?: string;
+  restaurant_address?: string;
+  restaurant_phone?: string;
+  time_left?: string;
+  customer_rating?: number;
+  delivery_fee?: number;
+  address?: any;
+  total?: number;
+  id?: string;
+}
 
 const OrderDetails = () => {
   const navigate = useNavigate();
@@ -61,7 +60,95 @@ const OrderDetails = () => {
   // State management
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
-  const [orderData] = useState(mockOrderData); // In real app, this would fetch from API
+  const [orderData, setOrderData] = useState<OrderData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [customerRating, setCustomerRating] = useState<number | null>(null);
+
+  // Fetch order data from backend
+  useEffect(() => {
+    const fetchOrderData = async () => {
+      if (!orderId) {
+        toast({
+          title: "Error",
+          description: "No order ID provided",
+          variant: "destructive"
+        });
+        navigate('/home');
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        
+        // Fetch order details
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', orderId)
+          .single();
+
+        if (orderError || !order) {
+          toast({
+            title: "Error",
+            description: "Order not found",
+            variant: "destructive"
+          });
+          navigate('/home');
+          return;
+        }
+
+        // Get customer rating from delivery_agent_ratings if order is completed
+        let rating = null;
+        if (order.status === 'delivered') {
+          const { data: ratingData } = await supabase
+            .from('delivery_history')
+            .select('customer_rating')
+            .eq('order_id', orderId)
+            .single();
+          
+          if (ratingData && ratingData.customer_rating) {
+            rating = ratingData.customer_rating;
+          }
+        }
+
+        // Transform order data to match component interface
+        const transformedOrder: OrderData = {
+          id: order.id,
+          order_id: order.id,
+          customer_name: order.customer_name || 'Unknown Customer',
+          customer_phone: order.customer_phone || '',
+          customer_address: typeof order.address === 'string' 
+            ? order.address 
+            : (order.address as any)?.full_address || 'Address not available',
+          items: Array.isArray(order.items) ? order.items : [],
+          total_amount: order.total || 0,
+          total: order.total || 0,
+          status: order.status || 'pending',
+          special_instructions: order.special_instructions || '',
+          address: order.address,
+          priority_level: 'Medium', // Default priority
+          delivery_fee: 0, // Default delivery fee
+          customer_rating: rating
+        };
+
+        setOrderData(transformedOrder);
+        setCustomerRating(rating);
+        
+      } catch (error) {
+        console.error('Error fetching order:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load order details",
+          variant: "destructive"
+        });
+        navigate('/home');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOrderData();
+  }, [orderId, toast, navigate]);
 
   // Get priority color based on level
   const getPriorityColor = (priority: string) => {
@@ -101,7 +188,7 @@ const OrderDetails = () => {
     }
   };
 
-  const priorityColors = getPriorityColor(orderData.priority_level);
+  const priorityColors = orderData ? getPriorityColor(orderData.priority_level || 'Medium') : getPriorityColor('Medium');
 
   // Handle accept order
   const handleAcceptOrder = async () => {
@@ -142,7 +229,28 @@ const OrderDetails = () => {
   };
 
   // Calculate total with delivery fee
-  const finalTotal = orderData.total_amount + orderData.delivery_fee;
+  const finalTotal = orderData ? (orderData.total_amount || 0) + (orderData.delivery_fee || 0) : 0;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground mt-2">Loading order details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!orderData) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Order not found</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-dark">
@@ -204,10 +312,12 @@ const OrderDetails = () => {
                   <User className="w-5 h-5 text-primary" />
                   <span>Customer Details</span>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                  <span className="text-sm font-medium text-foreground">{orderData.customer_rating}</span>
-                </div>
+                {customerRating && (
+                  <div className="flex items-center space-x-1">
+                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                    <span className="text-sm font-medium text-foreground">{customerRating.toFixed(1)}</span>
+                  </div>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
