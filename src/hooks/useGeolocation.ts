@@ -38,30 +38,31 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
 
   const [watchId, setWatchId] = useState<number | null>(null);
 
-  // Reverse geocoding to get address from coordinates
+  // Reverse geocoding to get address from coordinates using Google Places API
   const getAddressFromCoordinates = async (lat: number, lng: number): Promise<string> => {
     try {
-      // Try using a free geocoding service
-      const response = await fetch(
-        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.locality && data.city) {
-          return `${data.locality}, ${data.city}`;
-        } else if (data.city) {
-          return data.city;
-        } else if (data.countryName) {
-          return data.countryName;
+      const { data, error } = await supabase.functions.invoke('google-places-geocode', {
+        body: {
+          lat: lat,
+          lng: lng
         }
+      });
+
+      if (error) {
+        console.error('Google Places geocoding error:', error);
+        throw error;
+      }
+
+      if (data.success && data.address) {
+        return data.address;
+      } else {
+        throw new Error(data.error || 'Failed to get address');
       }
     } catch (error) {
-      console.warn('Failed to get address from coordinates:', error);
+      console.error('Error getting address from Google Places:', error);
+      // Fallback to coordinate display
+      return `Near ${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`;
     }
-    
-    // Fallback to readable format
-    return `Near ${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`;
   };
 
   // Save location to backend

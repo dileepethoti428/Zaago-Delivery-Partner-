@@ -1,18 +1,31 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { MapPin, Navigation, Map } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { MapPin, Navigation, Map, Search } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LocationPickerProps {
   children: React.ReactNode;
   onLocationSelected?: (location: { lat: number; lng: number; address: string }) => void;
 }
 
+interface Prediction {
+  place_id: string;
+  description: string;
+  main_text: string;
+  secondary_text: string;
+  types: string[];
+}
+
 export const LocationPicker = ({ children, onLocationSelected }: LocationPickerProps) => {
   const [open, setOpen] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
 
   const location = useGeolocation({
@@ -56,12 +69,96 @@ export const LocationPicker = ({ children, onLocationSelected }: LocationPickerP
     }
   };
 
-  const handleSelectOnMap = () => {
-    // For now, show a message that this feature is coming soon
-    toast({
-      title: "Coming Soon",
-      description: "Map selection feature will be available soon. Please use current location for now.",
-    });
+  // Google Places search functionality
+  const searchPlaces = async (input: string) => {
+    if (!input.trim()) {
+      setPredictions([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('google-places-autocomplete', {
+        body: {
+          input: input.trim(),
+          location: location.latitude && location.longitude ? {
+            lat: location.latitude,
+            lng: location.longitude
+          } : null,
+          types: "geocode"
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setPredictions(data.predictions || []);
+      } else {
+        throw new Error(data.error || 'Failed to search places');
+      }
+    } catch (error) {
+      console.error('Places search error:', error);
+      toast({
+        title: "Search Error",
+        description: "Failed to search places. Please try again.",
+        variant: "destructive",
+      });
+      setPredictions([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      searchPlaces(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const selectPlace = async (prediction: Prediction) => {
+    try {
+      setIsGettingLocation(true);
+      
+      const { data, error } = await supabase.functions.invoke('google-places-geocode', {
+        body: {
+          placeId: prediction.place_id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        const selectedLocation = {
+          lat: data.coordinates.lat,
+          lng: data.coordinates.lng,
+          address: data.address
+        };
+
+        onLocationSelected?.(selectedLocation);
+        setOpen(false);
+        setSearchQuery("");
+        setPredictions([]);
+
+        toast({
+          title: "Location Selected",
+          description: `Selected: ${data.address}`,
+        });
+      } else {
+        throw new Error(data.error || 'Failed to get place details');
+      }
+    } catch (error) {
+      console.error('Place selection error:', error);
+      toast({
+        title: "Selection Error",
+        description: "Failed to select location. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGettingLocation(false);
+    }
   };
 
   return (
@@ -102,23 +199,49 @@ export const LocationPicker = ({ children, onLocationSelected }: LocationPickerP
             </div>
           </Button>
 
-          <Button
-            onClick={handleSelectOnMap}
-            className="w-full justify-start h-auto p-4"
-            variant="outline"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-secondary/50 rounded-lg">
-                <Map className="w-5 h-5 text-foreground" />
-              </div>
-              <div className="text-left">
-                <div className="font-medium">Select on Map</div>
-                <div className="text-sm text-muted-foreground">
-                  Choose location manually on map
-                </div>
-              </div>
+          <div className="relative">
+            <div className="flex items-center space-x-2">
+              <Search className="w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search for places..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                disabled={isSearching}
+                className="flex-1"
+              />
             </div>
-          </Button>
+            
+            {predictions.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+                {predictions.map((prediction) => (
+                  <button
+                    key={prediction.place_id}
+                    onClick={() => selectPlace(prediction)}
+                    disabled={isGettingLocation}
+                    className="w-full px-4 py-3 text-left hover:bg-muted transition-colors border-b last:border-b-0"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">
+                          {prediction.main_text}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {prediction.secondary_text}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {isSearching && (
+              <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg p-4">
+                <div className="text-sm text-muted-foreground">Searching...</div>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
