@@ -5,7 +5,8 @@ import {
   Package, 
   DollarSign, 
   Settings,
-  Wallet
+  Wallet,
+  Truck
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import WalletDisplay from "./WalletDisplay";
@@ -23,8 +24,14 @@ const BottomNavigation = () => {
       path: "/home"
     },
     {
+      id: "my-orders",
+      label: "My Orders",
+      icon: Truck,
+      path: "/my-deliveries"
+    },
+    {
       id: "history",
-      label: "History",
+      label: "History", 
       icon: Package,
       path: "/history"
     },

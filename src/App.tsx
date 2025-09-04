@@ -11,6 +11,7 @@ import RequireAuth from "@/components/RequireAuth";
 import Splash from "./pages/Splash";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
+import MyDeliveries from "./pages/MyDeliveries";
 import History from "./pages/History";
 import Tracking from "./pages/Tracking";
 import DeliveryDetails from "./pages/DeliveryDetails";
@@ -44,6 +45,7 @@ const App = () => (
             
             {/* Main App Routes */}
             <Route path="/home" element={<RequireAuth><Home /></RequireAuth>} />
+            <Route path="/my-deliveries" element={<RequireAuth><MyDeliveries /></RequireAuth>} />
             <Route path="/history" element={<RequireAuth><History /></RequireAuth>} />
             <Route path="/tracking" element={<RequireAuth><Tracking /></RequireAuth>} />
             <Route path="/delivery-details/:orderId" element={<RequireAuth><DeliveryDetails /></RequireAuth>} />
