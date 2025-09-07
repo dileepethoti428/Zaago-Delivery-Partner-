@@ -24,12 +24,6 @@ const BottomNavigation = () => {
       path: "/home"
     },
     {
-      id: "my-orders",
-      label: "My Orders",
-      icon: Truck,
-      path: "/my-deliveries"
-    },
-    {
       id: "history",
       label: "History", 
       icon: Package,

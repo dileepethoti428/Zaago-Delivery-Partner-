@@ -24,8 +24,14 @@ import {
   User,
   QrCode,
   Loader2,
-  PackageOpen
+  PackageOpen,
+  Target,
+  MapPinOff,
+  Trophy,
+  BarChart3,
+  ChevronDown
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
 import DeliveryTimer from "@/components/DeliveryTimer";
@@ -75,6 +81,7 @@ const Home = () => {
   const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
   const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
   const [agentName, setAgentName] = useState<string>("");
+  const [sortBy, setSortBy] = useState<string>("nearest");
 
   // Get greeting based on current time
   const getGreeting = () => {
@@ -519,8 +526,29 @@ const Home = () => {
     }
   };
 
-  // Show available orders (no filtering needed anymore)
-  const availableOrders = ordersWithDistance;
+  // Sort orders based on selected criteria
+  const getSortedOrders = () => {
+    const orders = [...ordersWithDistance];
+    
+    switch (sortBy) {
+      case "nearest":
+        return orders.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
+      case "furthest":
+        return orders.sort((a, b) => (b.distance_km || 0) - (a.distance_km || 0));
+      case "newest":
+        return orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case "oldest":
+        return orders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      case "highest":
+        return orders.sort((a, b) => b.total - a.total);
+      case "lowest":
+        return orders.sort((a, b) => a.total - b.total);
+      default:
+        return orders;
+    }
+  };
+
+  const availableOrders = getSortedOrders();
 
   const LoadingSkeleton = () => (
     <div className="space-y-4">
@@ -682,6 +710,59 @@ const Home = () => {
                   Available orders and your assignments
                 </p>
               </div>
+              
+              {/* Sort Dropdown */}
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-44 h-9 bg-card border-border">
+                  <div className="flex items-center space-x-2">
+                    {sortBy === "nearest" && <Target className="w-4 h-4 text-primary" />}
+                    {sortBy === "furthest" && <MapPinOff className="w-4 h-4 text-destructive" />}
+                    {sortBy === "newest" && <Clock className="w-4 h-4 text-muted-foreground" />}
+                    {sortBy === "oldest" && <Clock className="w-4 h-4 text-muted-foreground" />}
+                    {sortBy === "highest" && <Trophy className="w-4 h-4 text-amber-500" />}
+                    {sortBy === "lowest" && <BarChart3 className="w-4 h-4 text-green-500" />}
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  <SelectItem value="nearest" className="cursor-pointer">
+                    <div className="flex items-center space-x-2">
+                      <Target className="w-4 h-4 text-primary" />
+                      <span>Nearest First</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="furthest" className="cursor-pointer">
+                    <div className="flex items-center space-x-2">
+                      <MapPinOff className="w-4 h-4 text-destructive" />
+                      <span>Furthest First</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="newest" className="cursor-pointer">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span>Newest First</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="oldest" className="cursor-pointer">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span>Oldest First</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="highest" className="cursor-pointer">
+                    <div className="flex items-center space-x-2">
+                      <Trophy className="w-4 h-4 text-amber-500" />
+                      <span>Highest Amount</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="lowest" className="cursor-pointer">
+                    <div className="flex items-center space-x-2">
+                      <BarChart3 className="w-4 h-4 text-green-500" />
+                      <span>Lowest Amount</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {isLoading ? (
