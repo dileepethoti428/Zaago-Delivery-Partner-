@@ -1997,6 +1997,7 @@ export type Database = {
           settlement_locked: boolean | null
           special_instructions: string | null
           status: string
+          subscription_id: string | null
           total: number
           updated_at: string
           user_id: string | null
@@ -2019,6 +2020,7 @@ export type Database = {
           settlement_locked?: boolean | null
           special_instructions?: string | null
           status?: string
+          subscription_id?: string | null
           total: number
           updated_at?: string
           user_id?: string | null
@@ -2041,6 +2043,7 @@ export type Database = {
           settlement_locked?: boolean | null
           special_instructions?: string | null
           status?: string
+          subscription_id?: string | null
           total?: number
           updated_at?: string
           user_id?: string | null
@@ -2058,6 +2061,13 @@ export type Database = {
             columns: ["delivery_address_id"]
             isOneToOne: false
             referencedRelation: "delivery_addresses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -4740,6 +4750,14 @@ export type Database = {
       send_birthday_messages: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      send_subscription_notification: {
+        Args: {
+          p_notification_type?: string
+          p_order_id: string
+          p_subscription_id: string
+        }
+        Returns: boolean
       }
       settle_cod_automatically: {
         Args: { p_agent_id: string; p_cod_amount: number; p_order_id: string }
