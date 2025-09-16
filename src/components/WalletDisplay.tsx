@@ -265,7 +265,7 @@ const WalletDisplay = ({ agentId }: WalletDisplayProps) => {
 
       {/* Transaction History Dialog */}
       <Dialog open={showTransactionHistory} onOpenChange={setShowTransactionHistory}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[95vw] max-w-lg mx-auto max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <History className="w-5 h-5" />

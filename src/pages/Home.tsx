@@ -714,15 +714,7 @@ const Home = () => {
               {/* Sort Dropdown */}
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-44 h-9 bg-card border-border">
-                  <div className="flex items-center space-x-2">
-                    {sortBy === "nearest" && <Target className="w-4 h-4 text-primary" />}
-                    {sortBy === "furthest" && <MapPinOff className="w-4 h-4 text-destructive" />}
-                    {sortBy === "newest" && <Clock className="w-4 h-4 text-muted-foreground" />}
-                    {sortBy === "oldest" && <Clock className="w-4 h-4 text-muted-foreground" />}
-                    {sortBy === "highest" && <Trophy className="w-4 h-4 text-amber-500" />}
-                    {sortBy === "lowest" && <BarChart3 className="w-4 h-4 text-green-500" />}
-                    <SelectValue />
-                  </div>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-popover border-border">
                   <SelectItem value="nearest" className="cursor-pointer">

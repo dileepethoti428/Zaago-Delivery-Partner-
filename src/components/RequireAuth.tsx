@@ -10,18 +10,32 @@ export default function RequireAuth({ children }: PropsWithChildren) {
 
   useEffect(() => {
     // Subscribe first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setIsAuthed(!!session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        setIsAuthed(!!session);
+      } else {
+        setIsAuthed(!!session);
+      }
+      
+      // Always set loading to false once we get a session update
+      if (loading) {
+        setLoading(false);
+      }
     });
 
     // Then fetch existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthed(!!session);
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.warn('Session error:', error);
+        setIsAuthed(false);
+      } else {
+        setIsAuthed(!!session);
+      }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [loading]);
 
   if (loading || isAuthed === null) return null; // or a small spinner placeholder
   if (!isAuthed) return <Navigate to="/login" replace state={{ from: location }} />;
