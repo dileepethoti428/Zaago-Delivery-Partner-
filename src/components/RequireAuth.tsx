@@ -45,7 +45,7 @@ export default function RequireAuth({ children }: PropsWithChildren) {
                 .eq('agent_id', agent.id)
                 .maybeSingle();
               
-              setAutoLogoutEnabled(settings?.auto_logout ?? true);
+              setAutoLogoutEnabled((settings as any)?.auto_logout ?? true);
             }
           } catch (error) {
             console.error('Error fetching auto logout setting:', error);

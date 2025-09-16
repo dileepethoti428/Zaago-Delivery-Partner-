@@ -221,6 +221,7 @@ export type Database = {
       agent_settings: {
         Row: {
           agent_id: string
+          auto_logout: boolean | null
           created_at: string | null
           id: string
           language: string | null
@@ -235,6 +236,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          auto_logout?: boolean | null
           created_at?: string | null
           id?: string
           language?: string | null
@@ -249,6 +251,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          auto_logout?: boolean | null
           created_at?: string | null
           id?: string
           language?: string | null
