@@ -179,10 +179,10 @@ const WalletDisplay = ({ agentId }: WalletDisplayProps) => {
     <>
       {/* Main Wallet Card */}
       <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between text-base">
             <div className="flex items-center space-x-2">
-              <Wallet className="w-6 h-6 text-primary" />
+              <Wallet className="w-5 h-5 text-primary" />
               <span>Wallet</span>
             </div>
             <Button 
@@ -194,25 +194,25 @@ const WalletDisplay = ({ agentId }: WalletDisplayProps) => {
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4 pt-0">
           {/* Balance Display */}
           <div className="text-center">
-            <div className="mb-2">
-              <span className="text-sm text-muted-foreground">Available Balance</span>
+            <div className="mb-1">
+              <span className="text-xs text-muted-foreground">Available Balance</span>
             </div>
-            <div className="text-4xl font-bold text-foreground mb-4">
+            <div className="text-2xl font-bold text-foreground mb-3">
               ₹{walletData.balance.toFixed(2)}
             </div>
             
             {/* Additional balances */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="p-3 bg-orange-500/10 rounded-lg">
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="p-2 bg-orange-500/10 rounded-lg">
                 <div className="text-xs text-orange-600 mb-1">Pending COD</div>
-                <div className="text-lg font-semibold">₹{walletData.pending_cod_amount.toFixed(2)}</div>
+                <div className="text-sm font-semibold">₹{walletData.pending_cod_amount.toFixed(2)}</div>
               </div>
-              <div className="p-3 bg-green-500/10 rounded-lg">
+              <div className="p-2 bg-green-500/10 rounded-lg">
                 <div className="text-xs text-green-600 mb-1">Total Collected</div>
-                <div className="text-lg font-semibold">₹{walletData.total_collected.toFixed(2)}</div>
+                <div className="text-sm font-semibold">₹{walletData.total_collected.toFixed(2)}</div>
               </div>
             </div>
 
@@ -223,30 +223,31 @@ const WalletDisplay = ({ agentId }: WalletDisplayProps) => {
           {/* Recent Transactions Preview */}
           {transactions.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-medium">Recent Transactions</h4>
                 <Button 
                   variant="ghost" 
                   size="sm"
                   onClick={() => setShowTransactionHistory(true)}
+                  className="text-xs h-6 px-2"
                 >
                   View All
                 </Button>
               </div>
               <div className="space-y-2">
-                {transactions.slice(0, 3).map((txn) => (
-                  <div key={txn.id} className="flex items-center justify-between p-3 bg-background/50 rounded-lg">
-                    <div className="flex items-center space-x-3">
+                {transactions.slice(0, 2).map((txn) => (
+                  <div key={txn.id} className="flex items-center justify-between p-2 bg-background/50 rounded-lg">
+                    <div className="flex items-center space-x-2">
                       {getTransactionIcon(txn.transaction_type)}
                       <div>
-                        <p className="text-sm font-medium">{txn.description}</p>
+                        <p className="text-xs font-medium truncate max-w-24">{txn.description}</p>
                         <p className="text-xs text-muted-foreground">
                           {new Date(txn.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-sm font-medium ${
+                    <div className="flex items-center space-x-1">
+                      <span className={`text-xs font-medium ${
                         txn.transaction_type === 'topup' || txn.transaction_type === 'delivery_payment' 
                           ? 'text-green-600' 
                           : 'text-red-600'
