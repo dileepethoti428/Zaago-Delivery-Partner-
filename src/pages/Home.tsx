@@ -276,8 +276,20 @@ const Home = () => {
 
   // Calculate distances when orders change or location updates
   useEffect(() => {
-    if (orders.length > 0 && (location.latitude && location.longitude)) {
-      calculateDistanceETA(orders);
+    if (orders.length > 0) {
+      // If we have location, calculate distances; otherwise use orders as-is
+      if (location.latitude && location.longitude) {
+        calculateDistanceETA(orders);
+      } else {
+        // Set orders with fallback distance values when location is not available
+        const ordersWithFallback = orders.map(order => ({
+          ...order,
+          distance_km: order.distance_km || 2.5,
+          delivery_time: order.delivery_time || "5 min",
+          backend_calculated: order.backend_calculated || false
+        }));
+        setOrdersWithDistance(ordersWithFallback);
+      }
     }
   }, [orders, location.latitude, location.longitude]);
 
@@ -528,23 +540,24 @@ const Home = () => {
 
   // Sort orders based on selected criteria
   const getSortedOrders = () => {
-    const orders = [...ordersWithDistance];
+    // Use ordersWithDistance if available, otherwise fallback to orders
+    const ordersToSort = ordersWithDistance.length > 0 ? [...ordersWithDistance] : [...orders];
     
     switch (sortBy) {
       case "nearest":
-        return orders.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
+        return ordersToSort.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
       case "furthest":
-        return orders.sort((a, b) => (b.distance_km || 0) - (a.distance_km || 0));
+        return ordersToSort.sort((a, b) => (b.distance_km || 0) - (a.distance_km || 0));
       case "newest":
-        return orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return ordersToSort.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       case "oldest":
-        return orders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        return ordersToSort.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       case "highest":
-        return orders.sort((a, b) => b.total - a.total);
+        return ordersToSort.sort((a, b) => b.total - a.total);
       case "lowest":
-        return orders.sort((a, b) => a.total - b.total);
+        return ordersToSort.sort((a, b) => a.total - b.total);
       default:
-        return orders;
+        return ordersToSort;
     }
   };
 
@@ -830,7 +843,7 @@ const Home = () => {
                            <div className="grid grid-cols-4 gap-2 text-sm">
                             <div className="flex items-center text-muted-foreground">
                               <Navigation className="w-4 h-4 mr-1 text-primary" />
-                              {order.distance_km?.toFixed(1) || '0.0'} km
+                              {order.distance_km !== undefined ? `${order.distance_km.toFixed(1)} km` : 'Calculating...'}
                             </div>
                             <div className="flex items-center text-muted-foreground">
                               <Clock className="w-4 h-4 mr-1 text-primary" />
