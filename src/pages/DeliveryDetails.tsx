@@ -344,8 +344,25 @@ const DeliveryDetails = () => {
         return 'bg-green-500/20 text-green-400';
       case 'pending':
         return 'bg-yellow-500/20 text-yellow-400';
+      case 'paid_cod':
+        return 'bg-blue-500/20 text-blue-400';
       default:
         return 'bg-gray-500/20 text-gray-400';
+    }
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'paid_online':
+        return 'PAID ONLINE';
+      case 'paid_cod':
+        return 'PAID COD';
+      case 'paid':
+        return 'PAID';
+      case 'pending':
+        return 'PENDING';
+      default:
+        return status.toUpperCase().replace('_', ' ');
     }
   };
 
@@ -373,7 +390,7 @@ const DeliveryDetails = () => {
           PENDING
         </Badge>
         <Badge className={`${getPaymentStatusColor(order.payment_status)} border-0`}>
-          {order.payment_status.toUpperCase().replace('_', ' ')}
+          {getPaymentStatusText(order.payment_status)}
         </Badge>
       </div>
 
@@ -507,7 +524,7 @@ const DeliveryDetails = () => {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-foreground">Payment Status:</span>
               <Badge className={`${getPaymentStatusColor(order.payment_status)} border-0 text-xs`}>
-                {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? 'PREPAID' : 'PENDING'}
+                {getPaymentStatusText(order.payment_status)}
               </Badge>
             </div>
 
