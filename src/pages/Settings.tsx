@@ -326,6 +326,9 @@ const Settings = () => {
       case "Help Center":
         navigate('/help');
         break;
+      case "Contact Support":
+        window.open('https://wa.me/917842343642', '_blank');
+        break;
       default:
         toast({
           title: "Coming Soon",

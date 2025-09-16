@@ -98,10 +98,21 @@ const PrivacySecurity = () => {
       if (error) throw error;
 
       setSettings(prev => ({ ...prev, [key]: value }));
-      toast({
-        title: "Settings Updated",
-        description: "Your privacy settings have been saved.",
-      });
+      
+      // Special message for auto logout
+      if (key === 'auto_logout') {
+        toast({
+          title: value ? "Auto Logout Enabled" : "Auto Logout Disabled",
+          description: value 
+            ? "You will be automatically logged out after 30 minutes of inactivity" 
+            : "Auto logout has been disabled",
+        });
+      } else {
+        toast({
+          title: "Settings Updated",
+          description: "Your privacy settings have been saved.",
+        });
+      }
     } catch (error) {
       console.error('Error updating settings:', error);
       toast({
