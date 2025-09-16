@@ -98,8 +98,8 @@ const BottomNavigation = () => {
 
       {/* Wallet Dialog */}
       <Dialog open={showWalletMenu} onOpenChange={setShowWalletMenu}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md mx-auto max-h-[85vh] overflow-y-auto p-0 m-4">
+          <DialogHeader className="p-6 pb-0">
             <DialogTitle className="flex items-center space-x-2">
               <Wallet className="w-5 h-5" />
               <span>My Wallet</span>
@@ -108,7 +108,7 @@ const BottomNavigation = () => {
               Manage your wallet balance and transactions
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="p-6 pt-4">
             <WalletDisplay />
           </div>
         </DialogContent>

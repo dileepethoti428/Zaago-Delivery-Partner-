@@ -265,8 +265,8 @@ const WalletDisplay = ({ agentId }: WalletDisplayProps) => {
 
       {/* Transaction History Dialog */}
       <Dialog open={showTransactionHistory} onOpenChange={setShowTransactionHistory}>
-        <DialogContent className="w-[95vw] max-w-lg mx-auto max-h-[90vh] overflow-hidden">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-lg mx-auto max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="sticky top-0 bg-background pb-2 border-b">
             <DialogTitle className="flex items-center space-x-2">
               <History className="w-5 h-5" />
               <span>Transaction History</span>
@@ -276,7 +276,7 @@ const WalletDisplay = ({ agentId }: WalletDisplayProps) => {
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="h-96 pr-4">
+          <ScrollArea className="h-[60vh] px-1 mt-4">\
             <div className="space-y-3">
               {transactions.length > 0 ? (
                 transactions.map((txn) => (
