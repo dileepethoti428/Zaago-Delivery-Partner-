@@ -341,6 +341,7 @@ const DeliveryDetails = () => {
     switch (status.toLowerCase()) {
       case 'paid':
       case 'paid_online':
+      case 'paid_subscription':
         return 'bg-green-500/20 text-green-400';
       case 'pending':
         return 'bg-yellow-500/20 text-yellow-400';
@@ -357,6 +358,8 @@ const DeliveryDetails = () => {
         return 'PAID ONLINE';
       case 'paid_cod':
         return 'PAID COD';
+      case 'paid_subscription':
+        return 'PAID SUBSCRIPTION';
       case 'paid':
         return 'PAID';
       case 'pending':
