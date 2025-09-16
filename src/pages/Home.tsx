@@ -163,30 +163,70 @@ const Home = () => {
       }
 
       // Transform backend data to match our interface
-      const transformedOrders: Order[] = (response.orders || []).map((order, index) => ({
-        id: order.id,
-        customer_name: order.customer_name,
-        customer_phone: order.customer_phone,
-        address: order.address,
-        items: Array.isArray(order.items) ? order.items : [],
-        total: order.total,
-        status: order.status,
-        delivery_date: order.delivery_date,
-        created_at: order.created_at,
-        payment_status: order.payment_status,
-        coordinates: (order.address as any)?.coordinates,
-        products_count: Array.isArray(order.items) ? order.items.length : 1,
-        restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
-        // Use backend-calculated distance if available, otherwise will be calculated later
-        distance_km: order.distance_km || undefined,
-        backend_calculated: order.distance_km ? true : false,
-        // Determine delivery type based on actual order data
-        delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
-        scheduled_time: order.delivery_time_slot ? 
-          new Date(order.delivery_date + 'T' + order.delivery_time_slot.split('-')[0] + ':00').toISOString() : 
-          null,
-        order_placed_at: new Date(order.created_at)
-      }));
+      const transformedOrders: Order[] = (response.orders || []).map((order, index) => {
+        // Safely parse scheduled time
+        let scheduledTime = null;
+        if (order.delivery_time_slot && order.delivery_date) {
+          try {
+            // Handle different time slot formats
+            const timeSlot = order.delivery_time_slot;
+            let timeString = '';
+            
+            if (timeSlot.includes('-')) {
+              // Format like "morning-early" or "18:00-20:00"
+              const timePart = timeSlot.split('-')[0];
+              if (timePart.includes(':')) {
+                timeString = timePart + ':00';
+              } else {
+                // Map text slots to times
+                const timeMap = {
+                  'morning': '08:00:00',
+                  'afternoon': '14:00:00',
+                  'evening': '18:00:00'
+                };
+                timeString = timeMap[timePart] || '12:00:00';
+              }
+            } else if (timeSlot.includes(':')) {
+              timeString = timeSlot + ':00';
+            } else {
+              timeString = '12:00:00'; // fallback
+            }
+            
+            const dateTimeString = order.delivery_date + 'T' + timeString;
+            const date = new Date(dateTimeString);
+            
+            // Validate the date
+            if (!isNaN(date.getTime())) {
+              scheduledTime = date.toISOString();
+            }
+          } catch (error) {
+            console.warn('Failed to parse scheduled time for order:', order.id, error);
+          }
+        }
+
+        return {
+          id: order.id,
+          customer_name: order.customer_name,
+          customer_phone: order.customer_phone,
+          address: order.address,
+          items: Array.isArray(order.items) ? order.items : [],
+          total: order.total,
+          status: order.status,
+          delivery_date: order.delivery_date,
+          created_at: order.created_at,
+          payment_status: order.payment_status,
+          coordinates: (order.address as any)?.coordinates,
+          products_count: Array.isArray(order.items) ? order.items.length : 1,
+          restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
+          // Use backend-calculated distance if available, otherwise will be calculated later
+          distance_km: order.distance_km || undefined,
+          backend_calculated: order.distance_km ? true : false,
+          // Determine delivery type based on actual order data
+          delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
+          scheduled_time: scheduledTime,
+          order_placed_at: new Date(order.created_at)
+        };
+      });
 
       setOrders(transformedOrders);
     } catch (error) {
