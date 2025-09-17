@@ -35,6 +35,8 @@ interface Order {
   special_instructions?: string;
   status: string;
   created_at: string;
+  distance_km?: number;
+  backend_calculated?: boolean;
 }
 
 const DeliveryDetails = () => {
@@ -64,29 +66,63 @@ const DeliveryDetails = () => {
 
   const calculateDistanceAndPayout = async () => {
     try {
-      // Get current agent location
-      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
-      if (!agentLocation || !order?.address?.coordinates) {
+      // First, try to use the stored distance from the order (backend calculated)
+      if (order?.distance_km && order.distance_km > 0) {
+        console.log('Using stored backend distance:', order.distance_km);
+        setDistance(order.distance_km);
+        
+        // Calculate payout using stored distance
+        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
+        setPayout(calculatedPayout);
         return;
       }
 
-      const { data: distanceData } = await supabase.functions.invoke('calculate-distance-eta', {
+      // If no stored distance, calculate fresh using backend service
+      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
+      if (!agentLocation || !order?.address?.coordinates) {
+        // Fallback to default values
+        setDistance(2.5);
+        setPayout(42.5); // 20 + (1.5 * 15)
+        return;
+      }
+
+      // Use the new pricing calculation function for accurate results
+      const { data: pricingData, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
         body: {
-          origin: agentLocation,
-          destination: order.address.coordinates
+          order_id: order.id,
+          agent_location: agentLocation
         }
       });
 
-      if (distanceData?.distance_km) {
-        const dist = distanceData.distance_km;
-        setDistance(dist);
-        
-        // Calculate fair payout: ₹20 base + ₹15/km beyond 1km
-        const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
-        setPayout(calculatedPayout);
+      if (error) throw error;
+
+      if (pricingData?.success) {
+        console.log('Fresh distance and pricing calculated:', pricingData);
+        setDistance(pricingData.distance_km);
+        setPayout(pricingData.agent_payout);
+      } else {
+        // Fallback calculation using distance-eta function
+        const { data: distanceData } = await supabase.functions.invoke('calculate-distance-eta', {
+          body: {
+            origin: agentLocation,
+            destination: order.address.coordinates
+          }
+        });
+
+        if (distanceData?.distance_km) {
+          const dist = distanceData.distance_km;
+          setDistance(dist);
+          
+          // Calculate fair payout: ₹20 base + ₹15/km beyond 1km
+          const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
+          setPayout(calculatedPayout);
+        }
       }
     } catch (error) {
       console.error('Distance calculation error:', error);
+      // Set fallback values on error
+      setDistance(2.5);
+      setPayout(42.5);
     }
   };
 

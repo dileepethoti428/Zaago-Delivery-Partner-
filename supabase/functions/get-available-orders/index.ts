@@ -19,7 +19,15 @@ function calculateHaversineDistance(lat1: number, lng1: number, lat2: number, ln
   return R * c;
 }
 
-// Calculate distance using Mapbox or fallback to Haversine
+// Calculate agent payout based on distance
+function calculateAgentPayout(distance: number): number {
+  const basePay = 20; // Base pay for first 1 km
+  const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
+  const perKmRate = 15; // Rate per km for additional distance
+  const distancePay = additionalDistance * perKmRate;
+  
+  return Math.round((basePay + distancePay) * 100) / 100; // Round to 2 decimal places
+}
 async function calculateDistance(origin: {lat: number, lng: number}, destination: {lat: number, lng: number}): Promise<number> {
   const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN');
   
@@ -158,9 +166,13 @@ serve(async (req) => {
       for (const order of filteredOrders) {
         // Skip distance filtering for orders already assigned to this agent
         if (order.status === 'assigned' && order.agent_id === agent_id) {
+          const existingDistance = order.distance_km || 0;
+          const agentPayout = calculateAgentPayout(existingDistance);
           nearbyOrders.push({
             ...order,
-            distance_km: order.distance_km || 0 // Keep existing distance or set to 0
+            distance_km: existingDistance,
+            agent_payout: agentPayout,
+            estimated_time_minutes: Math.ceil(existingDistance * 2)
           });
           continue;
         }
@@ -177,9 +189,12 @@ serve(async (req) => {
             
             // Only include orders within 15km
             if (distance <= 15) {
+              const agentPayout = calculateAgentPayout(distance);
               nearbyOrders.push({
                 ...order,
-                distance_km: Math.round(distance * 10) / 10 // Round to 1 decimal place
+                distance_km: Math.round(distance * 10) / 10, // Round to 1 decimal place
+                agent_payout: agentPayout,
+                estimated_time_minutes: Math.ceil(distance * 2) // 2 minutes per km
               });
             }
           } catch (distanceError) {

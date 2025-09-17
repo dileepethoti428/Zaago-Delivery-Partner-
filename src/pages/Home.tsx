@@ -56,6 +56,8 @@ interface Order {
   delivery_type?: 'immediate' | 'scheduled';
   scheduled_time?: string;
   order_placed_at?: Date;
+  agent_payout?: number;
+  estimated_time_minutes?: number;
 }
 
 
@@ -119,11 +121,52 @@ const Home = () => {
     }
   };
   
-  // Calculate agent payout based on real distance (updated rates)
+  // Calculate agent payout using backend service for accurate pricing
+  const calculateAgentPayoutFromBackend = async (orderId: string, agentLocation?: {lat: number, lng: number}) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
+        body: {
+          order_id: orderId,
+          agent_location: agentLocation
+        }
+      });
+
+      if (error) throw error;
+
+      return {
+        payout: data.agent_payout,
+        distance: data.distance_km,
+        estimatedTime: data.estimated_time_minutes,
+        breakdown: data.breakdown
+      };
+    } catch (error) {
+      console.error('Failed to calculate pricing from backend:', error);
+      // Fallback calculation
+      const fallbackDistance = 2.5;
+      const basePay = 20;
+      const additionalDistance = Math.max(0, fallbackDistance - 1);
+      const perKmRate = 15;
+      const distancePay = additionalDistance * perKmRate;
+      
+      return {
+        payout: basePay + distancePay,
+        distance: fallbackDistance,
+        estimatedTime: Math.ceil(fallbackDistance * 2),
+        breakdown: {
+          base_pay: basePay,
+          additional_distance: additionalDistance,
+          per_km_rate: perKmRate,
+          distance_pay: distancePay
+        }
+      };
+    }
+  };
+
+  // Synchronous payout calculation for display (using stored distance)
   const calculateAgentPayout = (distance: number) => {
-    const basePay = 20; // Increased base pay for first 1 km
+    const basePay = 20; // Base pay for first 1 km
     const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
-    const perKmRate = 15; // Increased rate per km for fair pricing
+    const perKmRate = 15; // Rate per km for additional distance
     const distancePay = additionalDistance * perKmRate;
     
     return basePay + distancePay;
@@ -218,8 +261,10 @@ const Home = () => {
           coordinates: (order.address as any)?.coordinates,
           products_count: Array.isArray(order.items) ? order.items.length : 1,
           restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
-          // Use backend-calculated distance if available, otherwise will be calculated later
+          // Use backend-calculated distance and payout if available, otherwise calculate
           distance_km: order.distance_km || undefined,
+          agent_payout: order.agent_payout || undefined,
+          estimated_time_minutes: order.estimated_time_minutes || undefined,
           backend_calculated: order.distance_km ? true : false,
           // Determine delivery type based on actual order data
           delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
@@ -241,25 +286,27 @@ const Home = () => {
     }
   };
 
-  // Calculate distance and ETA for orders using backend service (only for orders without backend distance)
-  const calculateDistanceETA = async (orders: Order[]) => {
-    // Use real agent location if available, fallback to default
+  // Process orders with backend-calculated distances (prioritize backend data)
+  const processOrdersWithDistances = async (orders: Order[]) => {
+    // Use real agent location if available
     const agentLocation = location.latitude && location.longitude 
       ? { lat: location.latitude, lng: location.longitude }
-      : { lat: 31.2556, lng: 75.7045 }; // Fallback location
+      : null;
     
     const updatedOrders = await Promise.all(
       orders.map(async (order) => {
-        // Skip calculation if backend already provided distance
-        if (order.backend_calculated && order.distance_km !== undefined) {
+        // Always use backend-calculated distance if available
+        if (order.distance_km !== undefined) {
           return {
             ...order,
             delivery_time: `${Math.ceil(order.distance_km * 2)} min`, // 2 minutes per km
+            backend_calculated: true
           };
         }
 
+        // Only recalculate if no backend distance and we have coordinates
         try {
-          if (!order.coordinates) {
+          if (!order.coordinates || !agentLocation) {
             return {
               ...order,
               distance_km: 2.5, // fallback
@@ -296,40 +343,14 @@ const Home = () => {
       })
     );
     
-    setOrdersWithDistance(prevOrders => {
-      // Deduplicate orders by ID to prevent showing duplicates
-      const newOrderIds = new Set(updatedOrders.map(order => order.id));
-      const existingOrders = prevOrders.filter(order => !newOrderIds.has(order.id));
-      const finalOrders = [...existingOrders, ...updatedOrders];
-      
-      // Additional deduplication just in case
-      const uniqueOrders = finalOrders.reduce((acc, order) => {
-        if (!acc.some(existing => existing.id === order.id)) {
-          acc.push(order);
-        }
-        return acc;
-      }, [] as typeof finalOrders);
-      
-      return uniqueOrders;
-    });
+    setOrdersWithDistance(updatedOrders);
   };
 
-  // Calculate distances when orders change or location updates
+  // Process orders with distances when they change
   useEffect(() => {
     if (orders.length > 0) {
-      // If we have location, calculate distances; otherwise use orders as-is
-      if (location.latitude && location.longitude) {
-        calculateDistanceETA(orders);
-      } else {
-        // Set orders with fallback distance values when location is not available
-        const ordersWithFallback = orders.map(order => ({
-          ...order,
-          distance_km: order.distance_km || 2.5,
-          delivery_time: order.delivery_time || "5 min",
-          backend_calculated: order.backend_calculated || false
-        }));
-        setOrdersWithDistance(ordersWithFallback);
-      }
+      // Process orders, prioritizing backend-calculated distances
+      processOrdersWithDistances(orders);
     }
   }, [orders, location.latitude, location.longitude]);
 
@@ -900,10 +921,10 @@ const Home = () => {
                           </div>
                           
                            <div className="flex items-center justify-between text-sm mt-2">
-                             <div className="flex items-center text-green-600 font-medium">
-                               <IndianRupee className="w-4 h-4 mr-1" />
-                               Agent payout: ₹{calculateAgentPayout(order.distance_km || 0).toFixed(0)}
-                             </div>
+                              <div className="flex items-center text-green-600 font-medium">
+                                <IndianRupee className="w-4 h-4 mr-1" />
+                                Agent payout: ₹{order.agent_payout ? order.agent_payout.toFixed(0) : calculateAgentPayout(order.distance_km || 0).toFixed(0)}
+                              </div>
                              {order.backend_calculated && (
                                <Badge variant="secondary" className="text-xs">
                                  Real-time distance
