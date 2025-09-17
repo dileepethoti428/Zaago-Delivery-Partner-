@@ -10,7 +10,7 @@ export default function RequireAuth({ children }: PropsWithChildren) {
   const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
-  const [autoLogoutEnabled, setAutoLogoutEnabled] = useState(true);
+  const [autoLogoutEnabled, setAutoLogoutEnabled] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   
   const { showWarning, extendSession } = useAutoLogout({ enabled: autoLogoutEnabled });
@@ -45,7 +45,7 @@ export default function RequireAuth({ children }: PropsWithChildren) {
                 .eq('agent_id', agent.id)
                 .maybeSingle();
               
-              setAutoLogoutEnabled((settings as any)?.auto_logout ?? true);
+              setAutoLogoutEnabled((settings as any)?.auto_logout ?? false);
             }
           } catch (error) {
             console.error('Error fetching auto logout setting:', error);
