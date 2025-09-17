@@ -66,24 +66,12 @@ const DeliveryDetails = () => {
 
   const calculateDistanceAndPayout = async () => {
     try {
-      // Always prioritize backend calculated distance from order if available
-      if (order?.distance_km && order.distance_km > 0 && order?.backend_calculated) {
-        console.log('Using accurate backend calculated distance:', order.distance_km);
-        setDistance(order.distance_km);
-        
-        // Calculate payout using backend distance: ₹20 base + ₹15/km beyond 1km
-        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
-        setPayout(calculatedPayout);
-        return;
-      }
-
-      // If no backend calculated distance, try fresh calculation
+      console.log('Calculating accurate distance and payout from backend...');
+      
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
       
       if (agentLocation && order?.address?.coordinates) {
-        console.log('Calculating fresh distance and payout from backend...');
-        
-        // First try the pricing calculation function
+        // Always use fresh backend calculation for accuracy
         const { data: pricingData, error: pricingError } = await supabase.functions.invoke('calculate-delivery-pricing', {
           body: {
             order_id: order.id,
@@ -98,7 +86,7 @@ const DeliveryDetails = () => {
           return;
         }
 
-        // Fallback to distance-eta calculation
+        // Fallback to distance-eta calculation if pricing fails
         const { data: distanceData, error: distanceError } = await supabase.functions.invoke('calculate-distance-eta', {
           body: {
             origin: agentLocation,
@@ -118,20 +106,10 @@ const DeliveryDetails = () => {
         }
       }
 
-      // Use stored distance as fallback even without backend_calculated flag
-      if (order?.distance_km && order.distance_km > 0) {
-        console.log('Using stored distance as fallback:', order.distance_km);
-        setDistance(order.distance_km);
-        
-        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
-        setPayout(calculatedPayout);
-        return;
-      }
-
-      // Final fallback values
-      console.warn('No accurate distance available, using estimated values');
+      // Final fallback - estimate based on typical delivery distance
+      console.warn('Backend calculation failed, using estimated values');
       setDistance(2.5);
-      setPayout(42.5); // 20 + (1.5 * 15)
+      setPayout(42.5);
       
     } catch (error) {
       console.error('Distance calculation error:', error);
