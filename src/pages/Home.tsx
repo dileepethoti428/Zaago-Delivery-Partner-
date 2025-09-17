@@ -346,13 +346,13 @@ const Home = () => {
     setOrdersWithDistance(updatedOrders);
   };
 
-  // Process orders with distances when they change
+  // Process orders with distances when they change (not when location changes)
   useEffect(() => {
     if (orders.length > 0) {
       // Process orders, prioritizing backend-calculated distances
       processOrdersWithDistances(orders);
     }
-  }, [orders, location.latitude, location.longitude]);
+  }, [orders]); // Removed location dependencies to prevent constant updates
 
   useEffect(() => {
     fetchOrders();
