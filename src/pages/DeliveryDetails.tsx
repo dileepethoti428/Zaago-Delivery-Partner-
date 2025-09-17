@@ -66,28 +66,39 @@ const DeliveryDetails = () => {
 
   const calculateDistanceAndPayout = async () => {
     try {
+      // Always prioritize backend calculated distance from order if available
+      if (order?.distance_km && order.distance_km > 0 && order?.backend_calculated) {
+        console.log('Using accurate backend calculated distance:', order.distance_km);
+        setDistance(order.distance_km);
+        
+        // Calculate payout using backend distance: ₹20 base + ₹15/km beyond 1km
+        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
+        setPayout(calculatedPayout);
+        return;
+      }
+
+      // If no backend calculated distance, try fresh calculation
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
       
-      // Always try backend calculation first for most accurate results
       if (agentLocation && order?.address?.coordinates) {
-        console.log('Calculating accurate distance and payout from backend...');
+        console.log('Calculating fresh distance and payout from backend...');
         
-        // Use the pricing calculation function for accurate backend results
-        const { data: pricingData, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
+        // First try the pricing calculation function
+        const { data: pricingData, error: pricingError } = await supabase.functions.invoke('calculate-delivery-pricing', {
           body: {
             order_id: order.id,
             agent_location: agentLocation
           }
         });
 
-        if (!error && pricingData?.success) {
-          console.log('Backend calculated distance and pricing:', pricingData);
+        if (!pricingError && pricingData?.success && pricingData?.distance_km > 0) {
+          console.log('Backend pricing calculation successful:', pricingData);
           setDistance(pricingData.distance_km);
           setPayout(pricingData.agent_payout);
           return;
         }
 
-        // Fallback to distance calculation if pricing function fails
+        // Fallback to distance-eta calculation
         const { data: distanceData, error: distanceError } = await supabase.functions.invoke('calculate-distance-eta', {
           body: {
             origin: agentLocation,
@@ -95,31 +106,30 @@ const DeliveryDetails = () => {
           }
         });
 
-        if (!distanceError && distanceData?.distance_km) {
+        if (!distanceError && distanceData?.distance_km && distanceData.distance_km > 0) {
           const dist = distanceData.distance_km;
           setDistance(dist);
           
-          // Calculate accurate payout: ₹20 base + ₹15/km beyond 1km
+          // Calculate payout: ₹20 base + ₹15/km beyond 1km
           const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
           setPayout(calculatedPayout);
-          console.log('Backend distance calculated:', dist, 'Payout:', calculatedPayout);
+          console.log('Backend distance calculation successful:', dist, 'km, Payout:', calculatedPayout);
           return;
         }
       }
 
-      // Only use stored distance as last resort if backend calls fail
+      // Use stored distance as fallback even without backend_calculated flag
       if (order?.distance_km && order.distance_km > 0) {
-        console.log('Using stored backend distance as fallback:', order.distance_km);
+        console.log('Using stored distance as fallback:', order.distance_km);
         setDistance(order.distance_km);
         
-        // Calculate payout using stored distance
         const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
         setPayout(calculatedPayout);
         return;
       }
 
       // Final fallback values
-      console.warn('No location data available, using fallback values');
+      console.warn('No accurate distance available, using estimated values');
       setDistance(2.5);
       setPayout(42.5); // 20 + (1.5 * 15)
       
