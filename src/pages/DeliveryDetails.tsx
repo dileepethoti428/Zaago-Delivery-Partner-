@@ -66,9 +66,50 @@ const DeliveryDetails = () => {
 
   const calculateDistanceAndPayout = async () => {
     try {
-      // First, try to use the stored distance from the order (backend calculated)
+      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
+      
+      // Always try backend calculation first for most accurate results
+      if (agentLocation && order?.address?.coordinates) {
+        console.log('Calculating accurate distance and payout from backend...');
+        
+        // Use the pricing calculation function for accurate backend results
+        const { data: pricingData, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
+          body: {
+            order_id: order.id,
+            agent_location: agentLocation
+          }
+        });
+
+        if (!error && pricingData?.success) {
+          console.log('Backend calculated distance and pricing:', pricingData);
+          setDistance(pricingData.distance_km);
+          setPayout(pricingData.agent_payout);
+          return;
+        }
+
+        // Fallback to distance calculation if pricing function fails
+        const { data: distanceData, error: distanceError } = await supabase.functions.invoke('calculate-distance-eta', {
+          body: {
+            origin: agentLocation,
+            destination: order.address.coordinates
+          }
+        });
+
+        if (!distanceError && distanceData?.distance_km) {
+          const dist = distanceData.distance_km;
+          setDistance(dist);
+          
+          // Calculate accurate payout: ₹20 base + ₹15/km beyond 1km
+          const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
+          setPayout(calculatedPayout);
+          console.log('Backend distance calculated:', dist, 'Payout:', calculatedPayout);
+          return;
+        }
+      }
+
+      // Only use stored distance as last resort if backend calls fail
       if (order?.distance_km && order.distance_km > 0) {
-        console.log('Using stored backend distance:', order.distance_km);
+        console.log('Using stored backend distance as fallback:', order.distance_km);
         setDistance(order.distance_km);
         
         // Calculate payout using stored distance
@@ -77,47 +118,11 @@ const DeliveryDetails = () => {
         return;
       }
 
-      // If no stored distance, calculate fresh using backend service
-      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
-      if (!agentLocation || !order?.address?.coordinates) {
-        // Fallback to default values
-        setDistance(2.5);
-        setPayout(42.5); // 20 + (1.5 * 15)
-        return;
-      }
-
-      // Use the new pricing calculation function for accurate results
-      const { data: pricingData, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
-        body: {
-          order_id: order.id,
-          agent_location: agentLocation
-        }
-      });
-
-      if (error) throw error;
-
-      if (pricingData?.success) {
-        console.log('Fresh distance and pricing calculated:', pricingData);
-        setDistance(pricingData.distance_km);
-        setPayout(pricingData.agent_payout);
-      } else {
-        // Fallback calculation using distance-eta function
-        const { data: distanceData } = await supabase.functions.invoke('calculate-distance-eta', {
-          body: {
-            origin: agentLocation,
-            destination: order.address.coordinates
-          }
-        });
-
-        if (distanceData?.distance_km) {
-          const dist = distanceData.distance_km;
-          setDistance(dist);
-          
-          // Calculate fair payout: ₹20 base + ₹15/km beyond 1km
-          const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
-          setPayout(calculatedPayout);
-        }
-      }
+      // Final fallback values
+      console.warn('No location data available, using fallback values');
+      setDistance(2.5);
+      setPayout(42.5); // 20 + (1.5 * 15)
+      
     } catch (error) {
       console.error('Distance calculation error:', error);
       // Set fallback values on error
