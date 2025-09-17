@@ -65,11 +65,11 @@ const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Get current location with auto-refresh and backend saving
+  // Get current location with backend saving (no auto-refresh)
   const location = useGeolocation({
     enableHighAccuracy: true,
     saveToBackend: true,
-    refreshInterval: 10000, // Refresh every 10 seconds
+    refreshInterval: 0, // Disabled auto-refresh
   });
   
   // State management

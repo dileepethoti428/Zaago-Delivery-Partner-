@@ -24,7 +24,7 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
     timeout = 10000,
     maximumAge = 60000,
     saveToBackend = false,
-    refreshInterval = 10000, // 10 seconds
+    refreshInterval = 0, // Disabled by default
   } = options;
 
   const [location, setLocation] = useState<LocationState>({
