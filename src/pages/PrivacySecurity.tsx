@@ -33,7 +33,6 @@ const PrivacySecurity = () => {
     data_sharing: false,
     biometric_login: false,
     two_factor_auth: false,
-    auto_logout: true,
     secure_mode: true
   });
 
@@ -71,7 +70,6 @@ const PrivacySecurity = () => {
             data_sharing: false, // Default privacy setting
             biometric_login: false, // Not stored in DB
             two_factor_auth: false, // Not implemented yet
-            auto_logout: true, // Default security setting
             secure_mode: true // Default security setting
           });
         }
@@ -99,20 +97,10 @@ const PrivacySecurity = () => {
 
       setSettings(prev => ({ ...prev, [key]: value }));
       
-      // Special message for auto logout
-      if (key === 'auto_logout') {
-        toast({
-          title: value ? "Auto Logout Enabled" : "Auto Logout Disabled",
-          description: value 
-            ? "You will be automatically logged out after 30 minutes of inactivity" 
-            : "Auto logout has been disabled",
-        });
-      } else {
-        toast({
-          title: "Settings Updated",
-          description: "Your privacy settings have been saved.",
-        });
-      }
+      toast({
+        title: "Settings Updated",
+        description: "Your privacy settings have been saved.",
+      });
     } catch (error) {
       console.error('Error updating settings:', error);
       toast({
@@ -141,14 +129,6 @@ const PrivacySecurity = () => {
       key: "two_factor_auth",
       enabled: settings.two_factor_auth,
       color: "text-success"
-    },
-    {
-      icon: Shield,
-      title: "Auto Logout",
-      description: "Automatically logout after 30 minutes of inactivity",
-      key: "auto_logout",
-      enabled: settings.auto_logout,
-      color: "text-warning"
     },
     {
       icon: AlertTriangle,
