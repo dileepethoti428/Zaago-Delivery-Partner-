@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 // Simple auth guard: waits for session, then renders children or redirects to /login
+// Auto-logout feature removed - users stay signed in until manual logout
 export default function RequireAuth({ children }: PropsWithChildren) {
   const location = useLocation();
   const [loading, setLoading] = useState(true);
