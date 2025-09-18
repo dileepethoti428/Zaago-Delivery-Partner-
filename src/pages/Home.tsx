@@ -65,12 +65,12 @@ const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Get current location with backend saving (no auto-refresh)
+  // Get current location with backend saving 
   const location = useGeolocation({
     enableHighAccuracy: false, // Use network location for speed
     timeout: 3000, // Fast timeout for initial detection
     saveToBackend: true,
-    refreshInterval: 0, // Disabled auto-refresh
+    refreshInterval: 0, // We'll handle manual refresh with auto-refresh
   });
   
   // State management
@@ -359,6 +359,16 @@ const Home = () => {
     fetchOrders();
     fetchAgentName();
     
+    // Set up auto-refresh for orders and location every 30 seconds
+    const autoRefreshInterval = setInterval(() => {
+      console.log('Auto-refreshing orders and location...');
+      fetchOrders();
+      // Refresh location by getting current position
+      if (location.getCurrentLocation) {
+        location.getCurrentLocation();
+      }
+    }, 30000); // 30 seconds
+    
     // Listen for order completion events from QR scanner
     const handleOrderCompleted = (e: Event) => {
       const event = e as CustomEvent<{ orderId?: string }>;
@@ -448,6 +458,7 @@ const Home = () => {
       .subscribe();
     
     return () => {
+      clearInterval(autoRefreshInterval);
       window.removeEventListener('orderCompleted', handleOrderCompleted);
       window.removeEventListener('orderCancelled', handleOrderCancelled);
       supabase.removeChannel(channel);
