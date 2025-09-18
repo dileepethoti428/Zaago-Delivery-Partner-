@@ -173,12 +173,17 @@ const Home = () => {
     return basePay + distancePay;
   };
 
-  // Fetch orders from backend (filtered by agent exclusions)
+  // Fetch orders from backend (filtered by agent exclusions) - Optimized
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
       
-      // Get current agent ID
+      // Add timeout for faster user experience
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 8000) // 8 second timeout
+      );
+      
+      // Get current agent ID with error handling
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) {
         throw new Error('Not authenticated');
@@ -195,10 +200,13 @@ const Home = () => {
         throw new Error('Agent not found');
       }
 
-      // Use edge function to get filtered orders
-      const { data: response, error } = await supabase.functions.invoke('get-available-orders', {
+      // Use edge function to get filtered orders with timeout
+      const fetchPromise = supabase.functions.invoke('get-available-orders', {
         body: { agent_id: agent.id }
       });
+      
+      const result = await Promise.race([fetchPromise, timeoutPromise]);
+      const { data: response, error } = result as any;
 
       if (error) throw error;
 
@@ -275,13 +283,24 @@ const Home = () => {
       });
 
       setOrders(transformedOrders);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching orders:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load orders",
-        variant: "destructive"
-      });
+      setOrders([]);
+      setOrdersWithDistance([]);
+      
+      // Only show toast if it's not an auto-refresh (to avoid spam)
+      if (!isRefreshing) {
+        const isNetworkError = error.message?.includes('Failed to fetch') || 
+                              error.message?.includes('timeout') ||
+                              error.message?.includes('Request timeout');
+        toast({
+          title: isNetworkError ? "Connection Issue" : "Failed to fetch orders",
+          description: isNetworkError 
+            ? "Poor network connection. Orders will retry automatically." 
+            : error.message || "Please check your connection and try again",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -359,15 +378,25 @@ const Home = () => {
     fetchOrders();
     fetchAgentName();
     
-    // Set up auto-refresh for orders and location every 30 seconds
-    const autoRefreshInterval = setInterval(() => {
-      console.log('Auto-refreshing orders and location...');
-      fetchOrders();
-      // Refresh location by getting current position
-      if (location.getCurrentLocation) {
-        location.getCurrentLocation();
+    // Set up auto-refresh for orders every 45 seconds (reduced frequency for better performance)
+    const autoRefreshInterval = setInterval(async () => {
+      console.log('Auto-refreshing orders...');
+      
+      // Only auto-refresh if not already loading and user is active
+      if (!isLoading && !isRefreshing && document.visibilityState === 'visible') {
+        try {
+          await fetchOrders();
+          
+          // Refresh location less frequently (every other auto-refresh)
+          if (Math.random() > 0.5 && location.getCurrentLocation) {
+            location.getCurrentLocation();
+          }
+        } catch (error) {
+          console.error('Auto-refresh failed:', error);
+          // Silent fail for auto-refresh to avoid spam
+        }
       }
-    }, 30000); // 30 seconds
+    }, 45000); // 45 seconds - increased from 30 for better performance
     
     // Listen for order completion events from QR scanner
     const handleOrderCompleted = (e: Event) => {
@@ -465,16 +494,32 @@ const Home = () => {
     };
   }, []);
 
-  // Pull to refresh functionality
+  // Pull to refresh functionality - Optimized for faster performance
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchOrders();
-    setIsRefreshing(false);
     
-    toast({
-      title: "Orders Updated!",
-      description: "Latest delivery requests loaded",
-    });
+    try {
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Refresh timeout')), 10000) // 10 second timeout
+      );
+      
+      await Promise.race([fetchOrders(), timeoutPromise]);
+      
+      toast({
+        title: "Orders Updated!",
+        description: "Latest delivery requests loaded",
+      });
+    } catch (error) {
+      console.error('Refresh failed:', error);
+      toast({
+        title: "Refresh Failed",
+        description: "Unable to fetch latest orders. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   // Accept order - Updated with better error handling and RLS compliance
