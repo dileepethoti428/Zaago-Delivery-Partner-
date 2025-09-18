@@ -20,9 +20,9 @@ interface UseGeolocationOptions {
 
 export const useGeolocation = (options: UseGeolocationOptions = {}) => {
   const {
-    enableHighAccuracy = true,
-    timeout = 10000,
-    maximumAge = 60000,
+    enableHighAccuracy = false, // Use network location first for speed
+    timeout = 5000, // Reduced timeout for faster response
+    maximumAge = 30000, // Fresher cache for better accuracy
     saveToBackend = false,
     refreshInterval = 0, // Disabled by default
   } = options;
@@ -106,21 +106,28 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
   const updateLocation = useCallback(async (position: GeolocationPosition) => {
     const { latitude, longitude, accuracy } = position.coords;
     
-    // Get address
-    const address = await getAddressFromCoordinates(latitude, longitude);
-    
+    // Update location immediately for fast response
     setLocation({
       latitude,
       longitude,
       accuracy,
       error: null,
       loading: false,
-      address,
+      address: null, // Address will be updated asynchronously
     });
 
-    // Save to backend if enabled
+    // Get address asynchronously (non-blocking)
+    getAddressFromCoordinates(latitude, longitude).then(address => {
+      setLocation(prev => ({ ...prev, address }));
+    }).catch(error => {
+      console.warn('Address lookup failed:', error);
+    });
+    
+    // Save to backend asynchronously (non-blocking)
     if (saveToBackend) {
-      await saveLocationToBackend(latitude, longitude, accuracy);
+      saveLocationToBackend(latitude, longitude, accuracy).catch(error => {
+        console.warn('Backend save failed:', error);
+      });
     }
   }, [saveToBackend]);
 

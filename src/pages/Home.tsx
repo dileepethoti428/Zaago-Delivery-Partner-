@@ -67,7 +67,8 @@ const Home = () => {
   
   // Get current location with backend saving (no auto-refresh)
   const location = useGeolocation({
-    enableHighAccuracy: true,
+    enableHighAccuracy: false, // Use network location for speed
+    timeout: 3000, // Fast timeout for initial detection
     saveToBackend: true,
     refreshInterval: 0, // Disabled auto-refresh
   });
