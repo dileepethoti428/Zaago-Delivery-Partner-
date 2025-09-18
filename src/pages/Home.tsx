@@ -685,9 +685,9 @@ const Home = () => {
                 ) : (
                   <>
                     <MapPin className="w-4 h-4 mr-2 text-primary" />
-                    {location.address || 
+                    {location.address ? location.address : 
                      (location.latitude && location.longitude ? 
-                       `${location.latitude.toFixed(3)}°N, ${location.longitude.toFixed(3)}°E` : 
+                       'Location detected' : 
                        'Tap to update location')}
                   </>
                 )}
