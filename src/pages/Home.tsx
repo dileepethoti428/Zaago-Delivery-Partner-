@@ -58,6 +58,7 @@ interface Order {
   order_placed_at?: Date;
   agent_payout?: number;
   estimated_time_minutes?: number;
+  subscription_id?: string;
 }
 
 
@@ -292,9 +293,11 @@ const Home = () => {
           estimated_time_minutes: order.estimated_time_minutes || undefined,
           backend_calculated: order.distance_km ? true : false,
           // Determine delivery type based on actual order data
-          delivery_type: order.delivery_time_slot || order.delivery_time ? 'scheduled' : 'immediate',
+          // Only show as scheduled for: 1) subscription orders, 2) customer-set delivery slots
+          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
           delivery_time: formattedDeliveryTime,
+          subscription_id: order.subscription_id,
           order_placed_at: new Date(order.created_at)
         };
       });
@@ -960,17 +963,19 @@ const Home = () => {
                            </div>
                          </div>
 
-                         {/* Delivery Timer */}
-                         {(order.delivery_type || order.scheduled_time) && (
-                           <div className="mb-4">
-                             <DeliveryTimer
-                               deliveryType={order.delivery_type || 'immediate'}
-                               scheduledTime={order.scheduled_time || undefined}
-                               orderPlacedAt={order.order_placed_at}
-                               className="text-xs"
-                             />
-                           </div>
-                         )}
+                          {/* Delivery Timer */}
+                          {(order.delivery_type || order.scheduled_time) && (
+                            <div className="mb-4">
+                              <DeliveryTimer
+                                deliveryType={order.delivery_type || 'immediate'}
+                                scheduledTime={order.scheduled_time || undefined}
+                                orderPlacedAt={order.order_placed_at}
+                                subscriptionId={order.subscription_id}
+                                deliveryTime={order.delivery_time}
+                                className="text-xs"
+                              />
+                            </div>
+                          )}
 
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center text-sm text-muted-foreground">

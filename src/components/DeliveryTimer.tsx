@@ -8,13 +8,17 @@ interface DeliveryTimerProps {
   scheduledTime?: string; // For scheduled deliveries
   orderPlacedAt?: Date; // When the order was placed
   className?: string;
+  subscriptionId?: string; // For subscription orders
+  deliveryTime?: string; // Actual delivery time (formatted like "12:00 PM")
 }
 
 const DeliveryTimer = ({ 
   deliveryType, 
   scheduledTime, 
   orderPlacedAt = new Date(),
-  className = "" 
+  className = "",
+  subscriptionId,
+  deliveryTime
 }: DeliveryTimerProps) => {
   const [timeLeft, setTimeLeft] = useState<{
     minutes: number;
@@ -79,6 +83,13 @@ const DeliveryTimer = ({
   if (deliveryType === 'scheduled') {
     const scheduleInfo = getScheduledDeliveryInfo();
     
+    // Different display for subscription vs regular scheduled orders
+    const isSubscription = Boolean(subscriptionId);
+    const displayTime = deliveryTime || scheduleInfo?.time;
+    const title = isSubscription ? 'Subscription Delivery' : 'Scheduled Delivery';
+    const subtitle = isSubscription ? 'Delivery at' : 'Arrives at';
+    const badgeText = isSubscription ? 'Subscription' : 'Scheduled';
+    
     return (
       <Card className={`bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/30 shadow-lg max-w-sm ${className}`}>
         <CardContent className="p-2">
@@ -88,25 +99,23 @@ const DeliveryTimer = ({
                 <Calendar className="w-3 h-3 text-blue-400" />
               </div>
               <div>
-                <h3 className="font-medium text-foreground text-xs">Scheduled Delivery</h3>
-                <p className="text-xs text-muted-foreground">Arrives at</p>
+                <h3 className="font-medium text-foreground text-xs">{title}</h3>
+                <p className="text-xs text-muted-foreground">{subtitle}</p>
               </div>
             </div>
             <Badge className="bg-blue-500 text-white animate-pulse text-xs px-2 py-0.5">
-              Scheduled
+              {badgeText}
             </Badge>
           </div>
           
-          {scheduleInfo && (
-            <div className="mt-2 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
-              <div className="text-center">
-                <p className="text-lg font-bold text-blue-400">{scheduleInfo.time}</p>
-                <p className="text-xs text-muted-foreground">
-                  {scheduleInfo.isToday ? 'Today' : scheduleInfo.date}
-                </p>
-              </div>
+          <div className="mt-2 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+            <div className="text-center">
+              <p className="text-lg font-bold text-blue-400">{displayTime}</p>
+              <p className="text-xs text-muted-foreground">
+                {isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date)}
+              </p>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     );
