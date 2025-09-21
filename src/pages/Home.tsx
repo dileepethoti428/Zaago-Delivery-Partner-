@@ -256,6 +256,22 @@ const Home = () => {
           }
         }
 
+        // Format delivery time for display
+        let formattedDeliveryTime = null;
+        if (order.delivery_time) {
+          try {
+            // Convert "12:00:00" to "12:00 PM" format
+            const [hours, minutes] = order.delivery_time.split(':');
+            const hour24 = parseInt(hours);
+            const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+            const ampm = hour24 >= 12 ? 'PM' : 'AM';
+            formattedDeliveryTime = `${hour12}:${minutes} ${ampm}`;
+          } catch (error) {
+            console.warn('Failed to format delivery time:', order.delivery_time, error);
+            formattedDeliveryTime = order.delivery_time;
+          }
+        }
+
         return {
           id: order.id,
           customer_name: order.customer_name,
@@ -276,8 +292,9 @@ const Home = () => {
           estimated_time_minutes: order.estimated_time_minutes || undefined,
           backend_calculated: order.distance_km ? true : false,
           // Determine delivery type based on actual order data
-          delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
+          delivery_type: order.delivery_time_slot || order.delivery_time ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
+          delivery_time: formattedDeliveryTime,
           order_placed_at: new Date(order.created_at)
         };
       });
