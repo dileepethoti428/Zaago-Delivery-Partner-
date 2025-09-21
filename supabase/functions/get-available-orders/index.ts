@@ -103,7 +103,7 @@ serve(async (req) => {
     // Get available orders - show 'packed' orders for everyone, and 'assigned' orders for current agent
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('*')
+      .select('*, delivery_time, delivery_time_slot, delivery_date')
       .or(`status.eq.packed,and(status.eq.assigned,agent_id.eq.${agent_id})`);
 
     if (error) {
