@@ -1111,19 +1111,32 @@ const Home = () => {
                           </div>
 
                           {/* Delivery Timer */}
-                          {(order.delivery_type || order.scheduled_time) && (
-                            <div className="mb-4">
-                              <DeliveryTimer
-                                deliveryType={order.delivery_type || 'immediate'}
-                                scheduledTime={order.scheduled_time || undefined}
-                                orderPlacedAt={order.order_placed_at}
-                                subscriptionId={order.subscription_id}
-                                deliveryTime={order.delivery_time}
-                                deliverySlots={order.delivery_slots}
-                                className="text-xs"
-                              />
-                            </div>
-                          )}
+                          {(() => {
+                            // Determine if order is scheduled based on multiple criteria
+                            const isScheduledOrder = Boolean(
+                              order.scheduled_time || 
+                              order.delivery_date !== new Date().toISOString().split('T')[0] ||
+                              order.delivery_time ||
+                              order.delivery_slots ||
+                              order.subscription_id
+                            );
+                            
+                            const deliveryType = isScheduledOrder ? 'scheduled' : 'immediate';
+                            
+                            return (
+                              <div className="mb-4">
+                                <DeliveryTimer
+                                  deliveryType={deliveryType}
+                                  scheduledTime={order.scheduled_time || `${order.delivery_date}T${order.delivery_time || '12:00:00'}`}
+                                  orderPlacedAt={order.order_placed_at}
+                                  subscriptionId={order.subscription_id}
+                                  deliveryTime={order.delivery_time}
+                                  deliverySlots={order.delivery_slots}
+                                  className="text-xs"
+                                />
+                              </div>
+                            );
+                          })()}
 
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center text-sm text-muted-foreground">
