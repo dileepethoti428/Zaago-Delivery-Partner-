@@ -194,16 +194,33 @@ serve(async (req) => {
     const resolvedOrders = await Promise.all(userOrdersPromises);
     filteredOrders = resolvedOrders.filter(order => order !== null);
 
-    // Fetch delivery slots for orders that have them
+    // Fetch delivery slots only for subscription orders
     const ordersWithSlots = await Promise.all(
       filteredOrders.map(async (order) => {
-        if (order.delivery_time_slot) {
+        // Only fetch delivery slots for orders that have subscription_id (subscription orders)
+        // Regular immediate orders should not have delivery slots regardless of delivery_time_slot value
+        if (order.subscription_id && order.delivery_time_slot) {
           try {
-            const { data: deliverySlot } = await supabase
-              .from('delivery_slots')
-              .select('id, slot_name, start_time, end_time')
-              .eq('id', order.delivery_time_slot)
-              .maybeSingle();
+            let deliverySlot = null;
+            
+            if (order.delivery_time_slot.includes('-')) {
+              // Create a synthetic delivery slot for time range format like "02:00-04:00"
+              const [startTime, endTime] = order.delivery_time_slot.split('-');
+              deliverySlot = {
+                id: `slot-${order.id}`,
+                slot_name: order.delivery_time_slot,
+                start_time: `${startTime}:00`,
+                end_time: `${endTime}:00`
+              };
+            } else {
+              // Try to fetch from delivery_slots table (UUID format)
+              const { data: slot } = await supabase
+                .from('delivery_slots')
+                .select('id, slot_name, start_time, end_time')
+                .eq('id', order.delivery_time_slot)
+                .maybeSingle();
+              deliverySlot = slot;
+            }
             
             return {
               ...order,
@@ -214,6 +231,7 @@ serve(async (req) => {
             return order;
           }
         }
+        // For immediate orders (no subscription_id), return without delivery_slots
         return order;
       })
     );
