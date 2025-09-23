@@ -409,10 +409,12 @@ const Home = () => {
           estimated_time_minutes: order.estimated_time_minutes || undefined,
           backend_calculated: order.distance_km ? true : false,
           // Determine delivery type based on actual order data
-          // Only show as scheduled for: 1) subscription orders, 2) customer-set delivery slots
-          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
+          delivery_type: order.subscription_id || order.delivery_time_slot || order.delivery_time ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
-          delivery_time: formattedDeliveryTime,
+          // Preserve original delivery_time from backend for scheduled orders  
+          delivery_time: (order.subscription_id || order.delivery_time_slot || order.delivery_time) ? 
+            (formattedDeliveryTime || order.delivery_time) : 
+            null, // Will be calculated for immediate orders
           subscription_id: order.subscription_id,
           order_placed_at: new Date(order.created_at),
           delivery_slots: deliverySlots
@@ -538,13 +540,16 @@ const Home = () => {
           coordinates: (order.address as any)?.coordinates,
           products_count: Array.isArray(order.items) ? order.items.length : 1,
           restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
-          distance_km: undefined, // Will be calculated
+          distance_km: undefined, // Will be calculated for immediate orders only
           agent_payout: undefined, // Will be calculated
-          estimated_time_minutes: undefined, // Will be calculated
+          estimated_time_minutes: undefined, // Will be calculated  
           backend_calculated: false,
           delivery_type: order.delivery_time_slot || order.delivery_time || order.subscription_id ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
-          delivery_time: formattedDeliveryTime && !formattedDeliveryTime.includes('min') ? formattedDeliveryTime : order.delivery_time,
+          // Preserve original delivery_time from backend for scheduled orders
+          delivery_time: (order.delivery_time_slot || order.delivery_time || order.subscription_id) ? 
+            (formattedDeliveryTime || order.delivery_time) : 
+            null, // Will be calculated for immediate orders
           subscription_id: order.subscription_id,
           order_placed_at: new Date(order.created_at),
           delivery_slots: deliverySlots
@@ -586,26 +591,19 @@ const Home = () => {
     
     const updatedOrders = await Promise.all(
       orders.map(async (order) => {
-        // For scheduled orders and subscription orders, fix backend time issues
+        // For scheduled orders and subscription orders, preserve their exact backend timing
         if (order.delivery_type === 'scheduled' || order.subscription_id) {
-          // If backend sent calculated time like "1 min" for scheduled orders, fix it
-          let correctedDeliveryTime = order.delivery_time;
-          if (correctedDeliveryTime && correctedDeliveryTime.includes('min')) {
-            // Backend incorrectly calculated time for scheduled order - clear it
-            correctedDeliveryTime = null;
-          }
-          
-          console.log(`Scheduled order ${order.id} delivery data:`, {
+          console.log(`Preserving scheduled order ${order.id} timing:`, {
             original_delivery_time: order.delivery_time,
-            corrected_delivery_time: correctedDeliveryTime,
             delivery_slots: order.delivery_slots,
-            scheduled_time: order.scheduled_time
+            scheduled_time: order.scheduled_time,
+            subscription_id: order.subscription_id
           });
           
+          // Don't modify delivery_time for scheduled orders - keep exact backend data
           return {
             ...order,
-            delivery_time: correctedDeliveryTime,
-            distance_km: order.distance_km || 2.5, // Keep distance for sorting
+            distance_km: order.distance_km || 2.5, // Keep distance for sorting only
             backend_calculated: order.distance_km ? true : false
           };
         }
