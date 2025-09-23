@@ -93,25 +93,33 @@ const DeliveryTimer = ({
     // Different display for subscription vs regular scheduled orders
     const isSubscription = Boolean(subscriptionId);
     
-    // Determine display time - use delivery slots if available for timing intervals
+    // Determine display time - prioritize delivery slots for timing intervals
     let displayTime;
+    let hasTimeSlot = false;
+    
     if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
       // Format time slots as intervals
       const formatSlotTime = (timeStr: string) => {
-        const time = new Date(`1970-01-01T${timeStr}`);
-        return time.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
-          hour12: true 
-        });
+        try {
+          const time = new Date(`1970-01-01T${timeStr}`);
+          return time.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true 
+          });
+        } catch (error) {
+          console.warn('Error formatting slot time:', timeStr, error);
+          return timeStr;
+        }
       };
       displayTime = `${formatSlotTime(deliverySlots.start_time)} - ${formatSlotTime(deliverySlots.end_time)}`;
+      hasTimeSlot = true;
     } else {
       displayTime = deliveryTime || scheduleInfo?.time;
     }
     
     const title = isSubscription ? 'Subscription Delivery' : 'Scheduled Delivery';
-    const subtitle = deliverySlots ? 'Delivery window' : (isSubscription ? 'Delivery at' : 'Arrives at');
+    const subtitle = hasTimeSlot ? 'Delivery window' : (isSubscription ? 'Delivery at' : 'Arrives at');
     const badgeText = isSubscription ? 'Subscription' : 'Scheduled';
     
     return (
@@ -134,11 +142,21 @@ const DeliveryTimer = ({
           
           <div className="mt-2 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
             <div className="text-center">
-              <p className="text-lg font-bold text-blue-400">{displayTime}</p>
+              <p className="text-lg font-bold text-blue-400">{displayTime || 'Time TBD'}</p>
               <p className="text-xs text-muted-foreground">
-                {deliverySlots?.slot_name || (isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date))}
+                {hasTimeSlot && deliverySlots?.slot_name ? 
+                  deliverySlots.slot_name : 
+                  (isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date))
+                }
               </p>
             </div>
+            {hasTimeSlot && (
+              <div className="mt-1 text-center">
+                <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-700 border-blue-500/30">
+                  Delivery Slot
+                </Badge>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

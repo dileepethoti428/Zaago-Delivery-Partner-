@@ -215,6 +215,8 @@ const Home = () => {
         .from('delivery_slots')
         .select('id, slot_name, start_time, end_time')
         .eq('is_active', true);
+        
+      console.log('Fetched delivery slots:', deliverySlots);
 
       // Fetch both available orders and assigned orders in parallel
       const [availableOrdersResult, assignedOrdersResult] = await Promise.all([
@@ -253,21 +255,28 @@ const Home = () => {
 
       // Helper function to match single time with delivery slots
       const matchTimeWithSlot = (timeString: string) => {
-        if (!deliverySlots || !timeString) return null;
+        if (!deliverySlots || !timeString) {
+          console.log('matchTimeWithSlot: No slots or timeString', { slotsCount: deliverySlots?.length, timeString });
+          return null;
+        }
         
         // Convert timeString to comparable format
         const targetTime = timeString.length === 5 ? timeString + ':00' : timeString;
+        console.log('matchTimeWithSlot: Looking for time', targetTime, 'in', deliverySlots.length, 'slots');
         
         // Find matching delivery slot
         const matchedSlot = deliverySlots.find(slot => {
           const slotStart = slot.start_time;
           const slotEnd = slot.end_time;
           
+          console.log(`Checking slot ${slot.slot_name}: ${slotStart} <= ${targetTime} <= ${slotEnd}`);
+          
           // Check if the target time falls within this slot
           return targetTime >= slotStart && targetTime <= slotEnd;
         });
         
         if (matchedSlot) {
+          console.log('Found matching slot:', matchedSlot);
           // Format times for display (remove seconds)
           const formatTime = (time: string) => time.substring(0, 5);
           
@@ -280,6 +289,7 @@ const Home = () => {
           };
         }
         
+        console.log('No matching slot found for time:', targetTime);
         return null;
       };
 
@@ -334,17 +344,20 @@ const Home = () => {
               timeString = '12:00:00'; // fallback
             }
             
-            // Try to match with actual delivery slot
-            const matchedSlot = matchTimeWithSlot(timeString);
-            if (matchedSlot) {
-              deliverySlots = {
-                id: matchedSlot.id,
-                slot_name: matchedSlot.formatted_range,
-                start_time: matchedSlot.start_time,
-                end_time: matchedSlot.end_time,
-              };
-              timeString = matchedSlot.start_time;
-            }
+        // Try to match with actual delivery slot
+        const matchedSlot = matchTimeWithSlot(timeString);
+        if (matchedSlot) {
+          console.log(`Order ${order.id} matched slot:`, matchedSlot);
+          deliverySlots = {
+            id: matchedSlot.id,
+            slot_name: matchedSlot.formatted_range,
+            start_time: matchedSlot.start_time,
+            end_time: matchedSlot.end_time,
+          };
+          timeString = matchedSlot.start_time;
+        } else {
+          console.log(`Order ${order.id} no slot match for time:`, timeString, 'Available slots:', deliverySlots?.length || 0);
+        }
             
             // Set scheduled time for single time slots
             if (order.delivery_date) {
@@ -445,20 +458,22 @@ const Home = () => {
               (timeSlot.length === 5 ? timeSlot + ':00' : timeSlot) : 
               '12:00:00';
               
-            // Try to match with actual delivery slot
-            const matchedSlot = matchTimeWithSlot(timeString);
-            if (matchedSlot) {
-              deliverySlots = {
-                id: matchedSlot.id,
-                slot_name: matchedSlot.formatted_range,
-                start_time: matchedSlot.start_time,
-                end_time: matchedSlot.end_time,
-              };
-              timeString = matchedSlot.start_time;
-            } else {
-              // Fallback: use the single time as formatted delivery time
-              formattedDeliveryTime = timeSlot;
-            }
+        // Try to match with actual delivery slot
+        const matchedSlot = matchTimeWithSlot(timeString);
+        if (matchedSlot) {
+          console.log(`Assigned order ${order.id} matched slot:`, matchedSlot);
+          deliverySlots = {
+            id: matchedSlot.id,
+            slot_name: matchedSlot.formatted_range,
+            start_time: matchedSlot.start_time,
+            end_time: matchedSlot.end_time,
+          };
+          timeString = matchedSlot.start_time;
+        } else {
+          // Fallback: use the single time as formatted delivery time
+          console.log(`Assigned order ${order.id} no slot match for time:`, timeString);
+          formattedDeliveryTime = timeSlot;
+        }
             
             if (order.delivery_date && timeString.includes(':')) {
               try {
@@ -478,18 +493,20 @@ const Home = () => {
             (order.delivery_time.length === 5 ? order.delivery_time + ':00' : order.delivery_time) : 
             '12:00:00';
             
-          // Try to match with actual delivery slot
-          const matchedSlot = matchTimeWithSlot(timeString);
-          if (matchedSlot) {
-            deliverySlots = {
-              id: matchedSlot.id,
-              slot_name: matchedSlot.formatted_range,
-              start_time: matchedSlot.start_time,
-              end_time: matchedSlot.end_time,
-            };
-          } else {
-            formattedDeliveryTime = order.delivery_time;
-          }
+        // Try to match with actual delivery slot
+        const matchedSlot = matchTimeWithSlot(timeString);
+        if (matchedSlot) {
+          console.log(`Assigned order ${order.id} from delivery_time matched slot:`, matchedSlot);
+          deliverySlots = {
+            id: matchedSlot.id,
+            slot_name: matchedSlot.formatted_range,
+            start_time: matchedSlot.start_time,
+            end_time: matchedSlot.end_time,
+          };
+        } else {
+          console.log(`Assigned order ${order.id} no slot match for delivery_time:`, timeString);
+          formattedDeliveryTime = order.delivery_time;
+        }
           
           if (order.delivery_date && timeString.includes(':')) {
             try {
@@ -1219,6 +1236,16 @@ const Home = () => {
                             );
                             
                             const deliveryType = isScheduledOrder ? 'scheduled' : 'immediate';
+                            
+                            // Debug what we're passing to DeliveryTimer
+                            console.log(`Order ${order.id} DeliveryTimer props:`, {
+                              deliveryType,
+                              hasScheduledTime: Boolean(order.scheduled_time),
+                              hasDeliverySlots: Boolean(order.delivery_slots),
+                              deliverySlots: order.delivery_slots,
+                              deliveryTime: order.delivery_time,
+                              subscriptionId: order.subscription_id
+                            });
                             
                             return (
                               <div className="mb-4">
