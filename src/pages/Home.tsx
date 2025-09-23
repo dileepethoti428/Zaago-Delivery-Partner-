@@ -616,13 +616,8 @@ const Home = () => {
       
       toast({
         title: "Order Accepted!",
-        description: "Redirecting to manage your delivery...",
+        description: "You can now manage this delivery",
       });
-      
-      // Navigate to My Deliveries page after accepting order
-      setTimeout(() => {
-        navigate('/my-deliveries');
-      }, 1000);
       
     } catch (error: any) {
       console.error('Error accepting order:', error);
