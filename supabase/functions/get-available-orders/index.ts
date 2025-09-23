@@ -100,7 +100,7 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders - show unassigned 'packed' orders OR orders assigned to current agent (regardless of status)
+    // Get available orders - show unassigned 'packed' orders OR non-delivered orders assigned to current agent
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -110,7 +110,7 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .or(`and(status.eq.packed,agent_id.is.null),agent_id.eq.${agent_id}`);
+      .or(`and(status.eq.packed,agent_id.is.null),and(agent_id.eq.${agent_id},status.neq.delivered)`);
 
     if (error) {
       console.error('Failed to fetch orders:', error);
