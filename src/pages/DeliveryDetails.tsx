@@ -66,12 +66,22 @@ const DeliveryDetails = () => {
 
   const calculateDistanceAndPayout = async () => {
     try {
+      // First check if order already has backend-calculated distance
+      if (order?.distance_km && order?.backend_calculated) {
+        console.log('Using existing backend-calculated distance:', order.distance_km);
+        setDistance(order.distance_km);
+        // Calculate payout: ₹20 base + ₹15/km beyond 1km
+        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
+        setPayout(calculatedPayout);
+        return;
+      }
+
       console.log('Calculating accurate distance and payout from backend...');
       
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
       
       if (agentLocation && order?.address?.coordinates) {
-        // Always use fresh backend calculation for accuracy
+        // Use fresh backend calculation for accuracy
         const { data: pricingData, error: pricingError } = await supabase.functions.invoke('calculate-delivery-pricing', {
           body: {
             order_id: order.id,
@@ -106,16 +116,29 @@ const DeliveryDetails = () => {
         }
       }
 
-      // Final fallback - estimate based on typical delivery distance
-      console.warn('Backend calculation failed, using estimated values');
-      setDistance(2.5);
-      setPayout(42.5);
+      // Final fallback - use order distance_km if available, otherwise estimate
+      if (order?.distance_km && order.distance_km > 0) {
+        console.log('Using order distance_km as fallback:', order.distance_km);
+        setDistance(order.distance_km);
+        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
+        setPayout(calculatedPayout);
+      } else {
+        console.warn('Backend calculation failed, using estimated values');
+        setDistance(2.5);
+        setPayout(42.5);
+      }
       
     } catch (error) {
       console.error('Distance calculation error:', error);
-      // Set fallback values on error
-      setDistance(2.5);
-      setPayout(42.5);
+      // Try to use order distance as fallback before defaulting
+      if (order?.distance_km && order.distance_km > 0) {
+        setDistance(order.distance_km);
+        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
+        setPayout(calculatedPayout);
+      } else {
+        setDistance(2.5);
+        setPayout(42.5);
+      }
     }
   };
 
