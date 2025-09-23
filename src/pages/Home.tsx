@@ -210,6 +210,12 @@ const Home = () => {
         throw new Error('Agent not found');
       }
 
+      // Fetch delivery slots for reference
+      const { data: deliverySlots } = await supabase
+        .from('delivery_slots')
+        .select('id, slot_name, start_time, end_time')
+        .eq('is_active', true);
+
       // Fetch both available orders and assigned orders in parallel
       const [availableOrdersResult, assignedOrdersResult] = await Promise.all([
         // Available orders from edge function
@@ -245,6 +251,38 @@ const Home = () => {
       const { data: assignedOrders, error: assignedError } = assignedOrdersResult;
       if (assignedError) throw assignedError;
 
+      // Helper function to match single time with delivery slots
+      const matchTimeWithSlot = (timeString: string) => {
+        if (!deliverySlots || !timeString) return null;
+        
+        // Convert timeString to comparable format
+        const targetTime = timeString.length === 5 ? timeString + ':00' : timeString;
+        
+        // Find matching delivery slot
+        const matchedSlot = deliverySlots.find(slot => {
+          const slotStart = slot.start_time;
+          const slotEnd = slot.end_time;
+          
+          // Check if the target time falls within this slot
+          return targetTime >= slotStart && targetTime <= slotEnd;
+        });
+        
+        if (matchedSlot) {
+          // Format times for display (remove seconds)
+          const formatTime = (time: string) => time.substring(0, 5);
+          
+          return {
+            id: matchedSlot.id,
+            slot_name: matchedSlot.slot_name,
+            start_time: matchedSlot.start_time,
+            end_time: matchedSlot.end_time,
+            formatted_range: `${formatTime(matchedSlot.start_time)} - ${formatTime(matchedSlot.end_time)}`
+          };
+        }
+        
+        return null;
+      };
+
       // Transform available orders to match our interface
       const transformedAvailableOrders: Order[] = (availableResponse.orders || []).map((order, index) => {
         // Parse delivery slots for timing intervals
@@ -278,7 +316,7 @@ const Home = () => {
               }
             }
           } else {
-            // Handle single time slots or text-based slots
+            // Handle single time slots - match with delivery_slots table
             let timeString = '';
             
             if (timeSlot.includes('-')) {
@@ -294,6 +332,18 @@ const Home = () => {
               timeString = timeSlot.length === 5 ? timeSlot + ':00' : timeSlot;
             } else {
               timeString = '12:00:00'; // fallback
+            }
+            
+            // Try to match with actual delivery slot
+            const matchedSlot = matchTimeWithSlot(timeString);
+            if (matchedSlot) {
+              deliverySlots = {
+                id: matchedSlot.id,
+                slot_name: matchedSlot.formatted_range,
+                start_time: matchedSlot.start_time,
+                end_time: matchedSlot.end_time,
+              };
+              timeString = matchedSlot.start_time;
             }
             
             // Set scheduled time for single time slots
@@ -390,12 +440,28 @@ const Home = () => {
               }
             }
           } else {
-            // For single time slots, use as delivery_time
-            formattedDeliveryTime = timeSlot;
+            // Handle single time slots - match with delivery_slots table
+            let timeString = timeSlot.includes(':') ? 
+              (timeSlot.length === 5 ? timeSlot + ':00' : timeSlot) : 
+              '12:00:00';
+              
+            // Try to match with actual delivery slot
+            const matchedSlot = matchTimeWithSlot(timeString);
+            if (matchedSlot) {
+              deliverySlots = {
+                id: matchedSlot.id,
+                slot_name: matchedSlot.formatted_range,
+                start_time: matchedSlot.start_time,
+                end_time: matchedSlot.end_time,
+              };
+              timeString = matchedSlot.start_time;
+            } else {
+              // Fallback: use the single time as formatted delivery time
+              formattedDeliveryTime = timeSlot;
+            }
             
-            if (order.delivery_date && timeSlot.includes(':')) {
+            if (order.delivery_date && timeString.includes(':')) {
               try {
-                const timeString = timeSlot.length === 5 ? timeSlot + ':00' : timeSlot;
                 const dateTimeString = order.delivery_date + 'T' + timeString;
                 const date = new Date(dateTimeString);
                 if (!isNaN(date.getTime())) {
@@ -408,11 +474,25 @@ const Home = () => {
           }
         } else if (order.delivery_time) {
           // Use delivery_time if delivery_time_slot is not available
-          formattedDeliveryTime = order.delivery_time;
+          let timeString = order.delivery_time.includes(':') ? 
+            (order.delivery_time.length === 5 ? order.delivery_time + ':00' : order.delivery_time) : 
+            '12:00:00';
+            
+          // Try to match with actual delivery slot
+          const matchedSlot = matchTimeWithSlot(timeString);
+          if (matchedSlot) {
+            deliverySlots = {
+              id: matchedSlot.id,
+              slot_name: matchedSlot.formatted_range,
+              start_time: matchedSlot.start_time,
+              end_time: matchedSlot.end_time,
+            };
+          } else {
+            formattedDeliveryTime = order.delivery_time;
+          }
           
-          if (order.delivery_date && order.delivery_time.includes(':')) {
+          if (order.delivery_date && timeString.includes(':')) {
             try {
-              const timeString = order.delivery_time.length === 5 ? order.delivery_time + ':00' : order.delivery_time;
               const dateTimeString = order.delivery_date + 'T' + timeString;
               const date = new Date(dateTimeString);
               if (!isNaN(date.getTime())) {
