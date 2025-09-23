@@ -586,12 +586,23 @@ const Home = () => {
     
     const updatedOrders = await Promise.all(
       orders.map(async (order) => {
-        // For scheduled orders and subscription orders, preserve original delivery times
+        // For scheduled orders and subscription orders, fix backend time issues
         if (order.delivery_type === 'scheduled' || order.subscription_id) {
-          // Don't override delivery_time for scheduled orders - keep original slot times
+          // If backend sent calculated time like "1 min" for scheduled orders, fix it
+          let correctedDeliveryTime = order.delivery_time;
+          if (correctedDeliveryTime && correctedDeliveryTime.includes('min')) {
+            // Backend incorrectly calculated time for scheduled order - use slot time or fallback
+            if (order.delivery_slots) {
+              correctedDeliveryTime = `${order.delivery_slots.start_time} - ${order.delivery_slots.end_time}`;
+            } else {
+              correctedDeliveryTime = 'Time to be confirmed';
+            }
+          }
+          
           return {
             ...order,
-            distance_km: order.distance_km || 2.5, // Keep distance for sorting but don't override time
+            delivery_time: correctedDeliveryTime,
+            distance_km: order.distance_km || 2.5, // Keep distance for sorting
             backend_calculated: order.distance_km ? true : false
           };
         }

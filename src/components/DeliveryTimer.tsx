@@ -126,13 +126,13 @@ const DeliveryTimer = ({
       };
       displayTime = `${formatSlotTime(deliverySlots.start_time)} - ${formatSlotTime(deliverySlots.end_time)}`;
       hasTimeSlot = true;
-    } else if (deliveryTime && !deliveryTime.includes('min')) {
-      // Use deliveryTime only if it's not a duration (like "2 min")
+    } else if (deliveryTime && !deliveryTime.includes('min') && !deliveryTime.includes('Time to be confirmed')) {
+      // Use deliveryTime only if it's not a duration (like "2 min") or confirmation message
       displayTime = deliveryTime;
     } else if (scheduleInfo?.time) {
       displayTime = scheduleInfo.time;
     } else {
-      // Fallback display
+      // Fallback display - show time to be confirmed for backend issues
       displayTime = 'Time to be confirmed';
     }
     
