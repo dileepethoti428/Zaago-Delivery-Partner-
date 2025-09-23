@@ -100,7 +100,24 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders - show unassigned 'packed' orders OR non-delivered orders assigned to current agent
+    // First, automatically reassign stale orders from other agents (older than 30 minutes)
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    
+    const { error: reassignError } = await supabase
+      .from('orders')
+      .update({ agent_id: null })
+      .eq('status', 'packed')
+      .not('agent_id', 'is', null)
+      .not('agent_id', 'eq', agent_id)
+      .lt('updated_at', thirtyMinutesAgo);
+
+    if (reassignError) {
+      console.warn('Failed to reassign stale orders:', reassignError);
+    } else {
+      console.log('Automatically reassigned stale orders older than 30 minutes');
+    }
+
+    // Get available orders - show only new, unassigned 'packed' orders
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -110,7 +127,8 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .or(`and(status.eq.packed,agent_id.is.null),and(agent_id.eq.${agent_id},status.neq.delivered)`);
+      .eq('status', 'packed')
+      .is('agent_id', null);
 
     if (error) {
       console.error('Failed to fetch orders:', error);
@@ -199,20 +217,6 @@ serve(async (req) => {
       const nearbyOrders = [];
       
       for (const order of filteredOrders) {
-        // Skip distance filtering for orders already assigned to this agent
-        if (order.agent_id === agent_id) {
-          console.log(`Skipping distance filter for assigned order ${order.id}`);
-          const existingDistance = order.distance_km || 0;
-          const agentPayout = calculateAgentPayout(existingDistance);
-          nearbyOrders.push({
-            ...order,
-            distance_km: existingDistance,
-            agent_payout: agentPayout,
-            estimated_time_minutes: Math.ceil(existingDistance * 2)
-          });
-          continue;
-        }
-        
         // Check if order has address with coordinates
         if (order.address && order.address.coordinates && order.address.coordinates.lat && order.address.coordinates.lng) {
           try {
