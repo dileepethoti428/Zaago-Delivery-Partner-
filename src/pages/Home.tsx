@@ -1252,12 +1252,9 @@ const Home = () => {
                           {/* Delivery Timer */}
                           {(() => {
                             // Determine if order is scheduled based on multiple criteria
-                            const isScheduledOrder = Boolean(
-                              order.scheduled_time || 
-                              order.delivery_date !== new Date().toISOString().split('T')[0] ||
-                              order.delivery_slots ||
-                              order.subscription_id
-                            );
+                            // Only subscription orders should be considered scheduled
+                            // Regular orders should always show countdown, not time intervals
+                            const isScheduledOrder = Boolean(order.subscription_id);
                             
                             const deliveryType = isScheduledOrder ? 'scheduled' : 'immediate';
                             
