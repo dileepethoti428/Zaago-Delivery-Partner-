@@ -27,6 +27,8 @@ interface RecentEarning {
   amount: number;
   time: string;
   delivery_date: string;
+  distance_km?: number;
+  distance_source?: 'backend' | 'history' | 'delivery';
   breakdown?: {
     base_pay: number;
     distance_pay: number;
@@ -224,7 +226,7 @@ const Earnings = () => {
 
       setEarningsData(newEarningsData);
 
-      // Fetch delivery history for customer names and recent earnings display
+      // Fetch delivery history for customer names and distance data
       const { data: deliveryHistory } = await supabase
         .from('delivery_history')
         .select('order_id, customer_name, delivery_date, total_amount, distance_traveled')
@@ -234,6 +236,9 @@ const Earnings = () => {
       // Format recent earnings for display
       const recentData = (earnings || []).slice(0, 10).map(earning => {
         const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
+        
+        // Use actual delivered distance from delivery history
+        // Note: This is the final delivery distance, which may differ from initial estimates
         const distance = historyData?.distance_traveled || 0;
         
         // Calculate breakdown using actual payout config
@@ -266,6 +271,8 @@ const Earnings = () => {
             hour12: true 
           }),
           delivery_date: historyData?.delivery_date || earning.created_at,
+          distance_km: distance,
+          distance_source: 'delivery' as 'backend' | 'history' | 'delivery',
           breakdown: {
             base_pay: basePay,
             distance_pay: distancePay,
@@ -445,9 +452,19 @@ const Earnings = () => {
                       </div>
                     </div>
                     
-                    <div className="text-right">
-                      <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
-                    </div>
+                     <div className="text-right">
+                       <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
+                       {earning.distance_km && (
+                         <div className="flex items-center justify-end space-x-1 mt-1">
+                           <Badge variant="secondary" className="text-xs">
+                             {earning.distance_km.toFixed(1)} km
+                           </Badge>
+                           <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                             Actual
+                           </Badge>
+                         </div>
+                       )}
+                     </div>
                   </div>
                   
                   {/* Payout Breakdown */}
