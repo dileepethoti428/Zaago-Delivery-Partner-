@@ -591,13 +591,16 @@ const Home = () => {
           // If backend sent calculated time like "1 min" for scheduled orders, fix it
           let correctedDeliveryTime = order.delivery_time;
           if (correctedDeliveryTime && correctedDeliveryTime.includes('min')) {
-            // Backend incorrectly calculated time for scheduled order - use slot time or fallback
-            if (order.delivery_slots) {
-              correctedDeliveryTime = `${order.delivery_slots.start_time} - ${order.delivery_slots.end_time}`;
-            } else {
-              correctedDeliveryTime = 'Time to be confirmed';
-            }
+            // Backend incorrectly calculated time for scheduled order - clear it
+            correctedDeliveryTime = null;
           }
+          
+          console.log(`Scheduled order ${order.id} delivery data:`, {
+            original_delivery_time: order.delivery_time,
+            corrected_delivery_time: correctedDeliveryTime,
+            delivery_slots: order.delivery_slots,
+            scheduled_time: order.scheduled_time
+          });
           
           return {
             ...order,

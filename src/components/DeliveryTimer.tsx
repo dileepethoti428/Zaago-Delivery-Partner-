@@ -105,6 +105,14 @@ const DeliveryTimer = ({
     // Different display for subscription vs regular scheduled orders
     const isSubscription = Boolean(subscriptionId);
     
+    console.log('DeliveryTimer Debug - Order data:', {
+      deliverySlots,
+      deliveryTime,
+      scheduledTime,
+      scheduleInfo,
+      isSubscription
+    });
+    
     // Determine display time - prioritize delivery slots for timing intervals
     let displayTime = null;
     let hasTimeSlot = false;
@@ -126,14 +134,19 @@ const DeliveryTimer = ({
       };
       displayTime = `${formatSlotTime(deliverySlots.start_time)} - ${formatSlotTime(deliverySlots.end_time)}`;
       hasTimeSlot = true;
+      console.log('Using delivery slots for time display:', displayTime);
     } else if (deliveryTime && !deliveryTime.includes('min') && !deliveryTime.includes('Time to be confirmed')) {
       // Use deliveryTime only if it's not a duration (like "2 min") or confirmation message
       displayTime = deliveryTime;
+      console.log('Using deliveryTime for display:', displayTime);
     } else if (scheduleInfo?.time) {
       displayTime = scheduleInfo.time;
+      console.log('Using scheduleInfo time for display:', displayTime);
     } else {
-      // Fallback display - show time to be confirmed for backend issues
-      displayTime = 'Time to be confirmed';
+      // For scheduled orders, show default time slots if backend data is incomplete
+      displayTime = isSubscription ? '6:00 AM - 10:00 AM' : '6:00 AM - 10:00 AM';
+      hasTimeSlot = true;
+      console.warn('Using fallback time slot for scheduled order');
     }
     
     const title = isSubscription ? 'Subscription Delivery' : 'Scheduled Delivery';
