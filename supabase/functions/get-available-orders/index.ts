@@ -128,7 +128,15 @@ serve(async (req) => {
         subscription_id
       `)
       .eq('status', 'packed')
-      .is('agent_id', null);
+      .is('agent_id', null)
+      .order('created_at', { ascending: true }); // Show oldest orders first
+
+    console.log('Raw query result:', orders?.map(o => ({ 
+      id: o.id, 
+      status: o.status, 
+      agent_id: o.agent_id,
+      updated_at: o.updated_at 
+    })) || []);
 
     if (error) {
       console.error('Failed to fetch orders:', error);
@@ -154,9 +162,14 @@ serve(async (req) => {
       console.warn('Failed to fetch exclusions:', exclusionError);
     }
 
+    // Double-check: filter out any orders that somehow have an agent_id (safety check)
+    let availableOrders = orders?.filter(order => order.agent_id === null && order.status === 'packed') || [];
+    
+    console.log(`After safety filter: ${availableOrders.length} orders remain`);
+    
     // Filter out excluded orders and orders from restaurant/business sellers
     const excludedOrderIds = exclusions?.map(ex => ex.order_id) || [];
-    let filteredOrders = orders?.filter(order => !excludedOrderIds.includes(order.id)) || [];
+    let filteredOrders = availableOrders.filter(order => !excludedOrderIds.includes(order.id));
     
     // Filter out orders from sellers/restaurants - only exclude pure business sellers
     const userOrdersPromises = filteredOrders.map(async (order) => {
