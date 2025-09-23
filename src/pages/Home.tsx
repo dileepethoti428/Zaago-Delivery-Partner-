@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { useAudioNotification } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   MapPin, 
@@ -71,6 +72,7 @@ interface Order {
 const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { playNotificationSound } = useAudioNotification();
   
   // Get current location with backend saving 
   const location = useGeolocation({
@@ -457,6 +459,8 @@ const Home = () => {
           
            // If an order status changed to 'placed' (released back to all agents)
           if (payload.new.status === 'placed' && payload.old.status === 'assigned') {
+            // Play notification sound like phone ringtone
+            playNotificationSound();
             toast({
               title: "New Order Available!",
               description: `Order from ${payload.new.customer_name} is now available`,
@@ -501,6 +505,8 @@ const Home = () => {
                               ordersWithDistance.some(order => order.id === payload.new.id);
             
             if (!orderExists) {
+              // Play notification sound like phone ringtone for new orders
+              playNotificationSound();
               toast({
                 title: "New Order Available!",
                 description: `New order from ${payload.new.customer_name}`,
