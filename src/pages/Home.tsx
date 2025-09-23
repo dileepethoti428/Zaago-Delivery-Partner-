@@ -30,7 +30,8 @@ import {
   MapPinOff,
   Trophy,
   BarChart3,
-  ChevronDown
+  ChevronDown,
+  UserCheck
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
@@ -209,22 +210,43 @@ const Home = () => {
         throw new Error('Agent not found');
       }
 
-      // Use edge function to get filtered orders with timeout
-      const fetchPromise = supabase.functions.invoke('get-available-orders', {
-        body: { agent_id: agent.id }
-      });
-      
-      const result = await Promise.race([fetchPromise, timeoutPromise]);
-      const { data: response, error } = result as any;
+      // Fetch both available orders and assigned orders in parallel
+      const [availableOrdersResult, assignedOrdersResult] = await Promise.all([
+        // Available orders from edge function
+        Promise.race([
+          supabase.functions.invoke('get-available-orders', {
+            body: { agent_id: agent.id }
+          }),
+          timeoutPromise
+        ]),
+        // Assigned orders directly from database
+        supabase
+          .from('orders')
+          .select(`
+            id, status, total, created_at, updated_at, agent_id,
+            customer_name, customer_phone, address, items,
+            special_instructions, delivery_time_slot, delivery_date,
+            payment_status
+          `)
+          .eq('agent_id', agent.id)
+          .in('status', ['assigned', 'picked_up', 'in_transit'])
+          .order('created_at', { ascending: false })
+      ]);
 
-      if (error) throw error;
+      // Handle available orders
+      const { data: availableResponse, error: availableError } = availableOrdersResult as any;
+      if (availableError) throw availableError;
 
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch orders');
+      if (!availableResponse.success) {
+        throw new Error(availableResponse.error || 'Failed to fetch available orders');
       }
 
-      // Transform backend data to match our interface
-      const transformedOrders: Order[] = (response.orders || []).map((order, index) => {
+      // Handle assigned orders
+      const { data: assignedOrders, error: assignedError } = assignedOrdersResult;
+      if (assignedError) throw assignedError;
+
+      // Transform available orders to match our interface
+      const transformedAvailableOrders: Order[] = (availableResponse.orders || []).map((order, index) => {
         // Safely parse scheduled time
         let scheduledTime = null;
         if (order.delivery_time_slot && order.delivery_date) {
@@ -310,7 +332,37 @@ const Home = () => {
         };
       });
 
-      setOrders(transformedOrders);
+      // Transform assigned orders to match our interface
+      const transformedAssignedOrders: Order[] = (assignedOrders || []).map((order) => {
+        return {
+          id: order.id,
+          customer_name: order.customer_name,
+          customer_phone: order.customer_phone,
+          address: order.address,
+          items: Array.isArray(order.items) ? order.items : [],
+          total: order.total,
+          status: order.status,
+          delivery_date: order.delivery_date,
+          created_at: order.created_at,
+          payment_status: order.payment_status,
+          coordinates: (order.address as any)?.coordinates,
+          products_count: Array.isArray(order.items) ? order.items.length : 1,
+          restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
+          distance_km: undefined, // Will be calculated
+          agent_payout: undefined, // Will be calculated
+          estimated_time_minutes: undefined, // Will be calculated
+          backend_calculated: false,
+          delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
+          scheduled_time: null,
+          delivery_time: order.delivery_time_slot,
+          subscription_id: null,
+          order_placed_at: new Date(order.created_at)
+        };
+      });
+
+      // Combine both available and assigned orders
+      const allOrders = [...transformedAvailableOrders, ...transformedAssignedOrders];
+      setOrders(allOrders);
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       setOrders([]);
@@ -959,21 +1011,30 @@ const Home = () => {
                   const address = `${order.address?.addressLine1 || ''}, ${order.address?.city || ''}`.trim();
                   
                   return (
-                    <Card 
-                      key={order.id} 
-                      className="bg-card border-border hover:shadow-neon hover:scale-[1.02] transition-all duration-300 animate-fade-in"
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <CardContent className="p-4">
-                         {/* Order Header */}
-                         <div className="flex items-center justify-between mb-3">
-                           <div>
-                             <h3 className="font-semibold text-foreground">{order.customer_name}</h3>
-                             <p className="text-sm text-muted-foreground">
-                               {restaurant} • Order #{order.id.substring(0, 8)}...
-                             </p>
-                           </div>
-                         </div>
+                     <Card 
+                       key={order.id} 
+                       className={`bg-card border-border hover:shadow-neon hover:scale-[1.02] transition-all duration-300 animate-fade-in ${
+                         order.status === 'assigned' ? 'ring-2 ring-primary/30 bg-primary/5' : ''
+                       }`}
+                       style={{ animationDelay: `${index * 0.1}s` }}
+                     >
+                       <CardContent className="p-4">
+                          {/* Order Header */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h3 className="font-semibold text-foreground">{order.customer_name}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {restaurant} • Order #{order.id.substring(0, 8)}...
+                              </p>
+                            </div>
+                            {/* Status Badge */}
+                            {order.status === 'assigned' && (
+                              <Badge variant="default" className="bg-primary/20 text-primary border-primary/30">
+                                <UserCheck className="w-3 h-3 mr-1" />
+                                Assigned to You
+                              </Badge>
+                            )}
+                          </div>
 
                           {/* Delivery Timer */}
                           {(order.delivery_type || order.scheduled_time) && (
