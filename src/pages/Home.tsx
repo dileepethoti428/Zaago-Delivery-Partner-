@@ -1255,7 +1255,6 @@ const Home = () => {
                             const isScheduledOrder = Boolean(
                               order.scheduled_time || 
                               order.delivery_date !== new Date().toISOString().split('T')[0] ||
-                              order.delivery_time ||
                               order.delivery_slots ||
                               order.subscription_id
                             );
