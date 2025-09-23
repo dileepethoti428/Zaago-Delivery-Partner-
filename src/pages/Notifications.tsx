@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAudioNotification } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Bell, 
@@ -32,6 +33,7 @@ interface Notification {
 
 const Notifications = () => {
   const { toast } = useToast();
+  const { playNotificationSound } = useAudioNotification();
   const [loading, setLoading] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -171,6 +173,9 @@ const Notifications = () => {
             },
             ...prev,
           ]);
+
+          // Play notification sound for new notifications
+          playNotificationSound();
         }
       )
       .subscribe();
