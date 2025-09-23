@@ -100,7 +100,7 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders - only show unassigned 'packed' orders and orders assigned to current agent
+    // Get available orders - show unassigned 'packed' orders OR orders assigned to current agent (regardless of status)
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -110,7 +110,7 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .or(`and(status.eq.packed,agent_id.is.null),and(status.eq.assigned,agent_id.eq.${agent_id})`);
+      .or(`and(status.eq.packed,agent_id.is.null),agent_id.eq.${agent_id}`);
 
     if (error) {
       console.error('Failed to fetch orders:', error);
@@ -122,6 +122,9 @@ serve(async (req) => {
         }
       );
     }
+
+    console.log(`Found ${orders?.length || 0} orders before filtering for agent:`, agent_id);
+    console.log('Orders found:', orders?.map(o => ({ id: o.id, status: o.status, agent_id: o.agent_id })) || []);
 
     // Get excluded order IDs for this agent
     const { data: exclusions, error: exclusionError } = await supabase
@@ -197,7 +200,8 @@ serve(async (req) => {
       
       for (const order of filteredOrders) {
         // Skip distance filtering for orders already assigned to this agent
-        if (order.status === 'assigned' && order.agent_id === agent_id) {
+        if (order.agent_id === agent_id) {
+          console.log(`Skipping distance filter for assigned order ${order.id}`);
           const existingDistance = order.distance_km || 0;
           const agentPayout = calculateAgentPayout(existingDistance);
           nearbyOrders.push({
