@@ -100,7 +100,7 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders with delivery slot details - only show unassigned 'packed' orders and orders assigned to current agent
+    // Get available orders - only show unassigned 'packed' orders and orders assigned to current agent
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -108,13 +108,7 @@ serve(async (req) => {
         delivery_time, 
         delivery_time_slot, 
         delivery_date, 
-        subscription_id,
-        delivery_slots:delivery_time_slot (
-          id,
-          slot_name,
-          start_time,
-          end_time
-        )
+        subscription_id
       `)
       .or(`and(status.eq.packed,agent_id.is.null),and(status.eq.assigned,agent_id.eq.${agent_id})`);
 
@@ -165,6 +159,32 @@ serve(async (req) => {
     
     const resolvedOrders = await Promise.all(userOrdersPromises);
     filteredOrders = resolvedOrders.filter(order => order !== null);
+
+    // Fetch delivery slots for orders that have them
+    const ordersWithSlots = await Promise.all(
+      filteredOrders.map(async (order) => {
+        if (order.delivery_time_slot) {
+          try {
+            const { data: deliverySlot } = await supabase
+              .from('delivery_slots')
+              .select('id, slot_name, start_time, end_time')
+              .eq('id', order.delivery_time_slot)
+              .maybeSingle();
+            
+            return {
+              ...order,
+              delivery_slots: deliverySlot
+            };
+          } catch (slotError) {
+            console.warn(`Failed to fetch delivery slot for order ${order.id}:`, slotError);
+            return order;
+          }
+        }
+        return order;
+      })
+    );
+    
+    filteredOrders = ordersWithSlots;
 
     // Apply 15km radius filtering if agent location is available
     if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
