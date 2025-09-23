@@ -586,7 +586,17 @@ const Home = () => {
     
     const updatedOrders = await Promise.all(
       orders.map(async (order) => {
-        // Always use backend-calculated distance if available
+        // For scheduled orders and subscription orders, preserve original delivery times
+        if (order.delivery_type === 'scheduled' || order.subscription_id) {
+          // Don't override delivery_time for scheduled orders - keep original slot times
+          return {
+            ...order,
+            distance_km: order.distance_km || 2.5, // Keep distance for sorting but don't override time
+            backend_calculated: order.distance_km ? true : false
+          };
+        }
+        
+        // Only calculate travel time for immediate orders
         if (order.distance_km !== undefined) {
           return {
             ...order,
