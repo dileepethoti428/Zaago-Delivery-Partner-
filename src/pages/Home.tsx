@@ -247,48 +247,71 @@ const Home = () => {
 
       // Transform available orders to match our interface
       const transformedAvailableOrders: Order[] = (availableResponse.orders || []).map((order, index) => {
-        // Safely parse scheduled time
+        // Parse delivery slots for timing intervals
+        let deliverySlots = null;
         let scheduledTime = null;
-        if (order.delivery_time_slot && order.delivery_date) {
-          try {
-            // Handle different time slot formats
-            const timeSlot = order.delivery_time_slot;
+        let formattedDeliveryTime = null;
+
+        if (order.delivery_time_slot) {
+          const timeSlot = order.delivery_time_slot;
+          
+          // Handle time intervals like "18:00-20:00" or "22:00-00:00"
+          if (timeSlot.includes('-') && timeSlot.match(/\d{1,2}:\d{2}-\d{1,2}:\d{2}/)) {
+            const [startTime, endTime] = timeSlot.split('-');
+            deliverySlots = {
+              id: `slot-${order.id}`,
+              slot_name: `${startTime} - ${endTime}`,
+              start_time: startTime.length === 5 ? startTime + ':00' : startTime,
+              end_time: endTime.length === 5 ? endTime + ':00' : endTime,
+            };
+            
+            // Set scheduled time using start time
+            if (order.delivery_date) {
+              try {
+                const dateTimeString = order.delivery_date + 'T' + deliverySlots.start_time;
+                const date = new Date(dateTimeString);
+                if (!isNaN(date.getTime())) {
+                  scheduledTime = date.toISOString();
+                }
+              } catch (error) {
+                console.warn('Failed to parse scheduled time for order:', order.id, error);
+              }
+            }
+          } else {
+            // Handle single time slots or text-based slots
             let timeString = '';
             
             if (timeSlot.includes('-')) {
-              // Format like "morning-early" or "18:00-20:00"
+              // Format like "morning-early"
               const timePart = timeSlot.split('-')[0];
-              if (timePart.includes(':')) {
-                timeString = timePart + ':00';
-              } else {
-                // Map text slots to times
-                const timeMap = {
-                  'morning': '08:00:00',
-                  'afternoon': '14:00:00',
-                  'evening': '18:00:00'
-                };
-                timeString = timeMap[timePart] || '12:00:00';
-              }
+              const timeMap = {
+                'morning': '08:00:00',
+                'afternoon': '14:00:00',
+                'evening': '18:00:00'
+              };
+              timeString = timeMap[timePart] || '12:00:00';
             } else if (timeSlot.includes(':')) {
-              timeString = timeSlot + ':00';
+              timeString = timeSlot.length === 5 ? timeSlot + ':00' : timeSlot;
             } else {
               timeString = '12:00:00'; // fallback
             }
             
-            const dateTimeString = order.delivery_date + 'T' + timeString;
-            const date = new Date(dateTimeString);
-            
-            // Validate the date
-            if (!isNaN(date.getTime())) {
-              scheduledTime = date.toISOString();
+            // Set scheduled time for single time slots
+            if (order.delivery_date) {
+              try {
+                const dateTimeString = order.delivery_date + 'T' + timeString;
+                const date = new Date(dateTimeString);
+                if (!isNaN(date.getTime())) {
+                  scheduledTime = date.toISOString();
+                }
+              } catch (error) {
+                console.warn('Failed to parse scheduled time for order:', order.id, error);
+              }
             }
-          } catch (error) {
-            console.warn('Failed to parse scheduled time for order:', order.id, error);
           }
         }
 
-        // Format delivery time for display
-        let formattedDeliveryTime = null;
+        // Format delivery time for display (fallback for single delivery times)
         if (order.delivery_time) {
           try {
             // Convert "12:00:00" to "12:00 PM" format
@@ -328,12 +351,62 @@ const Home = () => {
           scheduled_time: scheduledTime,
           delivery_time: formattedDeliveryTime,
           subscription_id: order.subscription_id,
-          order_placed_at: new Date(order.created_at)
+          order_placed_at: new Date(order.created_at),
+          delivery_slots: deliverySlots
         };
       });
 
       // Transform assigned orders to match our interface
       const transformedAssignedOrders: Order[] = (assignedOrders || []).map((order) => {
+        // Parse delivery slots for assigned orders too
+        let deliverySlots = null;
+        let scheduledTime = null;
+        let formattedDeliveryTime = null;
+
+        if (order.delivery_time_slot) {
+          const timeSlot = order.delivery_time_slot;
+          
+          // Handle time intervals like "18:00-20:00" or "22:00-00:00"
+          if (timeSlot.includes('-') && timeSlot.match(/\d{1,2}:\d{2}-\d{1,2}:\d{2}/)) {
+            const [startTime, endTime] = timeSlot.split('-');
+            deliverySlots = {
+              id: `slot-${order.id}`,
+              slot_name: `${startTime} - ${endTime}`,
+              start_time: startTime.length === 5 ? startTime + ':00' : startTime,
+              end_time: endTime.length === 5 ? endTime + ':00' : endTime,
+            };
+            
+            // Set scheduled time using start time
+            if (order.delivery_date) {
+              try {
+                const dateTimeString = order.delivery_date + 'T' + deliverySlots.start_time;
+                const date = new Date(dateTimeString);
+                if (!isNaN(date.getTime())) {
+                  scheduledTime = date.toISOString();
+                }
+              } catch (error) {
+                console.warn('Failed to parse scheduled time for assigned order:', order.id, error);
+              }
+            }
+          } else {
+            // For single time slots, use as delivery_time
+            formattedDeliveryTime = timeSlot;
+            
+            if (order.delivery_date && timeSlot.includes(':')) {
+              try {
+                const timeString = timeSlot.length === 5 ? timeSlot + ':00' : timeSlot;
+                const dateTimeString = order.delivery_date + 'T' + timeString;
+                const date = new Date(dateTimeString);
+                if (!isNaN(date.getTime())) {
+                  scheduledTime = date.toISOString();
+                }
+              } catch (error) {
+                console.warn('Failed to parse scheduled time for assigned order:', order.id, error);
+              }
+            }
+          }
+        }
+
         return {
           id: order.id,
           customer_name: order.customer_name,
@@ -353,10 +426,11 @@ const Home = () => {
           estimated_time_minutes: undefined, // Will be calculated
           backend_calculated: false,
           delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
-          scheduled_time: null,
-          delivery_time: order.delivery_time_slot,
+          scheduled_time: scheduledTime,
+          delivery_time: formattedDeliveryTime,
           subscription_id: null,
-          order_placed_at: new Date(order.created_at)
+          order_placed_at: new Date(order.created_at),
+          delivery_slots: deliverySlots
         };
       });
 
