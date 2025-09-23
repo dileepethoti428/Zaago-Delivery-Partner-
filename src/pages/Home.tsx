@@ -493,20 +493,23 @@ const Home = () => {
             (order.delivery_time.length === 5 ? order.delivery_time + ':00' : order.delivery_time) : 
             '12:00:00';
             
-        // Try to match with actual delivery slot
-        const matchedSlot = matchTimeWithSlot(timeString);
-        if (matchedSlot) {
-          console.log(`Assigned order ${order.id} from delivery_time matched slot:`, matchedSlot);
-          deliverySlots = {
-            id: matchedSlot.id,
-            slot_name: matchedSlot.formatted_range,
-            start_time: matchedSlot.start_time,
-            end_time: matchedSlot.end_time,
-          };
-        } else {
-          console.log(`Assigned order ${order.id} no slot match for delivery_time:`, timeString);
-          formattedDeliveryTime = order.delivery_time;
-        }
+          console.log(`Order ${order.id}: Trying to match delivery_time "${order.delivery_time}" -> "${timeString}"`);
+            
+          // Try to match with actual delivery slot
+          const matchedSlot = matchTimeWithSlot(timeString);
+          if (matchedSlot) {
+            console.log(`Assigned order ${order.id} from delivery_time matched slot:`, matchedSlot);
+            deliverySlots = {
+              id: matchedSlot.id,
+              slot_name: matchedSlot.slot_name,
+              start_time: matchedSlot.start_time,
+              end_time: matchedSlot.end_time,
+            };
+            formattedDeliveryTime = `${matchedSlot.formatted_range}`;
+          } else {
+            console.log(`Assigned order ${order.id} no slot match for delivery_time:`, timeString);
+            formattedDeliveryTime = order.delivery_time;
+          }
           
           if (order.delivery_date && timeString.includes(':')) {
             try {
@@ -541,7 +544,7 @@ const Home = () => {
           backend_calculated: false,
           delivery_type: order.delivery_time_slot || order.delivery_time || order.subscription_id ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
-          delivery_time: formattedDeliveryTime,
+          delivery_time: formattedDeliveryTime && !formattedDeliveryTime.includes('min') ? formattedDeliveryTime : order.delivery_time,
           subscription_id: order.subscription_id,
           order_placed_at: new Date(order.created_at),
           delivery_slots: deliverySlots

@@ -68,23 +68,35 @@ const DeliveryTimer = ({
   const getScheduledDeliveryInfo = () => {
     if (!scheduledTime) return null;
     
-    const scheduledDate = new Date(scheduledTime);
-    const now = new Date();
-    const isToday = scheduledDate.toDateString() === now.toDateString();
-    
-    return {
-      date: scheduledDate.toLocaleDateString('en-US', { 
-        weekday: isToday ? undefined : 'long',
-        month: 'short', 
-        day: 'numeric' 
-      }),
-      time: scheduledDate.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      }),
-      isToday
-    };
+    try {
+      const scheduledDate = new Date(scheduledTime);
+      
+      // Check if the date is valid
+      if (isNaN(scheduledDate.getTime())) {
+        console.warn('Invalid scheduled time:', scheduledTime);
+        return null;
+      }
+      
+      const now = new Date();
+      const isToday = scheduledDate.toDateString() === now.toDateString();
+      
+      return {
+        date: scheduledDate.toLocaleDateString('en-US', { 
+          weekday: isToday ? undefined : 'long',
+          month: 'short', 
+          day: 'numeric' 
+        }),
+        time: scheduledDate.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        }),
+        isToday
+      };
+    } catch (error) {
+      console.warn('Error parsing scheduled time:', scheduledTime, error);
+      return null;
+    }
   };
 
   if (deliveryType === 'scheduled') {
@@ -94,7 +106,7 @@ const DeliveryTimer = ({
     const isSubscription = Boolean(subscriptionId);
     
     // Determine display time - prioritize delivery slots for timing intervals
-    let displayTime;
+    let displayTime = null;
     let hasTimeSlot = false;
     
     if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
@@ -109,13 +121,19 @@ const DeliveryTimer = ({
           });
         } catch (error) {
           console.warn('Error formatting slot time:', timeStr, error);
-          return timeStr;
+          return timeStr.substring(0, 5); // Fallback to HH:MM format
         }
       };
       displayTime = `${formatSlotTime(deliverySlots.start_time)} - ${formatSlotTime(deliverySlots.end_time)}`;
       hasTimeSlot = true;
+    } else if (deliveryTime && !deliveryTime.includes('min')) {
+      // Use deliveryTime only if it's not a duration (like "2 min")
+      displayTime = deliveryTime;
+    } else if (scheduleInfo?.time) {
+      displayTime = scheduleInfo.time;
     } else {
-      displayTime = deliveryTime || scheduleInfo?.time;
+      // Fallback display
+      displayTime = 'Time to be confirmed';
     }
     
     const title = isSubscription ? 'Subscription Delivery' : 'Scheduled Delivery';
@@ -144,16 +162,16 @@ const DeliveryTimer = ({
             <div className="text-center">
               <p className="text-lg font-bold text-blue-400">{displayTime || 'Time TBD'}</p>
               <p className="text-xs text-muted-foreground">
-                {hasTimeSlot && deliverySlots?.slot_name ? 
-                  deliverySlots.slot_name : 
-                  (isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date))
+                {hasTimeSlot ? 
+                  'Delivery Window' : 
+                  (isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date || 'Date TBD'))
                 }
               </p>
             </div>
             {hasTimeSlot && (
               <div className="mt-1 text-center">
                 <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-700 border-blue-500/30">
-                  Delivery Slot
+                  Time Slot
                 </Badge>
               </div>
             )}
