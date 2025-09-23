@@ -1841,6 +1841,45 @@ export type Database = {
           },
         ]
       }
+      order_product_status: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          id: string
+          order_id: string
+          packed_at: string | null
+          product_id: string
+          rejection_reason: string | null
+          seller_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          id?: string
+          order_id: string
+          packed_at?: string | null
+          product_id: string
+          rejection_reason?: string | null
+          seller_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          id?: string
+          order_id?: string
+          packed_at?: string | null
+          product_id?: string
+          rejection_reason?: string | null
+          seller_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       order_qr_codes: {
         Row: {
           created_at: string
@@ -1989,6 +2028,7 @@ export type Database = {
           delivered_at: string | null
           delivery_address_id: string | null
           delivery_date: string | null
+          delivery_time: string | null
           delivery_time_slot: string | null
           id: string
           items: Json
@@ -2012,6 +2052,7 @@ export type Database = {
           delivered_at?: string | null
           delivery_address_id?: string | null
           delivery_date?: string | null
+          delivery_time?: string | null
           delivery_time_slot?: string | null
           id?: string
           items: Json
@@ -2035,6 +2076,7 @@ export type Database = {
           delivered_at?: string | null
           delivery_address_id?: string | null
           delivery_date?: string | null
+          delivery_time?: string | null
           delivery_time_slot?: string | null
           id?: string
           items?: Json
@@ -4118,8 +4160,16 @@ export type Database = {
       }
     }
     Functions: {
+      accept_delivery_assignment: {
+        Args: { p_agent_id: string; p_order_id: string }
+        Returns: Json
+      }
       accept_order: {
         Args: { p_agent_id: string; p_order_id: string }
+        Returns: Json
+      }
+      accept_product_in_order: {
+        Args: { p_order_id: string; p_product_id: string; p_seller_id: string }
         Returns: Json
       }
       activate_delivery_agent: {
@@ -4171,12 +4221,24 @@ export type Database = {
         Returns: number
       }
       calculate_next_delivery_date: {
-        Args: {
-          p_current_date: string
-          p_frequency_days: string[]
-          p_frequency_type: string
-          p_frequency_value: number
-        }
+        Args:
+          | {
+              current_hour?: number
+              input_current_date?: string
+              last_delivery_date?: string
+              subscription_type: string
+            }
+          | {
+              input_current_date?: string
+              last_delivery_date?: string
+              subscription_type: string
+            }
+          | {
+              p_current_date: string
+              p_frequency_days: string[]
+              p_frequency_type: string
+              p_frequency_value: number
+            }
         Returns: string
       }
       calculate_seller_payouts: {
@@ -4260,10 +4322,6 @@ export type Database = {
         }
         Returns: string
       }
-      create_order_from_existing_subscription: {
-        Args: { p_order_type?: string; p_subscription_id: string }
-        Returns: string
-      }
       create_order_from_subscription: {
         Args: { p_order_type?: string; p_subscription_id: string }
         Returns: string
@@ -4282,11 +4340,18 @@ export type Database = {
         Returns: string
       }
       create_vacation_period: {
-        Args: {
-          p_end_date: string
-          p_start_date: string
-          p_subscription_id: string
-        }
+        Args:
+          | {
+              p_end_date: string
+              p_start_date: string
+              p_subscription_id: string
+            }
+          | {
+              p_end_date: string
+              p_start_date: string
+              p_subscription_id: string
+              p_user_id: string
+            }
         Returns: Json
       }
       create_validated_payout: {
@@ -4296,6 +4361,10 @@ export type Database = {
       ensure_delivery_data_consistency: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      extract_seller_ids_from_order: {
+        Args: { order_items: Json }
+        Returns: string[]
       }
       fix_uncategorized_products: {
         Args: Record<PropertyKey, never>
@@ -4502,26 +4571,19 @@ export type Database = {
         }[]
       }
       get_seller_orders: {
-        Args:
-          | { seller_user_id: string }
-          | { seller_user_id: string; status_filter?: string[] }
+        Args: { seller_user_id: string; status_filter?: string[] }
         Returns: {
           address: Json
-          agent_id: string
           created_at: string
           customer_name: string
           customer_phone: string
-          delivered: boolean
-          delivery_date: string
+          delivery_time_slot: string
+          id: string
           items: Json
-          order_id: string
-          payment_status: string
-          seller_total: number
+          product_statuses: Json
           special_instructions: string
           status: string
           total: number
-          updated_at: string
-          user_id: string
         }[]
       }
       get_seller_payouts_summary_json: {
@@ -4531,6 +4593,24 @@ export type Database = {
       get_seller_sales_analytics: {
         Args: { target_seller_id: string; time_period?: string }
         Returns: Json
+      }
+      get_seller_specific_orders: {
+        Args: { p_seller_user_id: string }
+        Returns: {
+          address: Json
+          agent_id: string
+          created_at: string
+          customer_name: string
+          customer_phone: string
+          delivery_date: string
+          order_id: string
+          order_status: string
+          payment_status: string
+          seller_items: Json
+          seller_total: number
+          total_amount: number
+          updated_at: string
+        }[]
       }
       get_seller_stats: {
         Args: { seller_user_id: string }
@@ -4681,6 +4761,10 @@ export type Database = {
         Args: { payout_id: string }
         Returns: undefined
       }
+      notify_nearby_delivery_agents: {
+        Args: { p_order_id: string }
+        Returns: number
+      }
       process_daily_subscriptions_with_notifications: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -4717,6 +4801,15 @@ export type Database = {
       }
       reject_order: {
         Args: { p_agent_id: string; p_order_id: string; p_reason?: string }
+        Returns: Json
+      }
+      reject_product_in_order: {
+        Args: {
+          p_order_id: string
+          p_product_id: string
+          p_reason?: string
+          p_seller_id: string
+        }
         Returns: Json
       }
       reject_user: {
@@ -4775,6 +4868,10 @@ export type Database = {
         Args: { p_delivery_date: string; p_subscription_id: string }
         Returns: boolean
       }
+      should_skip_delivery_for_vacation_v3: {
+        Args: { p_delivery_date: string; p_subscription_id: string }
+        Returns: boolean
+      }
       sync_special_offers_from_products: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -4800,6 +4897,14 @@ export type Database = {
           seller_user_id: string
         }
         Returns: boolean
+      }
+      update_seller_order_status: {
+        Args: { p_action: string; p_order_id: string; p_seller_user_id: string }
+        Returns: Json
+      }
+      update_subscription_next_delivery_dates: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       update_trending_products: {
         Args: Record<PropertyKey, never>
