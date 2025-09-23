@@ -408,11 +408,11 @@ const Home = () => {
           agent_payout: order.agent_payout || undefined,
           estimated_time_minutes: order.estimated_time_minutes || undefined,
           backend_calculated: order.distance_km ? true : false,
-          // Determine delivery type based on actual order data
-          delivery_type: order.subscription_id || order.delivery_time_slot || order.delivery_time ? 'scheduled' : 'immediate',
+          // Determine delivery type - only subscription and time slots make it scheduled
+          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
-          // Preserve original delivery_time from backend for scheduled orders  
-          delivery_time: (order.subscription_id || order.delivery_time_slot || order.delivery_time) ? 
+          // Preserve original delivery_time from backend for scheduled orders only
+          delivery_time: (order.subscription_id || order.delivery_time_slot) ? 
             (formattedDeliveryTime || order.delivery_time) : 
             null, // Will be calculated for immediate orders
           subscription_id: order.subscription_id,
@@ -544,10 +544,10 @@ const Home = () => {
           agent_payout: undefined, // Will be calculated
           estimated_time_minutes: undefined, // Will be calculated  
           backend_calculated: false,
-          delivery_type: order.delivery_time_slot || order.delivery_time || order.subscription_id ? 'scheduled' : 'immediate',
+          delivery_type: order.delivery_time_slot || order.subscription_id ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
-          // Preserve original delivery_time from backend for scheduled orders
-          delivery_time: (order.delivery_time_slot || order.delivery_time || order.subscription_id) ? 
+          // Preserve original delivery_time from backend for scheduled orders only
+          delivery_time: (order.delivery_time_slot || order.subscription_id) ? 
             (formattedDeliveryTime || order.delivery_time) : 
             null, // Will be calculated for immediate orders
           subscription_id: order.subscription_id,
