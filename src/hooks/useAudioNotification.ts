@@ -1,46 +1,63 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 export const useAudioNotification = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
 
-  const createRingtone = useCallback(() => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+  // Initialize audio on first use
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio('/phone-ringtone.mp3');
+      audioRef.current.volume = 0.7;
+      audioRef.current.preload = 'auto';
+      
+      // Handle audio loading errors
+      audioRef.current.addEventListener('error', (e) => {
+        console.error('Error loading ringtone audio:', e);
+      });
     }
-    
-    const audioContext = audioContextRef.current;
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    // Create classic phone ringtone pattern
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(900, audioContext.currentTime + 0.1);
-    
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 1);
-    
-    return oscillator;
+
+    // Cleanup function
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+  }, []);
+
+  const playRingtone = useCallback(async () => {
+    if (!audioRef.current) return;
+
+    try {
+      // Reset audio to beginning
+      audioRef.current.currentTime = 0;
+      
+      // Play the ringtone
+      const playPromise = audioRef.current.play();
+      
+      if (playPromise !== undefined) {
+        await playPromise;
+      }
+    } catch (error) {
+      console.error('Error playing ringtone:', error);
+      // Fallback to system beep if audio fails
+      if (window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate([200, 100, 200]);
+      }
+    }
   }, []);
 
   const playNotificationSound = useCallback(() => {
     try {
-      // Play ringtone pattern 3 times
-      for (let i = 0; i < 3; i++) {
-        setTimeout(() => {
-          createRingtone();
-        }, i * 1500);
-      }
+      // Play ringtone 3 times with delays
+      playRingtone();
+      
+      setTimeout(() => playRingtone(), 2000);
+      setTimeout(() => playRingtone(), 4000);
     } catch (error) {
-      console.error('Error playing ringtone:', error);
+      console.error('Error playing notification sound:', error);
     }
-  }, [createRingtone]);
+  }, [playRingtone]);
 
   return { playNotificationSound };
 };
