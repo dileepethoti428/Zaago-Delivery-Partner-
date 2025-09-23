@@ -59,6 +59,12 @@ interface Order {
   agent_payout?: number;
   estimated_time_minutes?: number;
   subscription_id?: string;
+  delivery_slots?: {
+    id: string;
+    slot_name: string;
+    start_time: string;
+    end_time: string;
+  };
 }
 
 
@@ -972,6 +978,7 @@ const Home = () => {
                                 orderPlacedAt={order.order_placed_at}
                                 subscriptionId={order.subscription_id}
                                 deliveryTime={order.delivery_time}
+                                deliverySlots={order.delivery_slots}
                                 className="text-xs"
                               />
                             </div>

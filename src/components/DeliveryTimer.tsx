@@ -10,6 +10,12 @@ interface DeliveryTimerProps {
   className?: string;
   subscriptionId?: string; // For subscription orders
   deliveryTime?: string; // Actual delivery time (formatted like "12:00 PM")
+  deliverySlots?: {
+    id: string;
+    slot_name: string;
+    start_time: string;
+    end_time: string;
+  }; // For timing intervals
 }
 
 const DeliveryTimer = ({ 
@@ -18,7 +24,8 @@ const DeliveryTimer = ({
   orderPlacedAt = new Date(),
   className = "",
   subscriptionId,
-  deliveryTime
+  deliveryTime,
+  deliverySlots
 }: DeliveryTimerProps) => {
   const [timeLeft, setTimeLeft] = useState<{
     minutes: number;
@@ -85,9 +92,26 @@ const DeliveryTimer = ({
     
     // Different display for subscription vs regular scheduled orders
     const isSubscription = Boolean(subscriptionId);
-    const displayTime = deliveryTime || scheduleInfo?.time;
+    
+    // Determine display time - use delivery slots if available for timing intervals
+    let displayTime;
+    if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
+      // Format time slots as intervals
+      const formatSlotTime = (timeStr: string) => {
+        const time = new Date(`1970-01-01T${timeStr}`);
+        return time.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          hour12: true 
+        });
+      };
+      displayTime = `${formatSlotTime(deliverySlots.start_time)} - ${formatSlotTime(deliverySlots.end_time)}`;
+    } else {
+      displayTime = deliveryTime || scheduleInfo?.time;
+    }
+    
     const title = isSubscription ? 'Subscription Delivery' : 'Scheduled Delivery';
-    const subtitle = isSubscription ? 'Delivery at' : 'Arrives at';
+    const subtitle = deliverySlots ? 'Delivery window' : (isSubscription ? 'Delivery at' : 'Arrives at');
     const badgeText = isSubscription ? 'Subscription' : 'Scheduled';
     
     return (
@@ -112,7 +136,7 @@ const DeliveryTimer = ({
             <div className="text-center">
               <p className="text-lg font-bold text-blue-400">{displayTime}</p>
               <p className="text-xs text-muted-foreground">
-                {isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date)}
+                {deliverySlots?.slot_name || (isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date))}
               </p>
             </div>
           </div>

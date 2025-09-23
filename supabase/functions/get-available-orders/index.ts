@@ -100,10 +100,22 @@ serve(async (req) => {
       // If no location found, return all orders (backward compatibility)
     }
 
-    // Get available orders - only show unassigned 'packed' orders and orders assigned to current agent
+    // Get available orders with delivery slot details - only show unassigned 'packed' orders and orders assigned to current agent
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('*, delivery_time, delivery_time_slot, delivery_date, subscription_id')
+      .select(`
+        *, 
+        delivery_time, 
+        delivery_time_slot, 
+        delivery_date, 
+        subscription_id,
+        delivery_slots:delivery_time_slot (
+          id,
+          slot_name,
+          start_time,
+          end_time
+        )
+      `)
       .or(`and(status.eq.packed,agent_id.is.null),and(status.eq.assigned,agent_id.eq.${agent_id})`);
 
     if (error) {
