@@ -226,7 +226,7 @@ const Home = () => {
             id, status, total, created_at, updated_at, agent_id,
             customer_name, customer_phone, address, items,
             special_instructions, delivery_time_slot, delivery_date,
-            payment_status
+            delivery_time, subscription_id, payment_status
           `)
           .eq('agent_id', agent.id)
           .in('status', ['assigned', 'picked_up', 'in_transit'])
@@ -363,6 +363,7 @@ const Home = () => {
         let scheduledTime = null;
         let formattedDeliveryTime = null;
 
+        // Check for delivery_time_slot first (priority for intervals), then delivery_time
         if (order.delivery_time_slot) {
           const timeSlot = order.delivery_time_slot;
           
@@ -405,6 +406,22 @@ const Home = () => {
               }
             }
           }
+        } else if (order.delivery_time) {
+          // Use delivery_time if delivery_time_slot is not available
+          formattedDeliveryTime = order.delivery_time;
+          
+          if (order.delivery_date && order.delivery_time.includes(':')) {
+            try {
+              const timeString = order.delivery_time.length === 5 ? order.delivery_time + ':00' : order.delivery_time;
+              const dateTimeString = order.delivery_date + 'T' + timeString;
+              const date = new Date(dateTimeString);
+              if (!isNaN(date.getTime())) {
+                scheduledTime = date.toISOString();
+              }
+            } catch (error) {
+              console.warn('Failed to parse scheduled time from delivery_time for assigned order:', order.id, error);
+            }
+          }
         }
 
         return {
@@ -425,10 +442,10 @@ const Home = () => {
           agent_payout: undefined, // Will be calculated
           estimated_time_minutes: undefined, // Will be calculated
           backend_calculated: false,
-          delivery_type: order.delivery_time_slot ? 'scheduled' : 'immediate',
+          delivery_type: order.delivery_time_slot || order.delivery_time || order.subscription_id ? 'scheduled' : 'immediate',
           scheduled_time: scheduledTime,
           delivery_time: formattedDeliveryTime,
-          subscription_id: null,
+          subscription_id: order.subscription_id,
           order_placed_at: new Date(order.created_at),
           delivery_slots: deliverySlots
         };
