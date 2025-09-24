@@ -760,9 +760,8 @@ const Home = () => {
                                }}
                               >
                                 <MapPin className="w-4 h-4 mr-2" />
-                                <div className="flex flex-col items-start">
-                                  <span className="text-xs font-semibold opacity-90">📦 PICKUP FROM:</span>
-                                  <span className="text-sm font-medium">{debugAddress(order.pickup_address, `pickup-${order.id}`)}</span>
+                                <div className="flex items-center">
+                                  <span className="text-sm font-medium">Pick Up</span>
                                 </div>
                              </div>
                            )}
