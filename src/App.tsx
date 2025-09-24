@@ -22,6 +22,7 @@ import Settings from "./pages/Settings";
 import PrivacySecurity from "./pages/PrivacySecurity";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
+import SellerDashboard from "./pages/SellerDashboard";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,7 @@ const App = () => (
             
             {/* Main App Routes */}
             <Route path="/home" element={<RequireAuth><Home /></RequireAuth>} />
+            <Route path="/seller-dashboard" element={<RequireAuth><SellerDashboard /></RequireAuth>} />
             <Route path="/my-deliveries" element={<RequireAuth><MyDeliveries /></RequireAuth>} />
             <Route path="/history" element={<RequireAuth><History /></RequireAuth>} />
             <Route path="/tracking" element={<RequireAuth><Tracking /></RequireAuth>} />
