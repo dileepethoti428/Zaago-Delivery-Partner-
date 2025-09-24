@@ -95,11 +95,11 @@ const Home = () => {
   
   // Get current location with backend saving 
   const location = useGeolocation({
-    enableHighAccuracy: true, // Use GPS for accurate location
-    timeout: 10000, // Longer timeout for GPS accuracy
-    maximumAge: 30000, // Accept location up to 30 seconds old
+    enableHighAccuracy: true, // Use GPS for exact location
+    timeout: 15000, // Longer timeout for GPS accuracy
+    maximumAge: 10000, // Fresh location data
     saveToBackend: true,
-    refreshInterval: 60000, // Auto-refresh every minute
+    refreshInterval: 30000, // Auto-refresh every 30 seconds for exact location
   });
   
   // State management
@@ -528,7 +528,7 @@ const Home = () => {
 
       {/* Action Buttons */}
       <div className="px-4 py-4 bg-gray-50">
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {/* Go Online/Offline Button */}
           <Button
             onClick={() => setIsOnline(!isOnline)}
@@ -559,19 +559,6 @@ const Home = () => {
                 <span className="text-xs text-gray-700">Refresh</span>
               </div>
             )}
-          </Button>
-
-          {/* GPS Refresh */}
-          <Button
-            onClick={() => location.refresh()}
-            variant="outline"
-            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
-            disabled={location.loading}
-          >
-            <div className="flex items-center">
-              <Target className={`w-4 h-4 text-blue-600 mr-1 ${location.loading ? 'animate-pulse' : ''}`} />
-              <span className="text-xs text-gray-700">GPS</span>
-            </div>
           </Button>
 
           {/* QR Scanner */}
