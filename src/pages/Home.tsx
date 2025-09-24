@@ -849,7 +849,7 @@ const Home = () => {
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No orders available</h3>
                 <p className="text-gray-500 mb-4">
-                  There are no orders around 15 km
+                  No delivery requests available within 15km radius
                 </p>
                 {!isOnline && (
                   <Button
