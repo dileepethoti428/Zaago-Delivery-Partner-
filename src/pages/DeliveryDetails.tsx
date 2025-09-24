@@ -80,7 +80,7 @@ const DeliveryDetails = () => {
     if (!agentLocation) {
       console.warn('No agent location available');
       setDistance(2.5); // fallback
-      setEstimatedPayout(35); // fallback payout
+      setPayout(35); // fallback payout
       return;
     }
 
@@ -89,7 +89,7 @@ const DeliveryDetails = () => {
     if (!customerCoords) {
       console.warn('No customer coordinates available');
       setDistance(2.5); // fallback
-      setEstimatedPayout(35); // fallback payout
+      setPayout(35); // fallback payout
       return;
     }
 
@@ -105,7 +105,7 @@ const DeliveryDetails = () => {
       const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
       
       setDistance(dist);
-      setEstimatedPayout(calculatedPayout);
+      setPayout(calculatedPayout);
       
       console.log('✅ Distance calculated:', dist, 'km, Payout:', calculatedPayout, 'Source:', distanceResult.source);
       
@@ -113,40 +113,9 @@ const DeliveryDetails = () => {
       console.error('Error calculating distance:', error);
       // Use fallback values
       setDistance(2.5);
-      setEstimatedPayout(35);
+      setPayout(35);
     }
   };
-        const { data: distanceData, error: distanceError } = await supabase.functions.invoke('calculate-distance-eta', {
-          body: {
-            origin: agentLocation,
-            destination: order.address.coordinates
-          }
-        });
-
-        if (!distanceError && distanceData?.distance_km && distanceData.distance_km > 0) {
-          const dist = distanceData.distance_km;
-          setDistance(dist);
-          
-          // Calculate payout: ₹20 base + ₹15/km beyond 1km
-          const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
-          setPayout(calculatedPayout);
-          console.log('Backend distance calculation successful:', dist, 'km, Payout:', calculatedPayout);
-          return;
-        }
-      }
-
-      // Final fallback - use order distance_km if available, otherwise estimate
-      if (order?.distance_km && order.distance_km > 0) {
-        console.log('Using order distance_km as fallback:', order.distance_km);
-        setDistance(order.distance_km);
-        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
-        setPayout(calculatedPayout);
-      } else {
-        console.warn('Backend calculation failed, using estimated values');
-        setDistance(2.5);
-        setPayout(42.5);
-      }
-      
 
   const fetchOrderDetails = async () => {
     try {
