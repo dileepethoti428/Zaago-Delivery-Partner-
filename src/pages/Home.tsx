@@ -716,8 +716,8 @@ const Home = () => {
                           </div>
                            {/* Pickup Location */}
                            {order.status === 'assigned' && (
-                             <div 
-                               className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors"
+                              <div 
+                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors border-l-4 border-green-300"
                                onClick={async () => {
                                  if (order.pickup_location) {
                                    const { lat, lng } = order.pickup_location;
@@ -758,9 +758,12 @@ const Home = () => {
                                    });
                                  }
                                }}
-                             >
-                               <MapPin className="w-3 h-3 mr-1" />
-                                {debugAddress(order.pickup_address, `pickup-${order.id}`)}
+                              >
+                                <MapPin className="w-4 h-4 mr-2" />
+                                <div className="flex flex-col items-start">
+                                  <span className="text-xs font-semibold opacity-90">📦 PICKUP FROM:</span>
+                                  <span className="text-sm font-medium">{debugAddress(order.pickup_address, `pickup-${order.id}`)}</span>
+                                </div>
                              </div>
                            )}
                         </div>
