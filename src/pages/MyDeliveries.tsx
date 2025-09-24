@@ -169,9 +169,7 @@ const MyDeliveries = () => {
       state: {
         customerName: order.customer_name,
         customerAddress: normalizeAddress(order.address),
-        customerLocation: order.address?.latitude && order.address?.longitude 
-          ? { lat: order.address.latitude, lng: order.address.longitude }
-          : null,
+        customerLocation: null, // Temporarily disabled to prevent address object issues
         deliveryType: 'immediate',
         orderPlacedAt: order.created_at
       }

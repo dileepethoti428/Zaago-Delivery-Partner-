@@ -33,6 +33,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { normalizeAddress } from "@/lib/utils";
+import { debugAddress } from "@/lib/debugAddress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
@@ -813,17 +814,7 @@ const Home = () => {
                           <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
                           <div className="flex-1">
                                <p className="text-sm text-gray-700 leading-relaxed">
-                                 {(() => {
-                                   console.log('🎯 Rendering address for order:', order.id);
-                                   console.log('📍 Address value:', order.address, 'Type:', typeof order.address);
-                                   
-                                   if (typeof order.address !== 'string') {
-                                     console.error('❌ CRITICAL ERROR: Address is not a string in render!', order.address);
-                                     return 'Address display error';
-                                   }
-                                   
-                                   return order.address;
-                                 })()}
+                                 {debugAddress(order.address, `order-${order.id}-render`)}
                                </p>
                           </div>
                         </div>
