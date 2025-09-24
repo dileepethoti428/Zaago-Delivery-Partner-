@@ -100,9 +100,9 @@ const Home = () => {
   const location = useGeolocation({
     enableHighAccuracy: true, // Use GPS for exact location
     timeout: 15000, // Longer timeout for GPS accuracy
-    maximumAge: 10000, // Fresh location data
+    maximumAge: 60000, // Cache location for 1 minute
     saveToBackend: true,
-    refreshInterval: 30000, // Auto-refresh every 30 seconds for exact location
+    // Removed auto-refresh - only update location when manually triggered
   });
   
   // State management
@@ -578,6 +578,9 @@ const Home = () => {
   const availableOrders = getSortedOrders(orders);
   const assignedOrders = availableOrders.filter(order => order.status === 'assigned');
 
+  // Track previous location to prevent unnecessary refreshes
+  const [lastLocationRefresh, setLastLocationRefresh] = useState<{lat: number, lng: number} | null>(null);
+
   // Auto-update location when geolocation data is available
   useEffect(() => {
     if (location.address) {
@@ -586,9 +589,26 @@ const Home = () => {
       setCurrentLocation(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
     }
     
-    // Refresh orders when location changes significantly
+    // Only refresh orders when location changes significantly (more than 500m)
     if (location.latitude && location.longitude) {
-      fetchOrders();
+      const currentPos = { lat: location.latitude, lng: location.longitude };
+      
+      if (!lastLocationRefresh) {
+        setLastLocationRefresh(currentPos);
+        fetchOrders();
+      } else {
+        // Calculate distance between current and last refresh position
+        const distance = Math.sqrt(
+          Math.pow(currentPos.lat - lastLocationRefresh.lat, 2) + 
+          Math.pow(currentPos.lng - lastLocationRefresh.lng, 2)
+        ) * 111000; // Rough conversion to meters
+        
+        // Only refresh if moved more than 500 meters
+        if (distance > 500) {
+          setLastLocationRefresh(currentPos);
+          fetchOrders();
+        }
+      }
     }
   }, [location.address, location.latitude, location.longitude]);
 
@@ -596,8 +616,8 @@ const Home = () => {
     fetchAgentName();
     fetchOrders();
     
-    // More frequent order refresh for better real-time updates
-    const interval = setInterval(fetchOrders, 30000);
+    // Reasonable refresh interval - every 2 minutes for new orders
+    const interval = setInterval(fetchOrders, 120000);
     return () => clearInterval(interval);
   }, []);
 
