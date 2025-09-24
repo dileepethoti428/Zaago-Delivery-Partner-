@@ -1079,12 +1079,20 @@ const Home = () => {
 
                         {/* Agent Payout */}
                         <div className="bg-green-50 p-3 rounded-lg mb-4">
-                          <div className="flex items-center">
-                            <IndianRupee className="w-4 h-4 text-green-600 mr-1" />
-                            <span className="text-sm text-green-800">Agent payout: </span>
-                            <span className="text-sm font-bold text-green-800" title="Estimated payout based on delivery distance">
-                              ₹{order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)}
-                            </span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <IndianRupee className="w-4 h-4 text-green-600 mr-1" />
+                              <span className="text-sm text-green-800">Agent payout: </span>
+                              <span className="text-sm font-bold text-green-800" title="Estimated payout based on delivery distance">
+                                ₹{order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <Navigation className="w-3 h-3 text-green-600 mr-1" />
+                              <span className="text-xs text-green-700 font-medium">
+                                {order.distance_km ? `${order.distance_km.toFixed(1)} km` : 'Calculating...'}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
