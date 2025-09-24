@@ -141,6 +141,36 @@ const Home = () => {
     return true;
   };
 
+  // Check if an agent's accepted order should trigger pickup notification
+  const shouldPlayPickupNotificationForOrder = async (orderData: any): Promise<boolean> => {
+    // Only play for orders that just changed to 'packed' status
+    if (orderData.status !== 'packed') {
+      return false;
+    }
+    
+    // Check if this order belongs to the current agent
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) return false;
+
+    const { data: agent } = await supabase
+      .from('delivery_agents')
+      .select('id')
+      .eq('email', user.email)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!agent || orderData.agent_id !== agent.id) {
+      return false;
+    }
+    
+    // Don't play duplicate notifications for the same order
+    if (recentNotifications.has(`pickup-${orderData.id}`)) {
+      return false;
+    }
+    
+    return true;
+  };
+
   // Handle new order notification with debouncing
   const handleNewOrderNotification = (orderData: any) => {
     if (!shouldPlayNotificationForOrder(orderData)) {
@@ -167,6 +197,36 @@ const Home = () => {
       title: "🔔 New Order Available!",
       description: `New delivery order from ${orderData.customer_name || 'customer'}`,
       duration: 4000,
+    });
+  };
+
+  // Handle pickup ready notification for agent's accepted orders
+  const handlePickupReadyNotification = async (orderData: any, oldOrderData: any) => {
+    // Only notify if status changed from something else to 'packed'
+    if (oldOrderData.status === 'packed' || !(await shouldPlayPickupNotificationForOrder(orderData))) {
+      return;
+    }
+
+    // Add to recent notifications to prevent duplicates
+    setRecentNotifications(prev => new Set(prev).add(`pickup-${orderData.id}`));
+    
+    // Remove from recent notifications after 30 seconds
+    setTimeout(() => {
+      setRecentNotifications(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(`pickup-${orderData.id}`);
+        return newSet;
+      });
+    }, 30000);
+
+    // Play the ringtone
+    playNotificationSound();
+    
+    // Show toast notification
+    toast({
+      title: "🎉 Order Ready for Pickup!",
+      description: `Your order from ${orderData.customer_name || 'customer'} is packed and ready`,
+      duration: 5000,
     });
   };
 
@@ -694,9 +754,15 @@ const Home = () => {
         (payload) => {
           console.log('📝 Order updated:', payload);
           
-          // Refresh on any status change that could affect order visibility
+          // Handle pickup ready notification for agent's accepted orders
           if (payload.new && payload.old && payload.new.status !== payload.old.status) {
             console.log(`🔄 Order status changed: ${payload.old.status} → ${payload.new.status}`);
+            
+            // Check if this is an agent's order becoming ready for pickup
+            if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
+              handlePickupReadyNotification(payload.new, payload.old);
+            }
+            
             fetchOrdersForRefresh();
           }
           
