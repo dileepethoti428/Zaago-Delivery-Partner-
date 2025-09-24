@@ -229,9 +229,25 @@ const Home = () => {
 
   // Pull to refresh functionality
   const handleRefresh = async () => {
+    if (isRefreshing) return; // Prevent multiple clicks
+    
     setIsRefreshing(true);
-    await fetchOrders();
-    setIsRefreshing(false);
+    try {
+      await fetchOrders();
+      toast({
+        title: "Orders Updated",
+        description: "Your order list has been refreshed.",
+      });
+    } catch (error) {
+      console.error('Error refreshing orders:', error);
+      toast({
+        title: "Refresh Failed",
+        description: "Could not refresh orders. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   // Accept order
@@ -489,9 +505,15 @@ const Home = () => {
             disabled={isRefreshing}
           >
             {isRefreshing ? (
-              <Loader2 className="w-4 h-4 animate-spin text-gray-700" />
+              <div className="flex items-center">
+                <RefreshCw className="w-4 h-4 animate-spin text-gray-700 mr-2" />
+                <span className="text-gray-700">Refreshing...</span>
+              </div>
             ) : (
-              <span className="text-gray-700">Refresh</span>
+              <div className="flex items-center">
+                <RefreshCw className="w-4 h-4 text-gray-700 mr-2" />
+                <span className="text-gray-700">Refresh</span>
+              </div>
             )}
           </Button>
 
