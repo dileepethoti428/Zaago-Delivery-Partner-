@@ -194,13 +194,80 @@ const Home = () => {
     return basePay + distancePay;
   };
 
-  // Fetch orders from backend
-  const fetchOrders = async () => {
-    try {
-      setIsLoading(true);
+  // Transform and process order data
+  const transformOrder = async (order: any, isAssigned: boolean = false): Promise<Order> => {
+    const normalizedAddr = normalizeAddress(order.address);
+    
+    if (typeof normalizedAddr !== 'string') {
+      console.error('❌ CRITICAL: Normalized address is not a string!', normalizedAddr);
+    }
+
+    let pickupLocation = order.pickup_location;
+    let pickupAddress = order.pickup_address;
+    let sellerName = order.seller_name;
+    let sellerPhone = order.seller_phone;
+    
+    // If pickup location is missing for assigned orders, fetch from seller data
+    if (isAssigned && !pickupLocation && order.items && order.items.length > 0) {
+      const sellerId = order.items[0].seller_id;
       
+      if (sellerId) {
+        const { data: sellerData } = await supabase
+          .from('sellers')
+          .select('name, phone, latitude, longitude, address, business_name')
+          .eq('user_id', sellerId)
+          .single();
+        
+        if (sellerData && sellerData.latitude && sellerData.longitude) {
+          pickupLocation = {
+            lat: sellerData.latitude,
+            lng: sellerData.longitude
+          };
+          pickupAddress = sellerData.address || sellerData.business_name || 'Pickup Location';
+          sellerName = sellerData.name || sellerData.business_name;
+          sellerPhone = sellerData.phone;
+        }
+      }
+    }
+    
+    return {
+      id: order.id,
+      customer_name: order.customer_name || '',
+      customer_phone: order.customer_phone || '',
+      address: typeof normalizedAddr === 'string' ? normalizedAddr : 'Address processing error',
+      items: Array.isArray(order.items) ? order.items : [],
+      total: order.total || 0,
+      status: order.status,
+      delivery_date: order.delivery_date || '',
+      created_at: order.created_at,
+      payment_status: order.payment_status || '',
+      coordinates: order.coordinates || undefined,
+      distance_km: order.distance_km || undefined,
+      delivery_time: order.delivery_time || undefined,
+      products_count: Array.isArray(order.items) ? order.items.length : 1,
+      restaurant: order.restaurant || undefined,
+      backend_calculated: false,
+      delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
+      scheduled_time: order.scheduled_time || undefined,
+      order_placed_at: new Date(order.created_at),
+      agent_payout: order.agent_payout || undefined,
+      estimated_time_minutes: order.estimated_time_minutes || undefined,
+      subscription_id: order.subscription_id || undefined,
+      delivery_slots: order.delivery_slots || undefined,
+      pickup_location: pickupLocation,
+      pickup_address: pickupAddress,
+      seller_phone: sellerPhone,
+      seller_name: sellerName
+    };
+  };
+
+  // Unified fetch orders function with deduplication
+  const fetchOrdersData = async (showLoading: boolean = false): Promise<Order[]> => {
+    if (showLoading) setIsLoading(true);
+    
+    try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return;
+      if (!user?.email) return [];
       
       const { data: agent } = await supabase
         .from('delivery_agents')
@@ -209,262 +276,80 @@ const Home = () => {
         .eq('is_active', true)
         .maybeSingle();
 
-      if (!agent) return;
+      if (!agent) return [];
 
-      const { data: availableResponse, error: availableError } = await supabase.functions.invoke('get-available-orders', {
-        body: { agent_id: agent.id }
+      // Fetch both available and assigned orders in parallel
+      const [availableResponse, assignedResponse] = await Promise.all([
+        supabase.functions.invoke('get-available-orders', {
+          body: { agent_id: agent.id }
+        }),
+        supabase
+          .from('orders')
+          .select('*')
+          .eq('agent_id', agent.id)
+          .in('status', ['assigned', 'picked_up', 'in_transit'])
+          .order('created_at', { ascending: false })
+      ]);
+
+      if (availableResponse.error) throw availableResponse.error;
+      if (assignedResponse.error) throw assignedResponse.error;
+
+      // Transform orders
+      const availableOrders = await Promise.all(
+        (availableResponse.data?.orders || []).map((order: any) => transformOrder(order, false))
+      );
+      
+      const assignedOrders = await Promise.all(
+        (assignedResponse.data || []).map((order: any) => transformOrder(order, true))
+      );
+
+      // Combine and deduplicate orders by ID
+      const orderMap = new Map<string, Order>();
+      
+      // Add available orders first
+      availableOrders.forEach(order => {
+        orderMap.set(order.id, order);
+      });
+      
+      // Add assigned orders (will override available ones if duplicate)
+      assignedOrders.forEach(order => {
+        orderMap.set(order.id, order);
       });
 
-      if (availableError) throw availableError;
-
-      const { data: assignedOrders, error: assignedError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('agent_id', agent.id)
-        .in('status', ['assigned', 'picked_up', 'in_transit'])
-        .order('created_at', { ascending: false });
-
-      if (assignedError) throw assignedError;
-
-
-      const transformedAvailableOrders: Order[] = (availableResponse?.orders || []).map((order: any) => {
-        console.log('🔍 Processing available order:', order.id);
-        console.log('📍 Raw address:', order.address, 'Type:', typeof order.address);
-        
-        const normalizedAddr = normalizeAddress(order.address);
-        console.log('✅ Normalized address:', normalizedAddr, 'Type:', typeof normalizedAddr);
-        
-        if (typeof normalizedAddr !== 'string') {
-          console.error('❌ CRITICAL: Normalized address is not a string!', normalizedAddr);
-        }
-        
-        return {
-          ...order,
-          address: normalizedAddr,
-          order_placed_at: new Date(order.created_at),
-          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
-        };
-      });
-
-      const transformedAssignedOrders: Order[] = await Promise.all((assignedOrders || []).map(async (order: any) => {
-        let pickupLocation = order.pickup_location;
-        let pickupAddress = order.pickup_address;
-        let sellerName = order.seller_name;
-        let sellerPhone = order.seller_phone;
-        
-        // If pickup location is missing, fetch from seller data
-        if (!pickupLocation && order.items && order.items.length > 0) {
-          const sellerId = order.items[0].seller_id;
-          
-          if (sellerId) {
-            const { data: sellerData } = await supabase
-              .from('sellers')
-              .select('name, phone, latitude, longitude, address, business_name')
-              .eq('user_id', sellerId)
-              .single();
-            
-            if (sellerData && sellerData.latitude && sellerData.longitude) {
-              pickupLocation = {
-                lat: sellerData.latitude,
-                lng: sellerData.longitude
-              };
-              pickupAddress = sellerData.address || sellerData.business_name || 'Pickup Location';
-              sellerName = sellerData.name || sellerData.business_name;
-              sellerPhone = sellerData.phone;
-            }
-          }
-        }
-        
-        
-        const addressResult = (() => {
-          console.log('🔍 Processing assigned order address:', order.id);
-          console.log('📍 Raw address:', order.address, 'Type:', typeof order.address);
-          
-          const normalized = normalizeAddress(order.address);
-          console.log('✅ Normalized address:', normalized, 'Type:', typeof normalized);
-          
-          if (typeof normalized !== 'string') {
-            console.error('❌ CRITICAL: Normalized address is not a string!', normalized);
-            return 'Address processing error';
-          }
-          
-          return normalized;
-        })();
-        
-        return {
-          id: order.id,
-          customer_name: order.customer_name || '',
-          customer_phone: order.customer_phone || '',
-          address: addressResult,
-          items: Array.isArray(order.items) ? order.items : [],
-          total: order.total || 0,
-          status: order.status,
-          delivery_date: order.delivery_date || '',
-          created_at: order.created_at,
-          payment_status: order.payment_status || '',
-          coordinates: order.coordinates || undefined,
-          distance_km: order.distance_km || undefined,
-          delivery_time: order.delivery_time || undefined,
-          products_count: Array.isArray(order.items) ? order.items.length : 1,
-          restaurant: order.restaurant || undefined,
-          backend_calculated: false,
-          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
-          scheduled_time: order.scheduled_time || undefined,
-          order_placed_at: new Date(order.created_at),
-          agent_payout: order.agent_payout || undefined,
-          estimated_time_minutes: order.estimated_time_minutes || undefined,
-          subscription_id: order.subscription_id || undefined,
-          delivery_slots: order.delivery_slots || undefined,
-          pickup_location: pickupLocation,
-          pickup_address: pickupAddress,
-          seller_phone: sellerPhone,
-          seller_name: sellerName
-        };
-      }));
-
-      const allOrders = [...transformedAvailableOrders, ...transformedAssignedOrders];
-      setOrders(allOrders);
+      const deduplicatedOrders = Array.from(orderMap.values());
+      console.log(`📊 Orders processed: ${availableOrders.length} available, ${assignedOrders.length} assigned, ${deduplicatedOrders.length} total after deduplication`);
+      
+      return deduplicatedOrders;
     } catch (error) {
       console.error('Error fetching orders:', error);
+      throw error;
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
+  };
+
+  // Fetch orders with loading state
+  const fetchOrders = async () => {
+    try {
+      const orders = await fetchOrdersData(true);
+      setOrders(orders);
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to fetch orders. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Fetch orders without full page loading (for refresh)
+  // Fetch orders for refresh without loading state
   const fetchOrdersForRefresh = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return;
-      
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!agent) return;
-
-      const { data: availableResponse, error: availableError } = await supabase.functions.invoke('get-available-orders', {
-        body: { agent_id: agent.id }
-      });
-
-      if (availableError) throw availableError;
-
-      const { data: assignedOrders, error: assignedError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('agent_id', agent.id)
-        .in('status', ['assigned', 'picked_up', 'in_transit'])
-        .order('created_at', { ascending: false });
-
-      if (assignedError) throw assignedError;
-
-      const transformedAvailableOrders: Order[] = (availableResponse?.orders || []).map((order: any) => {
-        console.log('🔍 Processing available order:', order.id);
-        console.log('📍 Raw address:', order.address, 'Type:', typeof order.address);
-        
-        const normalizedAddr = normalizeAddress(order.address);
-        console.log('✅ Normalized address:', normalizedAddr, 'Type:', typeof normalizedAddr);
-        
-        if (typeof normalizedAddr !== 'string') {
-          console.error('❌ CRITICAL: Normalized address is not a string!', normalizedAddr);
-        }
-        
-        return {
-          ...order,
-          address: normalizedAddr,
-          order_placed_at: new Date(order.created_at),
-          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
-        };
-      });
-
-      const transformedAssignedOrders: Order[] = await Promise.all((assignedOrders || []).map(async (order: any) => {
-        let pickupLocation = order.pickup_location;
-        let pickupAddress = order.pickup_address;
-        let sellerName = order.seller_name;
-        let sellerPhone = order.seller_phone;
-        
-        // If pickup location is missing, fetch from seller data
-        if (!pickupLocation && order.items && order.items.length > 0) {
-          const sellerId = order.items[0].seller_id;
-          
-          if (sellerId) {
-            const { data: sellerData } = await supabase
-              .from('sellers')
-              .select('name, phone, latitude, longitude, address, business_name')
-              .eq('user_id', sellerId)
-              .single();
-            
-            if (sellerData && sellerData.latitude && sellerData.longitude) {
-              pickupLocation = {
-                lat: sellerData.latitude,
-                lng: sellerData.longitude
-              };
-              pickupAddress = sellerData.address || sellerData.business_name || 'Pickup Location';
-              sellerName = sellerData.name || sellerData.business_name;
-              sellerPhone = sellerData.phone;
-            }
-          }
-        }
-        
-        const addressResult = (() => {
-          console.log('🔍 Processing assigned order address:', order.id);
-          console.log('📍 Raw address:', order.address, 'Type:', typeof order.address);
-          
-          const normalized = normalizeAddress(order.address);
-          console.log('✅ Normalized address:', normalized, 'Type:', typeof normalized);
-          
-          if (typeof normalized !== 'string') {
-            console.error('❌ CRITICAL: Normalized address is not a string!', normalized);
-            return 'Address processing error';
-          }
-          
-          return normalized;
-        })();
-        
-        return {
-          id: order.id,
-          customer_name: order.customer_name || '',
-          customer_phone: order.customer_phone || '',
-          address: addressResult,
-          items: Array.isArray(order.items) ? order.items : [],
-          total: order.total || 0,
-          status: order.status,
-          delivery_date: order.delivery_date || '',
-          created_at: order.created_at,
-          payment_status: order.payment_status || '',
-          coordinates: order.coordinates || undefined,
-          distance_km: order.distance_km || undefined,
-          delivery_time: order.delivery_time || undefined,
-          products_count: Array.isArray(order.items) ? order.items.length : 1,
-          restaurant: order.restaurant || undefined,
-          backend_calculated: false,
-          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
-          scheduled_time: order.scheduled_time || undefined,
-          order_placed_at: new Date(order.created_at),
-          agent_payout: order.agent_payout || undefined,
-          estimated_time_minutes: order.estimated_time_minutes || undefined,
-          subscription_id: order.subscription_id || undefined,
-          delivery_slots: order.delivery_slots || undefined,
-          pickup_location: pickupLocation,
-          pickup_address: pickupAddress,
-          seller_phone: sellerPhone,
-          seller_name: sellerName
-        };
-      }));
-
-      const allOrders = [...transformedAvailableOrders, ...transformedAssignedOrders];
-      setOrders(allOrders);
+      const orders = await fetchOrdersData(false);
+      setOrders(orders);
     } catch (error) {
-      console.error('Error fetching orders:', error);
-      throw error;
+      console.error('Error refreshing orders:', error);
+      // Don't show error toast for background refresh
     }
   };
 
@@ -628,15 +513,15 @@ const Home = () => {
         (payload) => {
           console.log('📝 Order updated:', payload);
           
-          // Check if order was updated to 'packed' status
-          if (payload.new && payload.new.status === 'packed') {
-            console.log('📦 Order packed! Refreshing available orders...');
+          // Refresh on any status change that could affect order visibility
+          if (payload.new && payload.old && payload.new.status !== payload.old.status) {
+            console.log(`🔄 Order status changed: ${payload.old.status} → ${payload.new.status}`);
             fetchOrdersForRefresh();
           }
           
-          // Also refresh if order was just created/confirmed
-          if (payload.new && ['placed', 'confirmed'].includes(payload.new.status)) {
-            console.log('✅ Order confirmed, refreshing...');
+          // Also refresh if agent assignment changes
+          if (payload.new && payload.old && payload.new.agent_id !== payload.old.agent_id) {
+            console.log('👤 Agent assignment changed, refreshing...');
             fetchOrdersForRefresh();
           }
         }
