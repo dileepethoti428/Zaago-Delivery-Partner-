@@ -621,11 +621,36 @@ const Home = () => {
                               {order.seller_name || 'Restaurant'} • Order #{order.id.substring(0, 8)}...
                             </p>
                           </div>
-                          {/* Status Badge */}
+                          {/* Pickup Location */}
                           {order.status === 'assigned' && (
-                            <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center">
-                              <User className="w-3 h-3 mr-1" />
-                              Assigned to You
+                            <div 
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors"
+                              onClick={() => {
+                                if (order.pickup_location) {
+                                  const { lat, lng } = order.pickup_location;
+                                  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+                                  window.open(googleMapsUrl, '_blank');
+                                } else if (order.pickup_address) {
+                                  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.pickup_address)}&travelmode=driving`;
+                                  window.open(googleMapsUrl, '_blank');
+                                } else {
+                                  toast({
+                                    title: "Location Not Available",
+                                    description: "Pickup location information is not available for this order.",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                            >
+                              <MapPin className="w-3 h-3 mr-1" />
+                              {order.pickup_address 
+                                ? order.pickup_address.length > 25 
+                                  ? `${order.pickup_address.substring(0, 25)}...` 
+                                  : order.pickup_address
+                                : order.pickup_location 
+                                  ? `${order.pickup_location.lat.toFixed(4)}, ${order.pickup_location.lng.toFixed(4)}`
+                                  : 'Pickup Location'
+                              }
                             </div>
                           )}
                         </div>
