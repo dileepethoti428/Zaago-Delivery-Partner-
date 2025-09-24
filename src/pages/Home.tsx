@@ -99,6 +99,21 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("nearest");
 
+  // Get greeting based on current time
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
+
+  // Capitalize first letter of each word
+  const capitalizeWords = (str: string) => {
+    return str.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   // Fetch agent name
   const fetchAgentName = async () => {
     try {
@@ -168,11 +183,34 @@ const Home = () => {
         delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
       }));
 
-      const transformedAssignedOrders: Order[] = (assignedOrders || []).map((order) => ({
-        ...order,
+      const transformedAssignedOrders: Order[] = (assignedOrders || []).map((order: any) => ({
+        id: order.id,
+        customer_name: order.customer_name || '',
+        customer_phone: order.customer_phone || '',
+        address: order.address,
         items: Array.isArray(order.items) ? order.items : [],
+        total: order.total || 0,
+        status: order.status,
+        delivery_date: order.delivery_date || '',
+        created_at: order.created_at,
+        payment_status: order.payment_status || '',
+        coordinates: order.coordinates || undefined,
+        distance_km: order.distance_km || undefined,
+        delivery_time: order.delivery_time || undefined,
+        products_count: Array.isArray(order.items) ? order.items.length : 1,
+        restaurant: order.restaurant || undefined,
+        backend_calculated: false,
+        delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
+        scheduled_time: order.scheduled_time || undefined,
         order_placed_at: new Date(order.created_at),
-        delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
+        agent_payout: order.agent_payout || undefined,
+        estimated_time_minutes: order.estimated_time_minutes || undefined,
+        subscription_id: order.subscription_id || undefined,
+        delivery_slots: order.delivery_slots || undefined,
+        pickup_location: order.pickup_location || undefined,
+        pickup_address: order.pickup_address || undefined,
+        seller_phone: order.seller_phone || undefined,
+        seller_name: order.seller_name || undefined
       }));
 
       const allOrders = [...transformedAvailableOrders, ...transformedAssignedOrders];
@@ -309,13 +347,16 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Header with Greeting */}
       <div className="bg-white px-4 py-3 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
-            <div className="flex items-center text-sm text-gray-500 mt-1">
-              <MapPin className="w-4 h-4 mr-1 text-red-500" />
+            <p className="text-sm text-gray-600 mt-1">
+              {getGreeting()}{agentName ? `, ${capitalizeWords(agentName)}!` : '!'}
+            </p>
+            <div className="flex items-center text-xs text-gray-500 mt-1">
+              <MapPin className="w-3 h-3 mr-1 text-red-500" />
               <span>Tap to set location</span>
             </div>
           </div>
@@ -370,13 +411,13 @@ const Home = () => {
           <Button
             onClick={handleRefresh}
             variant="outline"
-            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100"
+            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
             disabled={isRefreshing}
           >
             {isRefreshing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin text-gray-700" />
             ) : (
-              'Refresh'
+              <span className="text-gray-700">Refresh</span>
             )}
           </Button>
 
@@ -384,9 +425,9 @@ const Home = () => {
           <Button
             onClick={() => setShowQrScanner(true)}
             variant="outline"
-            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100"
+            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
           >
-            Scan QR
+            <span className="text-gray-700">Scan QR</span>
           </Button>
         </div>
       </div>
@@ -400,26 +441,26 @@ const Home = () => {
               <p className="text-sm text-gray-500">Available orders and your assignments</p>
             </div>
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-36 h-9 border-gray-300">
-                <SelectValue />
+              <SelectTrigger className="w-36 h-9 border-gray-300 bg-white">
+                <SelectValue className="text-gray-700" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nearest">
+              <SelectContent className="bg-white">
+                <SelectItem value="nearest" className="text-gray-700">
                   <div className="flex items-center">
                     <Target className="w-4 h-4 mr-2 text-green-500" />
-                    Nearest First
+                    <span className="text-gray-700">Nearest First</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="newest">
+                <SelectItem value="newest" className="text-gray-700">
                   <div className="flex items-center">
-                    <Clock className="w-4 h-4 mr-2" />
-                    Newest First
+                    <Clock className="w-4 h-4 mr-2 text-gray-700" />
+                    <span className="text-gray-700">Newest First</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="highest">
+                <SelectItem value="highest" className="text-gray-700">
                   <div className="flex items-center">
-                    <IndianRupee className="w-4 h-4 mr-2" />
-                    Highest First
+                    <IndianRupee className="w-4 h-4 mr-2 text-gray-700" />
+                    <span className="text-gray-700">Highest First</span>
                   </div>
                 </SelectItem>
               </SelectContent>
