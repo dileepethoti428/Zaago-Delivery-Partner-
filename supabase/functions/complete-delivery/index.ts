@@ -78,20 +78,26 @@ serve(async (req) => {
     }
 
     // Calculate distance first (before any database operations)
+    // Use shop location (Bangalore coordinates) to customer address for consistent delivery distance
     let distance_km = 2.0;
     let payout_amount = 35;
 
-    if (agent_location && order.address?.coordinates) {
+    if (order.address?.coordinates) {
       try {
+        // Use shop coordinates (same as Home page for consistency)
+        const shopLocation = { lat: 12.9716, lng: 77.5946 }; // Bangalore coordinates
+        
         const { data: distanceData } = await supabaseClient.functions.invoke('calculate-distance-eta', {
           body: {
-            origin: agent_location,
+            origin: shopLocation,
             destination: order.address.coordinates
           }
         });
 
         if (distanceData?.distance_km) {
           distance_km = distanceData.distance_km;
+          // Calculate payout based on real distance: ₹20 base + ₹15/km beyond 1km
+          payout_amount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 15;
         }
       } catch (distanceError) {
         console.error('Distance calculation failed:', distanceError);

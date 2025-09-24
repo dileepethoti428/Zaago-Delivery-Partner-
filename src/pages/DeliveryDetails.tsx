@@ -467,27 +467,21 @@ const DeliveryDetails = () => {
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground flex items-center space-x-1">
               <Navigation className="w-3 h-3 text-primary" />
-              <span>DELIVERY DETAILS
-
-Distance
-
-2519.90 km
-
-Your Payout
-
-₹37803.5
-
-Fair pricing: ₹20 base + ₹15/km beyond 1km</span>
+              <span>DELIVERY DETAILS</span>
             </h3>
             
             <div className="grid grid-cols-2 gap-2">
               <div className="text-center p-2 bg-secondary/20 rounded-lg">
-                <p className="text-xs text-muted-foreground">Distance</p>
-                <p className="text-sm font-bold text-primary">{distance.toFixed(2)} km</p>
+                <p className="text-xs text-muted-foreground">Real-time Distance</p>
+                <p className="text-sm font-bold text-primary">
+                  {distance > 0 ? `${distance.toFixed(2)} km` : 'Calculating...'}
+                </p>
               </div>
               <div className="text-center p-2 bg-secondary/20 rounded-lg">
                 <p className="text-xs text-muted-foreground">Your Payout</p>
-                <p className="text-sm font-bold text-green-500">₹{payout}</p>
+                <p className="text-sm font-bold text-green-500">
+                  ₹{Math.round(payout)}
+                </p>
               </div>
             </div>
 
