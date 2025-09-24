@@ -1005,43 +1005,18 @@ const Home = () => {
                            )}
                         </div>
 
-                        {/* Delivery Timer */}
-                        {(() => {
-                          const isScheduledOrder = Boolean(
-                            order.subscription_id || 
-                            order.delivery_slots ||
-                            order.scheduled_time ||
-                            (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])
-                          );
-                          
-                          return isScheduledOrder ? (
-                            <div className="mb-4">
-                              <div className="bg-blue-50 p-3 rounded-lg flex items-center justify-between">
-                                <div className="flex items-center">
-                                  <div className="bg-blue-100 p-2 rounded-lg mr-3">
-                                    <Clock className="w-4 h-4 text-blue-600" />
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-blue-900 font-medium">Scheduled Delivery</p>
-                                    <p className="text-xs text-blue-700">Arrives at</p>
-                                  </div>
-                                </div>
-                                <div className="bg-blue-200 px-3 py-1 rounded-full">
-                                  <span className="text-xs text-blue-800 font-medium">Scheduled</span>
-                                </div>
-                              </div>
-                              
-                              <div className="bg-blue-100 p-4 rounded-lg mt-2 text-center">
-                                <div className="text-2xl font-bold text-blue-600 mb-1">
-                                  {order.delivery_time || '12:00 PM'}
-                                </div>
-                                <div className="text-sm text-blue-700">
-                                  {order.delivery_date === new Date().toISOString().split('T')[0] ? 'Today' : 'Tomorrow'}
-                                </div>
-                              </div>
-                            </div>
-                          ) : null;
-                        })()}
+                         {/* Delivery Timer */}
+                         <div className="mb-4">
+                           <DeliveryTimer
+                             deliveryType={order.delivery_type}
+                             scheduledTime={order.scheduled_time}
+                             orderPlacedAt={order.order_placed_at}
+                             subscriptionId={order.subscription_id}
+                             deliveryTime={order.delivery_time}
+                             deliverySlots={order.delivery_slots}
+                             paymentStatus={order.payment_status}
+                           />
+                         </div>
 
                         {/* Address */}
                         <div className="flex items-start mb-4">
