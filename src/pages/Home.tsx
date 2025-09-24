@@ -93,6 +93,9 @@ const Home = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [notificationCount] = useState(3);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<string>('Tap to set location');
+  const [locationPickerTrigger, setLocationPickerTrigger] = useState<HTMLButtonElement | null>(null);
   const [ordersWithDistance, setOrdersWithDistance] = useState<Order[]>([]);
   const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
   const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
@@ -343,6 +346,14 @@ const Home = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Trigger location picker when showLocationPicker changes
+  useEffect(() => {
+    if (showLocationPicker && locationPickerTrigger) {
+      locationPickerTrigger.click();
+      setShowLocationPicker(false);
+    }
+  }, [showLocationPicker, locationPickerTrigger]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -442,42 +453,9 @@ const Home = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
-            <div className="flex items-center text-xs text-gray-500 mt-1 cursor-pointer hover:text-gray-700 transition-colors" onClick={() => {
-              // Request location permission and update
-              if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                  (position) => {
-                    console.log('Location updated:', position.coords);
-                    toast({
-                      title: "Location Updated",
-                      description: "Your delivery location has been updated successfully.",
-                    });
-                  },
-                  (error) => {
-                    console.error('Location error:', error);
-                    toast({
-                      title: "Location Error", 
-                      description: "Unable to get your location. Please enable location access.",
-                      variant: "destructive",
-                    });
-                  },
-                  { enableHighAccuracy: true, timeout: 10000 }
-                );
-              } else {
-                toast({
-                  title: "Location Not Supported",
-                  description: "Location services are not supported by your browser.",
-                  variant: "destructive",
-                });
-              }
-            }}>
+            <div className="flex items-center text-xs text-gray-500 mt-1 cursor-pointer hover:text-gray-700 transition-colors" onClick={() => setShowLocationPicker(true)}>
               <MapPin className="w-3 h-3 mr-1 text-red-500" />
-              <span>
-                {location.latitude && location.longitude 
-                  ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` 
-                  : 'Tap to set location'
-                }
-              </span>
+              <span>{currentLocation}</span>
             </div>
           </div>
           
@@ -809,6 +787,22 @@ const Home = () => {
         open={showQrScanner} 
         onOpenChange={setShowQrScanner} 
       />
+
+      {/* Location Picker - Hidden trigger */}
+      <LocationPicker
+        onLocationSelected={(locationData) => {
+          setCurrentLocation(locationData.address || 'Location selected');
+          toast({
+            title: "Location Updated",
+            description: "Your delivery location has been updated successfully.",
+          });
+        }}
+      >
+        <button 
+          ref={setLocationPickerTrigger}
+          style={{ display: 'none' }}
+        />
+      </LocationPicker>
     </div>
   );
 };
