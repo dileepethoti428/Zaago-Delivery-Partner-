@@ -145,7 +145,14 @@ const Home = () => {
 
   // Calculate real-time distances for all orders
   const calculateOrderDistances = async (ordersList: Order[]) => {
-    const agentLocation = getAgentLocationFromStorage();
+    // Get agent location from real-time geolocation or storage fallback
+    let agentLocation = null;
+    if (location.latitude && location.longitude) {
+      agentLocation = { lat: location.latitude, lng: location.longitude };
+    } else {
+      agentLocation = getAgentLocationFromStorage();
+    }
+    
     if (!agentLocation) {
       console.warn('No agent location available for distance calculation');
       return ordersList;
@@ -552,6 +559,14 @@ const Home = () => {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Recalculate distances when location changes
+  useEffect(() => {
+    if (orders.length > 0 && (location.latitude && location.longitude)) {
+      console.log('🌍 Location updated, recalculating distances for all orders');
+      calculateOrderDistances(orders).then(setOrders);
+    }
+  }, [location.latitude, location.longitude]);
 
   useEffect(() => {
     fetchAgentName();
