@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
 import { NavigationMap } from "@/components/NavigationMap";
 import { normalizeAddress } from "@/lib/utils";
+import { debugAddress } from "@/lib/debugAddress";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -469,7 +470,7 @@ const DeliveryDetails = () => {
               <div className="flex items-start space-x-1">
                 <MapPin className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
                 <p className="text-sm font-medium text-foreground">
-                  {normalizeAddress(order.address)}
+                  {debugAddress(order.address, 'delivery-details')}
                 </p>
               </div>
             </div>
@@ -681,7 +682,7 @@ const DeliveryDetails = () => {
           open={showNavigationMap}
           onOpenChange={setShowNavigationMap}
           customerLocation={order.address?.coordinates || { lat: 31.33, lng: 75.57 }}
-          customerAddress={normalizeAddress(order.address)}
+          customerAddress={debugAddress(order.address, 'delivery-details-map')}
           customerName={order.customer_name}
           customerPhone={order.customer_phone}
         />

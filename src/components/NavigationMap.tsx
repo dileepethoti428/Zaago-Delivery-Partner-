@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { debugAddress } from '@/lib/debugAddress';
 import { 
   ArrowLeft, 
   Navigation, 
@@ -138,7 +139,7 @@ export const NavigationMap = ({
           <CardContent className="space-y-3">
             <div>
               <p className="font-medium text-foreground">{customerName}</p>
-              <p className="text-sm text-muted-foreground">{customerAddress}</p>
+              <p className="text-sm text-muted-foreground">{debugAddress(customerAddress, 'navigation-map')}</p>
             </div>
             
             {!isLoading && (

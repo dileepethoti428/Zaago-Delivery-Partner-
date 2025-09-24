@@ -1,27 +1,32 @@
-// Debug utility to catch address objects before they reach JSX
+import { normalizeAddress } from './utils';
+
+// Enhanced debug utility to catch address objects before they reach JSX
 export const debugAddress = (address: any, context: string = 'unknown'): string => {
   console.log(`🔍 DEBUG ADDRESS [${context}]:`, address, 'Type:', typeof address);
   
-  if (typeof address === 'string') {
-    return address;
-  }
-  
-  if (typeof address === 'object' && address !== null) {
-    console.error(`❌ FOUND OBJECT ADDRESS [${context}]:`, address);
+  // Use the robust normalizeAddress function
+  try {
+    const normalized = normalizeAddress(address);
     
-    // Force conversion to string to prevent React child error
-    if (address.full_address) return String(address.full_address);
-    if (address.addressLine1) return `${address.addressLine1}, ${address.city || ''}`;
-    if (address.address) {
-      const parts = [address.address, address.city, address.state, address.pincode].filter(Boolean);
-      return parts.join(', ');
+    // Double-check the result is a string
+    if (typeof normalized !== 'string') {
+      console.error(`❌ CRITICAL: normalizeAddress returned non-string [${context}]:`, normalized);
+      return 'Address normalization failed';
     }
     
-    // Fallback: stringify the object keys to see what we have
-    const keys = Object.keys(address);
-    console.error(`❌ UNKNOWN ADDRESS OBJECT STRUCTURE [${context}], Keys:`, keys);
-    return `[Address object: ${keys.join(', ')}]`;
+    // Log if we had to convert an object
+    if (typeof address === 'object' && address !== null) {
+      console.warn(`⚠️ CONVERTED OBJECT ADDRESS [${context}]:`, {
+        original: address,
+        normalized: normalized,
+        keys: Object.keys(address)
+      });
+    }
+    
+    return normalized;
+    
+  } catch (error) {
+    console.error(`❌ ERROR in debugAddress [${context}]:`, error, address);
+    return 'Address debug error';
   }
-  
-  return String(address || 'Address not available');
 };

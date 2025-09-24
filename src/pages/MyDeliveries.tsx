@@ -20,6 +20,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { normalizeAddress } from '@/lib/utils';
+import { debugAddress } from '@/lib/debugAddress';
 
 interface AssignedOrder {
   id: string;
@@ -322,7 +323,7 @@ const MyDeliveries = () => {
                   <MapPin className="w-4 h-4 text-primary mt-1 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm text-foreground">
-                        {normalizeAddress(order.address)}
+                        {debugAddress(order.address, `my-deliveries-${order.id}`)}
                     </p>
                     {order.estimated_time && (
                       <div className="flex items-center text-xs text-muted-foreground mt-1">

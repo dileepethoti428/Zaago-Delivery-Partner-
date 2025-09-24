@@ -18,6 +18,7 @@ import {
   Clock
 } from 'lucide-react';
 import { normalizeAddress } from '@/lib/utils';
+import { debugAddress } from '@/lib/debugAddress';
 
 interface TrackingMapProps {
   orderData: {
@@ -359,7 +360,7 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
                   onClick={() => window.open(`https://www.google.com/maps?q=${orderData.pickup_location?.lat},${orderData.pickup_location?.lng}&z=15`)}
                   className="text-sm text-orange-600 hover:text-orange-800 underline cursor-pointer block mt-1"
                 >
-                  📍 {orderData.pickup_address}
+                  📍 {debugAddress(orderData.pickup_address, 'tracking-map-pickup')}
                 </button>
                 <div className="flex space-x-2 mt-2">
                   {orderData.seller_phone && (
@@ -405,7 +406,7 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
                 onClick={() => window.open(`https://www.google.com/maps?q=${orderData.customer_location?.lat},${orderData.customer_location?.lng}&z=15`)}
                 className="text-sm text-blue-600 hover:text-blue-800 underline cursor-pointer block mt-1"
               >
-                 📍 {normalizeAddress(orderData.address)}
+                 📍 {debugAddress(orderData.address, 'tracking-map-customer')}
               </button>
               {orderData.customer_phone && (
                 <p className="text-sm text-blue-500 mt-1">{orderData.customer_phone}</p>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeAddress } from "@/lib/utils";
+import { debugAddress } from "@/lib/debugAddress";
 import { 
   MapPin, 
   Clock, 
@@ -448,7 +449,7 @@ const History = () => {
                       <div className="space-y-2 mb-4">
                         <div className="flex items-center text-sm text-muted-foreground">
                           <MapPin className="w-4 h-4 mr-2 text-primary" />
-                          {normalizeAddress(delivery.delivery_address)}
+                          {debugAddress(delivery.delivery_address, `history-${delivery.id}`)}
                         </div>
                         
                         <div className="grid grid-cols-3 gap-2 text-sm">
