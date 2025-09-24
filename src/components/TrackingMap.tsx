@@ -354,38 +354,68 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
                   </span>
                 </div>
                 <p className="text-sm text-orange-800">{orderData.seller_name || 'Store'}</p>
-                <p className="text-sm text-orange-600">{orderData.pickup_address}</p>
-                {orderData.seller_phone && (
-                  <button 
-                    onClick={() => window.open(`tel:${orderData.seller_phone}`)}
-                    className="mt-2 text-sm text-orange-700 hover:text-orange-900 flex items-center"
+                <button
+                  onClick={() => window.open(`https://www.google.com/maps?q=${orderData.pickup_location?.lat},${orderData.pickup_location?.lng}&z=15`)}
+                  className="text-sm text-orange-600 hover:text-orange-800 underline cursor-pointer block mt-1"
+                >
+                  📍 {orderData.pickup_address}
+                </button>
+                <div className="flex space-x-2 mt-2">
+                  {orderData.seller_phone && (
+                    <button 
+                      onClick={() => window.open(`tel:${orderData.seller_phone}`)}
+                      className="text-sm text-orange-700 hover:text-orange-900 flex items-center"
+                    >
+                      <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
+                      </svg>
+                      Call Store
+                    </button>
+                  )}
+                  <button
+                    onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${orderData.pickup_location?.lat},${orderData.pickup_location?.lng}`)}
+                    className="text-sm text-orange-700 hover:text-orange-900 flex items-center"
                   >
-                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
-                    </svg>
-                    Call Store: {orderData.seller_phone}
+                    <Navigation className="w-3 h-3 mr-1" />
+                    Navigate
                   </button>
-                )}
+                </div>
               </div>
             )}
 
             {/* Order Details */}
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="font-semibold text-gray-900">{orderData.customer_name}</h3>
-                <p className="text-sm text-gray-600">{orderData.address || 'Delivery address not available'}</p>
-                {orderData.customer_phone && (
-                  <p className="text-sm text-gray-500">{orderData.customer_phone}</p>
-                )}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium text-blue-900 flex items-center">
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Delivery Location
+                </h4>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-blue-900">
+                    {orderData.distance ? `${orderData.distance} km` : 'Distance unknown'}
+                  </p>
+                  <p className="text-sm text-blue-600">
+                    {orderData.estimated_time ? `${orderData.estimated_time} min` : 'ETA unknown'}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">
-                  {orderData.distance ? `${orderData.distance} km` : 'Distance unknown'}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {orderData.estimated_time ? `${orderData.estimated_time} min` : 'ETA unknown'}
-                </p>
-              </div>
+              <h3 className="font-semibold text-blue-900">{orderData.customer_name}</h3>
+              <button
+                onClick={() => window.open(`https://www.google.com/maps?q=${orderData.customer_location?.lat},${orderData.customer_location?.lng}&z=15`)}
+                className="text-sm text-blue-600 hover:text-blue-800 underline cursor-pointer block mt-1"
+              >
+                📍 {orderData.address || 'Delivery address not available'}
+              </button>
+              {orderData.customer_phone && (
+                <p className="text-sm text-blue-500 mt-1">{orderData.customer_phone}</p>
+              )}
+              <button
+                onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${orderData.customer_location?.lat},${orderData.customer_location?.lng}`)}
+                className="mt-2 text-sm text-blue-700 hover:text-blue-900 flex items-center"
+              >
+                <Navigation className="w-3 h-3 mr-1" />
+                Navigate to Customer
+              </button>
             </div>
 
             {/* Status and Action Buttons */}

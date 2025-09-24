@@ -1297,27 +1297,63 @@ const Home = () => {
                                   Pickup From
                                 </h4>
                                 <p className="text-sm font-medium text-orange-900">{(order as any).seller_name || 'Store'}</p>
-                                <p className="text-sm text-orange-700">{(order as any).pickup_address || 'Pickup address'}</p>
-                                {(order as any).seller_phone && (
-                                  <p className="text-sm text-orange-600">📞 {(order as any).seller_phone}</p>
-                                )}
+                                <button
+                                  onClick={() => window.open(`https://www.google.com/maps?q=${(order as any).pickup_location?.lat},${(order as any).pickup_location?.lng}&z=15`)}
+                                  className="text-sm text-orange-700 hover:text-orange-900 underline cursor-pointer block mt-1"
+                                >
+                                  📍 {(order as any).pickup_address || 'Pickup address'}
+                                </button>
+                                <div className="flex space-x-2 mt-2">
+                                  {(order as any).seller_phone && (
+                                    <button
+                                      onClick={() => window.open(`tel:${(order as any).seller_phone}`)}
+                                      className="text-xs text-orange-600 hover:text-orange-800 flex items-center"
+                                    >
+                                      📞 Call Store
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${(order as any).pickup_location?.lat},${(order as any).pickup_location?.lng}`)}
+                                    className="text-xs text-orange-600 hover:text-orange-800 flex items-center"
+                                  >
+                                    <Navigation className="w-3 h-3 mr-1" />
+                                    Navigate
+                                  </button>
+                                </div>
                               </div>
                             )}
 
                             {/* Customer Info */}
-                            <div className="bg-gray-50 p-3 rounded-lg">
-                              <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                              <h4 className="font-medium text-blue-900 mb-2 flex items-center">
                                 <MapPin className="w-4 h-4 mr-2 text-blue-600" />
                                 Deliver To
                               </h4>
-                              <p className="text-sm font-medium text-gray-900">{order.customer_name}</p>
-                              <p className="text-sm text-gray-600">{order.customer_phone || 'No phone provided'}</p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                {typeof order.address === 'string' 
+                              <p className="text-sm font-medium text-blue-900">{order.customer_name}</p>
+                              <button
+                                onClick={() => window.open(`https://www.google.com/maps?q=${order.coordinates?.lat},${order.coordinates?.lng}&z=15`)}
+                                className="text-sm text-blue-600 hover:text-blue-800 underline cursor-pointer block mt-1"
+                              >
+                                📍 {typeof order.address === 'string' 
                                   ? order.address 
                                   : order.address?.full_address || 'Address not available'
                                 }
-                              </p>
+                              </button>
+                              <div className="flex space-x-2 mt-2">
+                                <button
+                                  onClick={() => window.open(`tel:${order.customer_phone}`)}
+                                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                                >
+                                  📞 Call Customer
+                                </button>
+                                <button
+                                  onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.coordinates?.lat},${order.coordinates?.lng}`)}
+                                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                                >
+                                  <Navigation className="w-3 h-3 mr-1" />
+                                  Navigate
+                                </button>
+                              </div>
                             </div>
 
                             {/* Order Info */}
