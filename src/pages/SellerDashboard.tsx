@@ -42,25 +42,43 @@ const SellerDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [sellerInfo, setSellerInfo] = useState<any>(null);
   const [recentPackedNotifications, setRecentPackedNotifications] = useState<Set<string>>(new Set());
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string>('disconnected');
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  // Add debug log helper
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    console.log('🔍 DEBUG:', logEntry);
+    setDebugLogs(prev => [...prev.slice(-9), logEntry]); // Keep last 10 logs
+  };
 
   // Check if user is authenticated seller
   const checkSellerAuth = async () => {
     try {
+      addDebugLog('Starting seller authentication check...');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        addDebugLog('No authenticated user found, redirecting to login');
         navigate('/login');
         return false;
       }
+      addDebugLog(`User authenticated: ${user.id}`);
 
       // Check if user is a seller
-      const { data: seller } = await supabase
+      const { data: seller, error } = await supabase
         .from('sellers')
         .select('*')
         .eq('user_id', user.id)
         .eq('approval_status', 'approved')
         .single();
 
+      if (error) {
+        addDebugLog(`Seller query error: ${error.message}`);
+      }
+
       if (!seller) {
+        addDebugLog('User is not an approved seller');
         toast({
           title: "Access Denied",
           description: "You don't have seller access or your account is not approved.",
@@ -70,9 +88,11 @@ const SellerDashboard = () => {
         return false;
       }
 
+      addDebugLog(`Seller authenticated: ${seller.business_name || seller.name}`);
       setSellerInfo(seller);
       return true;
     } catch (error) {
+      addDebugLog(`Auth check error: ${error}`);
       console.error('Auth check error:', error);
       navigate('/login');
       return false;
@@ -110,11 +130,21 @@ const SellerDashboard = () => {
 
   // Handle new packed order notification
   const handlePackedOrderNotification = (orderData: any) => {
+    addDebugLog(`Processing order notification: ${orderData.id} - Status: ${orderData.status}`);
+    
     // Only play for orders that just got packed and haven't been notified recently
-    if (orderData.status !== 'packed' || recentPackedNotifications.has(orderData.id)) {
+    if (orderData.status !== 'packed') {
+      addDebugLog(`Skipping notification - order status is not 'packed': ${orderData.status}`);
+      return;
+    }
+    
+    if (recentPackedNotifications.has(orderData.id)) {
+      addDebugLog(`Skipping notification - already notified for order: ${orderData.id}`);
       return;
     }
 
+    addDebugLog(`🔔 Playing ringtone for order: ${orderData.id}`);
+    
     // Add to recent notifications to prevent duplicates
     setRecentPackedNotifications(prev => new Set(prev).add(orderData.id));
     
@@ -127,15 +157,21 @@ const SellerDashboard = () => {
       });
     }, 30000);
 
-    // Play the ringtone
-    playNotificationSound();
-    
-    // Show toast notification
-    toast({
-      title: "🎉 Order Ready for Pickup!",
-      description: `Order for ${orderData.customer_name} is packed and ready for delivery`,
-      duration: 5000,
-    });
+    try {
+      // Play the ringtone
+      playNotificationSound();
+      addDebugLog(`✅ Ringtone played successfully for order: ${orderData.id}`);
+      
+      // Show toast notification
+      toast({
+        title: "🎉 Order Ready for Pickup!",
+        description: `Order for ${orderData.customer_name} is packed and ready for delivery`,
+        duration: 5000,
+      });
+      addDebugLog(`✅ Toast notification shown for order: ${orderData.id}`);
+    } catch (error) {
+      addDebugLog(`❌ Error playing notification: ${error}`);
+    }
   };
 
   // Get status badge variant
@@ -190,16 +226,22 @@ const SellerDashboard = () => {
 
   // Set up real-time subscription for order updates
   useEffect(() => {
-    if (!sellerInfo) return;
+    if (!sellerInfo) {
+      addDebugLog('No seller info available, skipping subscription setup');
+      return;
+    }
 
     const setupSubscription = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        addDebugLog('No user found for subscription setup');
+        return;
+      }
 
-      console.log('🔗 Setting up real-time subscription for seller orders...');
+      addDebugLog(`Setting up real-time subscription for seller orders (user: ${user.id})`);
       
       const channel = supabase
-        .channel('seller-orders')
+        .channel('seller-orders-debug')
         .on(
           'postgres_changes',
           {
@@ -209,11 +251,18 @@ const SellerDashboard = () => {
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
-            console.log('📦 Order updated:', payload);
+            addDebugLog(`📦 Order update received: ${payload.new?.id || 'unknown'}`);
+            addDebugLog(`   Old Status: ${payload.old?.status || 'unknown'}`);
+            addDebugLog(`   New Status: ${payload.new?.status || 'unknown'}`);
             
             // Handle packed order notifications
             if (payload.new && payload.new.status === 'packed' && payload.old?.status !== 'packed') {
+              addDebugLog(`🎯 Status changed to 'packed' - triggering notification`);
               handlePackedOrderNotification(payload.new);
+            } else if (payload.new?.status === 'packed') {
+              addDebugLog(`ℹ️ Order already was 'packed', no notification needed`);
+            } else {
+              addDebugLog(`ℹ️ Status not 'packed', no notification needed`);
             }
             
             // Refresh orders
@@ -221,16 +270,22 @@ const SellerDashboard = () => {
           }
         )
         .subscribe((status) => {
-          console.log('📡 Real-time subscription status:', status);
+          addDebugLog(`📡 Subscription status: ${status}`);
+          setSubscriptionStatus(status);
         });
 
       return () => {
-        console.log('🔌 Cleaning up seller orders subscription');
+        addDebugLog('🔌 Cleaning up seller orders subscription');
         supabase.removeChannel(channel);
+        setSubscriptionStatus('disconnected');
       };
     };
 
-    setupSubscription();
+    const cleanup = setupSubscription();
+    
+    return () => {
+      cleanup?.then(cleanupFn => cleanupFn?.());
+    };
   }, [sellerInfo]);
 
   if (isLoading) {
@@ -295,10 +350,34 @@ const SellerDashboard = () => {
       {/* Orders List */}
       <div className="p-4">
         <div className="mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Your Orders</h2>
-          <p className="text-sm text-gray-600">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-semibold text-gray-900">Your Orders</h2>
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${
+                subscriptionStatus === 'SUBSCRIBED' ? 'bg-green-500' : 'bg-red-500'
+              }`}></div>
+              <span className="text-xs text-gray-500">
+                {subscriptionStatus === 'SUBSCRIBED' ? 'Live Updates' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 mb-3">
             You'll hear a ringtone when orders are packed and ready for pickup
           </p>
+          
+          {/* Debug Panel */}
+          {debugLogs.length > 0 && (
+            <div className="bg-gray-100 rounded-lg p-3 mb-4">
+              <div className="text-xs font-medium text-gray-700 mb-2">Debug Log:</div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {debugLogs.map((log, index) => (
+                  <div key={index} className="text-xs text-gray-600 font-mono">
+                    {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {orders.length === 0 ? (
