@@ -1290,96 +1290,96 @@ const Home = () => {
                             );
                           })()}
 
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-                            {/* Pickup Info - Always show for orders */}
-                            <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
-                              <h4 className="font-medium text-orange-900 mb-2 flex items-center">
-                                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+                            {/* Pickup Info - Compact design */}
+                            <div className="bg-orange-50 p-2.5 rounded-lg border border-orange-200">
+                              <h4 className="text-sm font-medium text-orange-900 mb-1.5 flex items-center">
+                                <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
                                   <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
                                 </svg>
                                 Pick up
                               </h4>
-                              <p className="text-sm font-medium text-orange-900">
-                                {(() => {
-                                  // Try to get restaurant name from items
+                              <p className="text-xs font-medium text-orange-900 mb-1">
+                                {order.seller_name || (() => {
+                                  // Fallback to restaurant name from items
                                   const firstItem = Array.isArray(order.items) && order.items[0] ? order.items[0] : null;
                                   return firstItem?.restaurant || order.restaurant || 'Store';
                                 })()}
                               </p>
                               <button
                                 onClick={() => {
-                                  // Try to get pickup location from order data
-                                  const pickupLat = order.pickup_location?.lat || order.coordinates?.lat;
-                                  const pickupLng = order.pickup_location?.lng || order.coordinates?.lng;
+                                  // Use pickup location coordinates for navigation
+                                  const pickupLat = order.pickup_location?.lat;
+                                  const pickupLng = order.pickup_location?.lng;
                                   if (pickupLat && pickupLng) {
                                     window.open(`https://www.google.com/maps?q=${pickupLat},${pickupLng}&z=15`);
                                   } else {
-                                    window.open(`https://www.google.com/maps/search/store+near+me`);
+                                    // Fallback navigation if no pickup coordinates
+                                    const address = order.pickup_address;
+                                    if (address) {
+                                      window.open(`https://www.google.com/maps/search/${encodeURIComponent(address)}`);
+                                    }
                                   }
                                 }}
-                                className="text-sm text-orange-700 hover:text-orange-900 underline cursor-pointer block mt-1"
+                                className="text-xs text-orange-700 hover:text-orange-900 underline cursor-pointer block"
                               >
-                                📍 {(() => {
-                                  // Try to get pickup address from multiple sources
-                                  if (order.pickup_address) return order.pickup_address;
-                                  if (typeof order.address === 'string') return order.address;
-                                  if (order.address?.full_address) return order.address.full_address;
-                                  if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
-                                  return 'Store Location';
-                                })()}
+                                📍 {order.pickup_address || 'Store Location'}
                               </button>
-                              <div className="flex space-x-2 mt-2">
+                              <div className="flex space-x-3 mt-1.5">
                                 <button
                                   onClick={() => {
-                                    const phone = order.seller_phone || order.customer_phone;
+                                    const phone = order.seller_phone;
                                     if (phone) window.open(`tel:${phone}`);
                                   }}
                                   className="text-xs text-orange-600 hover:text-orange-800 flex items-center"
+                                  disabled={!order.seller_phone}
                                 >
                                   📞 Call Store
                                 </button>
                                 <button
                                   onClick={() => {
-                                    const pickupLat = order.pickup_location?.lat || order.coordinates?.lat;
-                                    const pickupLng = order.pickup_location?.lng || order.coordinates?.lng;
+                                    const pickupLat = order.pickup_location?.lat;
+                                    const pickupLng = order.pickup_location?.lng;
                                     if (pickupLat && pickupLng) {
                                       window.open(`https://www.google.com/maps/dir/?api=1&destination=${pickupLat},${pickupLng}`);
                                     }
                                   }}
                                   className="text-xs text-orange-600 hover:text-orange-800 flex items-center"
+                                  disabled={!order.pickup_location?.lat}
                                 >
-                                  <Navigation className="w-3 h-3 mr-1" />
+                                  <Navigation className="w-3 h-3 mr-0.5" />
                                   Navigate
                                 </button>
                               </div>
                             </div>
 
-                            {/* Delivery Info */}
-                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                              <h4 className="font-medium text-blue-900 mb-2 flex items-center">
-                                <MapPin className="w-4 h-4 mr-2 text-blue-600" />
+                            {/* Delivery Info - Compact design */}
+                            <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-200">
+                              <h4 className="text-sm font-medium text-blue-900 mb-1.5 flex items-center">
+                                <MapPin className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
                                 Deliver to
                               </h4>
-                              <p className="text-sm font-medium text-blue-900">{order.customer_name}</p>
+                              <p className="text-xs font-medium text-blue-900 mb-1">{order.customer_name}</p>
                               <button
                                 onClick={() => {
                                   if (order.coordinates?.lat && order.coordinates?.lng) {
                                     window.open(`https://www.google.com/maps?q=${order.coordinates.lat},${order.coordinates.lng}&z=15`);
                                   }
                                 }}
-                                className="text-sm text-blue-600 hover:text-blue-800 underline cursor-pointer block mt-1"
+                                className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer block"
                               >
                                 📍 {(() => {
                                   if (typeof order.address === 'string') return order.address;
                                   if (order.address?.full_address) return order.address.full_address;
                                   if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
-                                  return 'Delivery address not available';
+                                  return 'Delivery address';
                                 })()}
                               </button>
-                              <div className="flex space-x-2 mt-2">
+                              <div className="flex space-x-3 mt-1.5">
                                 <button
                                   onClick={() => window.open(`tel:${order.customer_phone}`)}
                                   className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                                  disabled={!order.customer_phone}
                                 >
                                   📞 Call Customer
                                 </button>
@@ -1390,8 +1390,9 @@ const Home = () => {
                                     }
                                   }}
                                   className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                                  disabled={!order.coordinates?.lat}
                                 >
-                                  <Navigation className="w-3 h-3 mr-1" />
+                                  <Navigation className="w-3 h-3 mr-0.5" />
                                   Navigate
                                 </button>
                               </div>
