@@ -141,33 +141,22 @@ const Home = () => {
     return true;
   };
 
-  // Check if an agent's accepted order should trigger pickup notification
+  // Check if order should trigger pickup notification for all agents
   const shouldPlayPickupNotificationForOrder = async (orderData: any): Promise<boolean> => {
     // Only play for orders that just changed to 'packed' status
     if (orderData.status !== 'packed') {
       return false;
     }
     
-    // Check if this order belongs to the current agent
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.email) return false;
-
-    const { data: agent } = await supabase
-      .from('delivery_agents')
-      .select('id')
-      .eq('email', user.email)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (!agent || orderData.agent_id !== agent.id) {
-      return false;
-    }
+    console.log('🔔 Checking pickup notification for order:', orderData.id, 'Status:', orderData.status, 'Agent ID:', orderData.agent_id);
     
     // Don't play duplicate notifications for the same order
     if (recentNotifications.has(`pickup-${orderData.id}`)) {
+      console.log('⚠️ Skipping duplicate pickup notification for order:', orderData.id);
       return false;
     }
     
+    console.log('✅ Playing pickup notification for order:', orderData.id);
     return true;
   };
 
@@ -224,8 +213,8 @@ const Home = () => {
     
     // Show toast notification
     toast({
-      title: "🎉 Order Ready for Pickup!",
-      description: `Your order from ${orderData.customer_name || 'customer'} is packed and ready`,
+      title: "📦 New Order Ready for Pickup!",
+      description: `Order from ${orderData.customer_name || 'customer'} is packed and available for pickup`,
       duration: 5000,
     });
   };
