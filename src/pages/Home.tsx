@@ -479,6 +479,16 @@ const Home = () => {
         </div>
       </div>
 
+      {/* Greeting Section */}
+      <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+        <h2 className="text-lg font-semibold text-gray-900">
+          {getGreeting()}{agentName ? `, ${capitalizeWords(agentName)}!` : '!'}
+        </h2>
+        <p className="text-sm text-gray-600 italic mt-1">
+          "Ready to deliver excellence today"
+        </p>
+      </div>
+
       {/* Action Buttons */}
       <div className="px-4 py-4 bg-gray-50">
         <div className="grid grid-cols-3 gap-3">
@@ -526,19 +536,11 @@ const Home = () => {
       </div>
 
       <div className="flex-1 bg-gray-50">
-        {/* Orders Header with Greeting */}
+        {/* Orders Header */}
         <div className="px-4 py-4 bg-white border-b border-gray-100">
-          <div className="mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {getGreeting()}{agentName ? `, ${capitalizeWords(agentName)}!` : '!'}
-            </h2>
-            <p className="text-sm text-gray-600 italic">
-              "Ready to deliver excellence today"
-            </p>
-          </div>
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-md font-medium text-gray-800">Orders ({availableOrders.length})</h3>
+              <h2 className="text-lg font-semibold text-gray-900">Orders ({availableOrders.length})</h2>
               <p className="text-sm text-gray-500">Available orders and your assignments</p>
             </div>
             <Select value={sortBy} onValueChange={setSortBy}>
