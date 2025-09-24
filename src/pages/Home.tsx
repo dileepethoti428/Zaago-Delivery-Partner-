@@ -781,14 +781,29 @@ const Home = () => {
                         <div className="flex items-start mb-4">
                           <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
                           <div className="flex-1">
-                            <p className="text-sm text-gray-700 leading-relaxed">
-                              {(() => {
-                                if (typeof order.address === 'string') return order.address;
-                                if (order.address?.full_address) return order.address.full_address;
-                                if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
-                                return 'Address not available';
-                              })()}
-                            </p>
+                             <p className="text-sm text-gray-700 leading-relaxed">
+                               {(() => {
+                                 if (typeof order.address === 'string') return order.address;
+                                 if (order.address?.full_address) return order.address.full_address;
+                                 if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
+                                 if (order.address?.address) {
+                                   // Handle {city, state, address, pincode} structure
+                                   const parts = [
+                                     order.address.address,
+                                     order.address.city,
+                                     order.address.state,
+                                     order.address.pincode
+                                   ].filter(Boolean);
+                                   return parts.join(', ');
+                                 }
+                                 if (typeof order.address === 'object' && order.address) {
+                                   // Fallback for any other object structure
+                                   const addressStr = Object.values(order.address).filter(Boolean).join(', ');
+                                   return addressStr || 'Address not available';
+                                 }
+                                 return 'Address not available';
+                               })()}
+                             </p>
                           </div>
                         </div>
 
