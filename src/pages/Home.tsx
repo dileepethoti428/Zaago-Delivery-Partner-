@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
+import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from "@/lib/distanceService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
@@ -117,8 +118,9 @@ const Home = () => {
   const [ordersWithDistance, setOrdersWithDistance] = useState<Order[]>([]);
   const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
   const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
+  const [isLoadingDistance, setIsLoadingDistance] = useState<boolean>(false);
   const [agentName, setAgentName] = useState<string>("");
-  const [sortBy, setSortBy] = useState<string>("nearest");
+  const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
 
   // Fetch agent name
   const fetchAgentName = async () => {
@@ -139,6 +141,47 @@ const Home = () => {
     } catch (error) {
       console.error('Error fetching agent name:', error);
     }
+  };
+
+  // Calculate real-time distances for all orders
+  const calculateOrderDistances = async (ordersList: Order[]) => {
+    const agentLocation = getAgentLocationFromStorage();
+    if (!agentLocation) {
+      console.warn('No agent location available for distance calculation');
+      return ordersList;
+    }
+
+    setIsLoadingDistance(true);
+    const updatedOrders = await Promise.all(
+      ordersList.map(async (order) => {
+        try {
+          const customerCoords = extractCoordinatesFromAddress(order.address);
+          if (!customerCoords) {
+            console.warn('No customer coordinates for order:', order.id);
+            return { ...order, distance_km: 2.5, eta_mins: 5 }; // fallback
+          }
+
+          const distanceResult = await calculateRealTimeDistance(
+            agentLocation,
+            customerCoords,
+            order.id
+          );
+
+          return {
+            ...order,
+            distance_km: distanceResult.distance_km,
+            eta_mins: distanceResult.eta_mins,
+            distance_source: distanceResult.source
+          };
+        } catch (error) {
+          console.error('Error calculating distance for order:', order.id, error);
+          return { ...order, distance_km: 2.5, eta_mins: 5 }; // fallback
+        }
+      })
+    );
+    
+    setIsLoadingDistance(false);
+    return updatedOrders;
   };
 
   // Calculate agent payout (simple calculation)
@@ -647,7 +690,7 @@ const Home = () => {
               <h2 className="text-lg font-semibold text-gray-900">Orders ({availableOrders.length})</h2>
               <p className="text-sm text-gray-500">Available orders and your assignments</p>
             </div>
-            <Select value={sortBy} onValueChange={setSortBy}>
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'nearest' | 'newest' | 'highest')}>
               <SelectTrigger className="w-36 h-9 border-gray-300 bg-white">
                 <SelectValue className="text-gray-700" />
               </SelectTrigger>
@@ -829,7 +872,11 @@ const Home = () => {
                             <div className="flex items-center">
                               <Navigation className="w-4 h-4 text-green-500 mr-1" />
                               <span className="text-sm font-medium text-gray-700">
-                                {order.distance_km ? `${order.distance_km} km` : '2.5 km'}
+                                {isLoadingDistance ? (
+                                  <span className="text-xs text-gray-500">Calculating...</span>
+                                ) : (
+                                  `${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km`
+                                )}
                               </span>
                             </div>
                             <div className="flex items-center">

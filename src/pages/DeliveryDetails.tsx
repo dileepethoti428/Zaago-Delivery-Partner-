@@ -9,6 +9,7 @@ import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
 import { NavigationMap } from "@/components/NavigationMap";
 import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
+import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from "@/lib/distanceService";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -67,38 +68,54 @@ const DeliveryDetails = () => {
   }, [order]);
 
   const calculateDistanceAndPayout = async () => {
+    console.log('🧮 Starting distance calculation for order:', order?.id);
+    
+    if (!order) {
+      console.warn('No order data available');
+      return;
+    }
+
+    // Get agent location
+    const agentLocation = getAgentLocationFromStorage();
+    if (!agentLocation) {
+      console.warn('No agent location available');
+      setDistance(2.5); // fallback
+      setEstimatedPayout(35); // fallback payout
+      return;
+    }
+
+    // Extract customer coordinates
+    const customerCoords = extractCoordinatesFromAddress(order.address);
+    if (!customerCoords) {
+      console.warn('No customer coordinates available');
+      setDistance(2.5); // fallback
+      setEstimatedPayout(35); // fallback payout
+      return;
+    }
+
     try {
-      // First check if order already has backend-calculated distance
-      if (order?.distance_km && order?.backend_calculated) {
-        console.log('Using existing backend-calculated distance:', order.distance_km);
-        setDistance(order.distance_km);
-        // Calculate payout: ₹20 base + ₹15/km beyond 1km
-        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
-        setPayout(calculatedPayout);
-        return;
-      }
+      // Use the unified distance calculation service
+      const distanceResult = await calculateRealTimeDistance(
+        agentLocation,
+        customerCoords,
+        order.id
+      );
 
-      console.log('Calculating accurate distance and payout from backend...');
+      const dist = distanceResult.distance_km;
+      const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
       
-      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
+      setDistance(dist);
+      setEstimatedPayout(calculatedPayout);
       
-      if (agentLocation && order?.address?.coordinates) {
-        // Use fresh backend calculation for accuracy
-        const { data: pricingData, error: pricingError } = await supabase.functions.invoke('calculate-delivery-pricing', {
-          body: {
-            order_id: order.id,
-            agent_location: agentLocation
-          }
-        });
-
-        if (!pricingError && pricingData?.success && pricingData?.distance_km > 0) {
-          console.log('Backend pricing calculation successful:', pricingData);
-          setDistance(pricingData.distance_km);
-          setPayout(pricingData.agent_payout);
-          return;
-        }
-
-        // Fallback to distance-eta calculation if pricing fails
+      console.log('✅ Distance calculated:', dist, 'km, Payout:', calculatedPayout, 'Source:', distanceResult.source);
+      
+    } catch (error) {
+      console.error('Error calculating distance:', error);
+      // Use fallback values
+      setDistance(2.5);
+      setEstimatedPayout(35);
+    }
+  };
         const { data: distanceData, error: distanceError } = await supabase.functions.invoke('calculate-distance-eta', {
           body: {
             origin: agentLocation,
@@ -130,19 +147,6 @@ const DeliveryDetails = () => {
         setPayout(42.5);
       }
       
-    } catch (error) {
-      console.error('Distance calculation error:', error);
-      // Try to use order distance as fallback before defaulting
-      if (order?.distance_km && order.distance_km > 0) {
-        setDistance(order.distance_km);
-        const calculatedPayout = order.distance_km <= 1 ? 20 : 20 + ((order.distance_km - 1) * 15);
-        setPayout(calculatedPayout);
-      } else {
-        setDistance(2.5);
-        setPayout(42.5);
-      }
-    }
-  };
 
   const fetchOrderDetails = async () => {
     try {
