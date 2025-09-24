@@ -21,7 +21,7 @@ interface DeliveryTimerProps {
 const DeliveryTimer = ({ 
   deliveryType, 
   scheduledTime, 
-  orderPlacedAt = new Date(),
+  orderPlacedAt, // Remove default value here
   className = "",
   subscriptionId,
   deliveryTime,
@@ -35,10 +35,13 @@ const DeliveryTimer = ({
 
   useEffect(() => {
     if (deliveryType !== 'immediate') return;
+    
+    // Use the actual order placed time from backend, fallback to current time
+    const actualOrderTime = orderPlacedAt ? new Date(orderPlacedAt) : new Date();
 
     const calculateTimeLeft = () => {
       const now = new Date();
-      const deliveryTime = new Date(orderPlacedAt.getTime() + 20 * 60 * 1000); // 20 minutes after order
+      const deliveryTime = new Date(actualOrderTime.getTime() + 20 * 60 * 1000); // 20 minutes after actual order time
       const difference = deliveryTime.getTime() - now.getTime();
 
       if (difference <= 0) {
@@ -77,12 +80,13 @@ const DeliveryTimer = ({
         return null;
       }
       
-      const now = new Date();
-      const isToday = scheduledDate.toDateString() === now.toDateString();
+      // For scheduled orders, show the actual scheduled date, not relative to "today"
+      const orderDate = orderPlacedAt ? new Date(orderPlacedAt) : new Date();
+      const isOrderToday = scheduledDate.toDateString() === orderDate.toDateString();
       
       return {
         date: scheduledDate.toLocaleDateString('en-US', { 
-          weekday: isToday ? undefined : 'long',
+          weekday: isOrderToday ? undefined : 'long',
           month: 'short', 
           day: 'numeric' 
         }),
@@ -91,7 +95,12 @@ const DeliveryTimer = ({
           minute: '2-digit',
           hour12: true 
         }),
-        isToday
+        isOrderToday: isOrderToday,
+        actualDate: scheduledDate.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          year: scheduledDate.getFullYear() !== orderDate.getFullYear() ? 'numeric' : undefined
+        })
       };
     } catch (error) {
       console.warn('Error parsing scheduled time:', scheduledTime, error);
@@ -177,7 +186,7 @@ const DeliveryTimer = ({
               <p className="text-xs text-muted-foreground">
                 {hasTimeSlot ? 
                   'Delivery Window' : 
-                  (isSubscription ? 'Today' : (scheduleInfo?.isToday ? 'Today' : scheduleInfo?.date || 'Date TBD'))
+                  (isSubscription ? scheduleInfo?.actualDate || 'Today' : (scheduleInfo?.isOrderToday ? 'Today' : scheduleInfo?.actualDate || scheduleInfo?.date || 'Date TBD'))
                 }
               </p>
             </div>
