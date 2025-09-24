@@ -1220,7 +1220,6 @@ const Home = () => {
                               </span>
                             </div>
                             <div className="flex items-center">
-                              <Clock className="w-4 h-4 text-gray-500 mr-1" />
                               <span className="text-sm text-gray-600">
                                 {order.estimated_time_minutes ? `${order.estimated_time_minutes} min` : '5 min'}
                               </span>
