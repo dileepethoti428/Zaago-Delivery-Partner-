@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import MapPreview from "@/components/MapPreview";
 import { debugAddress } from "@/lib/debugAddress";
+import { calculateRealTimeDistance, extractCoordinatesFromAddress } from "@/lib/distanceService";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -64,6 +65,8 @@ const OrderDetails = () => {
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [customerRating, setCustomerRating] = useState<number | null>(null);
+  const [realTimeDistance, setRealTimeDistance] = useState<string>('Calculating...');
+  const [realTimeEta, setRealTimeEta] = useState<string>('Calculating...');
 
   // Fetch order data from backend
   useEffect(() => {
@@ -135,6 +138,9 @@ const OrderDetails = () => {
         setOrderData(transformedOrder);
         setCustomerRating(rating);
         
+        // Calculate real-time distance (shop-to-customer)
+        await calculateRealTimeDistanceForOrder(transformedOrder);
+        
       } catch (error) {
         console.error('Error fetching order:', error);
         toast({
@@ -150,6 +156,39 @@ const OrderDetails = () => {
 
     fetchOrderData();
   }, [orderId, toast, navigate]);
+
+  // Calculate real-time shop-to-customer distance
+  const calculateRealTimeDistanceForOrder = async (order: OrderData) => {
+    try {
+      // Extract customer coordinates from order address
+      const customerCoords = extractCoordinatesFromAddress(order.address);
+      if (!customerCoords) {
+        console.warn('No customer coordinates available for distance calculation');
+        setRealTimeDistance('N/A');
+        setRealTimeEta('N/A');
+        return;
+      }
+
+      // Use hardcoded pickup location (same as Home page)
+      const pickupLocation = { lat: 12.9716, lng: 77.5946 }; // Bangalore coordinates
+
+      const distanceResult = await calculateRealTimeDistance(
+        pickupLocation,
+        customerCoords,
+        order.id
+      );
+
+      setRealTimeDistance(`${distanceResult.distance_km.toFixed(1)} km`);
+      setRealTimeEta(`${distanceResult.eta_mins} mins`);
+      
+      console.log('✅ OrderDetails distance calculated:', distanceResult.distance_km, 'km, Source:', distanceResult.source);
+      
+    } catch (error) {
+      console.error('Error calculating real-time distance:', error);
+      setRealTimeDistance('Error');
+      setRealTimeEta('Error');
+    }
+  };
 
   // Get priority color based on level
   const getPriorityColor = (priority: string) => {
@@ -330,7 +369,7 @@ const OrderDetails = () => {
                 </div>
                 <div className="flex items-center text-muted-foreground mt-1">
                   <Navigation className="w-4 h-4 mr-2 text-primary" />
-                  <span className="text-sm">{orderData.distance_km} km • {orderData.estimated_time}</span>
+                  <span className="text-sm">{realTimeDistance} • {realTimeEta}</span>
                 </div>
               </div>
 

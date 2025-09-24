@@ -86,21 +86,6 @@ const DeliveryDetails = () => {
       return;
     }
 
-    // Get agent location from real-time geolocation or storage
-    let agentLocation = null;
-    if (location.latitude && location.longitude) {
-      agentLocation = { lat: location.latitude, lng: location.longitude };
-    } else {
-      agentLocation = getAgentLocationFromStorage();
-    }
-
-    if (!agentLocation) {
-      console.warn('No agent location available');
-      setDistance(2.5); // fallback
-      setPayout(35); // fallback payout
-      return;
-    }
-
     // Extract customer coordinates
     const customerCoords = extractCoordinatesFromAddress(order.address);
     if (!customerCoords) {
@@ -111,9 +96,11 @@ const DeliveryDetails = () => {
     }
 
     try {
-      // Use the unified distance calculation service
+      // Use shop-to-customer distance (same as Home page for consistency)
+      const pickupLocation = { lat: 12.9716, lng: 77.5946 }; // Bangalore coordinates
+      
       const distanceResult = await calculateRealTimeDistance(
-        agentLocation,
+        pickupLocation,
         customerCoords,
         order.id
       );
@@ -124,7 +111,7 @@ const DeliveryDetails = () => {
       setDistance(dist);
       setPayout(calculatedPayout);
       
-      console.log('✅ Distance calculated:', dist, 'km, Payout:', calculatedPayout, 'Source:', distanceResult.source);
+      console.log('✅ DeliveryDetails distance calculated (shop-to-customer):', dist, 'km, Payout:', calculatedPayout, 'Source:', distanceResult.source);
       
     } catch (error) {
       console.error('Error calculating distance:', error);
