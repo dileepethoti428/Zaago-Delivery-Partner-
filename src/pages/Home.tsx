@@ -143,36 +143,38 @@ const Home = () => {
     }
   };
 
-  // Calculate real-time distances for all orders
+  // Calculate real-time distances for all orders (shop to customer)
   const calculateOrderDistances = async (ordersList: Order[]) => {
-    // Get agent location from real-time geolocation or storage fallback
-    let agentLocation = null;
-    if (location.latitude && location.longitude) {
-      agentLocation = { lat: location.latitude, lng: location.longitude };
-    } else {
-      agentLocation = getAgentLocationFromStorage();
-    }
-    
-    if (!agentLocation) {
-      console.warn('No agent location available for distance calculation');
-      return ordersList;
-    }
-
     setIsLoadingDistance(true);
     const updatedOrders = await Promise.all(
       ordersList.map(async (order) => {
         try {
+          // Extract pickup location (shop) coordinates
+          const pickupCoords = order.pickup_location ? 
+            { lat: order.pickup_location.lat, lng: order.pickup_location.lng } : null;
+          
+          // Extract customer delivery coordinates
           const customerCoords = extractCoordinatesFromAddress(order.address);
-          if (!customerCoords) {
-            console.warn('No customer coordinates for order:', order.id);
+          
+          if (!pickupCoords || !customerCoords) {
+            console.warn('Missing coordinates for order:', order.id, { pickupCoords, customerCoords });
             return { ...order, distance_km: 2.5, eta_mins: 5 }; // fallback
           }
 
+          // Calculate distance from shop to customer (actual delivery distance)
           const distanceResult = await calculateRealTimeDistance(
-            agentLocation,
+            pickupCoords,
             customerCoords,
             order.id
           );
+
+          console.log('🚚 Shop-to-customer distance calculated:', {
+            orderId: order.id,
+            pickup: pickupCoords,
+            customer: customerCoords,
+            distance: distanceResult.distance_km + 'km',
+            source: distanceResult.source
+          });
 
           return {
             ...order,
@@ -191,10 +193,10 @@ const Home = () => {
     return updatedOrders;
   };
 
-  // Calculate agent payout (simple calculation)
+  // Calculate agent payout based on delivery distance (shop to customer)
   const calculateAgentPayout = (distance: number) => {
     const basePay = 20;
-    const additionalDistance = Math.max(0, distance - 1);
+    const additionalDistance = Math.max(0, distance - 1); // Free first 1km
     const perKmRate = 15;
     const distancePay = additionalDistance * perKmRate;
     
@@ -560,13 +562,13 @@ const Home = () => {
     };
   }, []);
 
-  // Recalculate distances when location changes
+  // Trigger distance calculation when orders are initially loaded
   useEffect(() => {
-    if (orders.length > 0 && (location.latitude && location.longitude)) {
-      console.log('🌍 Location updated, recalculating distances for all orders');
+    if (orders.length > 0 && !isLoadingDistance) {
+      console.log('🔄 Orders loaded, calculating shop-to-customer distances for', orders.length, 'orders');
       calculateOrderDistances(orders).then(setOrders);
     }
-  }, [location.latitude, location.longitude]);
+  }, [orders.length]); // Trigger when new orders are loaded
 
   useEffect(() => {
     fetchAgentName();
@@ -969,11 +971,11 @@ const Home = () => {
                           <div className="flex items-center space-x-4">
                             <div className="flex items-center">
                               <Navigation className="w-4 h-4 text-green-500 mr-1" />
-                              <span className="text-sm font-medium text-gray-700">
+                              <span className="text-sm font-medium text-gray-700" title="Delivery distance from shop to customer">
                                 {isLoadingDistance ? (
                                   <span className="text-xs text-gray-500">Calculating...</span>
                                 ) : (
-                                  `${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km`
+                                  `${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`
                                 )}
                               </span>
                             </div>
@@ -1003,7 +1005,7 @@ const Home = () => {
                           <div className="flex items-center">
                             <IndianRupee className="w-4 h-4 text-green-600 mr-1" />
                             <span className="text-sm text-green-800">Agent payout: </span>
-                            <span className="text-sm font-bold text-green-800">
+                            <span className="text-sm font-bold text-green-800" title="Estimated payout based on delivery distance">
                               ₹{order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)}
                             </span>
                           </div>
