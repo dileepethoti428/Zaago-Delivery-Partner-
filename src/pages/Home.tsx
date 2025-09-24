@@ -57,7 +57,7 @@ interface Order {
   id: string;
   customer_name: string;
   customer_phone: string;
-  address: any;
+  address: string; // Enforced as string to prevent React child errors
   items: any[];
   total: number;
   status: string;
@@ -183,12 +183,24 @@ const Home = () => {
       if (assignedError) throw assignedError;
 
 
-      const transformedAvailableOrders: Order[] = (availableResponse?.orders || []).map((order: any) => ({
-        ...order,
-        address: normalizeAddress(order.address),
-        order_placed_at: new Date(order.created_at),
-        delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
-      }));
+      const transformedAvailableOrders: Order[] = (availableResponse?.orders || []).map((order: any) => {
+        console.log('🔍 Processing available order:', order.id);
+        console.log('📍 Raw address:', order.address, 'Type:', typeof order.address);
+        
+        const normalizedAddr = normalizeAddress(order.address);
+        console.log('✅ Normalized address:', normalizedAddr, 'Type:', typeof normalizedAddr);
+        
+        if (typeof normalizedAddr !== 'string') {
+          console.error('❌ CRITICAL: Normalized address is not a string!', normalizedAddr);
+        }
+        
+        return {
+          ...order,
+          address: normalizedAddr,
+          order_placed_at: new Date(order.created_at),
+          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
+        };
+      });
 
       const transformedAssignedOrders: Order[] = await Promise.all((assignedOrders || []).map(async (order: any) => {
         let pickupLocation = order.pickup_location;
@@ -220,11 +232,26 @@ const Home = () => {
         }
         
         
+        const addressResult = (() => {
+          console.log('🔍 Processing assigned order address:', order.id);
+          console.log('📍 Raw address:', order.address, 'Type:', typeof order.address);
+          
+          const normalized = normalizeAddress(order.address);
+          console.log('✅ Normalized address:', normalized, 'Type:', typeof normalized);
+          
+          if (typeof normalized !== 'string') {
+            console.error('❌ CRITICAL: Normalized address is not a string!', normalized);
+            return 'Address processing error';
+          }
+          
+          return normalized;
+        })();
+        
         return {
           id: order.id,
           customer_name: order.customer_name || '',
           customer_phone: order.customer_phone || '',
-          address: normalizeAddress(order.address),
+          address: addressResult,
           items: Array.isArray(order.items) ? order.items : [],
           total: order.total || 0,
           status: order.status,
@@ -785,9 +812,19 @@ const Home = () => {
                         <div className="flex items-start mb-4">
                           <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
                           <div className="flex-1">
-                              <p className="text-sm text-gray-700 leading-relaxed">
-                                {normalizeAddress(order.address)}
-                              </p>
+                               <p className="text-sm text-gray-700 leading-relaxed">
+                                 {(() => {
+                                   console.log('🎯 Rendering address for order:', order.id);
+                                   console.log('📍 Address value:', order.address, 'Type:', typeof order.address);
+                                   
+                                   if (typeof order.address !== 'string') {
+                                     console.error('❌ CRITICAL ERROR: Address is not a string in render!', order.address);
+                                     return 'Address display error';
+                                   }
+                                   
+                                   return order.address;
+                                 })()}
+                               </p>
                           </div>
                         </div>
 

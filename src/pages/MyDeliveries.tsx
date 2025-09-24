@@ -168,7 +168,7 @@ const MyDeliveries = () => {
     navigate(`/tracking?orderId=${order.id}`, {
       state: {
         customerName: order.customer_name,
-        customerAddress: typeof order.address === 'string' ? order.address : order.address?.full_address,
+        customerAddress: normalizeAddress(order.address),
         customerLocation: order.address?.latitude && order.address?.longitude 
           ? { lat: order.address.latitude, lng: order.address.longitude }
           : null,
