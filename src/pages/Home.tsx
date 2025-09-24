@@ -32,6 +32,7 @@ import {
   ChevronDown,
   UserCheck
 } from "lucide-react";
+import { normalizeAddress } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
@@ -181,28 +182,6 @@ const Home = () => {
 
       if (assignedError) throw assignedError;
 
-      // Normalize address objects to strings for available orders too
-      const normalizeAddress = (addressObj: any): string => {
-        if (typeof addressObj === 'string') return addressObj;
-        if (addressObj?.full_address) return addressObj.full_address;
-        if (addressObj?.addressLine1) return `${addressObj.addressLine1}, ${addressObj.city || ''}`;
-        if (addressObj?.address) {
-          // Handle {city, state, address, pincode} structure
-          const parts = [
-            addressObj.address,
-            addressObj.city,
-            addressObj.state,
-            addressObj.pincode
-          ].filter(Boolean);
-          return parts.join(', ');
-        }
-        if (typeof addressObj === 'object' && addressObj) {
-          // Fallback for any other object structure
-          const addressStr = Object.values(addressObj).filter(Boolean).join(', ');
-          return addressStr || 'Address not available';
-        }
-        return 'Address not available';
-      };
 
       const transformedAvailableOrders: Order[] = (availableResponse?.orders || []).map((order: any) => ({
         ...order,
@@ -240,28 +219,6 @@ const Home = () => {
           }
         }
         
-        // Normalize address object to string to prevent React child errors
-        const normalizeAddress = (addressObj: any): string => {
-          if (typeof addressObj === 'string') return addressObj;
-          if (addressObj?.full_address) return addressObj.full_address;
-          if (addressObj?.addressLine1) return `${addressObj.addressLine1}, ${addressObj.city || ''}`;
-          if (addressObj?.address) {
-            // Handle {city, state, address, pincode} structure
-            const parts = [
-              addressObj.address,
-              addressObj.city,
-              addressObj.state,
-              addressObj.pincode
-            ].filter(Boolean);
-            return parts.join(', ');
-          }
-          if (typeof addressObj === 'object' && addressObj) {
-            // Fallback for any other object structure
-            const addressStr = Object.values(addressObj).filter(Boolean).join(', ');
-            return addressStr || 'Address not available';
-          }
-          return 'Address not available';
-        };
         
         return {
           id: order.id,
@@ -828,29 +785,9 @@ const Home = () => {
                         <div className="flex items-start mb-4">
                           <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
                           <div className="flex-1">
-                             <p className="text-sm text-gray-700 leading-relaxed">
-                               {(() => {
-                                 if (typeof order.address === 'string') return order.address;
-                                 if (order.address?.full_address) return order.address.full_address;
-                                 if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
-                                 if (order.address?.address) {
-                                   // Handle {city, state, address, pincode} structure
-                                   const parts = [
-                                     order.address.address,
-                                     order.address.city,
-                                     order.address.state,
-                                     order.address.pincode
-                                   ].filter(Boolean);
-                                   return parts.join(', ');
-                                 }
-                                 if (typeof order.address === 'object' && order.address) {
-                                   // Fallback for any other object structure
-                                   const addressStr = Object.values(order.address).filter(Boolean).join(', ');
-                                   return addressStr || 'Address not available';
-                                 }
-                                 return 'Address not available';
-                               })()}
-                             </p>
+                              <p className="text-sm text-gray-700 leading-relaxed">
+                                {normalizeAddress(order.address)}
+                              </p>
                           </div>
                         </div>
 

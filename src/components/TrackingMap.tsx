@@ -17,6 +17,7 @@ import {
   Package,
   Clock
 } from 'lucide-react';
+import { normalizeAddress } from '@/lib/utils';
 
 interface TrackingMapProps {
   orderData: {
@@ -404,27 +405,7 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
                 onClick={() => window.open(`https://www.google.com/maps?q=${orderData.customer_location?.lat},${orderData.customer_location?.lng}&z=15`)}
                 className="text-sm text-blue-600 hover:text-blue-800 underline cursor-pointer block mt-1"
               >
-                 📍 {(() => {
-                   if (typeof orderData.address === 'string') return orderData.address;
-                   if (orderData.address?.full_address) return orderData.address.full_address;
-                   if (orderData.address?.addressLine1) return `${orderData.address.addressLine1}, ${orderData.address.city || ''}`;
-                   if (orderData.address?.address) {
-                     // Handle {city, state, address, pincode} structure
-                     const parts = [
-                       orderData.address.address,
-                       orderData.address.city,
-                       orderData.address.state,
-                       orderData.address.pincode
-                     ].filter(Boolean);
-                     return parts.join(', ');
-                   }
-                   if (typeof orderData.address === 'object' && orderData.address) {
-                     // Fallback for any other object structure
-                     const addressStr = Object.values(orderData.address).filter(Boolean).join(', ');
-                     return addressStr || 'Delivery address not available';
-                   }
-                   return 'Delivery address not available';
-                 })()}
+                 📍 {normalizeAddress(orderData.address)}
               </button>
               {orderData.customer_phone && (
                 <p className="text-sm text-blue-500 mt-1">{orderData.customer_phone}</p>
