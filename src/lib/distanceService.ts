@@ -36,16 +36,16 @@ export async function calculateRealTimeDistance(
       }
     });
 
-    if (!error && data?.success && data?.distance_km > 0) {
-      console.log('✅ Real-time distance calculated:', data.distance_km, 'km');
+    if (!error && data?.success && typeof data?.distance_km === 'number' && data.distance_km >= 0) {
+      console.log('✅ Real-time distance calculated:', data.distance_km, 'km, source:', data.source);
       return {
         distance_km: data.distance_km,
-        eta_mins: data.eta_mins || Math.ceil(data.distance_km * 2),
+        eta_mins: data.eta_mins || Math.max(1, Math.ceil(data.distance_km * 2)), // Minimum 1 min ETA
         source: 'realtime'
       };
     }
 
-    console.warn('⚠️ Edge function failed, using Haversine fallback:', error);
+    console.warn('⚠️ Edge function failed or returned invalid data, using Haversine fallback:', { error, data });
   } catch (err) {
     console.warn('⚠️ Error calling distance service:', err);
   }

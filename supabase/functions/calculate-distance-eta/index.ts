@@ -61,11 +61,23 @@ serve(async (req) => {
         if (mapboxData.routes && mapboxData.routes.length > 0) {
           const route = mapboxData.routes[0]
           distance_km = (route.distance / 1000) // Convert meters to km
-          // Use our custom ETA: 2 minutes per km (ignoring Mapbox duration)
-          eta_mins = Math.ceil(distance_km * 2)
+          
+          // Handle very short distances - set minimum practical values
+          if (distance_km < 0.01) { // Less than 10 meters
+            distance_km = 0.01 // Set minimum 10m for practical purposes
+            eta_mins = 1 // Minimum 1 minute
+          } else {
+            eta_mins = Math.max(1, Math.ceil(distance_km * 2)) // Minimum 1 min, 2 min per km
+          }
+          
           source = 'mapbox'
           
-          console.log('Mapbox route found:', { distance_km, eta_mins })
+          console.log('Mapbox route found:', { 
+            original_distance: route.distance, 
+            distance_km, 
+            eta_mins, 
+            very_close: route.distance < 10 
+          })
         } else {
           throw new Error('No routes found from Mapbox')
         }
@@ -73,14 +85,30 @@ serve(async (req) => {
         console.log('Mapbox failed, using fallback:', mapboxError.message)
         // Fall back to Haversine calculation
         distance_km = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng)
-        eta_mins = Math.ceil(distance_km * 2) // 2 minutes per km
+        
+        // Handle very short distances for fallback too
+        if (distance_km < 0.01) {
+          distance_km = 0.01
+          eta_mins = 1
+        } else {
+          eta_mins = Math.max(1, Math.ceil(distance_km * 2)) // Minimum 1 min, 2 min per km
+        }
+        
         source = 'fallback'
       }
     } else {
       console.log('No Mapbox token, using Haversine fallback')
       // Use Haversine distance if no Mapbox token
       distance_km = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng)
-      eta_mins = Math.ceil(distance_km * 2) // 2 minutes per km
+      
+      // Handle very short distances for Haversine too
+      if (distance_km < 0.01) {
+        distance_km = 0.01
+        eta_mins = 1
+      } else {
+        eta_mins = Math.max(1, Math.ceil(distance_km * 2)) // Minimum 1 min, 2 min per km
+      }
+      
       source = 'fallback'
     }
 
