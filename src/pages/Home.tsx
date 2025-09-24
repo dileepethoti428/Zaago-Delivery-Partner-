@@ -1286,43 +1286,57 @@ const Home = () => {
                             );
                           })()}
 
-                        <div className="space-y-2 mb-4">
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <MapPin className="w-4 h-4 mr-2 text-primary" />
-                            {address}
-                          </div>
-                          
-                           <div className="grid grid-cols-4 gap-2 text-sm">
-                            <div className="flex items-center text-muted-foreground">
-                              <Navigation className="w-4 h-4 mr-1 text-primary" />
-                              {order.distance_km !== undefined ? `${order.distance_km.toFixed(1)} km` : 'Calculating...'}
-                            </div>
-                            <div className="flex items-center text-muted-foreground">
-                              <Clock className="w-4 h-4 mr-1 text-primary" />
-                              {order.delivery_time || 'Calculating...'}
-                            </div>
-                            <div className="flex items-center text-muted-foreground">
-                              <Package className="w-4 h-4 mr-1 text-primary" />
-                              {order.products_count} products
-                            </div>
-                            <div className="flex items-center text-primary font-semibold">
-                              <IndianRupee className="w-4 h-4 mr-1" />
-                              ₹{order.total}
-                            </div>
-                          </div>
-                          
-                           <div className="flex items-center justify-between text-sm mt-2">
-                              <div className="flex items-center text-green-600 font-medium">
-                                <IndianRupee className="w-4 h-4 mr-1" />
-                                Agent payout: ₹{order.agent_payout ? order.agent_payout.toFixed(0) : calculateAgentPayout(order.distance_km || 0).toFixed(0)}
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                            {/* Pickup Info */}
+                            {(order as any).pickup_location && (
+                              <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                                <h4 className="font-medium text-orange-900 mb-2 flex items-center">
+                                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                                  </svg>
+                                  Pickup From
+                                </h4>
+                                <p className="text-sm font-medium text-orange-900">{(order as any).seller_name || 'Store'}</p>
+                                <p className="text-sm text-orange-700">{(order as any).pickup_address || 'Pickup address'}</p>
+                                {(order as any).seller_phone && (
+                                  <p className="text-sm text-orange-600">📞 {(order as any).seller_phone}</p>
+                                )}
                               </div>
-                             {order.backend_calculated && (
-                               <Badge variant="secondary" className="text-xs">
-                                 Real-time distance
-                               </Badge>
-                             )}
-                           </div>
-                        </div>
+                            )}
+
+                            {/* Customer Info */}
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                                <MapPin className="w-4 h-4 mr-2 text-blue-600" />
+                                Deliver To
+                              </h4>
+                              <p className="text-sm font-medium text-gray-900">{order.customer_name}</p>
+                              <p className="text-sm text-gray-600">{order.customer_phone || 'No phone provided'}</p>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {typeof order.address === 'string' 
+                                  ? order.address 
+                                  : order.address?.full_address || 'Address not available'
+                                }
+                              </p>
+                            </div>
+
+                            {/* Order Info */}
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                                <Package className="w-4 h-4 mr-2 text-blue-600" />
+                                Order Details
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                Total Distance: {order.distance_km ? `${order.distance_km} km` : 'Unknown'}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                Items: {Array.isArray(order.items) ? order.items.length : 0}
+                              </p>
+                              <p className="text-sm font-medium text-green-600">
+                                Payout: ₹{order.agent_payout || '0'}
+                              </p>
+                            </div>
+                          </div>
 
                         {/* Action Buttons */}
                         {order.status === 'assigned' ? (

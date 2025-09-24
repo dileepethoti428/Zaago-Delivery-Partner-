@@ -20,19 +20,23 @@ import {
 
 interface TrackingMapProps {
   orderData: {
-    order_id: string;
+    id: string;
     customer_name: string;
-    customer_address: string;
-    agent_location: { lat: number; lng: number };
-    customer_location: { lat: number; lng: number };
-    distance_km: number;
-    estimated_time: string;
-    delivery_status: 'Pending' | 'On the Way' | 'Arrived' | 'Delivered';
-    special_instructions?: string;
-    priority_level: 'High' | 'Medium' | 'Low';
-    total_amount: number;
+    customer_phone?: string;
+    customer_location?: { lat: number; lng: number };
+    address?: any;
+    distance?: number;
+    estimated_time?: number;
+    delivery_status?: string;
+    priority?: string;
+    pickup_location?: { lat: number; lng: number };
+    pickup_address?: string;
+    pickup_status?: string;
+    seller_name?: string;
+    seller_phone?: string;
+    total?: number;
   };
-  onStatusUpdate: (status: string) => void;
+  onStatusUpdate: (newStatus: string) => void;
   mapboxToken: string;
 }
 
@@ -42,38 +46,31 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
   mapboxToken 
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const agentMarker = useRef<mapboxgl.Marker | null>(null);
-  const customerMarker = useRef<mapboxgl.Marker | null>(null);
+  const mapInstance = useRef<mapboxgl.Map | null>(null);
   
-  const [currentLocation, setCurrentLocation] = useState(orderData.agent_location);
+  const [agentLocation] = useState({
+    lat: 12.9716,
+    lng: 77.5946
+  });
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
 
-  // Initialize map
+  // Initialize map and set up markers
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken) return;
+    if (!mapContainer.current || !orderData.customer_location) return;
 
+    // Initialize map
     mapboxgl.accessToken = mapboxToken;
-
-    map.current = new mapboxgl.Map({
+    const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/navigation-night-v1', // Dark navigation style
-      center: [currentLocation.lng, currentLocation.lat],
-      zoom: 15,
-      pitch: 60,
-      bearing: 0,
+      style: 'mapbox://styles/mapbox/streets-v11',
+      center: [orderData.customer_location.lng, orderData.customer_location.lat],
+      zoom: 13
     });
 
     // Add navigation controls
-    map.current.addControl(
-      new mapboxgl.NavigationControl({
-        visualizePitch: true,
-        showCompass: true,
-      }),
-      'top-right'
-    );
-
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    
     // Add geolocate control
     const geolocate = new mapboxgl.GeolocateControl({
       positionOptions: {
@@ -82,389 +79,392 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
       trackUserLocation: true,
       showUserHeading: true
     });
-    map.current.addControl(geolocate, 'top-right');
+    map.addControl(geolocate, 'top-right');
 
-    map.current.on('load', () => {
-      if (!map.current) return;
-      
-      setIsMapLoaded(true);
+    // Create agent marker with pulsing animation
+    const agentMarker = document.createElement('div');
+    agentMarker.className = 'w-6 h-6 bg-blue-500 rounded-full animate-ping absolute';
+    agentMarker.innerHTML = `
+      <div class="w-full h-full bg-blue-600 rounded-full flex items-center justify-center">
+        <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 2L3 7v11h4v-6h6v6h4V7l-7-5z"/>
+        </svg>
+      </div>
+    `;
 
-      // Create custom agent marker
-      const agentEl = document.createElement('div');
-      agentEl.className = 'agent-marker';
-      agentEl.innerHTML = `
-        <div class="w-12 h-12 bg-gradient-to-r from-cyan-400 to-cyan-600 rounded-full flex items-center justify-center shadow-lg animate-pulse border-2 border-white">
-          <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z"/>
-          </svg>
+    const agentMapboxMarker = new mapboxgl.Marker({ element: agentMarker })
+      .setLngLat([agentLocation.lng, agentLocation.lat])
+      .setPopup(new mapboxgl.Popup().setHTML(`
+        <div class="text-sm">
+          <h3 class="font-bold text-gray-900">Delivery Agent</h3>
+          <p class="text-gray-600">Your agent is on the way</p>
         </div>
-        <div class="absolute top-0 left-0 w-full h-full bg-cyan-400 rounded-full opacity-30 animate-ping"></div>
+      `))
+      .addTo(map);
+
+    // Create pickup marker if pickup location exists
+    if (orderData.pickup_location) {
+      const pickupMarker = document.createElement('div');
+      pickupMarker.className = 'w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center';
+      pickupMarker.innerHTML = `
+        <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+        </svg>
       `;
 
-      agentMarker.current = new mapboxgl.Marker({ element: agentEl })
-        .setLngLat([currentLocation.lng, currentLocation.lat])
-        .setPopup(
-          new mapboxgl.Popup({ offset: 25 })
-            .setHTML(`
-              <div class="p-2 bg-gray-900 text-white rounded">
-                <div class="font-semibold">Your Location</div>
-                <div class="text-sm text-gray-300">Agent Position</div>
-              </div>
-            `)
-        )
-        .addTo(map.current);
+      new mapboxgl.Marker({ element: pickupMarker })
+        .setLngLat([orderData.pickup_location.lng, orderData.pickup_location.lat])
+        .setPopup(new mapboxgl.Popup().setHTML(`
+          <div class="text-sm">
+            <h3 class="font-bold text-gray-900">Pickup Location</h3>
+            <p class="text-gray-600">${orderData.seller_name || 'Store'}</p>
+            <p class="text-gray-600">${orderData.pickup_address || ''}</p>
+            ${orderData.seller_phone ? `<p class="text-gray-600">${orderData.seller_phone}</p>` : ''}
+          </div>
+        `))
+        .addTo(map);
+    }
 
-      // Create custom customer marker
-      const customerEl = document.createElement('div');
-      customerEl.className = 'customer-marker';
-      customerEl.innerHTML = `
-        <div class="w-10 h-10 bg-gradient-to-r from-red-400 to-red-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-          <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-          </svg>
+    // Create customer marker
+    const customerMarker = document.createElement('div');
+    customerMarker.className = 'w-6 h-6 bg-red-500 rounded-full flex items-center justify-center';
+    customerMarker.innerHTML = `
+      <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/>
+      </svg>
+    `;
+
+    new mapboxgl.Marker({ element: customerMarker })
+      .setLngLat([orderData.customer_location.lng, orderData.customer_location.lat])
+      .setPopup(new mapboxgl.Popup().setHTML(`
+        <div class="text-sm">
+          <h3 class="font-bold text-gray-900">${orderData.customer_name}</h3>
+          <p class="text-gray-600">Delivery destination</p>
+          ${orderData.customer_phone ? `<p class="text-gray-600">${orderData.customer_phone}</p>` : ''}
         </div>
-      `;
+      `))
+      .addTo(map);
 
-      customerMarker.current = new mapboxgl.Marker({ element: customerEl })
-        .setLngLat([orderData.customer_location.lng, orderData.customer_location.lat])
-        .setPopup(
-          new mapboxgl.Popup({ offset: 25 })
-            .setHTML(`
-              <div class="p-3 bg-gray-900 text-white rounded max-w-xs">
-                <div class="font-semibold">${orderData.customer_name}</div>
-                <div class="text-sm text-gray-300 mt-1">${orderData.customer_address}</div>
-                ${orderData.special_instructions ? `
-                  <div class="text-xs text-yellow-300 mt-2 p-2 bg-yellow-900/30 rounded">
-                    📝 ${orderData.special_instructions}
-                  </div>
-                ` : ''}
-              </div>
-            `)
-        )
-        .addTo(map.current);
+    // Set map instance
+    mapInstance.current = map;
+    setIsMapLoaded(true);
 
-      // Add route
+    // Add route and fit bounds when map loads
+    map.on('load', () => {
       addRoute();
-      
-      // Fit bounds to show both markers
       fitMapToBounds();
     });
 
     return () => {
-      map.current?.remove();
+      map.remove();
+      mapInstance.current = null;
     };
-  }, [mapboxToken]);
+  }, [orderData, mapboxToken]);
 
-  // Add route between agent and customer
-  const addRoute = async () => {
-    if (!map.current) return;
+  // Add route between agent, pickup, and customer
+  const addRoute = () => {
+    if (!mapInstance.current) return;
 
-    const start = [currentLocation.lng, currentLocation.lat];
-    const end = [orderData.customer_location.lng, orderData.customer_location.lat];
+    let routeCoords = [];
+    
+    if (orderData.pickup_location) {
+      // Two-leg route: Agent → Pickup → Customer
+      routeCoords = [
+        [agentLocation.lng, agentLocation.lat],
+        [orderData.pickup_location.lng, orderData.pickup_location.lat],
+        [orderData.customer_location!.lng, orderData.customer_location!.lat]
+      ];
+    } else {
+      // Direct route: Agent → Customer
+      routeCoords = [
+        [agentLocation.lng, agentLocation.lat],
+        [orderData.customer_location!.lng, orderData.customer_location!.lat]
+      ];
+    }
 
-    try {
-      // Simple straight line route for demo
-      const routeGeoJSON = {
-        type: 'Feature' as const,
+    // Add route line
+    mapInstance.current.addSource('route', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
         properties: {},
         geometry: {
-          type: 'LineString' as const,
-          coordinates: [start, end]
+          type: 'LineString',
+          coordinates: routeCoords
         }
-      };
-
-      // Add route source
-      if (map.current.getSource('route')) {
-        (map.current.getSource('route') as mapboxgl.GeoJSONSource).setData(routeGeoJSON);
-      } else {
-        map.current.addSource('route', {
-          type: 'geojson',
-          data: routeGeoJSON
-        });
-
-        // Add route layer with gradient effect
-        map.current.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#00FFAA',
-            'line-width': 6,
-            'line-opacity': 0.8,
-            'line-gradient': [
-              'interpolate',
-              ['linear'],
-              ['line-progress'],
-              0, '#00FFAA',
-              1, '#00FFDD'
-            ]
-          }
-        });
-
-        // Add route outline
-        map.current.addLayer({
-          id: 'route-outline',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 8,
-            'line-opacity': 0.3
-          }
-        }, 'route');
       }
-    } catch (error) {
-      console.error('Error adding route:', error);
-    }
+    });
+
+    // Add route layer with gradient effect
+    mapInstance.current.addLayer({
+      id: 'route',
+      type: 'line',
+      source: 'route',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#3B82F6',
+        'line-width': 4,
+        'line-opacity': 0.8
+      }
+    });
+
+    // Add route outline
+    mapInstance.current.addLayer({
+      id: 'route-outline',
+      type: 'line',
+      source: 'route',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#1E40AF',
+        'line-width': 6,
+        'line-opacity': 0.4
+      }
+    }, 'route');
   };
 
-  // Fit map to show both markers
+  // Fit map to show agent, pickup, and customer
   const fitMapToBounds = () => {
-    if (!map.current) return;
-    
+    if (!mapInstance.current) return;
+
     const bounds = new mapboxgl.LngLatBounds();
-    bounds.extend([currentLocation.lng, currentLocation.lat]);
-    bounds.extend([orderData.customer_location.lng, orderData.customer_location.lat]);
+    bounds.extend([agentLocation.lng, agentLocation.lat]);
     
-    map.current.fitBounds(bounds, {
-      padding: { top: 100, bottom: 300, left: 50, right: 50 },
-      maxZoom: 16
+    if (orderData.pickup_location) {
+      bounds.extend([orderData.pickup_location.lng, orderData.pickup_location.lat]);
+    }
+    
+    bounds.extend([orderData.customer_location!.lng, orderData.customer_location!.lat]);
+
+    mapInstance.current.fitBounds(bounds, {
+      padding: 60,
+      maxZoom: 14
     });
   };
 
-  // Simulate location updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Simulate movement towards customer
-      setCurrentLocation(prev => {
-        const newLat = prev.lat + (orderData.customer_location.lat - prev.lat) * 0.01;
-        const newLng = prev.lng + (orderData.customer_location.lng - prev.lng) * 0.01;
-        
-        if (agentMarker.current) {
-          agentMarker.current.setLngLat([newLng, newLat]);
-        }
-        
-        return { lat: newLat, lng: newLng };
-      });
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [orderData.customer_location]);
-
-  // Get status color
+  // Get status color for badges
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pending':
-        return 'bg-yellow-500';
-      case 'On the Way':
-        return 'bg-blue-500';
-      case 'Arrived':
-        return 'bg-orange-500';
-      case 'Delivered':
-        return 'bg-green-500';
+    switch (status?.toLowerCase()) {
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
+      case 'in_transit':
+      case 'on the way':
+        return 'bg-blue-100 text-blue-800';
+      case 'arrived':
+        return 'bg-yellow-100 text-yellow-800';
       default:
-        return 'bg-gray-500';
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  // Get priority color
+  // Return status badge CSS classes based on priority
   const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High':
-        return 'border-red-500 bg-red-500/10';
-      case 'Medium':
-        return 'border-yellow-500 bg-yellow-500/10';
-      case 'Low':
-        return 'border-green-500 bg-green-500/10';
+    switch (priority?.toLowerCase()) {
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-300';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-300';
       default:
-        return 'border-primary bg-primary/10';
+        return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 
-  // Get next action based on status
+  // Get the next action button based on delivery and pickup status
   const getNextAction = () => {
+    const hasPickup = orderData.pickup_location;
+    const pickupStatus = orderData.pickup_status || 'pending';
+    
+    if (hasPickup && pickupStatus === 'pending') {
+      return { text: 'Go to Pickup', action: 'going_to_pickup' };
+    }
+    
+    if (hasPickup && pickupStatus === 'going_to_pickup') {
+      return { text: 'Mark Picked Up', action: 'picked_up' };
+    }
+    
     switch (orderData.delivery_status) {
-      case 'Pending':
-        return { label: 'Start Delivery', status: 'On the Way', icon: Route };
-      case 'On the Way':
-        return { label: 'Mark Arrived', status: 'Arrived', icon: MapPin };
-      case 'Arrived':
-        return { label: 'Complete Delivery', status: 'Delivered', icon: CheckCircle };
+      case 'pending':
+      case 'assigned':
+        return hasPickup && pickupStatus === 'picked_up' 
+          ? { text: 'Start Delivery', action: 'in_transit' }
+          : { text: 'Start Delivery', action: 'in_transit' };
+      case 'in_transit':
+        return { text: 'Mark Arrived', action: 'arrived' };
+      case 'arrived':
+        return { text: 'Complete Delivery', action: 'delivered' };
       default:
         return null;
     }
   };
 
-  const nextAction = getNextAction();
-
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-screen bg-gray-900">
       {/* Map Container */}
       <div ref={mapContainer} className="absolute inset-0" />
-
+      
       {/* Loading Overlay */}
       {!isMapLoaded && (
-        <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center">
+        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-50">
           <div className="text-center text-white">
-            <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-lg font-semibold">Loading Map...</p>
-            <p className="text-sm text-gray-300">Initializing tracking</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-2 border-white border-t-transparent mx-auto mb-4"></div>
+            <p>Loading map...</p>
           </div>
         </div>
       )}
 
-      {/* Floating Info Panel */}
-      {showInfoPanel && isMapLoaded && (
-        <Card className={`absolute top-4 left-4 right-4 bg-gray-900/95 backdrop-blur-lg border-2 ${getPriorityColor(orderData.priority_level)} shadow-2xl animate-slide-up z-10`}>
+      {/* Info Panel */}
+      {showInfoPanel && (
+        <Card className="absolute top-4 left-4 right-4 z-40 bg-white/95 backdrop-blur-sm border border-gray-200 shadow-xl">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2">
-                  <Package className="w-5 h-5 text-cyan-400" />
-                  <div>
-                    <p className="font-bold text-white">#{orderData.order_id}</p>
-                    <p className="text-sm text-gray-300">{orderData.customer_name}</p>
-                  </div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Delivery Tracking</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowInfoPanel(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </Button>
+            </div>
+
+            {/* Pickup Details */}
+            {orderData.pickup_location && (
+              <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium text-orange-900 flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                    </svg>
+                    Pickup Location
+                  </h4>
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    orderData.pickup_status === 'picked_up' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-orange-100 text-orange-800'
+                  }`}>
+                    {orderData.pickup_status === 'picked_up' ? 'Picked Up' : 'Pending Pickup'}
+                  </span>
                 </div>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Badge className={`${getStatusColor(orderData.delivery_status)} text-white animate-pulse`}>
-                  {orderData.delivery_status}
-                </Badge>
-                <Badge className="bg-red-500 text-white">
-                  {orderData.priority_level}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-3">
-              <div className="flex items-center space-x-2 text-gray-300">
-                <Navigation className="w-4 h-4 text-cyan-400" />
-                <span className="text-sm">{orderData.distance_km} km</span>
-              </div>
-              <div className="flex items-center space-x-2 text-gray-300">
-                <Clock className="w-4 h-4 text-cyan-400" />
-                <span className="text-sm">{orderData.estimated_time}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 text-gray-300 mb-3">
-              <MapPin className="w-4 h-4 text-red-400" />
-              <span className="text-sm">{orderData.customer_address}</span>
-            </div>
-
-            {orderData.special_instructions && (
-              <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-3 mb-3">
-                <div className="flex items-start space-x-2">
-                  <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-yellow-400">Special Instructions</p>
-                    <p className="text-sm text-gray-300 mt-1">{orderData.special_instructions}</p>
-                  </div>
-                </div>
+                <p className="text-sm text-orange-800">{orderData.seller_name || 'Store'}</p>
+                <p className="text-sm text-orange-600">{orderData.pickup_address}</p>
+                {orderData.seller_phone && (
+                  <button 
+                    onClick={() => window.open(`tel:${orderData.seller_phone}`)}
+                    className="mt-2 text-sm text-orange-700 hover:text-orange-900 flex items-center"
+                  >
+                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
+                    </svg>
+                    Call Store: {orderData.seller_phone}
+                  </button>
+                )}
               </div>
             )}
 
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="icon"
-                className="border-gray-600 text-gray-300 hover:bg-gray-800"
-              >
-                <Phone className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="border-gray-600 text-gray-300 hover:bg-gray-800"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowInfoPanel(false)}
-                className="border-gray-600 text-gray-300 hover:bg-gray-800 ml-auto"
-              >
-                Hide
-              </Button>
+            {/* Order Details */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-gray-900">{orderData.customer_name}</h3>
+                <p className="text-sm text-gray-600">{orderData.address || 'Delivery address not available'}</p>
+                {orderData.customer_phone && (
+                  <p className="text-sm text-gray-500">{orderData.customer_phone}</p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">
+                  {orderData.distance ? `${orderData.distance} km` : 'Distance unknown'}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {orderData.estimated_time ? `${orderData.estimated_time} min` : 'ETA unknown'}
+                </p>
+              </div>
+            </div>
+
+            {/* Status and Action Buttons */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Badge className={getStatusColor(orderData.delivery_status || 'pending')}>
+                  {orderData.delivery_status || 'Pending'}
+                </Badge>
+                {orderData.priority && (
+                  <Badge variant="outline" className={getPriorityColor(orderData.priority)}>
+                    {orderData.priority} Priority
+                  </Badge>
+                )}
+              </div>
+
+              {/* Contact Buttons */}
+              <div className="flex space-x-2">
+                {orderData.customer_phone && (
+                  <button
+                    onClick={() => window.open(`tel:${orderData.customer_phone}`)}
+                    className="flex-1 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg text-sm"
+                  >
+                    <Phone className="w-4 h-4 mr-2" />
+                    Call
+                  </button>
+                )}
+                <button
+                  onClick={() => window.open(`https://wa.me/?text=Order%20${orderData.id}%20delivery%20update`)}
+                  className="flex-1 flex items-center justify-center bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg text-sm"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  WhatsApp
+                </button>
+              </div>
+
+              {/* Action Button */}
+              {(() => {
+                const nextAction = getNextAction();
+                return nextAction ? (
+                  <Button
+                    onClick={() => onStatusUpdate(nextAction.action)}
+                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    {nextAction.text}
+                  </Button>
+                ) : null;
+              })()}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Show Info Panel Button (when hidden) */}
-      {!showInfoPanel && isMapLoaded && (
-        <Button
-          onClick={() => setShowInfoPanel(true)}
-          className="absolute top-4 left-4 bg-gray-900/95 backdrop-blur-lg border border-gray-600 text-white hover:bg-gray-800 z-10"
-        >
-          <Package className="w-4 h-4 mr-2" />
-          Show Details
-        </Button>
-      )}
-
-      {/* Action Buttons */}
-      {nextAction && isMapLoaded && (
-        <div className="absolute bottom-6 left-4 right-4 z-10">
-          <div className="flex flex-col space-y-3">
-            {/* Main Action Button */}
-            <Button
-              onClick={() => onStatusUpdate(nextAction.status)}
-              className="w-full h-14 bg-gradient-to-r from-cyan-400 to-cyan-600 hover:from-cyan-500 hover:to-cyan-700 text-white font-bold text-lg shadow-lg hover:shadow-cyan-500/50 transition-all duration-300 hover:scale-105"
-            >
-              <nextAction.icon className="w-6 h-6 mr-3" />
-              {nextAction.label}
-            </Button>
-
-            {/* Secondary Actions */}
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                className="flex-1 bg-gray-900/80 backdrop-blur-lg border-gray-600 text-gray-300 hover:bg-gray-800"
-                onClick={fitMapToBounds}
-              >
-                <Navigation className="w-4 h-4 mr-2" />
-                Center Map
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 bg-gray-900/80 backdrop-blur-lg border-gray-600 text-gray-300 hover:bg-gray-800"
-              >
-                <Timer className="w-4 h-4 mr-2" />
-                ₹{orderData.total_amount}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delivery Complete Message */}
-      {orderData.delivery_status === 'Delivered' && isMapLoaded && (
-        <div className="absolute bottom-6 left-4 right-4 z-10">
-          <Card className="bg-green-900/95 backdrop-blur-lg border-2 border-green-500 shadow-2xl">
-            <CardContent className="p-6 text-center">
-              <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4 animate-pulse" />
-              <h3 className="text-xl font-bold text-white mb-2">Delivery Completed!</h3>
-              <p className="text-green-300 mb-4">Order #{orderData.order_id} has been delivered successfully</p>
-              <Button
-                className="bg-green-500 hover:bg-green-600 text-white"
-                onClick={() => window.history.back()}
-              >
-                Return to Dashboard
-              </Button>
-            </CardContent>
+      {/* Delivery Completed Message */}
+      {orderData.delivery_status === 'delivered' && (
+        <div className="absolute inset-0 bg-green-900/80 flex items-center justify-center z-50">
+          <Card className="bg-white p-8 text-center max-w-md mx-4">
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Delivery Completed!</h2>
+            <p className="text-gray-600 mb-4">
+              Order has been successfully delivered to {orderData.customer_name}
+            </p>
+            <p className="text-sm text-gray-500">
+              Total Amount: ₹{orderData.total || 0}
+            </p>
           </Card>
         </div>
+      )}
+
+      {/* Toggle Info Panel Button */}
+      {!showInfoPanel && (
+        <Button
+          onClick={() => setShowInfoPanel(true)}
+          className="absolute top-4 left-4 z-40 bg-white/90 text-gray-900 hover:bg-white"
+          size="sm"
+        >
+          <Route className="w-4 h-4 mr-2" />
+          Show Details
+        </Button>
       )}
     </div>
   );

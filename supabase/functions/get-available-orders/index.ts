@@ -251,21 +251,73 @@ serve(async (req) => {
         // Check if order has address with coordinates
         if (order.address && order.address.coordinates && order.address.coordinates.lat && order.address.coordinates.lng) {
           try {
-            const distance = await calculateDistance(
-              { lat: agentLocation.latitude, lng: agentLocation.longitude },
-              { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-            );
+            // Get pickup location from seller
+            let pickupLocation = null;
+            let pickupAddress = null;
+            let sellerName = null;
+            let sellerPhone = null;
             
-            console.log(`Order ${order.id} distance: ${distance.toFixed(2)}km`);
+            if (order.items && order.items.length > 0) {
+              const sellerId = order.items[0].seller_id;
+              if (sellerId) {
+                const { data: seller } = await supabase
+                  .from('sellers')
+                  .select('name, phone, latitude, longitude, address, business_name')
+                  .eq('user_id', sellerId)
+                  .single();
+                  
+                if (seller && seller.latitude && seller.longitude) {
+                  pickupLocation = {
+                    lat: seller.latitude,
+                    lng: seller.longitude
+                  };
+                  pickupAddress = seller.address || `${seller.business_name || seller.name}`;
+                  sellerName = seller.business_name || seller.name;
+                  sellerPhone = seller.phone;
+                }
+              }
+            }
             
-            // Only include orders within 15km
-            if (distance <= 15) {
-              const agentPayout = calculateAgentPayout(distance);
+            // Calculate two-leg distance: Agent → Pickup → Customer
+            let totalDistance = 0;
+            
+            if (pickupLocation) {
+              // Leg 1: Agent to pickup location
+              const distanceToPickup = await calculateDistance(
+                { lat: agentLocation.latitude, lng: agentLocation.longitude },
+                { lat: pickupLocation.lat, lng: pickupLocation.lng }
+              );
+              
+              // Leg 2: Pickup to customer location
+              const distanceToCustomer = await calculateDistance(
+                { lat: pickupLocation.lat, lng: pickupLocation.lng },
+                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+              );
+              
+              totalDistance = distanceToPickup + distanceToCustomer;
+            } else {
+              // Fallback: Direct distance to customer
+              totalDistance = await calculateDistance(
+                { lat: agentLocation.latitude, lng: agentLocation.longitude },
+                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+              );
+            }
+            
+            console.log(`Order ${order.id} total distance: ${totalDistance.toFixed(2)}km`);
+            
+            // Only include orders within 15km total radius
+            if (totalDistance <= 15) {
+              const agentPayout = calculateAgentPayout(totalDistance);
               nearbyOrders.push({
                 ...order,
-                distance_km: Math.round(distance * 10) / 10, // Round to 1 decimal place
+                distance_km: Math.round(totalDistance * 10) / 10, // Round to 1 decimal place
                 agent_payout: agentPayout,
-                estimated_time_minutes: Math.ceil(distance * 2) // 2 minutes per km
+                estimated_time_minutes: Math.ceil(totalDistance * 2), // 2 minutes per km
+                pickup_location: pickupLocation,
+                pickup_address: pickupAddress,
+                pickup_status: 'pending',
+                seller_name: sellerName,
+                seller_phone: sellerPhone
               });
             }
           } catch (distanceError) {

@@ -266,7 +266,18 @@ const Tracking = () => {
       {/* Full-screen Map */}
       <div className="flex-1 relative">
         <TrackingMap
-          orderData={orderData}
+          orderData={{
+            id: orderData.order_id,
+            customer_name: orderData.customer_name,
+            customer_phone: orderData.customer_phone,
+            customer_location: orderData.customer_location,
+            address: orderData.customer_address,
+            distance: orderData.distance_km,
+            estimated_time: orderData.estimated_time,
+            delivery_status: orderData.delivery_status,
+            priority: orderData.priority_level,
+            total: orderData.total_amount
+          }}
           onStatusUpdate={handleStatusUpdate}
           mapboxToken={mapboxToken}
         />
