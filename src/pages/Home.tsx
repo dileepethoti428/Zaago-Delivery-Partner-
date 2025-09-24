@@ -712,16 +712,6 @@ const Home = () => {
               <MapPin className="w-3 h-3 mr-1 text-red-500" />
               <span className="truncate max-w-[280px]">{currentLocation}</span>
             </div>
-            {location.latitude && location.longitude && (
-              <div className="text-xs text-gray-400 mt-1">
-                <span className="font-mono">
-                  {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-                </span>
-                {location.accuracy && (
-                  <span className="ml-2">±{Math.round(location.accuracy)}m</span>
-                )}
-              </div>
-            )}
           </div>
           
           <div className="flex items-center space-x-2">
