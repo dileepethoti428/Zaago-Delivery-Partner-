@@ -124,6 +124,51 @@ const Home = () => {
   const [isLoadingDistance, setIsLoadingDistance] = useState<boolean>(false);
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
+  const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
+
+  // Check if a new order should trigger notification sound
+  const shouldPlayNotificationForOrder = (orderData: any): boolean => {
+    // Only play for orders that are available to accept (packed status, no agent assigned)
+    if (orderData.status !== 'packed' || orderData.agent_id) {
+      return false;
+    }
+    
+    // Don't play duplicate notifications for the same order
+    if (recentNotifications.has(orderData.id)) {
+      return false;
+    }
+    
+    return true;
+  };
+
+  // Handle new order notification with debouncing
+  const handleNewOrderNotification = (orderData: any) => {
+    if (!shouldPlayNotificationForOrder(orderData)) {
+      return;
+    }
+
+    // Add to recent notifications to prevent duplicates
+    setRecentNotifications(prev => new Set(prev).add(orderData.id));
+    
+    // Remove from recent notifications after 30 seconds
+    setTimeout(() => {
+      setRecentNotifications(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderData.id);
+        return newSet;
+      });
+    }, 30000);
+
+    // Play the ringtone
+    playNotificationSound();
+    
+    // Show toast notification
+    toast({
+      title: "🔔 New Order Available!",
+      description: `New delivery order from ${orderData.customer_name || 'customer'}`,
+      duration: 4000,
+    });
+  };
 
   // Fetch agent name
   const fetchAgentName = async () => {
@@ -671,6 +716,12 @@ const Home = () => {
         },
         (payload) => {
           console.log('🆕 New order created:', payload);
+          
+          // Handle notification for new available orders
+          if (payload.new) {
+            handleNewOrderNotification(payload.new);
+          }
+          
           fetchOrdersForRefresh();
         }
       )
