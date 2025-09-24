@@ -115,7 +115,8 @@ const DeliveryDetails = () => {
       console.log('🚚 Using pickup location:', pickupLocation, 'to customer:', customerCoords);
       const distanceResult = await calculateRealTimeDistance(pickupLocation, customerCoords, order.id);
       const dist = distanceResult.distance_km;
-      const calculatedPayout = dist <= 1 ? 20 : 20 + (dist - 1) * 15;
+      // Use edge function for accurate real-time pricing
+      const calculatedPayout = dist <= 3 ? 40 : 40 + (dist - 3) * 9;
       
       // Immediate state updates for fast UI response
       setDistance(dist);
@@ -538,7 +539,7 @@ const DeliveryDetails = () => {
 
             <div className="p-2 bg-green-50 rounded-lg border border-green-200">
               <p className="text-xs text-green-700 flex items-center justify-center">
-                <span>⚡ Fast updates every 10 seconds • Fair pricing: ₹20 base + ₹15/km beyond 1km</span>
+                <span>⚡ Fast updates every 10 seconds • New pricing: ₹40 base (3km) + ₹9/km • Peak hours +15% • Platform fee ₹13</span>
               </p>
             </div>
           </div>

@@ -47,14 +47,63 @@ async function calculateDistance(origin: {lat: number, lng: number}, destination
   }
 }
 
-// Calculate agent payout based on distance
-function calculateAgentPayout(distance: number): number {
-  const basePay = 20; // Base pay for first 1 km
-  const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
-  const perKmRate = 15; // Rate per km for additional distance
-  const distancePay = additionalDistance * perKmRate;
+// Check if current time is peak hours (lunch: 12-2 PM, dinner: 7-10 PM)
+function isPeakHour(): boolean {
+  const currentHour = new Date().getHours();
+  const isWeekend = [0, 6].includes(new Date().getDay()); // Sunday = 0, Saturday = 6
   
-  return Math.round((basePay + distancePay) * 100) / 100; // Round to 2 decimal places
+  // Peak hours: lunch (12-14) or dinner (19-22) or weekends
+  const isLunchRush = currentHour >= 12 && currentHour < 14;
+  const isDinnerRush = currentHour >= 19 && currentHour < 22;
+  
+  return isLunchRush || isDinnerRush || isWeekend;
+}
+
+// Calculate total delivery pricing with platform fees and surge
+function calculateDeliveryPricing(distance: number): {
+  baseFare: number;
+  distanceFare: number;
+  subtotal: number;
+  surgeAmount: number;
+  platformFee: number;
+  totalCustomerCharge: number;
+  agentPayout: number;
+} {
+  // Base fare for first 3 km: ₹30-₹50 (using ₹40 as middle ground)
+  const baseFare = 40;
+  
+  // Additional distance beyond 3 km
+  const additionalDistance = Math.max(0, distance - 3);
+  
+  // Per km rate for additional distance: ₹8-₹10 (using ₹9)
+  const perKmRate = 9;
+  const distanceFare = additionalDistance * perKmRate;
+  
+  // Subtotal before surge and platform fee
+  const subtotal = baseFare + distanceFare;
+  
+  // Peak hour surge: 10%-20% (using 15% as middle ground)
+  const surgeMultiplier = isPeakHour() ? 0.15 : 0;
+  const surgeAmount = subtotal * surgeMultiplier;
+  
+  // Platform fee: ₹12-₹15 (using ₹13)
+  const platformFee = 13;
+  
+  // Total customer charge
+  const totalCustomerCharge = subtotal + surgeAmount + platformFee;
+  
+  // Agent payout (total - platform fee, includes surge benefit)
+  const agentPayout = totalCustomerCharge - platformFee;
+  
+  return {
+    baseFare: Math.round(baseFare * 100) / 100,
+    distanceFare: Math.round(distanceFare * 100) / 100,
+    subtotal: Math.round(subtotal * 100) / 100,
+    surgeAmount: Math.round(surgeAmount * 100) / 100,
+    platformFee: Math.round(platformFee * 100) / 100,
+    totalCustomerCharge: Math.round(totalCustomerCharge * 100) / 100,
+    agentPayout: Math.round(agentPayout * 100) / 100
+  };
 }
 
 serve(async (req) => {
@@ -127,21 +176,29 @@ serve(async (req) => {
       distance_km = order.distance_km || 2.5;
     }
 
-    // Calculate pricing
-    const agentPayout = calculateAgentPayout(distance_km);
+    // Calculate pricing with new structure
+    const pricing = calculateDeliveryPricing(distance_km);
     const estimatedTime = Math.ceil(distance_km * 2); // 2 minutes per km
+    const isPeak = isPeakHour();
 
     const result = {
       success: true,
       order_id: order_id,
       distance_km: Math.round(distance_km * 10) / 10, // Round to 1 decimal
-      agent_payout: agentPayout,
+      agent_payout: pricing.agentPayout,
+      customer_charge: pricing.totalCustomerCharge,
       estimated_time_minutes: estimatedTime,
-      breakdown: {
-        base_pay: 20,
-        additional_distance: Math.max(0, distance_km - 1),
-        per_km_rate: 15,
-        distance_pay: Math.max(0, (distance_km - 1) * 15)
+      is_peak_hour: isPeak,
+      pricing_breakdown: {
+        base_fare: pricing.baseFare,
+        distance_fare: pricing.distanceFare,
+        subtotal: pricing.subtotal,
+        surge_amount: pricing.surgeAmount,
+        platform_fee: pricing.platformFee,
+        total_customer_charge: pricing.totalCustomerCharge,
+        agent_payout: pricing.agentPayout,
+        additional_distance: Math.max(0, distance_km - 3),
+        per_km_rate: 9,
       }
     };
 

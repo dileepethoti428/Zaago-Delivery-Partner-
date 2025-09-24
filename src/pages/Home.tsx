@@ -215,14 +215,27 @@ const Home = () => {
     return updatedOrders;
   };
 
-  // Calculate agent payout based on delivery distance (shop to customer)
+  // Calculate agent payout based on delivery distance (shop to customer) - New pricing structure
   const calculateAgentPayout = (distance: number) => {
-    const basePay = 20;
-    const additionalDistance = Math.max(0, distance - 1); // Free first 1km
-    const perKmRate = 15;
-    const distancePay = additionalDistance * perKmRate;
+    const basePay = 40; // Base pay for first 3 km  
+    const additionalDistance = Math.max(0, distance - 3); // Distance beyond 3 km
+    const perKmRate = 9; // Rate per km for additional distance
+    const subtotal = basePay + (additionalDistance * perKmRate);
     
-    return basePay + distancePay;
+    // Check for peak hours (basic approximation for frontend)
+    const currentHour = new Date().getHours();
+    const isWeekend = [0, 6].includes(new Date().getDay());
+    const isPeak = (currentHour >= 12 && currentHour < 14) || (currentHour >= 19 && currentHour < 22) || isWeekend;
+    
+    // Apply surge if peak hours
+    const surgeAmount = isPeak ? subtotal * 0.15 : 0;
+    const totalWithSurge = subtotal + surgeAmount;
+    
+    // Agent gets total minus platform fee (₹13)
+    const platformFee = 13;
+    const agentPayout = Math.max(0, totalWithSurge - platformFee);
+    
+    return Math.round(agentPayout * 100) / 100; // Round to 2 decimal places
   };
 
   // Transform and process order data

@@ -214,14 +214,28 @@ const History = () => {
     };
   }, []);
 
-  // Calculate agent payout (base 20 + 15 per km beyond 1km)
+  // Calculate agent payout (base 40 for first 3km + 9 per km beyond 3km, minus platform fee)
   const calculateAgentPayout = (distance: number = 1, products: number = 1) => {
-    const basePay = 20; // Base pay for first 1 km
-    const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
-    const perKmRate = 15; // Rate per km for fair pricing
+    const basePay = 40; // Base pay for first 3 km
+    const additionalDistance = Math.max(0, distance - 3); // Distance beyond 3 km
+    const perKmRate = 9; // Rate per km for new pricing
     const distancePay = additionalDistance * perKmRate;
+    const subtotal = basePay + distancePay;
     
-    return basePay + distancePay;
+    // Apply basic peak hour check (approximation for frontend)
+    const currentHour = new Date().getHours();
+    const isWeekend = [0, 6].includes(new Date().getDay());
+    const isPeak = (currentHour >= 12 && currentHour < 14) || (currentHour >= 19 && currentHour < 22) || isWeekend;
+    
+    // Apply surge if peak hours
+    const surgeAmount = isPeak ? subtotal * 0.15 : 0;
+    const totalWithSurge = subtotal + surgeAmount;
+    
+    // Agent gets total minus platform fee (₹13)
+    const platformFee = 13;
+    const agentPayout = Math.max(0, totalWithSurge - platformFee);
+    
+    return Math.round(agentPayout * 100) / 100; // Round to 2 decimal places
   };
 
   // Loading skeleton

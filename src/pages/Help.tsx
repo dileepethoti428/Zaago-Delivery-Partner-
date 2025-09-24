@@ -74,7 +74,7 @@ const Help = () => {
         },
         {
           question: "Understanding delivery fees and tips",
-          answer: "Base delivery fee varies by distance. You earn 80% of the delivery fee plus 100% of customer tips. Surge pricing applies during peak hours and bad weather conditions."
+          answer: "New pricing structure: Base delivery fee ₹40 (covers first 3km) + ₹9 per additional km. You earn the total customer charge minus ₹13 platform fee. Peak hour surge (15% extra) during lunch (12-2 PM), dinner (7-10 PM), and weekends. Plus 100% of customer tips."
         },
         {
           question: "Tax information for agents",
