@@ -37,6 +37,21 @@ import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
 import DeliveryTimer from "@/components/DeliveryTimer";
 
+// Get greeting based on current time
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good Morning";
+  if (hour < 17) return "Good Afternoon";
+  return "Good Evening";
+};
+
+// Capitalize first letter of each word
+const capitalizeWords = (str: string) => {
+  return str.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 interface Order {
   id: string;
   customer_name: string;
@@ -101,21 +116,6 @@ const Home = () => {
   const [rejectingOrders, setRejectingOrders] = useState<Record<string, boolean>>({});
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("nearest");
-
-  // Get greeting based on current time
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good Morning";
-    if (hour < 17) return "Good Afternoon";
-    return "Good Evening";
-  };
-
-  // Capitalize first letter of each word
-  const capitalizeWords = (str: string) => {
-    return str.split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
-  };
 
   // Fetch agent name
   const fetchAgentName = async () => {
