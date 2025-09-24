@@ -16,6 +16,7 @@ interface Order {
   customer_name: string;
   customer_phone: string;
   address: any;
+  original_address?: any; // Keep original address object for coordinate extraction
   items: any[];
   total: number;
   payment_status: string;
@@ -100,8 +101,8 @@ const DeliveryDetails = () => {
       return;
     }
     
-    // Extract customer coordinates
-    const customerCoords = extractCoordinatesFromAddress(order.address);
+    // Extract customer coordinates from original address object if available
+    const customerCoords = extractCoordinatesFromAddress(order.original_address || order.address);
     if (!customerCoords) {
       console.warn('No customer coordinates available');
       setDistance(2.5); // fallback

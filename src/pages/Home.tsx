@@ -60,6 +60,7 @@ interface Order {
   customer_name: string;
   customer_phone: string;
   address: string; // Enforced as string to prevent React child errors
+  original_address?: any; // Keep original address object for coordinate extraction
   items: any[];
   total: number;
   status: string;
@@ -159,8 +160,8 @@ const Home = () => {
           const pickupCoords = order.pickup_location ? 
             { lat: order.pickup_location.lat, lng: order.pickup_location.lng } : null;
           
-          // Extract customer delivery coordinates
-          const customerCoords = extractCoordinatesFromAddress(order.address);
+          // Extract customer delivery coordinates from original address object (before normalization)
+          const customerCoords = extractCoordinatesFromAddress(order.original_address || order.address);
           
           if (!pickupCoords) {
             console.warn(`❌ Missing pickup coordinates for order ${order.id}:`, {
@@ -226,11 +227,15 @@ const Home = () => {
 
   // Transform and process order data
   const transformOrder = async (order: any, isAssigned: boolean = false): Promise<Order> => {
-    const normalizedAddr = normalizeAddress(order.address);
+    // Keep original address object for coordinate extraction
+    const originalAddress = order.address;
+    const normalizedAddr = normalizeAddress(originalAddress);
     
     if (typeof normalizedAddr !== 'string') {
       console.error('❌ CRITICAL: Normalized address is not a string!', normalizedAddr);
     }
+    
+    console.log('🔍 Transform order - Original address:', originalAddress, 'Normalized:', normalizedAddr);
 
     let pickupLocation = order.pickup_location;
     let pickupAddress = order.pickup_address;
@@ -265,6 +270,7 @@ const Home = () => {
       customer_name: order.customer_name || '',
       customer_phone: order.customer_phone || '',
       address: typeof normalizedAddr === 'string' ? normalizedAddr : 'Address processing error',
+      original_address: originalAddress, // Keep original address for coordinate extraction
       items: Array.isArray(order.items) ? order.items : [],
       total: order.total || 0,
       status: order.status,

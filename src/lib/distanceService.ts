@@ -83,20 +83,37 @@ export function getAgentLocationFromStorage(): { lat: number; lng: number } | nu
 }
 
 export function extractCoordinatesFromAddress(address: any): { lat: number; lng: number } | null {
-  if (!address) return null;
+  console.log('🔍 Extracting coordinates from address:', address, 'Type:', typeof address);
+  
+  if (!address) {
+    console.warn('❌ Address is null or undefined');
+    return null;
+  }
+  
+  // If address is a string, we can't extract coordinates from it
+  if (typeof address === 'string') {
+    console.warn('❌ Address is a string, cannot extract coordinates:', address);
+    return null;
+  }
   
   // Try different coordinate formats
-  if (address.coordinates && address.coordinates.lat && address.coordinates.lng) {
-    return { lat: address.coordinates.lat, lng: address.coordinates.lng };
+  if (address.coordinates && typeof address.coordinates === 'object') {
+    if (address.coordinates.lat && address.coordinates.lng) {
+      console.log('✅ Found coordinates in address.coordinates:', address.coordinates);
+      return { lat: Number(address.coordinates.lat), lng: Number(address.coordinates.lng) };
+    }
   }
   
   if (address.lat && address.lng) {
-    return { lat: address.lat, lng: address.lng };
+    console.log('✅ Found coordinates in address.lat/lng:', { lat: address.lat, lng: address.lng });
+    return { lat: Number(address.lat), lng: Number(address.lng) };
   }
   
   if (address.latitude && address.longitude) {
-    return { lat: address.latitude, lng: address.longitude };
+    console.log('✅ Found coordinates in address.latitude/longitude:', { lat: address.latitude, lng: address.longitude });
+    return { lat: Number(address.latitude), lng: Number(address.longitude) };
   }
   
+  console.warn('❌ No valid coordinates found in address object:', Object.keys(address));
   return null;
 }
