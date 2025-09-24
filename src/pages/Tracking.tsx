@@ -28,6 +28,7 @@ type DeliveryStatus = 'Pending' | 'On the Way' | 'Arrived' | 'Delivered';
 const mockTrackingData = {
   order_id: "ORD123",
   customer_name: "Rohit Sharma",
+  customer_phone: "+91 98765 43210",
   customer_address: "Sector 21, Phagwara",
   agent_location: { lat: 31.3240, lng: 75.5625 }, // Phagwara coordinates
   customer_location: { lat: 31.3346, lng: 75.5726 }, // Near Phagwara
@@ -273,7 +274,7 @@ const Tracking = () => {
             customer_location: orderData.customer_location,
             address: orderData.customer_address,
             distance: orderData.distance_km,
-            estimated_time: orderData.estimated_time,
+            estimated_time: parseInt(orderData.estimated_time) || 25,
             delivery_status: orderData.delivery_status,
             priority: orderData.priority_level,
             total: orderData.total_amount
