@@ -614,19 +614,31 @@ const Home = () => {
 
   // Set up real-time subscription for order updates
   useEffect(() => {
+    console.log('🔧 Setting up real-time subscription for orders...');
+    
     const channel = supabase
-      .channel('orders-changes')
+      .channel('orders-realtime-updates')
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'orders',
-          filter: 'status=eq.packed'
+          table: 'orders'
         },
         (payload) => {
-          console.log('📦 Order packed, refreshing available orders...');
-          fetchOrdersForRefresh();
+          console.log('📝 Order updated:', payload);
+          
+          // Check if order was updated to 'packed' status
+          if (payload.new && payload.new.status === 'packed') {
+            console.log('📦 Order packed! Refreshing available orders...');
+            fetchOrdersForRefresh();
+          }
+          
+          // Also refresh if order was just created/confirmed
+          if (payload.new && ['placed', 'confirmed'].includes(payload.new.status)) {
+            console.log('✅ Order confirmed, refreshing...');
+            fetchOrdersForRefresh();
+          }
         }
       )
       .on(
@@ -637,13 +649,21 @@ const Home = () => {
           table: 'orders'
         },
         (payload) => {
-          console.log('🆕 New order created, refreshing...');
+          console.log('🆕 New order created:', payload);
           fetchOrdersForRefresh();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Real-time subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to orders real-time updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Real-time subscription error');
+        }
+      });
 
     return () => {
+      console.log('🔌 Cleaning up real-time subscription');
       supabase.removeChannel(channel);
     };
   }, []);
