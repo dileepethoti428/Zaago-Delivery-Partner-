@@ -627,6 +627,25 @@ const Home = () => {
     }
   }, [orders.length, location.latitude, location.longitude]); // Trigger when new orders are loaded or location is available
 
+  // Real-time distance updates - recalculate every 30 seconds for active orders
+  useEffect(() => {
+    if (orders.length === 0 || !location.latitude || !location.longitude) return;
+    
+    const updateDistances = async () => {
+      console.log('🔄 Updating real-time distances...');
+      const updatedOrders = await calculateOrderDistances(orders);
+      setOrders(updatedOrders);
+    };
+
+    // Initial calculation
+    updateDistances();
+    
+    // Set up interval for real-time updates every 30 seconds
+    const interval = setInterval(updateDistances, 30000);
+    
+    return () => clearInterval(interval);
+  }, [location.latitude, location.longitude]); // Recalculate when agent location changes
+
   useEffect(() => {
     fetchAgentName();
     fetchOrders();
@@ -1028,33 +1047,34 @@ const Home = () => {
                           <div className="flex items-center space-x-4">
                             <div className="flex items-center">
                               <Navigation className="w-4 h-4 text-green-500 mr-1" />
-                               <span className="text-sm font-medium text-gray-700" title="Delivery distance from shop to customer">
-                                 {isLoadingDistance ? (
-                                   <div className="flex items-center">
-                                     <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                     <span className="text-xs text-gray-500">Calculating...</span>
-                                   </div>
-                                 ) : (
-                                   <div className="flex items-center">
-                                     <span>{`${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
-                                     {order.distance_source && (
-                                       <span 
-                                         className={`ml-1 px-1 py-0.5 text-xs rounded ${
-                                           order.distance_source === 'realtime' ? 'bg-green-100 text-green-700' :
-                                           order.distance_source === 'cached' ? 'bg-blue-100 text-blue-700' :
-                                           order.distance_source === 'fallback' ? 'bg-yellow-100 text-yellow-700' :
-                                           'bg-red-100 text-red-700'
-                                         }`}
-                                         title={`Distance source: ${order.distance_source}`}
-                                       >
-                                         {order.distance_source === 'realtime' ? '🎯' : 
-                                          order.distance_source === 'cached' ? '📍' :
-                                          order.distance_source === 'fallback' ? '📐' : '⚠️'}
-                                       </span>
-                                     )}
-                                   </div>
-                                 )}
-                               </span>
+                              <span className="text-sm font-medium text-gray-700 flex items-center" title="Real-time delivery distance from shop to customer">
+                                {isLoadingDistance ? (
+                                  <div className="flex items-center">
+                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                    <span className="text-xs text-gray-500">Updating...</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center">
+                                    <span>{`${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
+                                    <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
+                                    {order.distance_source && (
+                                      <span 
+                                        className={`ml-1 px-1 py-0.5 text-xs rounded ${
+                                          order.distance_source === 'realtime' ? 'bg-green-100 text-green-700' :
+                                          order.distance_source === 'cached' ? 'bg-blue-100 text-blue-700' :
+                                          order.distance_source === 'fallback' ? 'bg-yellow-100 text-yellow-700' :
+                                          'bg-red-100 text-red-700'
+                                        }`}
+                                        title={`Distance source: ${order.distance_source}`}
+                                      >
+                                        {order.distance_source === 'realtime' ? '🎯' : 
+                                         order.distance_source === 'cached' ? '📍' :
+                                         order.distance_source === 'fallback' ? '📐' : '⚠️'}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </span>
                             </div>
                             <div className="flex items-center">
                               <Clock className="w-4 h-4 text-gray-500 mr-1" />
@@ -1089,8 +1109,20 @@ const Home = () => {
                             </div>
                             <div className="flex items-center">
                               <Navigation className="w-3 h-3 text-green-600 mr-1" />
-                              <span className="text-xs text-green-700 font-medium">
-                                {order.distance_km ? `${order.distance_km.toFixed(1)} km` : 'Calculating...'}
+                              <span className="text-xs text-green-700 font-medium flex items-center">
+                                {isLoadingDistance ? (
+                                  <div className="flex items-center">
+                                    <Loader2 className="w-2 h-2 animate-spin mr-1" />
+                                    <span>Updating...</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center">
+                                    <span>{order.distance_km ? `${order.distance_km.toFixed(1)} km` : 'Calculating...'}</span>
+                                    {order.distance_km && (
+                                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
+                                    )}
+                                  </div>
+                                )}
                               </span>
                             </div>
                           </div>
