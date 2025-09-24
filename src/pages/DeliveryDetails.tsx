@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
 import { NavigationMap } from "@/components/NavigationMap";
+import { normalizeAddress } from "@/lib/utils";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -191,7 +192,7 @@ const DeliveryDetails = () => {
     // If no coordinates, try to geocode the address
     if (!customerLocation) {
       try {
-        const fullAddress = `${order.address.addressLine1}, ${order.address.city}, ${order.address.state}, ${order.address.pincode}`;
+        const fullAddress = normalizeAddress(order.address);
         
         // Using a free geocoding service
         const response = await fetch(
@@ -468,7 +469,7 @@ const DeliveryDetails = () => {
               <div className="flex items-start space-x-1">
                 <MapPin className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
                 <p className="text-sm font-medium text-foreground">
-                  {order.address?.addressLine1}, {order.address?.city} - {order.address?.pincode}
+                  {normalizeAddress(order.address)}
                 </p>
               </div>
             </div>
@@ -680,7 +681,7 @@ const DeliveryDetails = () => {
           open={showNavigationMap}
           onOpenChange={setShowNavigationMap}
           customerLocation={order.address?.coordinates || { lat: 31.33, lng: 75.57 }}
-          customerAddress={`${order.address?.addressLine1}, ${order.address?.city}, ${order.address?.state} - ${order.address?.pincode}`}
+          customerAddress={normalizeAddress(order.address)}
           customerName={order.customer_name}
           customerPhone={order.customer_phone}
         />

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeAddress } from "@/lib/utils";
 import { 
   MapPin, 
   Clock, 
@@ -54,8 +55,7 @@ const History = () => {
     const matchesSearch = searchTerm === "" || 
       delivery.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       delivery.order_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.delivery_address?.addressLine1?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.delivery_address?.city?.toLowerCase().includes(searchTerm.toLowerCase());
+      normalizeAddress(delivery.delivery_address).toLowerCase().includes(searchTerm.toLowerCase());
 
     // Payment filter
     const matchesPayment = paymentFilter === "all" || 
@@ -448,7 +448,7 @@ const History = () => {
                       <div className="space-y-2 mb-4">
                         <div className="flex items-center text-sm text-muted-foreground">
                           <MapPin className="w-4 h-4 mr-2 text-primary" />
-                          {delivery.delivery_address?.addressLine1}, {delivery.delivery_address?.city}
+                          {normalizeAddress(delivery.delivery_address)}
                         </div>
                         
                         <div className="grid grid-cols-3 gap-2 text-sm">
