@@ -116,6 +116,11 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
       address: null, // Address will be updated asynchronously
     });
 
+    // Save to localStorage for real-time sync with other pages
+    const locationData = { lat: latitude, lng: longitude };
+    localStorage.setItem('agentLocation', JSON.stringify(locationData));
+    localStorage.setItem('currentLocation', JSON.stringify(locationData));
+
     // Get address asynchronously (non-blocking)
     getAddressFromCoordinates(latitude, longitude).then(address => {
       setLocation(prev => ({ ...prev, address }));

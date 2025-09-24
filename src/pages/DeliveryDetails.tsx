@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
 import { NavigationMap } from "@/components/NavigationMap";
@@ -46,6 +47,15 @@ const DeliveryDetails = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Use real-time location for sync with home page
+  const location = useGeolocation({
+    enableHighAccuracy: true,
+    timeout: 15000,
+    maximumAge: 60000,
+    saveToBackend: true
+  });
+  
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -61,11 +71,12 @@ const DeliveryDetails = () => {
     }
   }, [orderId]);
 
+  // Recalculate distance when location or order changes
   useEffect(() => {
     if (order) {
       calculateDistanceAndPayout();
     }
-  }, [order]);
+  }, [order, location.latitude, location.longitude]);
 
   const calculateDistanceAndPayout = async () => {
     console.log('🧮 Starting distance calculation for order:', order?.id);
@@ -75,8 +86,14 @@ const DeliveryDetails = () => {
       return;
     }
 
-    // Get agent location
-    const agentLocation = getAgentLocationFromStorage();
+    // Get agent location from real-time geolocation or storage
+    let agentLocation = null;
+    if (location.latitude && location.longitude) {
+      agentLocation = { lat: location.latitude, lng: location.longitude };
+    } else {
+      agentLocation = getAgentLocationFromStorage();
+    }
+
     if (!agentLocation) {
       console.warn('No agent location available');
       setDistance(2.5); // fallback
