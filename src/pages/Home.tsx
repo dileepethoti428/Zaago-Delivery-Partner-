@@ -174,19 +174,7 @@ const Home = () => {
 
       const { data: assignedOrders, error: assignedError } = await supabase
         .from('orders')
-        .select(`
-          *,
-          sellers:user_id (
-            id,
-            name,
-            email,
-            phone,
-            business_name,
-            latitude,
-            longitude,
-            address
-          )
-        `)
+        .select('*')
         .eq('agent_id', agent.id)
         .in('status', ['assigned', 'picked_up', 'in_transit'])
         .order('created_at', { ascending: false });
