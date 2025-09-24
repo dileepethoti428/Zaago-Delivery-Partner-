@@ -809,7 +809,8 @@ const Home = () => {
                         <div className="flex items-start mb-4">
                           <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
                           <div className="flex-1">
-                               <p className="text-sm text-gray-700 leading-relaxed">
+               <p className="text-sm text-gray-700 leading-relaxed">
+                                 <span className="font-semibold text-blue-600">🏠 Delivery Address: </span>
                                  {debugAddress(order.address, `order-${order.id}-render`)}
                                </p>
                           </div>
