@@ -120,7 +120,7 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
           <div class="text-sm">
             <h3 class="font-bold text-gray-900">Pickup Location</h3>
             <p class="text-gray-600">${orderData.seller_name || 'Store'}</p>
-            <p class="text-gray-600">${orderData.pickup_address || ''}</p>
+            <p class="text-gray-600">${typeof orderData.pickup_address === 'string' ? orderData.pickup_address : (orderData.pickup_address ? JSON.stringify(orderData.pickup_address) : '')}</p>
             ${orderData.seller_phone ? `<p class="text-gray-600">${orderData.seller_phone}</p>` : ''}
           </div>
         `))

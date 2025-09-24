@@ -724,7 +724,8 @@ const Home = () => {
                                    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
                                    window.open(googleMapsUrl, '_blank');
                                  } else if (order.pickup_address) {
-                                   const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.pickup_address)}&travelmode=driving`;
+                                    const safePickupAddress = typeof order.pickup_address === 'string' ? order.pickup_address : JSON.stringify(order.pickup_address);
+                                    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(safePickupAddress)}&travelmode=driving`;
                                    window.open(googleMapsUrl, '_blank');
                                  } else {
                                    // Try to fetch seller location if missing
@@ -759,14 +760,7 @@ const Home = () => {
                                }}
                              >
                                <MapPin className="w-3 h-3 mr-1" />
-                               {order.pickup_address 
-                                 ? order.pickup_address.length > 25 
-                                   ? `${order.pickup_address.substring(0, 25)}...` 
-                                   : order.pickup_address
-                                 : order.pickup_location 
-                                   ? `${order.pickup_location.lat.toFixed(4)}, ${order.pickup_location.lng.toFixed(4)}`
-                                   : 'Pickup Location'
-                               }
+                                {debugAddress(order.pickup_address, `pickup-${order.id}`)}
                              </div>
                            )}
                         </div>

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import MapPreview from "@/components/MapPreview";
+import { debugAddress } from "@/lib/debugAddress";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -325,7 +326,7 @@ const OrderDetails = () => {
                 <h3 className="text-lg font-bold text-foreground">{orderData.customer_name}</h3>
                 <div className="flex items-center text-muted-foreground mt-1">
                   <MapPin className="w-4 h-4 mr-2 text-primary" />
-                  <span className="text-sm">{orderData.customer_address}</span>
+                  <span className="text-sm">{debugAddress(orderData.customer_address, 'order-details')}</span>
                 </div>
                 <div className="flex items-center text-muted-foreground mt-1">
                   <Navigation className="w-4 h-4 mr-2 text-primary" />
@@ -375,7 +376,7 @@ const OrderDetails = () => {
             </CardHeader>
             <CardContent className="p-4">
               <MapPreview
-                customerAddress={orderData.customer_address}
+                customerAddress={debugAddress(orderData.customer_address, 'order-details-map')}
                 onFullScreenOpen={() => handleTrackOrder()}
                 className="w-full"
               />
