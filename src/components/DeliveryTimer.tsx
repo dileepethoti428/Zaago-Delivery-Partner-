@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, Timer, Calendar } from "lucide-react";
 
 interface DeliveryTimerProps {
-  deliveryType: 'immediate' | 'scheduled';
+  deliveryType: 'immediate' | 'scheduled' | 'book_now_pay_later';
   scheduledTime?: string; // For scheduled deliveries
   orderPlacedAt?: Date; // When the order was placed
   className?: string;
@@ -16,6 +16,7 @@ interface DeliveryTimerProps {
     start_time: string;
     end_time: string;
   }; // For timing intervals
+  paymentStatus?: string; // For book now pay later orders
 }
 
 const DeliveryTimer = ({ 
@@ -25,7 +26,8 @@ const DeliveryTimer = ({
   className = "",
   subscriptionId,
   deliveryTime,
-  deliverySlots
+  deliverySlots,
+  paymentStatus
 }: DeliveryTimerProps) => {
   const [timeLeft, setTimeLeft] = useState<{
     minutes: number;
@@ -108,18 +110,21 @@ const DeliveryTimer = ({
     }
   };
 
-  if (deliveryType === 'scheduled') {
+  if (deliveryType === 'scheduled' || deliveryType === 'book_now_pay_later') {
     const scheduleInfo = getScheduledDeliveryInfo();
     
-    // Different display for subscription vs regular scheduled orders
+    // Different display for subscription vs book now pay later vs regular scheduled orders
     const isSubscription = Boolean(subscriptionId);
+    const isBookNowPayLater = deliveryType === 'book_now_pay_later';
     
     console.log('DeliveryTimer Debug - Order data:', {
       deliverySlots,
       deliveryTime,
       scheduledTime,
       scheduleInfo,
-      isSubscription
+      isSubscription,
+      isBookNowPayLater,
+      paymentStatus
     });
     
     // Determine display time - prioritize delivery slots for timing intervals
@@ -153,46 +158,73 @@ const DeliveryTimer = ({
       console.log('Using scheduleInfo time for display:', displayTime);
     } else {
       // For scheduled orders, show default time slots if backend data is incomplete
-      displayTime = isSubscription ? '6:00 AM - 10:00 AM' : '6:00 AM - 10:00 AM';
+      displayTime = isSubscription ? '6:00 AM - 10:00 AM' : (isBookNowPayLater ? '6:00 AM - 10:00 AM' : '6:00 AM - 10:00 AM');
       hasTimeSlot = true;
-      console.warn('Using fallback time slot for scheduled order');
+      console.warn('Using fallback time slot for order');
     }
     
-    const title = isSubscription ? 'Subscription Delivery' : 'Scheduled Delivery';
-    const subtitle = hasTimeSlot ? 'Delivery window' : (isSubscription ? 'Delivery at' : 'Arrives at');
-    const badgeText = isSubscription ? 'Subscription' : 'Scheduled';
+    const title = isSubscription ? 'Subscription Delivery' : (isBookNowPayLater ? 'Book Now Pay Later' : 'Scheduled Delivery');
+    const subtitle = hasTimeSlot ? 'Delivery window' : (isSubscription ? 'Delivery at' : (isBookNowPayLater ? 'Available at' : 'Arrives at'));
+    const badgeText = isSubscription ? 'Subscription' : (isBookNowPayLater ? 'Pay Later' : 'Scheduled');
     
+    // Different color schemes for different order types
+    const gradientClass = isBookNowPayLater 
+      ? 'bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-500/30'
+      : isSubscription 
+        ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30'
+        : 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-blue-500/30';
+    
+    const iconClass = isBookNowPayLater 
+      ? 'bg-orange-500/20'
+      : isSubscription 
+        ? 'bg-purple-500/20'
+        : 'bg-blue-500/20';
+    
+    const iconColor = isBookNowPayLater 
+      ? 'text-orange-400'
+      : isSubscription 
+        ? 'text-purple-400'
+        : 'text-blue-400';
+    
+    const badgeColor = isBookNowPayLater 
+      ? 'bg-orange-500'
+      : isSubscription 
+        ? 'bg-purple-500'
+        : 'bg-blue-500';
+
     return (
-      <Card className={`bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/30 shadow-lg max-w-sm ${className}`}>
+      <Card className={`${gradientClass} shadow-lg max-w-sm ${className}`}>
         <CardContent className="p-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="p-1 bg-blue-500/20 rounded-full">
-                <Calendar className="w-3 h-3 text-blue-400" />
+              <div className={`p-1 ${iconClass} rounded-full`}>
+                <Calendar className={`w-3 h-3 ${iconColor}`} />
               </div>
               <div>
                 <h3 className="font-medium text-foreground text-xs">{title}</h3>
                 <p className="text-xs text-muted-foreground">{subtitle}</p>
               </div>
             </div>
-            <Badge className="bg-blue-500 text-white animate-pulse text-xs px-2 py-0.5">
+            <Badge className={`${badgeColor} text-white animate-pulse text-xs px-2 py-0.5`}>
               {badgeText}
             </Badge>
           </div>
           
-          <div className="mt-2 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+          <div className={`mt-2 p-2 ${isBookNowPayLater ? 'bg-orange-500/10 border border-orange-500/20' : isSubscription ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-blue-500/10 border border-blue-500/20'} rounded-lg`}>
             <div className="text-center">
-              <p className="text-lg font-bold text-blue-400">{displayTime || 'Time TBD'}</p>
+              <p className={`text-lg font-bold ${isBookNowPayLater ? 'text-orange-400' : isSubscription ? 'text-purple-400' : 'text-blue-400'}`}>
+                {displayTime || 'Time TBD'}
+              </p>
               <p className="text-xs text-muted-foreground">
                 {hasTimeSlot ? 
                   'Delivery Window' : 
-                  (isSubscription ? scheduleInfo?.actualDate || 'Today' : (scheduleInfo?.isOrderToday ? 'Today' : scheduleInfo?.actualDate || scheduleInfo?.date || 'Date TBD'))
+                  (isSubscription ? scheduleInfo?.actualDate || 'Today' : (isBookNowPayLater ? 'Pay to confirm delivery' : (scheduleInfo?.isOrderToday ? 'Today' : scheduleInfo?.actualDate || scheduleInfo?.date || 'Date TBD')))
                 }
               </p>
             </div>
             {hasTimeSlot && (
               <div className="mt-1 text-center">
-                <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-700 border-blue-500/30">
+                <Badge variant="outline" className={`text-xs ${isBookNowPayLater ? 'bg-orange-500/20 text-orange-700 border-orange-500/30' : isSubscription ? 'bg-purple-500/20 text-purple-700 border-purple-500/30' : 'bg-blue-500/20 text-blue-700 border-blue-500/30'}`}>
                   Time Slot
                 </Badge>
               </div>

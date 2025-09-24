@@ -73,7 +73,7 @@ interface Order {
   products_count?: number;
   restaurant?: string;
   backend_calculated?: boolean;
-  delivery_type?: 'immediate' | 'scheduled';
+  delivery_type?: 'immediate' | 'scheduled' | 'book_now_pay_later';
   scheduled_time?: string;
   order_placed_at?: Date;
   agent_payout?: number;
@@ -296,7 +296,7 @@ const Home = () => {
       products_count: Array.isArray(order.items) ? order.items.length : 1,
       restaurant: order.restaurant || undefined,
       backend_calculated: false,
-      delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
+      delivery_type: order.payment_status === 'Pending' ? 'book_now_pay_later' : (order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'),
       scheduled_time: order.scheduled_time || undefined,
       order_placed_at: new Date(order.created_at),
       agent_payout: order.agent_payout || undefined,
