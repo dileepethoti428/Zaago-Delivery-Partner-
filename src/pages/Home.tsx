@@ -1093,7 +1093,6 @@ const Home = () => {
                               </span>
                             </div>
                             <div className="flex items-center">
-                              <Navigation className="w-3 h-3 text-green-600 mr-1" />
                               <span className="text-xs text-green-700 font-medium flex items-center">
                                 {isLoadingDistance ? (
                                   <div className="flex items-center">

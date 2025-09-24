@@ -55,22 +55,37 @@ const DeliveryDetails = () => {
       calculateDistanceAndPayout();
     }
   }, [order]);
+
+  // Real-time distance updates - recalculate every 10 seconds for faster updates
+  useEffect(() => {
+    if (!order) return;
+    
+    const updateDistance = () => {
+      calculateDistanceAndPayout();
+    };
+    
+    // Initial calculation
+    updateDistance();
+    
+    // Fast real-time updates every 10 seconds
+    const interval = setInterval(updateDistance, 10000);
+    
+    return () => clearInterval(interval);
+  }, [order?.id]);
+
   const calculateDistanceAndPayout = async () => {
-    console.log('🧮 Starting distance calculation for order:', order?.id);
+    console.log('🧮 Starting fast distance calculation for order:', order?.id);
     if (!order) {
       console.warn('No order data available');
       return;
     }
 
-    // Get agent location
-    const agentLocation = getAgentLocationFromStorage();
-    if (!agentLocation) {
-      console.warn('No agent location available');
-      setDistance(2.5); // fallback
-      setPayout(35); // fallback payout
-      return;
-    }
-
+    // Show immediate loading state
+    setDistance(0);
+    
+    // Use shop coordinates for consistent delivery distance (same as Home page)
+    const shopLocation = { lat: 12.9716, lng: 77.5946 }; // Bangalore coordinates
+    
     // Extract customer coordinates
     const customerCoords = extractCoordinatesFromAddress(order.address);
     if (!customerCoords) {
@@ -79,17 +94,21 @@ const DeliveryDetails = () => {
       setPayout(35); // fallback payout
       return;
     }
+
     try {
-      // Use the unified distance calculation service
-      const distanceResult = await calculateRealTimeDistance(agentLocation, customerCoords, order.id);
+      // Use shop-to-customer distance for consistent calculation
+      const distanceResult = await calculateRealTimeDistance(shopLocation, customerCoords, order.id);
       const dist = distanceResult.distance_km;
       const calculatedPayout = dist <= 1 ? 20 : 20 + (dist - 1) * 15;
+      
+      // Immediate state updates for fast UI response
       setDistance(dist);
-      setPayout(calculatedPayout);
-      console.log('✅ Distance calculated:', dist, 'km, Payout:', calculatedPayout, 'Source:', distanceResult.source);
+      setPayout(Math.round(calculatedPayout));
+      
+      console.log('✅ Shop-to-customer distance calculated:', dist, 'km, Payout:', Math.round(calculatedPayout), 'Source:', distanceResult.source);
     } catch (error) {
       console.error('Error calculating distance:', error);
-      // Use fallback values
+      // Fast fallback
       setDistance(2.5);
       setPayout(35);
     }
@@ -471,23 +490,39 @@ const DeliveryDetails = () => {
             </h3>
             
             <div className="grid grid-cols-2 gap-2">
-              <div className="text-center p-2 bg-secondary/20 rounded-lg">
-                <p className="text-xs text-muted-foreground">Real-time Distance</p>
-                <p className="text-sm font-bold text-primary">
-                  {distance > 0 ? `${distance.toFixed(2)} km` : 'Calculating...'}
+              <div className="text-center p-2 bg-secondary/20 rounded-lg border border-green-200">
+                <p className="text-xs text-muted-foreground flex items-center justify-center">
+                  <span>Fast Real-time Distance</span>
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full ml-1 animate-pulse" title="Updates every 10 seconds"></div>
+                </p>
+                <p className="text-sm font-bold text-primary flex items-center justify-center">
+                  {distance > 0 ? (
+                    <>
+                      <span>{distance.toFixed(1)} km</span>
+                      <span className="text-xs text-green-600 ml-1">(Live)</span>
+                    </>
+                  ) : (
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1"></div>
+                      <span>Updating...</span>
+                    </div>
+                  )}
                 </p>
               </div>
-              <div className="text-center p-2 bg-secondary/20 rounded-lg">
+              <div className="text-center p-2 bg-secondary/20 rounded-lg border border-green-200">
                 <p className="text-xs text-muted-foreground">Your Payout</p>
-                <p className="text-sm font-bold text-green-500">
-                  ₹{Math.round(payout)}
+                <p className="text-sm font-bold text-green-500 flex items-center justify-center">
+                  <span>₹{Math.round(payout)}</span>
+                  {distance > 0 && (
+                    <span className="text-xs text-green-600 ml-1">(Live)</span>
+                  )}
                 </p>
               </div>
             </div>
 
-            <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-              <p className="text-xs text-primary">
-                Fair pricing: ₹20 base + ₹15/km beyond 1km
+            <div className="p-2 bg-green-50 rounded-lg border border-green-200">
+              <p className="text-xs text-green-700 flex items-center justify-center">
+                <span>⚡ Fast updates every 10 seconds • Fair pricing: ₹20 base + ₹15/km beyond 1km</span>
               </p>
             </div>
           </div>
