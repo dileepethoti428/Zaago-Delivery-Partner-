@@ -338,6 +338,15 @@ const Home = () => {
   const availableOrders = getSortedOrders(orders);
   const assignedOrders = availableOrders.filter(order => order.status === 'assigned');
 
+  // Auto-update location when geolocation data is available
+  useEffect(() => {
+    if (location.address) {
+      setCurrentLocation(location.address);
+    } else if (location.latitude && location.longitude) {
+      setCurrentLocation(`${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
+    }
+  }, [location.address, location.latitude, location.longitude]);
+
   useEffect(() => {
     fetchAgentName();
     fetchOrders();
