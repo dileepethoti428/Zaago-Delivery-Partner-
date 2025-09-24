@@ -26,6 +26,7 @@ interface Order {
   created_at: string;
   distance_km?: number;
   backend_calculated?: boolean;
+  pickup_location?: any; // Json type from database that contains {lat: number, lng: number}
 }
 const DeliveryDetails = () => {
   const {
@@ -83,8 +84,21 @@ const DeliveryDetails = () => {
     // Show immediate loading state
     setDistance(0);
     
-    // Use shop coordinates for consistent delivery distance (same as Home page)
-    const shopLocation = { lat: 12.9716, lng: 77.5946 }; // Bangalore coordinates
+    // Extract pickup location coordinates from order (handle Json type from database)
+    let pickupLocation = null;
+    if (order.pickup_location && typeof order.pickup_location === 'object') {
+      pickupLocation = {
+        lat: order.pickup_location.lat,
+        lng: order.pickup_location.lng
+      };
+    }
+    
+    if (!pickupLocation || !pickupLocation.lat || !pickupLocation.lng) {
+      console.warn('No valid pickup location available in order');
+      setDistance(2.5); // fallback
+      setPayout(35); // fallback payout
+      return;
+    }
     
     // Extract customer coordinates
     const customerCoords = extractCoordinatesFromAddress(order.address);
@@ -96,8 +110,9 @@ const DeliveryDetails = () => {
     }
 
     try {
-      // Use shop-to-customer distance for consistent calculation
-      const distanceResult = await calculateRealTimeDistance(shopLocation, customerCoords, order.id);
+      // Use actual pickup-to-customer distance for accurate calculation
+      console.log('🚚 Using pickup location:', pickupLocation, 'to customer:', customerCoords);
+      const distanceResult = await calculateRealTimeDistance(pickupLocation, customerCoords, order.id);
       const dist = distanceResult.distance_km;
       const calculatedPayout = dist <= 1 ? 20 : 20 + (dist - 1) * 15;
       
@@ -105,7 +120,7 @@ const DeliveryDetails = () => {
       setDistance(dist);
       setPayout(Math.round(calculatedPayout));
       
-      console.log('✅ Shop-to-customer distance calculated:', dist, 'km, Payout:', Math.round(calculatedPayout), 'Source:', distanceResult.source);
+      console.log('✅ Pickup-to-customer distance calculated:', dist, 'km, Payout:', Math.round(calculatedPayout), 'Source:', distanceResult.source);
     } catch (error) {
       console.error('Error calculating distance:', error);
       // Fast fallback
