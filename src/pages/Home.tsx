@@ -1102,7 +1102,6 @@ const Home = () => {
                                   </div>
                                 ) : (
                                   <div className="flex items-center">
-                                    <span>{order.distance_km ? `${order.distance_km.toFixed(1)} km` : 'Calculating...'}</span>
                                     {order.distance_km && (
                                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
                                     )}
