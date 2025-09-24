@@ -181,8 +181,32 @@ const Home = () => {
 
       if (assignedError) throw assignedError;
 
+      // Normalize address objects to strings for available orders too
+      const normalizeAddress = (addressObj: any): string => {
+        if (typeof addressObj === 'string') return addressObj;
+        if (addressObj?.full_address) return addressObj.full_address;
+        if (addressObj?.addressLine1) return `${addressObj.addressLine1}, ${addressObj.city || ''}`;
+        if (addressObj?.address) {
+          // Handle {city, state, address, pincode} structure
+          const parts = [
+            addressObj.address,
+            addressObj.city,
+            addressObj.state,
+            addressObj.pincode
+          ].filter(Boolean);
+          return parts.join(', ');
+        }
+        if (typeof addressObj === 'object' && addressObj) {
+          // Fallback for any other object structure
+          const addressStr = Object.values(addressObj).filter(Boolean).join(', ');
+          return addressStr || 'Address not available';
+        }
+        return 'Address not available';
+      };
+
       const transformedAvailableOrders: Order[] = (availableResponse?.orders || []).map((order: any) => ({
         ...order,
+        address: normalizeAddress(order.address),
         order_placed_at: new Date(order.created_at),
         delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
       }));
@@ -216,11 +240,34 @@ const Home = () => {
           }
         }
         
+        // Normalize address object to string to prevent React child errors
+        const normalizeAddress = (addressObj: any): string => {
+          if (typeof addressObj === 'string') return addressObj;
+          if (addressObj?.full_address) return addressObj.full_address;
+          if (addressObj?.addressLine1) return `${addressObj.addressLine1}, ${addressObj.city || ''}`;
+          if (addressObj?.address) {
+            // Handle {city, state, address, pincode} structure
+            const parts = [
+              addressObj.address,
+              addressObj.city,
+              addressObj.state,
+              addressObj.pincode
+            ].filter(Boolean);
+            return parts.join(', ');
+          }
+          if (typeof addressObj === 'object' && addressObj) {
+            // Fallback for any other object structure
+            const addressStr = Object.values(addressObj).filter(Boolean).join(', ');
+            return addressStr || 'Address not available';
+          }
+          return 'Address not available';
+        };
+        
         return {
           id: order.id,
           customer_name: order.customer_name || '',
           customer_phone: order.customer_phone || '',
-          address: order.address,
+          address: normalizeAddress(order.address),
           items: Array.isArray(order.items) ? order.items : [],
           total: order.total || 0,
           status: order.status,
@@ -783,7 +830,6 @@ const Home = () => {
                           <div className="flex-1">
                              <p className="text-sm text-gray-700 leading-relaxed">
                                {(() => {
-                                 console.log('Home.tsx - Rendering address for order:', order.id, 'Address object:', order.address);
                                  if (typeof order.address === 'string') return order.address;
                                  if (order.address?.full_address) return order.address.full_address;
                                  if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;

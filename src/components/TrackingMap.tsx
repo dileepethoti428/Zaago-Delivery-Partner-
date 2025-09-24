@@ -405,7 +405,6 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
                 className="text-sm text-blue-600 hover:text-blue-800 underline cursor-pointer block mt-1"
               >
                  📍 {(() => {
-                   console.log('TrackingMap.tsx - Rendering address for order:', orderData.id, 'Address object:', orderData.address);
                    if (typeof orderData.address === 'string') return orderData.address;
                    if (orderData.address?.full_address) return orderData.address.full_address;
                    if (orderData.address?.addressLine1) return `${orderData.address.addressLine1}, ${orderData.address.city || ''}`;

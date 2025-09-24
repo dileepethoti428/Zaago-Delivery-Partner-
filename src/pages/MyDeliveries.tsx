@@ -324,7 +324,6 @@ const MyDeliveries = () => {
                   <div className="flex-1">
                     <p className="text-sm text-foreground">
                        {(() => {
-                         console.log('MyDeliveries.tsx - Rendering address for order:', order.id, 'Address object:', order.address);
                          if (typeof order.address === 'string') return order.address;
                          if (order.address?.full_address) return order.address.full_address;
                          if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
