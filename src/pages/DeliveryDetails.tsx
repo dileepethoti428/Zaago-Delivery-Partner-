@@ -4,28 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useGeolocation } from "@/hooks/useGeolocation";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
 import { NavigationMap } from "@/components/NavigationMap";
 import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from "@/lib/distanceService";
-import { 
-  ArrowLeft, 
-  MapPin, 
-  Phone, 
-  Clock, 
-  Calendar,
-  Navigation,
-  CheckCircle2,
-  Package,
-  User,
-  CreditCard,
-  AlertCircle,
-  X
-} from "lucide-react";
-
+import { ArrowLeft, MapPin, Phone, Clock, Calendar, Navigation, CheckCircle2, Package, User, CreditCard, AlertCircle, X } from "lucide-react";
 interface Order {
   id: string;
   customer_name: string;
@@ -42,20 +27,16 @@ interface Order {
   distance_km?: number;
   backend_calculated?: boolean;
 }
-
 const DeliveryDetails = () => {
-  const { orderId } = useParams<{ orderId: string }>();
+  const {
+    orderId
+  } = useParams<{
+    orderId: string;
+  }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  
-  // Use real-time location for sync with home page
-  const location = useGeolocation({
-    enableHighAccuracy: true,
-    timeout: 15000,
-    maximumAge: 60000,
-    saveToBackend: true
-  });
-  
+  const {
+    toast
+  } = useToast();
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -64,25 +45,29 @@ const DeliveryDetails = () => {
   const [payout, setPayout] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-
   useEffect(() => {
     if (orderId) {
       fetchOrderDetails();
     }
   }, [orderId]);
-
-  // Recalculate distance when location or order changes
   useEffect(() => {
     if (order) {
       calculateDistanceAndPayout();
     }
-  }, [order, location.latitude, location.longitude]);
-
+  }, [order]);
   const calculateDistanceAndPayout = async () => {
     console.log('🧮 Starting distance calculation for order:', order?.id);
-    
     if (!order) {
       console.warn('No order data available');
+      return;
+    }
+
+    // Get agent location
+    const agentLocation = getAgentLocationFromStorage();
+    if (!agentLocation) {
+      console.warn('No agent location available');
+      setDistance(2.5); // fallback
+      setPayout(35); // fallback payout
       return;
     }
 
@@ -94,25 +79,14 @@ const DeliveryDetails = () => {
       setPayout(35); // fallback payout
       return;
     }
-
     try {
-      // Use shop-to-customer distance (same as Home page for consistency)
-      const pickupLocation = { lat: 12.9716, lng: 77.5946 }; // Bangalore coordinates
-      
-      const distanceResult = await calculateRealTimeDistance(
-        pickupLocation,
-        customerCoords,
-        order.id
-      );
-
+      // Use the unified distance calculation service
+      const distanceResult = await calculateRealTimeDistance(agentLocation, customerCoords, order.id);
       const dist = distanceResult.distance_km;
-      const calculatedPayout = dist <= 1 ? 20 : 20 + ((dist - 1) * 15);
-      
+      const calculatedPayout = dist <= 1 ? 20 : 20 + (dist - 1) * 15;
       setDistance(dist);
       setPayout(calculatedPayout);
-      
-      console.log('✅ DeliveryDetails distance calculated (shop-to-customer):', dist, 'km, Payout:', calculatedPayout, 'Source:', distanceResult.source);
-      
+      console.log('✅ Distance calculated:', dist, 'km, Payout:', calculatedPayout, 'Source:', distanceResult.source);
     } catch (error) {
       console.error('Error calculating distance:', error);
       // Use fallback values
@@ -120,28 +94,23 @@ const DeliveryDetails = () => {
       setPayout(35);
     }
   };
-
   const fetchOrderDetails = async () => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .maybeSingle();
-
+      const {
+        data,
+        error
+      } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
       if (error) throw error;
-      
       if (!data) {
         setOrder(null);
         return;
       }
-      
+
       // Transform the data to match our interface
       const transformedOrder = {
         ...data,
         items: Array.isArray(data.items) ? data.items : []
       };
-      
       setOrder(transformedOrder);
     } catch (error) {
       console.error('Error fetching order details:', error);
@@ -154,35 +123,27 @@ const DeliveryDetails = () => {
       setIsLoading(false);
     }
   };
-
   const handleNavigation = async () => {
     if (!order?.address) {
       toast({
-        title: "Location Error", 
+        title: "Location Error",
         description: "Customer address not available",
         variant: "destructive"
       });
       return;
     }
-
     let customerLocation = order.address.coordinates;
 
     // If no coordinates, try to geocode the address
     if (!customerLocation) {
       try {
         const fullAddress = normalizeAddress(order.address);
-        
+
         // Using a free geocoding service
-        const response = await fetch(
-          `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(fullAddress)}&key=your-api-key&limit=1`
-        );
-        
+        const response = await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(fullAddress)}&key=your-api-key&limit=1`);
         if (!response.ok) {
           // Fallback: try with OpenStreetMap Nominatim (free)
-          const osmResponse = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`
-          );
-          
+          const osmResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`);
           if (osmResponse.ok) {
             const osmData = await osmResponse.json();
             if (osmData && osmData.length > 0) {
@@ -219,16 +180,17 @@ const DeliveryDetails = () => {
     // Update order with coordinates for future use
     if (!order.address.coordinates) {
       order.address.coordinates = customerLocation;
-      setOrder({...order});
+      setOrder({
+        ...order
+      });
     }
 
     // Show in-app navigation
     setShowNavigationMap(true);
   };
-
   const handleMarkAsDelivery = async () => {
     if (!order) return;
-    
+
     // If prepaid, complete directly
     if (order.payment_status === 'paid' || order.payment_status === 'paid_online') {
       await completeDeliveryDirect('Online');
@@ -237,46 +199,43 @@ const DeliveryDetails = () => {
       setShowPaymentDialog(true);
     }
   };
-
   const handleCancelDelivery = async () => {
     if (!order) return;
-    
     setIsCancelling(true);
     try {
       // Get current user and then find agent ID
-      const { data: user } = await supabase.auth.getUser();
+      const {
+        data: user
+      } = await supabase.auth.getUser();
       if (!user.user?.email) {
         throw new Error('User not authenticated');
       }
 
       // Get agent ID from delivery_agents table
-      const { data: agentData, error: agentError } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.user.email)
-        .eq('is_active', true)
-        .single();
-
+      const {
+        data: agentData,
+        error: agentError
+      } = await supabase.from('delivery_agents').select('id').eq('email', user.user.email).eq('is_active', true).single();
       if (agentError || !agentData?.id) {
         throw new Error('Agent not found or not active');
       }
-      
-      const { data, error } = await supabase.functions.invoke('cancel-delivery', {
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('cancel-delivery', {
         body: {
           order_id: order.id,
           agent_id: agentData.id,
           cancellation_reason: 'Agent cancelled delivery'
         }
       });
-
       if (error) {
         throw error;
       }
-
       if (data?.success) {
         toast({
           title: "Delivery Cancelled",
-          description: "Order has been released back to all agents",
+          description: "Order has been released back to all agents"
         });
         // Notify other screens to refresh
         window.dispatchEvent(new CustomEvent('orderCancelled'));
@@ -295,36 +254,40 @@ const DeliveryDetails = () => {
       setIsCancelling(false);
     }
   };
-
   const completeDeliveryDirect = async (paymentMethod: string) => {
     setIsProcessing(true);
     try {
       console.log('DeliveryDetails: Starting delivery completion with method:', paymentMethod);
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
-      
+
       // Map payment methods to function input ('COD' or 'Online')
       const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
-      console.log('DeliveryDetails: Calling complete-delivery with:', { order_id: order?.id, payment_method: methodParam });
-      
-      const { data, error } = await supabase.functions.invoke('complete-delivery', {
+      console.log('DeliveryDetails: Calling complete-delivery with:', {
+        order_id: order?.id,
+        payment_method: methodParam
+      });
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('complete-delivery', {
         body: {
           order_id: order?.id,
           payment_method: methodParam,
           agent_location: agentLocation
         }
       });
-
-      console.log('DeliveryDetails: Edge function response:', { data, error });
-
+      console.log('DeliveryDetails: Edge function response:', {
+        data,
+        error
+      });
       if (error) {
         console.error('DeliveryDetails: Edge function error:', error);
         throw error;
       }
-
       if (data?.success) {
         toast({
           title: "Successfully Delivered! ✅",
-          description: `Order completed. Distance: ${data.order?.distance_km?.toFixed(2) || 0}km, Earned: ₹${data.order?.payout_amount || 0}`,
+          description: `Order completed. Distance: ${data.order?.distance_km?.toFixed(2) || 0}km, Earned: ₹${data.order?.payout_amount || 0}`
         });
         // Notify other screens to refresh
         window.dispatchEvent(new CustomEvent('orderCompleted'));
@@ -345,29 +308,22 @@ const DeliveryDetails = () => {
       setIsProcessing(false);
     }
   };
-
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+    return <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="text-muted-foreground mt-2">Loading order details...</p>
         </div>
-      </div>
-    );
+      </div>;
   }
-
   if (!order) {
-    return (
-      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+    return <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">Order not found</p>
         </div>
-      </div>
-    );
+      </div>;
   }
-
   const getPaymentStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'paid':
@@ -382,7 +338,6 @@ const DeliveryDetails = () => {
         return 'bg-gray-500/20 text-gray-400';
     }
   };
-
   const getPaymentStatusText = (status: string) => {
     switch (status.toLowerCase()) {
       case 'paid_online':
@@ -399,17 +354,10 @@ const DeliveryDetails = () => {
         return status.toUpperCase().replace('_', ' ');
     }
   };
-
-  return (
-    <div className="min-h-screen bg-background p-4 space-y-6">
+  return <div className="min-h-screen bg-background p-4 space-y-6">
       {/* Header */}
       <div className="flex items-center space-x-4 animate-fade-in">
-        <Button 
-          variant="ghost" 
-          size="icon"
-          onClick={() => navigate('/home')}
-          className="hover:bg-secondary"
-        >
+        <Button variant="ghost" size="icon" onClick={() => navigate('/home')} className="hover:bg-secondary">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
@@ -472,15 +420,13 @@ const DeliveryDetails = () => {
             </div>
           </div>
 
-          {order.delivery_time_slot && (
-            <div>
+          {order.delivery_time_slot && <div>
               <p className="text-xs text-muted-foreground">Time Slot</p>
               <div className="flex items-center space-x-1">
                 <Clock className="w-3 h-3 text-primary" />
                 <p className="text-sm font-medium text-foreground">{order.delivery_time_slot}</p>
               </div>
-            </div>
-          )}
+            </div>}
         </CardContent>
       </Card>
 
@@ -493,8 +439,7 @@ const DeliveryDetails = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 p-3">
-          {order.items?.map((item: any, index: number) => (
-            <div key={index} className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg">
+          {order.items?.map((item: any, index: number) => <div key={index} className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
                   <Package className="w-3 h-3 text-primary" />
@@ -505,8 +450,7 @@ const DeliveryDetails = () => {
                 </div>
               </div>
               <p className="text-sm font-bold text-foreground">₹{item.price || item.total || order.total}</p>
-            </div>
-          ))}
+            </div>)}
           
           <div className="border-t border-border pt-2">
             <div className="flex justify-between items-center">
@@ -523,7 +467,17 @@ const DeliveryDetails = () => {
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground flex items-center space-x-1">
               <Navigation className="w-3 h-3 text-primary" />
-              <span>DELIVERY DETAILS</span>
+              <span>DELIVERY DETAILS
+
+Distance
+
+2519.90 km
+
+Your Payout
+
+₹37803.5
+
+Fair pricing: ₹20 base + ₹15/km beyond 1km</span>
             </h3>
             
             <div className="grid grid-cols-2 gap-2">
@@ -562,19 +516,15 @@ const DeliveryDetails = () => {
               </Badge>
             </div>
 
-            {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? (
-              <div className="p-2 bg-green-500/10 rounded-lg border border-green-500/20">
+            {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? <div className="p-2 bg-green-500/10 rounded-lg border border-green-500/20">
                 <p className="text-xs text-green-600 dark:text-green-400">
                   Order is already paid online
                 </p>
-              </div>
-            ) : (
-              <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
+              </div> : <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   Payment pending - collect on delivery
                 </p>
-              </div>
-            )}
+              </div>}
           </div>
         </CardContent>
        </Card>
@@ -590,31 +540,18 @@ const DeliveryDetails = () => {
             
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-1">
-                <Button 
-                  variant="outline" 
-                  className="flex items-center justify-center space-x-1 h-8 border-border hover:bg-secondary px-2"
-                  onClick={handleNavigation}
-                >
+                <Button variant="outline" className="flex items-center justify-center space-x-1 h-8 border-border hover:bg-secondary px-2" onClick={handleNavigation}>
                   <Navigation className="w-3 h-3" />
                   <span className="text-xs">Navigate to Customer</span>
                 </Button>
                 
-                <Button 
-                  className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1"
-                  onClick={handleMarkAsDelivery}
-                  disabled={isProcessing}
-                >
+                <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
                   <CheckCircle2 className="w-3 h-3" />
                   <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
                 </Button>
               </div>
               
-              <Button 
-                variant="destructive" 
-                className="w-full flex items-center justify-center space-x-2 h-8"
-                onClick={handleCancelDelivery}
-                disabled={isCancelling}
-              >
+              <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
                 <X className="w-3 h-3" />
                 <span className="text-sm">{isCancelling ? 'Cancelling...' : 'Cancel Delivery'}</span>
               </Button>
@@ -624,48 +561,30 @@ const DeliveryDetails = () => {
       </Card>
 
       {/* Special Instructions */}
-      {order.special_instructions && (
-        <Card className="bg-card border-border animate-slide-up">
+      {order.special_instructions && <Card className="bg-card border-border animate-slide-up">
           <CardContent className="p-6">
             <h3 className="font-semibold text-foreground mb-2">Special Instructions</h3>
             <p className="text-muted-foreground">{order.special_instructions}</p>
           </CardContent>
-        </Card>
-      )}
+        </Card>}
 
       {/* Payment Method Dialog */}
-      {order && (
-        <PaymentMethodDialog 
-          open={showPaymentDialog}
-          onOpenChange={setShowPaymentDialog}
-          selectionOnly={true}
-          order={{
-            order_id: order.id,
-            customer_name: order.customer_name,
-            total_amount: order.total,
-            payment_status: order.payment_status
-          }}
-          onSuccess={async (paymentMethod) => {
-            console.log('DeliveryDetails: Payment method selected:', paymentMethod);
-            setShowPaymentDialog(false);
-            await completeDeliveryDirect(paymentMethod);
-          }}
-        />
-      )}
+      {order && <PaymentMethodDialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog} selectionOnly={true} order={{
+      order_id: order.id,
+      customer_name: order.customer_name,
+      total_amount: order.total,
+      payment_status: order.payment_status
+    }} onSuccess={async paymentMethod => {
+      console.log('DeliveryDetails: Payment method selected:', paymentMethod);
+      setShowPaymentDialog(false);
+      await completeDeliveryDirect(paymentMethod);
+    }} />}
 
       {/* Navigation Map */}
-      {order && (
-        <NavigationMap
-          open={showNavigationMap}
-          onOpenChange={setShowNavigationMap}
-          customerLocation={order.address?.coordinates || { lat: 31.33, lng: 75.57 }}
-          customerAddress={debugAddress(order.address, 'delivery-details-map')}
-          customerName={order.customer_name}
-          customerPhone={order.customer_phone}
-        />
-      )}
-    </div>
-  );
+      {order && <NavigationMap open={showNavigationMap} onOpenChange={setShowNavigationMap} customerLocation={order.address?.coordinates || {
+      lat: 31.33,
+      lng: 75.57
+    }} customerAddress={debugAddress(order.address, 'delivery-details-map')} customerName={order.customer_name} customerPhone={order.customer_phone} />}
+    </div>;
 };
-
 export default DeliveryDetails;
