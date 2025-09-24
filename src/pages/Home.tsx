@@ -1226,6 +1226,17 @@ const Home = () => {
                               </span>
                             </div>
                             <div className="flex items-center">
+                              <Clock className="w-4 h-4 text-blue-500 mr-1" />
+                              <span className="text-sm text-blue-600 font-medium">
+                                {new Date().toLocaleTimeString('en-US', { 
+                                  hour: '2-digit', 
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                  hour12: true 
+                                })}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
                               <Package className="w-4 h-4 text-gray-500 mr-1" />
                               <span className="text-sm text-gray-600">
                                 {Array.isArray(order.items) ? order.items.length : 1} products
