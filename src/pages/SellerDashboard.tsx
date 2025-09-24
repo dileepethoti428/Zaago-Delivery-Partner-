@@ -128,22 +128,17 @@ const SellerDashboard = () => {
     }
   };
 
-  // Handle new packed order notification
-  const handlePackedOrderNotification = (orderData: any) => {
-    addDebugLog(`Processing order notification: ${orderData.id} - Status: ${orderData.status}`);
+  // Handle new order notification (INSERT events)
+  const handleNewOrderNotification = (orderData: any) => {
+    addDebugLog(`🆕 Processing new order notification: ${orderData.id} - Status: ${orderData.status}`);
     
-    // Only play for orders that just got packed and haven't been notified recently
-    if (orderData.status !== 'packed') {
-      addDebugLog(`Skipping notification - order status is not 'packed': ${orderData.status}`);
-      return;
-    }
-    
+    // Prevent duplicate notifications
     if (recentPackedNotifications.has(orderData.id)) {
       addDebugLog(`Skipping notification - already notified for order: ${orderData.id}`);
       return;
     }
 
-    addDebugLog(`🔔 Playing ringtone for order: ${orderData.id}`);
+    addDebugLog(`🔔 Playing ringtone for new order: ${orderData.id}`);
     
     // Add to recent notifications to prevent duplicates
     setRecentPackedNotifications(prev => new Set(prev).add(orderData.id));
@@ -160,7 +155,53 @@ const SellerDashboard = () => {
     try {
       // Play the ringtone
       playNotificationSound();
-      addDebugLog(`✅ Ringtone played successfully for order: ${orderData.id}`);
+      addDebugLog(`✅ Ringtone played successfully for new order: ${orderData.id}`);
+      
+      // Show toast notification
+      toast({
+        title: "🔔 New Order Received!",
+        description: `New order from ${orderData.customer_name} - ${formatCurrency(orderData.total)}`,
+        duration: 5000,
+      });
+      addDebugLog(`✅ Toast notification shown for new order: ${orderData.id}`);
+    } catch (error) {
+      addDebugLog(`❌ Error playing notification: ${error}`);
+    }
+  };
+
+  // Handle packed order notification (UPDATE events)
+  const handlePackedOrderNotification = (orderData: any) => {
+    addDebugLog(`Processing packed order notification: ${orderData.id} - Status: ${orderData.status}`);
+    
+    // Only play for orders that just got packed and haven't been notified recently
+    if (orderData.status !== 'packed') {
+      addDebugLog(`Skipping notification - order status is not 'packed': ${orderData.status}`);
+      return;
+    }
+    
+    if (recentPackedNotifications.has(orderData.id)) {
+      addDebugLog(`Skipping notification - already notified for order: ${orderData.id}`);
+      return;
+    }
+
+    addDebugLog(`🔔 Playing ringtone for packed order: ${orderData.id}`);
+    
+    // Add to recent notifications to prevent duplicates
+    setRecentPackedNotifications(prev => new Set(prev).add(orderData.id));
+    
+    // Remove from recent notifications after 30 seconds
+    setTimeout(() => {
+      setRecentPackedNotifications(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderData.id);
+        return newSet;
+      });
+    }, 30000);
+
+    try {
+      // Play the ringtone
+      playNotificationSound();
+      addDebugLog(`✅ Ringtone played successfully for packed order: ${orderData.id}`);
       
       // Show toast notification
       toast({
@@ -168,7 +209,7 @@ const SellerDashboard = () => {
         description: `Order for ${orderData.customer_name} is packed and ready for delivery`,
         duration: 5000,
       });
-      addDebugLog(`✅ Toast notification shown for order: ${orderData.id}`);
+      addDebugLog(`✅ Toast notification shown for packed order: ${orderData.id}`);
     } catch (error) {
       addDebugLog(`❌ Error playing notification: ${error}`);
     }
@@ -245,13 +286,37 @@ const SellerDashboard = () => {
         .on(
           'postgres_changes',
           {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'orders',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            addDebugLog(`🆕 New order INSERT received: ${payload.new?.id || 'unknown'}`);
+            addDebugLog(`   Customer: ${payload.new?.customer_name || 'unknown'}`);
+            addDebugLog(`   Status: ${payload.new?.status || 'unknown'}`);
+            addDebugLog(`   Total: ${payload.new?.total || 'unknown'}`);
+            
+            // Handle new order notifications
+            if (payload.new) {
+              addDebugLog(`🎯 New order detected - triggering notification`);
+              handleNewOrderNotification(payload.new);
+            }
+            
+            // Refresh orders
+            fetchOrders();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
             event: 'UPDATE',
             schema: 'public',
             table: 'orders',
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
-            addDebugLog(`📦 Order update received: ${payload.new?.id || 'unknown'}`);
+            addDebugLog(`📦 Order UPDATE received: ${payload.new?.id || 'unknown'}`);
             addDebugLog(`   Old Status: ${payload.old?.status || 'unknown'}`);
             addDebugLog(`   New Status: ${payload.new?.status || 'unknown'}`);
             
