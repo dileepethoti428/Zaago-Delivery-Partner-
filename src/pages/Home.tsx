@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -100,21 +99,6 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("nearest");
 
-  // Get greeting based on current time
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good Morning";
-    if (hour < 17) return "Good Afternoon";
-    return "Good Evening";
-  };
-
-  // Capitalize first letter of each word
-  const capitalizeWords = (str: string) => {
-    return str.split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
-  };
-
   // Fetch agent name
   const fetchAgentName = async () => {
     try {
@@ -129,79 +113,30 @@ const Home = () => {
         .maybeSingle();
 
       if (agent?.name) {
-        setAgentName(capitalizeWords(agent.name));
+        setAgentName(agent.name);
       }
     } catch (error) {
       console.error('Error fetching agent name:', error);
     }
   };
-  
-  // Calculate agent payout using backend service for accurate pricing
-  const calculateAgentPayoutFromBackend = async (orderId: string, agentLocation?: {lat: number, lng: number}) => {
-    try {
-      const { data, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
-        body: {
-          order_id: orderId,
-          agent_location: agentLocation
-        }
-      });
 
-      if (error) throw error;
-
-      return {
-        payout: data.agent_payout,
-        distance: data.distance_km,
-        estimatedTime: data.estimated_time_minutes,
-        breakdown: data.breakdown
-      };
-    } catch (error) {
-      console.error('Failed to calculate pricing from backend:', error);
-      // Fallback calculation
-      const fallbackDistance = 2.5;
-      const basePay = 20;
-      const additionalDistance = Math.max(0, fallbackDistance - 1);
-      const perKmRate = 15;
-      const distancePay = additionalDistance * perKmRate;
-      
-      return {
-        payout: basePay + distancePay,
-        distance: fallbackDistance,
-        estimatedTime: Math.ceil(fallbackDistance * 2),
-        breakdown: {
-          base_pay: basePay,
-          additional_distance: additionalDistance,
-          per_km_rate: perKmRate,
-          distance_pay: distancePay
-        }
-      };
-    }
-  };
-
-  // Synchronous payout calculation for display (using stored distance)
+  // Calculate agent payout (simple calculation)
   const calculateAgentPayout = (distance: number) => {
-    const basePay = 20; // Base pay for first 1 km
-    const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
-    const perKmRate = 15; // Rate per km for additional distance
+    const basePay = 20;
+    const additionalDistance = Math.max(0, distance - 1);
+    const perKmRate = 15;
     const distancePay = additionalDistance * perKmRate;
     
     return basePay + distancePay;
   };
 
-  // Fetch orders from backend (filtered by agent exclusions) - Optimized
+  // Fetch orders from backend
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
       
-      // Add timeout for faster user experience
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 8000) // 8 second timeout
-      );
-      
-      // Get current agent ID with error handling
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error('Not authenticated');
-      }
+      if (!user?.email) return;
       
       const { data: agent } = await supabase
         .from('delivery_agents')
@@ -210,630 +145,65 @@ const Home = () => {
         .eq('is_active', true)
         .maybeSingle();
 
-      if (!agent) {
-        throw new Error('Agent not found');
-      }
+      if (!agent) return;
 
-      // Fetch delivery slots for reference
-      const { data: deliverySlots } = await supabase
-        .from('delivery_slots')
-        .select('id, slot_name, start_time, end_time')
-        .eq('is_active', true);
-        
-      console.log('Fetched delivery slots:', deliverySlots);
+      const { data: availableResponse, error: availableError } = await supabase.functions.invoke('get-available-orders', {
+        body: { agent_id: agent.id }
+      });
 
-      // Fetch both available orders and assigned orders in parallel
-      const [availableOrdersResult, assignedOrdersResult] = await Promise.all([
-        // Available orders from edge function
-        Promise.race([
-          supabase.functions.invoke('get-available-orders', {
-            body: { agent_id: agent.id }
-          }),
-          timeoutPromise
-        ]),
-        // Assigned orders directly from database
-        supabase
-          .from('orders')
-          .select(`
-            id, status, total, created_at, updated_at, agent_id,
-            customer_name, customer_phone, address, items,
-            special_instructions, delivery_time_slot, delivery_date,
-            delivery_time, subscription_id, payment_status
-          `)
-          .eq('agent_id', agent.id)
-          .in('status', ['assigned', 'picked_up', 'in_transit'])
-          .order('created_at', { ascending: false })
-      ]);
-
-      // Handle available orders
-      const { data: availableResponse, error: availableError } = availableOrdersResult as any;
       if (availableError) throw availableError;
 
-      if (!availableResponse.success) {
-        throw new Error(availableResponse.error || 'Failed to fetch available orders');
-      }
+      const { data: assignedOrders, error: assignedError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('agent_id', agent.id)
+        .in('status', ['assigned', 'picked_up', 'in_transit'])
+        .order('created_at', { ascending: false });
 
-      // Handle assigned orders
-      const { data: assignedOrders, error: assignedError } = assignedOrdersResult;
       if (assignedError) throw assignedError;
 
-      // Helper function to match single time with delivery slots
-      const matchTimeWithSlot = (timeString: string) => {
-        if (!deliverySlots || !timeString) {
-          console.log('matchTimeWithSlot: No slots or timeString', { slotsCount: deliverySlots?.length, timeString });
-          return null;
-        }
-        
-        // Convert timeString to comparable format
-        const targetTime = timeString.length === 5 ? timeString + ':00' : timeString;
-        console.log('matchTimeWithSlot: Looking for time', targetTime, 'in', deliverySlots.length, 'slots');
-        
-        // Find matching delivery slot
-        const matchedSlot = deliverySlots.find(slot => {
-          const slotStart = slot.start_time;
-          const slotEnd = slot.end_time;
-          
-          console.log(`Checking slot ${slot.slot_name}: ${slotStart} <= ${targetTime} <= ${slotEnd}`);
-          
-          // Check if the target time falls within this slot
-          return targetTime >= slotStart && targetTime <= slotEnd;
-        });
-        
-        if (matchedSlot) {
-          console.log('Found matching slot:', matchedSlot);
-          // Format times for display (remove seconds)
-          const formatTime = (time: string) => time.substring(0, 5);
-          
-          return {
-            id: matchedSlot.id,
-            slot_name: matchedSlot.slot_name,
-            start_time: matchedSlot.start_time,
-            end_time: matchedSlot.end_time,
-            formatted_range: `${formatTime(matchedSlot.start_time)} - ${formatTime(matchedSlot.end_time)}`
-          };
-        }
-        
-        console.log('No matching slot found for time:', targetTime);
-        return null;
-      };
+      const transformedAvailableOrders: Order[] = (availableResponse?.orders || []).map((order: any) => ({
+        ...order,
+        order_placed_at: new Date(order.created_at),
+        delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
+      }));
 
-      // Transform available orders to match our interface
-      const transformedAvailableOrders: Order[] = (availableResponse.orders || []).map((order, index) => {
-        // Parse delivery slots for timing intervals
-        let deliverySlots = null;
-        let scheduledTime = null;
-        let formattedDeliveryTime = null;
+      const transformedAssignedOrders: Order[] = (assignedOrders || []).map((order) => ({
+        ...order,
+        items: Array.isArray(order.items) ? order.items : [],
+        order_placed_at: new Date(order.created_at),
+        delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
+      }));
 
-        if (order.delivery_time_slot) {
-          const timeSlot = order.delivery_time_slot;
-          
-          // Handle time intervals like "18:00-20:00" or "22:00-00:00"
-          if (timeSlot.includes('-') && timeSlot.match(/\d{1,2}:\d{2}-\d{1,2}:\d{2}/)) {
-            const [startTime, endTime] = timeSlot.split('-');
-            deliverySlots = {
-              id: `slot-${order.id}`,
-              slot_name: `${startTime} - ${endTime}`,
-              start_time: startTime.length === 5 ? startTime + ':00' : startTime,
-              end_time: endTime.length === 5 ? endTime + ':00' : endTime,
-            };
-            
-            // Set scheduled time using start time
-            if (order.delivery_date) {
-              try {
-                const dateTimeString = order.delivery_date + 'T' + deliverySlots.start_time;
-                const date = new Date(dateTimeString);
-                if (!isNaN(date.getTime())) {
-                  scheduledTime = date.toISOString();
-                }
-              } catch (error) {
-                console.warn('Failed to parse scheduled time for order:', order.id, error);
-              }
-            }
-          } else {
-            // Handle single time slots - match with delivery_slots table
-            let timeString = '';
-            
-            if (timeSlot.includes('-')) {
-              // Format like "morning-early"
-              const timePart = timeSlot.split('-')[0];
-              const timeMap = {
-                'morning': '08:00:00',
-                'afternoon': '14:00:00',
-                'evening': '18:00:00'
-              };
-              timeString = timeMap[timePart] || '12:00:00';
-            } else if (timeSlot.includes(':')) {
-              timeString = timeSlot.length === 5 ? timeSlot + ':00' : timeSlot;
-            } else {
-              timeString = '12:00:00'; // fallback
-            }
-            
-        // Try to match with actual delivery slot
-        const matchedSlot = matchTimeWithSlot(timeString);
-        if (matchedSlot) {
-          console.log(`Order ${order.id} matched slot:`, matchedSlot);
-          deliverySlots = {
-            id: matchedSlot.id,
-            slot_name: matchedSlot.formatted_range,
-            start_time: matchedSlot.start_time,
-            end_time: matchedSlot.end_time,
-          };
-          timeString = matchedSlot.start_time;
-        } else {
-          console.log(`Order ${order.id} no slot match for time:`, timeString, 'Available slots:', deliverySlots?.length || 0);
-        }
-            
-            // Set scheduled time for single time slots
-            if (order.delivery_date) {
-              try {
-                const dateTimeString = order.delivery_date + 'T' + timeString;
-                const date = new Date(dateTimeString);
-                if (!isNaN(date.getTime())) {
-                  scheduledTime = date.toISOString();
-                }
-              } catch (error) {
-                console.warn('Failed to parse scheduled time for order:', order.id, error);
-              }
-            }
-          }
-        }
-
-        // Format delivery time for display (fallback for single delivery times)
-        if (order.delivery_time) {
-          try {
-            // Convert "12:00:00" to "12:00 PM" format
-            const [hours, minutes] = order.delivery_time.split(':');
-            const hour24 = parseInt(hours);
-            const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
-            const ampm = hour24 >= 12 ? 'PM' : 'AM';
-            formattedDeliveryTime = `${hour12}:${minutes} ${ampm}`;
-          } catch (error) {
-            console.warn('Failed to format delivery time:', order.delivery_time, error);
-            formattedDeliveryTime = order.delivery_time;
-          }
-        }
-
-        return {
-          id: order.id,
-          customer_name: order.customer_name,
-          customer_phone: order.customer_phone,
-          address: order.address,
-          items: Array.isArray(order.items) ? order.items : [],
-          total: order.total,
-          status: order.status,
-          delivery_date: order.delivery_date,
-          created_at: order.created_at,
-          payment_status: order.payment_status,
-          coordinates: (order.address as any)?.coordinates,
-          products_count: Array.isArray(order.items) ? order.items.length : 1,
-          restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
-          // Use backend-calculated distance and payout if available, otherwise calculate
-          distance_km: order.distance_km || undefined,
-          agent_payout: order.agent_payout || undefined,
-          estimated_time_minutes: order.estimated_time_minutes || undefined,
-          backend_calculated: order.distance_km ? true : false,
-          // Determine delivery type - only subscription and time slots make it scheduled
-          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
-          scheduled_time: scheduledTime,
-          // Preserve original delivery_time from backend for scheduled orders only
-          delivery_time: (order.subscription_id || order.delivery_time_slot) ? 
-            (formattedDeliveryTime || order.delivery_time) : 
-            null, // Will be calculated for immediate orders
-          subscription_id: order.subscription_id,
-          order_placed_at: new Date(order.created_at),
-          delivery_slots: deliverySlots
-        };
-      });
-
-      // Transform assigned orders to match our interface
-      const transformedAssignedOrders: Order[] = (assignedOrders || []).map((order) => {
-        // Parse delivery slots for assigned orders too
-        let deliverySlots = null;
-        let scheduledTime = null;
-        let formattedDeliveryTime = null;
-
-        // Check for delivery_time_slot first (priority for intervals), then delivery_time
-        if (order.delivery_time_slot) {
-          const timeSlot = order.delivery_time_slot;
-          
-          // Handle time intervals like "18:00-20:00" or "22:00-00:00"
-          if (timeSlot.includes('-') && timeSlot.match(/\d{1,2}:\d{2}-\d{1,2}:\d{2}/)) {
-            const [startTime, endTime] = timeSlot.split('-');
-            deliverySlots = {
-              id: `slot-${order.id}`,
-              slot_name: `${startTime} - ${endTime}`,
-              start_time: startTime.length === 5 ? startTime + ':00' : startTime,
-              end_time: endTime.length === 5 ? endTime + ':00' : endTime,
-            };
-            
-            // Set scheduled time using start time
-            if (order.delivery_date) {
-              try {
-                const dateTimeString = order.delivery_date + 'T' + deliverySlots.start_time;
-                const date = new Date(dateTimeString);
-                if (!isNaN(date.getTime())) {
-                  scheduledTime = date.toISOString();
-                }
-              } catch (error) {
-                console.warn('Failed to parse scheduled time for assigned order:', order.id, error);
-              }
-            }
-          } else {
-            // Handle single time slots - match with delivery_slots table
-            let timeString = timeSlot.includes(':') ? 
-              (timeSlot.length === 5 ? timeSlot + ':00' : timeSlot) : 
-              '12:00:00';
-              
-        // Try to match with actual delivery slot
-        const matchedSlot = matchTimeWithSlot(timeString);
-        if (matchedSlot) {
-          console.log(`Assigned order ${order.id} matched slot:`, matchedSlot);
-          deliverySlots = {
-            id: matchedSlot.id,
-            slot_name: matchedSlot.formatted_range,
-            start_time: matchedSlot.start_time,
-            end_time: matchedSlot.end_time,
-          };
-          timeString = matchedSlot.start_time;
-        } else {
-          // Fallback: use the single time as formatted delivery time
-          console.log(`Assigned order ${order.id} no slot match for time:`, timeString);
-          formattedDeliveryTime = timeSlot;
-        }
-            
-            if (order.delivery_date && timeString.includes(':')) {
-              try {
-                const dateTimeString = order.delivery_date + 'T' + timeString;
-                const date = new Date(dateTimeString);
-                if (!isNaN(date.getTime())) {
-                  scheduledTime = date.toISOString();
-                }
-              } catch (error) {
-                console.warn('Failed to parse scheduled time for assigned order:', order.id, error);
-              }
-            }
-          }
-        } else if (order.delivery_time) {
-          // Use delivery_time if delivery_time_slot is not available
-          let timeString = order.delivery_time.includes(':') ? 
-            (order.delivery_time.length === 5 ? order.delivery_time + ':00' : order.delivery_time) : 
-            '12:00:00';
-            
-          console.log(`Order ${order.id}: Trying to match delivery_time "${order.delivery_time}" -> "${timeString}"`);
-            
-          // Try to match with actual delivery slot
-          const matchedSlot = matchTimeWithSlot(timeString);
-          if (matchedSlot) {
-            console.log(`Assigned order ${order.id} from delivery_time matched slot:`, matchedSlot);
-            deliverySlots = {
-              id: matchedSlot.id,
-              slot_name: matchedSlot.slot_name,
-              start_time: matchedSlot.start_time,
-              end_time: matchedSlot.end_time,
-            };
-            formattedDeliveryTime = `${matchedSlot.formatted_range}`;
-          } else {
-            console.log(`Assigned order ${order.id} no slot match for delivery_time:`, timeString);
-            formattedDeliveryTime = order.delivery_time;
-          }
-          
-          if (order.delivery_date && timeString.includes(':')) {
-            try {
-              const dateTimeString = order.delivery_date + 'T' + timeString;
-              const date = new Date(dateTimeString);
-              if (!isNaN(date.getTime())) {
-                scheduledTime = date.toISOString();
-              }
-            } catch (error) {
-              console.warn('Failed to parse scheduled time from delivery_time for assigned order:', order.id, error);
-            }
-          }
-        }
-
-        return {
-          id: order.id,
-          customer_name: order.customer_name,
-          customer_phone: order.customer_phone,
-          address: order.address,
-          items: Array.isArray(order.items) ? order.items : [],
-          total: order.total,
-          status: order.status,
-          delivery_date: order.delivery_date,
-          created_at: order.created_at,
-          payment_status: order.payment_status,
-          coordinates: (order.address as any)?.coordinates,
-          products_count: Array.isArray(order.items) ? order.items.length : 1,
-          restaurant: Array.isArray(order.items) && order.items[0] ? (order.items[0] as any).restaurant || 'Restaurant' : 'Restaurant',
-          distance_km: undefined, // Will be calculated for immediate orders only
-          agent_payout: undefined, // Will be calculated
-          estimated_time_minutes: undefined, // Will be calculated  
-          backend_calculated: false,
-          delivery_type: order.delivery_time_slot || order.subscription_id ? 'scheduled' : 'immediate',
-          scheduled_time: scheduledTime,
-          // Preserve original delivery_time from backend for scheduled orders only
-          delivery_time: (order.delivery_time_slot || order.subscription_id) ? 
-            (formattedDeliveryTime || order.delivery_time) : 
-            null, // Will be calculated for immediate orders
-          subscription_id: order.subscription_id,
-          order_placed_at: new Date(order.created_at),
-          delivery_slots: deliverySlots
-        };
-      });
-
-      // Combine both available and assigned orders
       const allOrders = [...transformedAvailableOrders, ...transformedAssignedOrders];
       setOrders(allOrders);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching orders:', error);
-      setOrders([]);
-      setOrdersWithDistance([]);
-      
-      // Only show toast if it's not an auto-refresh (to avoid spam)
-      if (!isRefreshing) {
-        const isNetworkError = error.message?.includes('Failed to fetch') || 
-                              error.message?.includes('timeout') ||
-                              error.message?.includes('Request timeout');
-        toast({
-          title: isNetworkError ? "Connection Issue" : "Failed to fetch orders",
-          description: isNetworkError 
-            ? "Poor network connection. Orders will retry automatically." 
-            : error.message || "Please check your connection and try again",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error",
+        description: "Failed to fetch orders. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Process orders with backend-calculated distances (prioritize backend data)
-  const processOrdersWithDistances = async (orders: Order[]) => {
-    // Use real agent location if available
-    const agentLocation = location.latitude && location.longitude 
-      ? { lat: location.latitude, lng: location.longitude }
-      : null;
-    
-    const updatedOrders = await Promise.all(
-      orders.map(async (order) => {
-        // For scheduled orders and subscription orders, preserve their exact backend timing
-        if (order.delivery_type === 'scheduled' || order.subscription_id) {
-          console.log(`Preserving scheduled order ${order.id} timing:`, {
-            original_delivery_time: order.delivery_time,
-            delivery_slots: order.delivery_slots,
-            scheduled_time: order.scheduled_time,
-            subscription_id: order.subscription_id
-          });
-          
-          // Don't modify delivery_time for scheduled orders - keep exact backend data
-          return {
-            ...order,
-            distance_km: order.distance_km || 2.5, // Keep distance for sorting only
-            backend_calculated: order.distance_km ? true : false
-          };
-        }
-        
-        // Only calculate travel time for immediate orders
-        if (order.distance_km !== undefined) {
-          return {
-            ...order,
-            delivery_time: `${Math.ceil(order.distance_km * 2)} min`, // 2 minutes per km
-            backend_calculated: true
-          };
-        }
-
-        // Only recalculate if no backend distance and we have coordinates
-        try {
-          if (!order.coordinates || !agentLocation) {
-            return {
-              ...order,
-              distance_km: 2.5, // fallback
-              delivery_time: "5 min",
-              backend_calculated: false
-            };
-          }
-
-          const { data, error } = await supabase.functions.invoke('calculate-distance-eta', {
-            body: {
-              origin: agentLocation,
-              destination: order.coordinates
-            }
-          });
-
-          if (error) throw error;
-
-          return {
-            ...order,
-            distance_km: data.distance_km,
-            delivery_time: `${data.eta_mins} min`,
-            backend_calculated: true
-          };
-        } catch (error) {
-          console.error('Failed to calculate distance for order:', order.id, error);
-          // Keep fallback values on error
-          return {
-            ...order,
-            distance_km: 2.5,
-            delivery_time: "5 min",
-            backend_calculated: false
-          };
-        }
-      })
-    );
-    
-    setOrdersWithDistance(updatedOrders);
-  };
-
-  // Process orders with distances when they change (not when location changes)
-  useEffect(() => {
-    if (orders.length > 0) {
-      // Process orders, prioritizing backend-calculated distances
-      processOrdersWithDistances(orders);
-    }
-  }, [orders]); // Removed location dependencies to prevent constant updates
-
-  useEffect(() => {
-    fetchOrders();
-    fetchAgentName();
-    
-    // Set up auto-refresh for orders every 45 seconds (reduced frequency for better performance)
-    const autoRefreshInterval = setInterval(async () => {
-      console.log('Auto-refreshing orders...');
-      
-      // Only auto-refresh if not already loading and user is active
-      if (!isLoading && !isRefreshing && document.visibilityState === 'visible') {
-        try {
-          await fetchOrders();
-          
-          // Refresh location less frequently (every other auto-refresh)
-          if (Math.random() > 0.5 && location.getCurrentLocation) {
-            location.getCurrentLocation();
-          }
-        } catch (error) {
-          console.error('Auto-refresh failed:', error);
-          // Silent fail for auto-refresh to avoid spam
-        }
-      }
-    }, 45000); // 45 seconds - increased from 30 for better performance
-    
-    // Listen for order completion events from QR scanner
-    const handleOrderCompleted = (e: Event) => {
-      const event = e as CustomEvent<{ orderId?: string }>;
-      const completedId = event.detail?.orderId;
-      if (completedId) {
-        setOrders(prev => prev.filter(o => o.id !== completedId));
-        setOrdersWithDistance(prev => prev.filter(o => o.id !== completedId));
-      }
-      fetchOrders();
-    };
-    
-    // Listen for order cancellation events
-    const handleOrderCancelled = () => {
-      fetchOrders();
-    };
-    window.addEventListener('orderCompleted', handleOrderCompleted);
-    window.addEventListener('orderCancelled', handleOrderCancelled);
-    
-    // Set up real-time subscription for orders table
-    const channel = supabase
-      .channel('orders-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders'
-        },
-        (payload) => {
-          console.log('Order updated:', payload);
-          
-           // If an order status changed to 'placed' (released back to all agents)
-          if (payload.new.status === 'placed' && payload.old.status === 'assigned') {
-            // Play notification sound like phone ringtone
-            playNotificationSound();
-            toast({
-              title: "New Order Available!",
-              description: `Order from ${payload.new.customer_name} is now available`,
-            });
-            // Refresh orders to show the newly available order
-            fetchOrders();
-          }
-          
-          // If an order status changes from 'packed' to 'assigned', remove it from view
-          if (payload.old.status === 'packed' && payload.new.status === 'assigned') {
-            setOrders(prev => prev.filter(order => order.id !== payload.new.id));
-            setOrdersWithDistance(prev => prev.filter(order => order.id !== payload.new.id));
-            
-            toast({
-              title: "Order Taken",
-              description: "This order was accepted by another agent",
-              variant: "default"
-            });
-          }
-          
-          // If an order was delivered or cancelled, remove it
-          if (payload.new.status === 'delivered' || payload.new.status === 'cancelled') {
-            setOrders(prev => prev.filter(order => order.id !== payload.new.id));
-            setOrdersWithDistance(prev => prev.filter(order => order.id !== payload.new.id));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders'
-        },
-        (payload) => {
-          console.log('New order created:', payload);
-          
-          // If a new order is packed, check if it's not already in our list to prevent duplicates
-          if (payload.new.status === 'packed') {
-            // Check if order already exists to prevent duplicates
-            const orderExists = orders.some(order => order.id === payload.new.id) || 
-                              ordersWithDistance.some(order => order.id === payload.new.id);
-            
-            if (!orderExists) {
-              // Play notification sound like phone ringtone for new orders
-              playNotificationSound();
-              toast({
-                title: "New Order Available!",
-                description: `New order from ${payload.new.customer_name}`,
-              });
-              fetchOrders();
-            }
-          }
-        }
-      )
-      .subscribe();
-    
-    return () => {
-      clearInterval(autoRefreshInterval);
-      window.removeEventListener('orderCompleted', handleOrderCompleted);
-      window.removeEventListener('orderCancelled', handleOrderCancelled);
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  // Pull to refresh functionality - Optimized for faster performance
+  // Pull to refresh functionality
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    
-    try {
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Refresh timeout')), 10000) // 10 second timeout
-      );
-      
-      await Promise.race([fetchOrders(), timeoutPromise]);
-      
-      toast({
-        title: "Orders Updated!",
-        description: "Latest delivery requests loaded",
-      });
-    } catch (error) {
-      console.error('Refresh failed:', error);
-      toast({
-        title: "Refresh Failed",
-        description: "Unable to fetch latest orders. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
+    await fetchOrders();
+    setIsRefreshing(false);
   };
 
-  // Accept order - Updated with better error handling and RLS compliance
+  // Accept order
   const handleAcceptOrder = async (orderId: string) => {
     setAcceptingOrders(prev => ({ ...prev, [orderId]: true }));
     
     try {
-      // Get current authenticated user's email
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error('Not authenticated');
-      }
-      
+      if (!user?.email) return;
+
       const { data: agent } = await supabase
         .from('delivery_agents')
         .select('id')
@@ -841,59 +211,32 @@ const Home = () => {
         .eq('is_active', true)
         .maybeSingle();
 
-      if (!agent) {
-        throw new Error(`Agent not found for email: ${user.email}. Please contact admin for activation.`);
-      }
+      if (!agent) return;
 
-      // Update order with specific conditions to work with RLS policies
-      const { data: updated, error } = await supabase
+      const { error } = await supabase
         .from('orders')
         .update({ 
-          status: 'assigned',
-          agent_id: agent.id
+          status: 'assigned', 
+          agent_id: agent.id,
+          updated_at: new Date().toISOString()
         })
         .eq('id', orderId)
-        .eq('status', 'packed')  // Only accept orders that are still 'packed'
-        .is('agent_id', null)   // Only accept unassigned orders
-        .select('id, status, agent_id')
-        .maybeSingle();
+        .eq('status', 'packed');
 
-      if (error) {
-        console.error('Database error:', error);
-        throw new Error(error.message || 'Failed to accept order');
-      }
+      if (error) throw error;
 
-      if (!updated || updated.status !== 'assigned' || updated.agent_id !== agent.id) {
-        throw new Error('This order is no longer available. It may have been accepted by another agent.');
-      }
-
-      // Update order in state to show as assigned
-      setOrders(prev => prev.map(order => 
-        order.id === orderId 
-          ? { ...order, status: 'assigned' }
-          : order
-      ));
-      
-      setOrdersWithDistance(prev => prev.map(order => 
-        order.id === orderId 
-          ? { ...order, status: 'assigned' }
-          : order
-      ));
-      
-      // Refresh orders to get latest state
-      await fetchOrders();
-      
       toast({
         title: "Order Accepted!",
-        description: "You can now manage this delivery",
+        description: "You have successfully accepted this order.",
       });
-      
-    } catch (error: any) {
+
+      await fetchOrders();
+    } catch (error) {
       console.error('Error accepting order:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to accept order",
-        variant: "destructive"
+        description: "Failed to accept order. Please try again.",
+        variant: "destructive",
       });
     } finally {
       setAcceptingOrders(prev => ({ ...prev, [orderId]: false }));
@@ -905,549 +248,346 @@ const Home = () => {
     setRejectingOrders(prev => ({ ...prev, [orderId]: true }));
     
     try {
-      // Get current authenticated user's email
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error('Not authenticated');
-      }
-      
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!agent) {
-        throw new Error('Agent not found');
-      }
-
-      const { data, error } = await supabase.functions.invoke('cancel-delivery', {
-        body: {
-          order_id: orderId,
-          agent_id: agent.id,
-          cancellation_reason: 'Agent rejected delivery'
-        }
-      });
-
-      if (error) throw error;
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to reject order');
-      }
-
-      // Remove from local orders list
-      setOrders(prev => prev.filter(order => order.id !== orderId));
-      setOrdersWithDistance(prev => prev.filter(order => order.id !== orderId));
-      
+      // Add order to rejected list or handle rejection logic
       toast({
         title: "Order Rejected",
-        description: `Order has been rejected`,
-        variant: "destructive"
+        description: "Order has been rejected and removed from your list.",
       });
+      
+      setOrders(prev => prev.filter(order => order.id !== orderId));
     } catch (error) {
       console.error('Error rejecting order:', error);
-      toast({
-        title: "Error",
-        description: "Failed to reject order",
-        variant: "destructive"
-      });
     } finally {
       setRejectingOrders(prev => ({ ...prev, [orderId]: false }));
     }
   };
 
   // Sort orders based on selected criteria
-  const getSortedOrders = () => {
-    // Use ordersWithDistance if available, otherwise fallback to orders
-    const ordersToSort = ordersWithDistance.length > 0 ? [...ordersWithDistance] : [...orders];
-    
-    switch (sortBy) {
-      case "nearest":
-        return ordersToSort.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
-      case "furthest":
-        return ordersToSort.sort((a, b) => (b.distance_km || 0) - (a.distance_km || 0));
-      case "newest":
-        return ordersToSort.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      case "oldest":
-        return ordersToSort.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      case "highest":
-        return ordersToSort.sort((a, b) => b.total - a.total);
-      case "lowest":
-        return ordersToSort.sort((a, b) => a.total - b.total);
-      default:
-        return ordersToSort;
-    }
+  const getSortedOrders = (orders: Order[]) => {
+    return [...orders].sort((a, b) => {
+      switch (sortBy) {
+        case 'nearest':
+          return (a.distance_km || 999) - (b.distance_km || 999);
+        case 'newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'highest':
+          return b.total - a.total;
+        default:
+          return 0;
+      }
+    });
   };
 
-  const availableOrders = getSortedOrders();
+  const availableOrders = getSortedOrders(orders);
+  const assignedOrders = availableOrders.filter(order => order.status === 'assigned');
 
-  const LoadingSkeleton = () => (
-    <div className="space-y-4">
-      {[1, 2, 3].map(i => (
-        <Card key={i} className="bg-card/50 border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-20" />
+  useEffect(() => {
+    fetchAgentName();
+    fetchOrders();
+    
+    const interval = setInterval(fetchOrders, 45000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="p-4">
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-10 w-full" />
               </div>
-              <Skeleton className="h-6 w-16" />
-            </div>
-            <div className="space-y-2 mb-4">
-              <Skeleton className="h-3 w-full" />
-              <div className="flex justify-between">
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-            </div>
-            <div className="flex space-x-2">
-              <Skeleton className="h-10 flex-1" />
-              <Skeleton className="h-10 w-12" />
-              <Skeleton className="h-10 w-12" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-dark">
-      {/* Top App Bar */}
-      <div className="bg-card/80 backdrop-blur-lg border-b border-primary/20 shadow-neon sticky top-0 z-50">
-        <div className="flex items-center justify-between p-4">
-          <div className="animate-fade-in">
-            <h1 className="text-xl font-bold text-foreground">
-              Zaago Delivery Agent
-            </h1>
-            <LocationPicker onLocationSelected={(loc) => {
-              toast({
-                title: "Location Updated",
-                description: `Location set to: ${loc.address}`,
-              });
-            }}>
-              <div className="flex items-center text-sm text-muted-foreground cursor-pointer hover:text-primary transition-colors">
-                {location.loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Getting location...
-                  </>
-                ) : location.error ? (
-                  <>
-                    <MapPin className="w-4 h-4 mr-2 text-destructive" />
-                    Tap to set location
-                  </>
-                ) : (
-                  <>
-                    <MapPin className="w-4 h-4 mr-2 text-primary" />
-                    {location.address ? location.address : 
-                     (location.latitude && location.longitude ? 
-                       'Location detected' : 
-                       'Tap to update location')}
-                  </>
-                )}
-              </div>
-            </LocationPicker>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
+            <div className="flex items-center text-sm text-gray-500 mt-1">
+              <MapPin className="w-4 h-4 mr-1 text-red-500" />
+              <span>Tap to set location</span>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative hover:bg-primary/10"
-              onClick={() => navigate('/notifications')}
-            >
-              <Bell className="w-5 h-5 text-foreground" />
-              {notificationCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-destructive text-destructive-foreground text-xs animate-pulse">
-                  {notificationCount}
-                </Badge>
-              )}
-            </Button>
+          <div className="flex items-center space-x-2">
+            {/* Notification Bell */}
+            <div className="relative">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => navigate('/notifications')}
+                className="hover:bg-gray-100"
+              >
+                <Bell className="w-5 h-5 text-gray-600" />
+                {notificationCount > 0 && (
+                  <div className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 rounded-full flex items-center justify-center">
+                    <span className="text-xs text-white font-medium">{notificationCount}</span>
+                  </div>
+                )}
+              </Button>
+            </div>
             
-            <Button
-              variant="ghost"
+            {/* Profile Button */}
+            <Button 
+              variant="ghost" 
               size="icon"
-              className="hover:bg-primary/10"
               onClick={() => navigate('/profile')}
+              className="hover:bg-gray-100"
             >
-              <User className="w-5 h-5 text-foreground" />
+              <User className="w-5 h-5 text-gray-600" />
             </Button>
           </div>
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-6">
-          {/* Greeting */}
-          {agentName && (
-            <div className="text-center animate-fade-in">
-              <div className="text-2xl font-bold text-primary">
-                {getGreeting()} {agentName}
-              </div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Ready to deliver excellence
-              </div>
-            </div>
-          )}
-          
-          {/* Quick Services */}
-          <Card className="bg-gradient-to-r from-card to-card/50 border-primary/20 animate-slide-up">
-            <CardContent className="p-4">
-              <h3 className="text-sm font-medium text-foreground mb-3">Quick Services</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <Button
-                  onClick={() => setIsOnline(!isOnline)}
-                  className={`${
-                    isOnline 
-                      ? "bg-destructive hover:bg-destructive/80" 
-                      : "bg-gradient-neon hover:shadow-neon hover:scale-105"
-                  } transition-all duration-300 flex-col h-16`}
-                >
-                  <Zap className="w-5 h-5 mb-1" />
-                  <span className="text-xs">
-                    {isOnline ? "Go Offline" : "Go Online"}
-                  </span>
-                </Button>
-                
-                <Button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  variant="outline"
-                  className="border-border hover:bg-secondary hover:shadow-neon transition-all duration-300 flex-col h-16"
-                >
-                  <RefreshCw className={`w-5 h-5 mb-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  <span className="text-xs">Refresh</span>
-                </Button>
-                
-                <Button
-                  onClick={() => setShowQrScanner(true)}
-                  variant="outline"
-                  className="border-border hover:bg-secondary hover:shadow-neon transition-all duration-300 flex-col h-16"
-                >
-                  <QrCode className="w-5 h-5 mb-1" />
-                  <span className="text-xs">Scan QR</span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Action Buttons */}
+      <div className="px-4 py-4 bg-gray-50">
+        <div className="grid grid-cols-3 gap-3">
+          {/* Go Online/Offline Button */}
+          <Button
+            onClick={() => setIsOnline(!isOnline)}
+            className={`h-12 rounded-lg font-medium ${
+              isOnline 
+                ? 'bg-red-500 hover:bg-red-600 text-white' 
+                : 'bg-green-500 hover:bg-green-600 text-white'
+            }`}
+          >
+            {isOnline ? 'Go Offline' : 'Go Online'}
+          </Button>
 
-          {/* Orders List */}
-          <div className="animate-slide-up">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                  Orders ({availableOrders.length})
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Available orders and your assignments
-                </p>
-              </div>
-              
-              {/* Sort Dropdown */}
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-44 h-9 bg-card border-border">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  <SelectItem value="nearest" className="cursor-pointer">
-                    <div className="flex items-center space-x-2">
-                      <Target className="w-4 h-4 text-primary" />
-                      <span>Nearest First</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="furthest" className="cursor-pointer">
-                    <div className="flex items-center space-x-2">
-                      <MapPinOff className="w-4 h-4 text-destructive" />
-                      <span>Furthest First</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="newest" className="cursor-pointer">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span>Newest First</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="oldest" className="cursor-pointer">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span>Oldest First</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="highest" className="cursor-pointer">
-                    <div className="flex items-center space-x-2">
-                      <Trophy className="w-4 h-4 text-amber-500" />
-                      <span>Highest Amount</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="lowest" className="cursor-pointer">
-                    <div className="flex items-center space-x-2">
-                      <BarChart3 className="w-4 h-4 text-green-500" />
-                      <span>Lowest Amount</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Refresh Orders */}
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100"
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              'Refresh'
+            )}
+          </Button>
 
-            {isLoading ? (
-              <LoadingSkeleton />
-            ) : availableOrders.length === 0 ? (
-              <Card className="bg-card/50 border-border">
-                <CardContent className="p-8 text-center">
-                  <div className="mb-6">
-                    <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-                      <PackageOpen className="w-16 h-16 text-primary/60" />
-                    </div>
+          {/* QR Scanner */}
+          <Button
+            onClick={() => setShowQrScanner(true)}
+            variant="outline"
+            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100"
+          >
+            Scan QR
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1 bg-gray-50">
+        {/* Orders Header */}
+        <div className="px-4 py-4 bg-white border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Orders ({availableOrders.length})</h2>
+              <p className="text-sm text-gray-500">Available orders and your assignments</p>
+            </div>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-36 h-9 border-gray-300">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nearest">
+                  <div className="flex items-center">
+                    <Target className="w-4 h-4 mr-2 text-green-500" />
+                    Nearest First
                   </div>
-                  <h3 className="text-lg font-medium text-foreground mb-2">No nearby orders</h3>
-                  <p className="text-muted-foreground mb-4">
-                    No orders within 15km radius currently available. 
-                    {location.latitude && location.longitude 
-                      ? " Try moving to a different area or check back later! 🌟" 
-                      : " Enable location access to see nearby orders! 📍"
-                    }
-                  </p>
-                  {!isOnline && (
-                    <Button
-                      onClick={() => setIsOnline(true)}
-                      className="bg-gradient-neon hover:shadow-neon transition-smooth"
-                    >
-                      <Zap className="w-4 h-4 mr-2" />
-                      Go Online
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
+                </SelectItem>
+                <SelectItem value="newest">
+                  <div className="flex items-center">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Newest First
+                  </div>
+                </SelectItem>
+                <SelectItem value="highest">
+                  <div className="flex items-center">
+                    <IndianRupee className="w-4 h-4 mr-2" />
+                    Highest First
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="p-4">
+            {availableOrders.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-200 flex items-center justify-center">
+                  <PackageOpen className="w-10 h-10 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No orders available</h3>
+                <p className="text-gray-500 mb-4">
+                  Check back later for new delivery opportunities
+                </p>
+                {!isOnline && (
+                  <Button
+                    onClick={() => setIsOnline(true)}
+                    className="bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Go Online
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="space-y-4">
                 {availableOrders.map((order, index) => {
-                  const restaurant = order.items?.[0]?.restaurant || order.restaurant || 'Restaurant';
-                  const address = `${order.address?.addressLine1 || ''}, ${order.address?.city || ''}`.trim();
-                  
                   return (
-                     <Card 
+                     <div 
                        key={order.id} 
-                       className={`bg-card border-border hover:shadow-neon hover:scale-[1.02] transition-all duration-300 animate-fade-in ${
-                         order.status === 'assigned' ? 'ring-2 ring-primary/30 bg-primary/5' : ''
+                       className={`bg-white rounded-2xl p-4 border border-gray-200 ${
+                         order.status === 'assigned' ? 'border-green-200 bg-green-50' : ''
                        }`}
-                       style={{ animationDelay: `${index * 0.1}s` }}
                      >
-                       <CardContent className="p-4">
-                          {/* Order Header */}
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <h3 className="font-semibold text-foreground">{order.customer_name}</h3>
-                              <p className="text-sm text-muted-foreground">
-                                {restaurant} • Order #{order.id.substring(0, 8)}...
-                              </p>
-                            </div>
-                            {/* Status Badge */}
-                            {order.status === 'assigned' && (
-                              <Badge variant="default" className="bg-primary/20 text-primary border-primary/30">
-                                <UserCheck className="w-3 h-3 mr-1" />
-                                Assigned to You
-                              </Badge>
-                            )}
+                        {/* Order Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h3 className="font-semibold text-gray-900 text-lg">{order.customer_name}</h3>
+                            <p className="text-sm text-gray-500">
+                              {order.seller_name || 'Restaurant'} • Order #{order.id.substring(0, 8)}...
+                            </p>
                           </div>
+                          {/* Status Badge */}
+                          {order.status === 'assigned' && (
+                            <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center">
+                              <User className="w-3 h-3 mr-1" />
+                              Assigned to You
+                            </div>
+                          )}
+                        </div>
 
-                          {/* Delivery Timer */}
-                          {(() => {
-                            // Determine if order is scheduled based on multiple criteria
-                            const isScheduledOrder = Boolean(
-                              order.subscription_id || 
-                              order.delivery_slots ||
-                              order.scheduled_time ||
-                              order.delivery_date !== new Date().toISOString().split('T')[0]
-                            );
-                            
-                            const deliveryType = isScheduledOrder ? 'scheduled' : 'immediate';
-                            
-                            // Debug what we're passing to DeliveryTimer
-                            console.log(`Order ${order.id} DeliveryTimer props:`, {
-                              deliveryType,
-                              hasScheduledTime: Boolean(order.scheduled_time),
-                              hasDeliverySlots: Boolean(order.delivery_slots),
-                              deliverySlots: order.delivery_slots,
-                              deliveryTime: order.delivery_time,
-                              subscriptionId: order.subscription_id
-                            });
-                            
-                            return (
-                              <div className="mb-4">
-                                <DeliveryTimer
-                                  deliveryType={deliveryType}
-                                  scheduledTime={order.scheduled_time || `${order.delivery_date}T${order.delivery_time || '12:00:00'}`}
-                                  orderPlacedAt={order.order_placed_at}
-                                  subscriptionId={order.subscription_id}
-                                  deliveryTime={order.delivery_time}
-                                  deliverySlots={order.delivery_slots}
-                                  className="text-xs"
-                                />
+                        {/* Delivery Timer */}
+                        {(() => {
+                          const isScheduledOrder = Boolean(
+                            order.subscription_id || 
+                            order.delivery_slots ||
+                            order.scheduled_time ||
+                            order.delivery_date !== new Date().toISOString().split('T')[0]
+                          );
+                          
+                          return (
+                            <div className="mb-4">
+                              <div className="bg-blue-50 p-3 rounded-lg flex items-center justify-between">
+                                <div className="flex items-center">
+                                  <div className="bg-blue-100 p-2 rounded-lg mr-3">
+                                    <Clock className="w-4 h-4 text-blue-600" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-blue-900 font-medium">Scheduled Delivery</p>
+                                    <p className="text-xs text-blue-700">Arrives at</p>
+                                  </div>
+                                </div>
+                                <div className="bg-blue-200 px-3 py-1 rounded-full">
+                                  <span className="text-xs text-blue-800 font-medium">Scheduled</span>
+                                </div>
                               </div>
-                            );
-                          })()}
-
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
-                            {/* Pickup Info - Compact design */}
-                            <div className="bg-orange-50 p-2.5 rounded-lg border border-orange-200">
-                              <h4 className="text-sm font-medium text-orange-900 mb-1.5 flex items-center">
-                                <svg className="w-3.5 h-3.5 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
-                                </svg>
-                                Pick up
-                              </h4>
-                              <p className="text-xs font-medium text-orange-900 mb-1">
-                                {order.seller_name || (() => {
-                                  // Fallback to restaurant name from items
-                                  const firstItem = Array.isArray(order.items) && order.items[0] ? order.items[0] : null;
-                                  return firstItem?.restaurant || order.restaurant || 'Store';
-                                })()}
-                              </p>
-                              <button
-                                onClick={() => {
-                                  // Use pickup location coordinates for navigation
-                                  const pickupLat = order.pickup_location?.lat;
-                                  const pickupLng = order.pickup_location?.lng;
-                                  if (pickupLat && pickupLng) {
-                                    window.open(`https://www.google.com/maps?q=${pickupLat},${pickupLng}&z=15`);
-                                  } else {
-                                    // Fallback navigation if no pickup coordinates
-                                    const address = order.pickup_address;
-                                    if (address) {
-                                      window.open(`https://www.google.com/maps/search/${encodeURIComponent(address)}`);
-                                    }
-                                  }
-                                }}
-                                className="text-xs text-orange-700 hover:text-orange-900 underline cursor-pointer block"
-                              >
-                                📍 {order.pickup_address || 'Store Location'}
-                              </button>
-                              <div className="flex space-x-3 mt-1.5">
-                                <button
-                                  onClick={() => {
-                                    const phone = order.seller_phone;
-                                    if (phone) window.open(`tel:${phone}`);
-                                  }}
-                                  className="text-xs text-orange-600 hover:text-orange-800 flex items-center"
-                                  disabled={!order.seller_phone}
-                                >
-                                  📞 Call Store
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    const pickupLat = order.pickup_location?.lat;
-                                    const pickupLng = order.pickup_location?.lng;
-                                    if (pickupLat && pickupLng) {
-                                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${pickupLat},${pickupLng}`);
-                                    }
-                                  }}
-                                  className="text-xs text-orange-600 hover:text-orange-800 flex items-center"
-                                  disabled={!order.pickup_location?.lat}
-                                >
-                                  <Navigation className="w-3 h-3 mr-0.5" />
-                                  Navigate
-                                </button>
+                              
+                              <div className="bg-blue-100 p-4 rounded-lg mt-2 text-center">
+                                <div className="text-2xl font-bold text-blue-600 mb-1">
+                                  {order.delivery_time || '12:00 PM'}
+                                </div>
+                                <div className="text-sm text-blue-700">
+                                  {order.delivery_date === new Date().toISOString().split('T')[0] ? 'Today' : 'Tomorrow'}
+                                </div>
                               </div>
                             </div>
+                          );
+                        })()}
 
-                            {/* Delivery Info - Compact design */}
-                            <div className="bg-blue-50 p-2.5 rounded-lg border border-blue-200">
-                              <h4 className="text-sm font-medium text-blue-900 mb-1.5 flex items-center">
-                                <MapPin className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
-                                Deliver to
-                              </h4>
-                              <p className="text-xs font-medium text-blue-900 mb-1">{order.customer_name}</p>
-                              <button
-                                onClick={() => {
-                                  if (order.coordinates?.lat && order.coordinates?.lng) {
-                                    window.open(`https://www.google.com/maps?q=${order.coordinates.lat},${order.coordinates.lng}&z=15`);
-                                  }
-                                }}
-                                className="text-xs text-blue-600 hover:text-blue-800 underline cursor-pointer block"
-                              >
-                                📍 {(() => {
-                                  if (typeof order.address === 'string') return order.address;
-                                  if (order.address?.full_address) return order.address.full_address;
-                                  if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
-                                  return 'Delivery address';
-                                })()}
-                              </button>
-                              <div className="flex space-x-3 mt-1.5">
-                                <button
-                                  onClick={() => window.open(`tel:${order.customer_phone}`)}
-                                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
-                                  disabled={!order.customer_phone}
-                                >
-                                  📞 Call Customer
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (order.coordinates?.lat && order.coordinates?.lng) {
-                                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.coordinates.lat},${order.coordinates.lng}`);
-                                    }
-                                  }}
-                                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
-                                  disabled={!order.coordinates?.lat}
-                                >
-                                  <Navigation className="w-3 h-3 mr-0.5" />
-                                  Navigate
-                                </button>
-                              </div>
+                        {/* Address */}
+                        <div className="flex items-start mb-4">
+                          <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-700 leading-relaxed">
+                              {(() => {
+                                if (typeof order.address === 'string') return order.address;
+                                if (order.address?.full_address) return order.address.full_address;
+                                if (order.address?.addressLine1) return `${order.address.addressLine1}, ${order.address.city || ''}`;
+                                return 'Address not available';
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Order Stats */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center">
+                              <Navigation className="w-4 h-4 text-green-500 mr-1" />
+                              <span className="text-sm font-medium text-gray-700">
+                                {order.distance_km ? `${order.distance_km} km` : '2.5 km'}
+                              </span>
                             </div>
-
-                            {/* Order Info */}
-                            <div className="bg-gray-50 p-3 rounded-lg lg:col-span-2">
-                              <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                                <Package className="w-4 h-4 mr-2 text-blue-600" />
-                                Order Details
-                              </h4>
-                              <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                  <p className="text-xs text-gray-500">Distance</p>
-                                  <p className="text-sm font-medium text-gray-900">
-                                    {order.distance_km ? `${order.distance_km} km` : 'Calculating...'}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Items</p>
-                                  <p className="text-sm font-medium text-gray-900">
-                                    {Array.isArray(order.items) ? order.items.length : 0} item(s)
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500">Payout</p>
-                                  <p className="text-sm font-medium text-green-600">
-                                    ₹{order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)}
-                                  </p>
-                                </div>
-                              </div>
+                            <div className="flex items-center">
+                              <Clock className="w-4 h-4 text-gray-500 mr-1" />
+                              <span className="text-sm text-gray-600">
+                                {order.estimated_time_minutes ? `${order.estimated_time_minutes} min` : '5 min'}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <Package className="w-4 h-4 text-gray-500 mr-1" />
+                              <span className="text-sm text-gray-600">
+                                {Array.isArray(order.items) ? order.items.length : 1} products
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <IndianRupee className="w-4 h-4 text-gray-900 mr-1" />
+                              <span className="text-sm font-medium text-gray-900">
+                                ₹{order.total}
+                              </span>
                             </div>
                           </div>
+                        </div>
 
-                        {/* Action Buttons */}
+                        {/* Agent Payout */}
+                        <div className="bg-green-50 p-3 rounded-lg mb-4">
+                          <div className="flex items-center">
+                            <IndianRupee className="w-4 h-4 text-green-600 mr-1" />
+                            <span className="text-sm text-green-800">Agent payout: </span>
+                            <span className="text-sm font-bold text-green-800">
+                              ₹{order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
                         {order.status === 'assigned' ? (
-                          <div className="flex space-x-2">
-                            <Button 
-                              onClick={() => navigate(`/delivery-details/${order.id}`)}
-                              className="flex-1 bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300"
-                            >
-                              <Settings className="w-4 h-4 mr-2" />
-                              Manage Delivery
-                            </Button>
-                          </div>
+                          <Button 
+                            onClick={() => navigate(`/delivery-details/${order.id}`)}
+                            className="w-full bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium flex items-center justify-center"
+                          >
+                            <Settings className="w-4 h-4 mr-2" />
+                            Manage Delivery
+                          </Button>
                         ) : (
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-3">
                             <Button 
                               onClick={() => handleAcceptOrder(order.id)}
-                              className="flex-1 bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300"
+                              className="flex-1 bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium"
                               disabled={acceptingOrders[order.id]}
                             >
                               {acceptingOrders[order.id] ? (
                                 <>
-                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                   Accepting...
                                 </>
                               ) : (
@@ -1461,12 +601,12 @@ const Home = () => {
                             <Button 
                               variant="outline"
                               onClick={() => handleRejectOrder(order.id)}
-                              className="flex-1 border-destructive/50 text-destructive hover:bg-destructive/10 hover:shadow-neon transition-all duration-300"
+                              className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-100 h-12 rounded-lg font-medium"
                               disabled={rejectingOrders[order.id]}
                             >
                               {rejectingOrders[order.id] ? (
                                 <>
-                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-destructive border-t-transparent mr-2" />
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                   Rejecting...
                                 </>
                               ) : (
@@ -1478,15 +618,14 @@ const Home = () => {
                             </Button>
                           </div>
                         )}
-                      </CardContent>
-                    </Card>
+                     </div>
                   );
                 })}
               </div>
             )}
           </div>
-        </div>
-      </ScrollArea>
+        </ScrollArea>
+      </div>
 
       {/* QR Scanner Dialog */}
       <QrScannerDialog 
