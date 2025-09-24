@@ -8,32 +8,34 @@ export const useAudioNotification = () => {
   // Initialize audio on first use
   useEffect(() => {
     if (!audioRef.current) {
-      // Try notification-sound.mp3 first, fallback to phone-ringtone.mp3
-      audioRef.current = new Audio('/notification-sound.mp3');
+      // Use phone-ringtone.mp3 directly (notification-sound.mp3 is broken)
+      audioRef.current = new Audio('/phone-ringtone.mp3');
       audioRef.current.volume = 1.0; // Maximum volume
       audioRef.current.playbackRate = 1.2; // Faster playback for urgency
       audioRef.current.preload = 'auto';
       
-      // Fallback to phone ringtone if notification sound fails
-      audioRef.current.addEventListener('error', () => {
-        if (audioRef.current) {
-          audioRef.current.src = '/phone-ringtone.mp3';
-        }
-      });
+      console.log('Audio initialized with phone-ringtone.mp3');
       
-      // Setup Web Audio API for volume amplification
-      try {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (audioContextRef.current && audioRef.current) {
-          const source = audioContextRef.current.createMediaElementSource(audioRef.current);
-          gainNodeRef.current = audioContextRef.current.createGain();
-          gainNodeRef.current.gain.value = 2.0; // Amplify beyond 100%
-          source.connect(gainNodeRef.current);
-          gainNodeRef.current.connect(audioContextRef.current.destination);
+      // Setup Web Audio API for volume amplification after audio loads
+      const setupWebAudio = () => {
+        try {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          if (audioContextRef.current && audioRef.current) {
+            const source = audioContextRef.current.createMediaElementSource(audioRef.current);
+            gainNodeRef.current = audioContextRef.current.createGain();
+            gainNodeRef.current.gain.value = 3.0; // Even higher amplification
+            source.connect(gainNodeRef.current);
+            gainNodeRef.current.connect(audioContextRef.current.destination);
+            console.log('Web Audio API setup complete with 3x amplification');
+          }
+        } catch (error) {
+          console.warn('Web Audio API not supported, using standard audio:', error);
         }
-      } catch (error) {
-        console.warn('Web Audio API not supported, using standard audio');
-      }
+      };
+      
+      // Setup Web Audio after audio loads
+      audioRef.current.addEventListener('loadeddata', setupWebAudio);
+      audioRef.current.addEventListener('canplaythrough', setupWebAudio);
       
       // Handle audio loading errors
       audioRef.current.addEventListener('error', (e) => {
