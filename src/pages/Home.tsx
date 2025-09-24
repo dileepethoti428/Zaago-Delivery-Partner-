@@ -810,7 +810,7 @@ const Home = () => {
                             <Button 
                               variant="outline"
                               onClick={() => handleRejectOrder(order.id)}
-                              className="flex-1 border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400 h-12 rounded-lg font-medium"
+                              className="flex-1 border-gray-300 text-gray-700 hover:bg-white hover:border-gray-400 h-12 rounded-lg font-medium bg-white"
                               disabled={rejectingOrders[order.id]}
                             >
                               {rejectingOrders[order.id] ? (
