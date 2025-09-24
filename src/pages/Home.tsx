@@ -95,10 +95,11 @@ const Home = () => {
   
   // Get current location with backend saving 
   const location = useGeolocation({
-    enableHighAccuracy: false, // Use network location for speed
-    timeout: 3000, // Fast timeout for initial detection
+    enableHighAccuracy: true, // Use GPS for accurate location
+    timeout: 10000, // Longer timeout for GPS accuracy
+    maximumAge: 30000, // Accept location up to 30 seconds old
     saveToBackend: true,
-    refreshInterval: 0, // We'll handle manual refresh with auto-refresh
+    refreshInterval: 60000, // Auto-refresh every minute
   });
   
   // State management
@@ -343,7 +344,12 @@ const Home = () => {
     if (location.address) {
       setCurrentLocation(location.address);
     } else if (location.latitude && location.longitude) {
-      setCurrentLocation(`${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
+      setCurrentLocation(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
+    }
+    
+    // Refresh orders when location changes significantly
+    if (location.latitude && location.longitude) {
+      fetchOrders();
     }
   }, [location.address, location.latitude, location.longitude]);
 
@@ -351,7 +357,8 @@ const Home = () => {
     fetchAgentName();
     fetchOrders();
     
-    const interval = setInterval(fetchOrders, 45000);
+    // More frequent order refresh for better real-time updates
+    const interval = setInterval(fetchOrders, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -464,8 +471,18 @@ const Home = () => {
             <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
             <div className="flex items-center text-xs text-gray-500 mt-1 cursor-pointer hover:text-gray-700 transition-colors" onClick={() => setShowLocationPicker(true)}>
               <MapPin className="w-3 h-3 mr-1 text-red-500" />
-              <span>{currentLocation}</span>
+              <span className="truncate max-w-[280px]">{currentLocation}</span>
             </div>
+            {location.latitude && location.longitude && (
+              <div className="text-xs text-gray-400 mt-1">
+                <span className="font-mono">
+                  {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                </span>
+                {location.accuracy && (
+                  <span className="ml-2">±{Math.round(location.accuracy)}m</span>
+                )}
+              </div>
+            )}
           </div>
           
           <div className="flex items-center space-x-2">
@@ -511,7 +528,7 @@ const Home = () => {
 
       {/* Action Buttons */}
       <div className="px-4 py-4 bg-gray-50">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           {/* Go Online/Offline Button */}
           <Button
             onClick={() => setIsOnline(!isOnline)}
@@ -533,15 +550,28 @@ const Home = () => {
           >
             {isRefreshing ? (
               <div className="flex items-center">
-                <RefreshCw className="w-4 h-4 animate-spin text-gray-700 mr-2" />
-                <span className="text-gray-700">Refreshing...</span>
+                <RefreshCw className="w-4 h-4 animate-spin text-gray-700 mr-1" />
+                <span className="text-xs text-gray-700">Refresh</span>
               </div>
             ) : (
               <div className="flex items-center">
-                <RefreshCw className="w-4 h-4 text-gray-700 mr-2" />
-                <span className="text-gray-700">Refresh</span>
+                <RefreshCw className="w-4 h-4 text-gray-700 mr-1" />
+                <span className="text-xs text-gray-700">Refresh</span>
               </div>
             )}
+          </Button>
+
+          {/* GPS Refresh */}
+          <Button
+            onClick={() => location.refresh()}
+            variant="outline"
+            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
+            disabled={location.loading}
+          >
+            <div className="flex items-center">
+              <Target className={`w-4 h-4 text-blue-600 mr-1 ${location.loading ? 'animate-pulse' : ''}`} />
+              <span className="text-xs text-gray-700">GPS</span>
+            </div>
           </Button>
 
           {/* QR Scanner */}
@@ -550,7 +580,10 @@ const Home = () => {
             variant="outline"
             className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
           >
-            <span className="text-gray-700">Scan QR</span>
+            <div className="flex items-center">
+              <QrCode className="w-4 h-4 text-gray-700 mr-1" />
+              <span className="text-xs text-gray-700">QR</span>
+            </div>
           </Button>
         </div>
       </div>

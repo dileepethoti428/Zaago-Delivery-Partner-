@@ -200,15 +200,26 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
     }
   }, [watchId]);
 
-  // Get location once on mount only (like Blinkit)
+  // Get location once on mount and setup refresh interval if specified
   useEffect(() => {
     getCurrentLocation();
     
-    // No automatic refresh - only manual updates
+    // Setup refresh interval if specified
+    if (refreshInterval > 0) {
+      const interval = setInterval(() => {
+        getCurrentLocation();
+      }, refreshInterval);
+      
+      return () => {
+        clearInterval(interval);
+        stopWatching();
+      };
+    }
+    
     return () => {
       stopWatching();
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [refreshInterval, getCurrentLocation]); // Include getCurrentLocation in dependencies
 
   return {
     ...location,
