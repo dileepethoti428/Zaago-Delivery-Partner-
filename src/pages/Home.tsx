@@ -442,13 +442,13 @@ const Home = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              {getGreeting()}{agentName ? `, ${capitalizeWords(agentName)}!` : '!'}
-            </p>
             <div className="flex items-center text-xs text-gray-500 mt-1">
               <MapPin className="w-3 h-3 mr-1 text-red-500" />
               <span>Tap to set location</span>
             </div>
+            <p className="text-sm text-gray-600 mt-1">
+              "Ready to deliver excellence today"
+            </p>
           </div>
           
           <div className="flex items-center space-x-2">
