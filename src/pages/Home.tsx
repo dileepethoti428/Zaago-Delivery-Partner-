@@ -296,13 +296,71 @@ const Home = () => {
       products_count: Array.isArray(order.items) ? order.items.length : 1,
       restaurant: order.restaurant || undefined,
       backend_calculated: false,
-      delivery_type: order.payment_status === 'Pending' ? 'book_now_pay_later' : (order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'),
+      // Improved delivery type logic
+      delivery_type: (() => {
+        // Priority 1: Subscription orders
+        if (order.subscription_id) return 'scheduled';
+        
+        // Priority 2: Orders with delivery time slots (scheduled)
+        if (order.delivery_time_slot || order.scheduled_time) return 'scheduled';
+        
+        // Priority 3: Book now pay later orders (need specific criteria)
+        // Only mark as book_now_pay_later if it has specific flag or future delivery date
+        if (order.payment_status === 'Pending' && (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])) {
+          return 'book_now_pay_later';
+        }
+        
+        // Default: Immediate delivery
+        return 'immediate';
+      })(),
       scheduled_time: order.scheduled_time || undefined,
       order_placed_at: new Date(order.created_at),
       agent_payout: order.agent_payout || undefined,
       estimated_time_minutes: order.estimated_time_minutes || undefined,
       subscription_id: order.subscription_id || undefined,
-      delivery_slots: order.delivery_slots || undefined,
+      
+      // Enhanced delivery slots mapping
+      delivery_slots: (() => {
+        // If delivery_slots already exists, use it
+        if (order.delivery_slots) return order.delivery_slots;
+        
+        // If delivery_time_slot exists, map it to the expected structure
+        if (order.delivery_time_slot) {
+          // Try to parse time slot to create start/end times
+          const timeSlot = order.delivery_time_slot;
+          if (typeof timeSlot === 'string' && timeSlot.includes('-')) {
+            const [startTime, endTime] = timeSlot.split('-').map(t => t.trim());
+            return {
+              id: `slot-${order.id}`,
+              slot_name: timeSlot,
+              start_time: startTime.includes(':') ? startTime : `${startTime}:00`,
+              end_time: endTime.includes(':') ? endTime : `${endTime}:00`
+            };
+          }
+        }
+        
+        // If delivery_time exists and not a duration, create a time window
+        if (order.delivery_time && !order.delivery_time.includes('min') && order.delivery_time.includes(':')) {
+          const deliveryTime = order.delivery_time;
+          // Create a 1-hour window around the delivery time
+          try {
+            const time = new Date(`1970-01-01T${deliveryTime.replace(/[AP]M/i, '')} ${deliveryTime.includes('PM') ? 'PM' : 'AM'}`);
+            const startTime = new Date(time.getTime() - 30 * 60000); // 30 min before
+            const endTime = new Date(time.getTime() + 30 * 60000);   // 30 min after
+            
+            return {
+              id: `slot-${order.id}`,
+              slot_name: `${deliveryTime} window`,
+              start_time: startTime.toTimeString().substring(0, 5),
+              end_time: endTime.toTimeString().substring(0, 5)
+            };
+          } catch (error) {
+            console.warn('Error parsing delivery_time for slots:', deliveryTime, error);
+          }
+        }
+        
+        return undefined;
+      })(),
       pickup_location: pickupLocation,
       pickup_address: pickupAddress,
       seller_phone: sellerPhone,
