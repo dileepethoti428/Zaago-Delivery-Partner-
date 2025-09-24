@@ -88,6 +88,8 @@ interface Order {
   pickup_address?: string;
   seller_phone?: string;
   seller_name?: string;
+  eta_mins?: number;
+  distance_source?: 'realtime' | 'cached' | 'fallback' | 'error';
 }
 
 
@@ -145,7 +147,11 @@ const Home = () => {
 
   // Calculate real-time distances for all orders (shop to customer)
   const calculateOrderDistances = async (ordersList: Order[]) => {
+    if (ordersList.length === 0) return ordersList;
+    
     setIsLoadingDistance(true);
+    console.log(`🔄 Calculating distances for ${ordersList.length} orders...`);
+    
     const updatedOrders = await Promise.all(
       ordersList.map(async (order) => {
         try {
@@ -156,9 +162,22 @@ const Home = () => {
           // Extract customer delivery coordinates
           const customerCoords = extractCoordinatesFromAddress(order.address);
           
-          if (!pickupCoords || !customerCoords) {
-            console.warn('Missing coordinates for order:', order.id, { pickupCoords, customerCoords });
-            return { ...order, distance_km: 2.5, eta_mins: 5 }; // fallback
+          if (!pickupCoords) {
+            console.warn(`❌ Missing pickup coordinates for order ${order.id}:`, {
+              order_id: order.id,
+              pickup_location: order.pickup_location,
+              pickup_address: order.pickup_address
+            });
+            return { ...order, distance_km: 2.5, eta_mins: 5, distance_source: 'fallback' as const };
+          }
+          
+          if (!customerCoords) {
+            console.warn(`❌ Missing customer coordinates for order ${order.id}:`, {
+              order_id: order.id,
+              customer_address: order.address,
+              address_type: typeof order.address
+            });
+            return { ...order, distance_km: 2.5, eta_mins: 5, distance_source: 'fallback' as const };
           }
 
           // Calculate distance from shop to customer (actual delivery distance)
@@ -168,11 +187,12 @@ const Home = () => {
             order.id
           );
 
-          console.log('🚚 Shop-to-customer distance calculated:', {
+          console.log('✅ Shop-to-customer distance calculated:', {
             orderId: order.id,
             pickup: pickupCoords,
             customer: customerCoords,
             distance: distanceResult.distance_km + 'km',
+            eta: distanceResult.eta_mins + 'min',
             source: distanceResult.source
           });
 
@@ -180,16 +200,17 @@ const Home = () => {
             ...order,
             distance_km: distanceResult.distance_km,
             eta_mins: distanceResult.eta_mins,
-            distance_source: distanceResult.source
+            distance_source: distanceResult.source as 'realtime' | 'cached' | 'fallback'
           };
         } catch (error) {
-          console.error('Error calculating distance for order:', order.id, error);
-          return { ...order, distance_km: 2.5, eta_mins: 5 }; // fallback
+          console.error(`❌ Error calculating distance for order ${order.id}:`, error);
+          return { ...order, distance_km: 2.5, eta_mins: 5, distance_source: 'error' as const };
         }
       })
     );
     
     setIsLoadingDistance(false);
+    console.log(`✅ Distance calculation completed for ${updatedOrders.length} orders`);
     return updatedOrders;
   };
 
@@ -356,6 +377,13 @@ const Home = () => {
     try {
       const orders = await fetchOrdersData(false);
       setOrders(orders);
+      
+      // Calculate distances for refreshed orders if we have location
+      if (orders.length > 0 && location.latitude && location.longitude) {
+        console.log('🔄 Orders refreshed, recalculating distances...');
+        const ordersWithDistance = await calculateOrderDistances(orders);
+        setOrders(ordersWithDistance);
+      }
     } catch (error) {
       console.error('Error refreshing orders:', error);
       // Don't show error toast for background refresh
@@ -474,6 +502,7 @@ const Home = () => {
 
   // Track previous location to prevent unnecessary refreshes
   const [lastLocationRefresh, setLastLocationRefresh] = useState<{lat: number, lng: number} | null>(null);
+  const [lastDistanceCalculation, setLastDistanceCalculation] = useState<{lat: number, lng: number} | null>(null);
 
   // Auto-update location when geolocation data is available
   useEffect(() => {
@@ -503,8 +532,29 @@ const Home = () => {
           fetchOrders();
         }
       }
+      
+      // Recalculate distances when location changes significantly (more than 100m)
+      if (orders.length > 0) {
+        if (!lastDistanceCalculation) {
+          setLastDistanceCalculation(currentPos);
+          console.log('🎯 Initial location set, calculating distances...');
+          calculateOrderDistances(orders).then(setOrders);
+        } else {
+          const distanceChange = Math.sqrt(
+            Math.pow(currentPos.lat - lastDistanceCalculation.lat, 2) + 
+            Math.pow(currentPos.lng - lastDistanceCalculation.lng, 2)
+          ) * 111000; // Rough conversion to meters
+          
+          // Recalculate distances if moved more than 100 meters
+          if (distanceChange > 100) {
+            setLastDistanceCalculation(currentPos);
+            console.log('📍 Location changed significantly, recalculating distances...');
+            calculateOrderDistances(orders).then(setOrders);
+          }
+        }
+      }
     }
-  }, [location.address, location.latitude, location.longitude]);
+  }, [location.address, location.latitude, location.longitude, orders.length]);
 
   // Set up real-time subscription for order updates
   useEffect(() => {
@@ -562,13 +612,20 @@ const Home = () => {
     };
   }, []);
 
-  // Trigger distance calculation when orders are initially loaded
+  // Trigger distance calculation when orders are initially loaded (only once per order set)
   useEffect(() => {
-    if (orders.length > 0 && !isLoadingDistance) {
-      console.log('🔄 Orders loaded, calculating shop-to-customer distances for', orders.length, 'orders');
-      calculateOrderDistances(orders).then(setOrders);
+    if (orders.length > 0 && !isLoadingDistance && location.latitude && location.longitude) {
+      // Check if these orders already have distance calculations
+      const ordersNeedingDistance = orders.filter(order => 
+        order.distance_km === undefined || order.distance_source === undefined
+      );
+      
+      if (ordersNeedingDistance.length > 0) {
+        console.log(`🔄 ${ordersNeedingDistance.length} orders need distance calculation...`);
+        calculateOrderDistances(orders).then(setOrders);
+      }
     }
-  }, [orders.length]); // Trigger when new orders are loaded
+  }, [orders.length, location.latitude, location.longitude]); // Trigger when new orders are loaded or location is available
 
   useEffect(() => {
     fetchAgentName();
@@ -971,13 +1028,33 @@ const Home = () => {
                           <div className="flex items-center space-x-4">
                             <div className="flex items-center">
                               <Navigation className="w-4 h-4 text-green-500 mr-1" />
-                              <span className="text-sm font-medium text-gray-700" title="Delivery distance from shop to customer">
-                                {isLoadingDistance ? (
-                                  <span className="text-xs text-gray-500">Calculating...</span>
-                                ) : (
-                                  `${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`
-                                )}
-                              </span>
+                               <span className="text-sm font-medium text-gray-700" title="Delivery distance from shop to customer">
+                                 {isLoadingDistance ? (
+                                   <div className="flex items-center">
+                                     <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                     <span className="text-xs text-gray-500">Calculating...</span>
+                                   </div>
+                                 ) : (
+                                   <div className="flex items-center">
+                                     <span>{`${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
+                                     {order.distance_source && (
+                                       <span 
+                                         className={`ml-1 px-1 py-0.5 text-xs rounded ${
+                                           order.distance_source === 'realtime' ? 'bg-green-100 text-green-700' :
+                                           order.distance_source === 'cached' ? 'bg-blue-100 text-blue-700' :
+                                           order.distance_source === 'fallback' ? 'bg-yellow-100 text-yellow-700' :
+                                           'bg-red-100 text-red-700'
+                                         }`}
+                                         title={`Distance source: ${order.distance_source}`}
+                                       >
+                                         {order.distance_source === 'realtime' ? '🎯' : 
+                                          order.distance_source === 'cached' ? '📍' :
+                                          order.distance_source === 'fallback' ? '📐' : '⚠️'}
+                                       </span>
+                                     )}
+                                   </div>
+                                 )}
+                               </span>
                             </div>
                             <div className="flex items-center">
                               <Clock className="w-4 h-4 text-gray-500 mr-1" />
