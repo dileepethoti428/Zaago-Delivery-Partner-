@@ -135,16 +135,44 @@ const Earnings = () => {
 
       if (!agent) return;
 
-      // Call the database function to get distance stats
-      const { data, error } = await supabase.rpc('get_agent_distance_stats', {
-        agent_uuid: agent.id
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Get today's distance
+      const { data: todayData } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled')
+        .eq('agent_id', agent.id)
+        .gte('delivery_date', todayStart.toISOString().split('T')[0])
+        .not('distance_traveled', 'is', null);
+
+      // Get this week's distance
+      const { data: weekData } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled')
+        .eq('agent_id', agent.id)
+        .gte('delivery_date', weekStart.toISOString().split('T')[0])
+        .not('distance_traveled', 'is', null);
+
+      // Get this month's distance
+      const { data: monthData } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled')
+        .eq('agent_id', agent.id)
+        .gte('delivery_date', monthStart.toISOString().split('T')[0])
+        .not('distance_traveled', 'is', null);
+
+      const distance_today = (todayData || []).reduce((sum, record) => sum + (record.distance_traveled || 0), 0);
+      const distance_week = (weekData || []).reduce((sum, record) => sum + (record.distance_traveled || 0), 0);
+      const distance_month = (monthData || []).reduce((sum, record) => sum + (record.distance_traveled || 0), 0);
+
+      setDistanceStats({
+        distance_today: Math.round(distance_today * 10) / 10,
+        distance_week: Math.round(distance_week * 10) / 10,
+        distance_month: Math.round(distance_month * 10) / 10
       });
-
-      if (error) throw error;
-
-      if (data) {
-        setDistanceStats(data as unknown as DistanceStats);
-      }
     } catch (error) {
       console.error('Error fetching distance stats:', error);
     }
