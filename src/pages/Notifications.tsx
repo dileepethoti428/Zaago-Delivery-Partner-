@@ -174,8 +174,7 @@ const Notifications = () => {
             ...prev,
           ]);
 
-          // Play notification sound for new notifications
-          playNotificationSound();
+          // Play notification sound for new notifications (removed)
         }
       )
       .subscribe();

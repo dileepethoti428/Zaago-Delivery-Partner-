@@ -178,8 +178,7 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone
-    playNotificationSound();
+    // Play the ringtone (removed)
     
     // Show toast notification
     toast({
@@ -208,8 +207,7 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone
-    playNotificationSound();
+    // Play the ringtone (removed)
     
     // Show toast notification
     toast({
@@ -939,7 +937,7 @@ const Home = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       {/* Header with Greeting */}
       <div className="bg-white px-4 py-3 border-b border-gray-100">
         <div className="flex items-center justify-between">
@@ -1222,17 +1220,6 @@ const Home = () => {
                             <div className="flex items-center">
                               <span className="text-sm text-gray-600">
                                 {order.estimated_time_minutes ? `${order.estimated_time_minutes} min` : '5 min'}
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <Clock className="w-4 h-4 text-blue-500 mr-1" />
-                              <span className="text-sm text-blue-600 font-medium">
-                                {new Date().toLocaleTimeString('en-US', { 
-                                  hour: '2-digit', 
-                                  minute: '2-digit',
-                                  second: '2-digit',
-                                  hour12: true 
-                                })}
                               </span>
                             </div>
                             <div className="flex items-center">

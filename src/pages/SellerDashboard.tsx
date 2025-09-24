@@ -153,8 +153,7 @@ const SellerDashboard = () => {
     }, 30000);
 
     try {
-      // Play the ringtone
-      playNotificationSound();
+      // Play the ringtone (removed)
       addDebugLog(`✅ Ringtone played successfully for new order: ${orderData.id}`);
       
       // Show toast notification
@@ -199,8 +198,7 @@ const SellerDashboard = () => {
     }, 30000);
 
     try {
-      // Play the ringtone
-      playNotificationSound();
+      // Play the ringtone (removed)
       addDebugLog(`✅ Ringtone played successfully for packed order: ${orderData.id}`);
       
       // Show toast notification
