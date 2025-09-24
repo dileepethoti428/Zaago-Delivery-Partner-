@@ -2094,6 +2094,8 @@ export type Database = {
           pickup_address: string | null
           pickup_location: Json | null
           pickup_status: string | null
+          seller_latitude: number | null
+          seller_longitude: number | null
           seller_name: string | null
           seller_phone: string | null
           settlement_locked: boolean | null
@@ -2123,6 +2125,8 @@ export type Database = {
           pickup_address?: string | null
           pickup_location?: Json | null
           pickup_status?: string | null
+          seller_latitude?: number | null
+          seller_longitude?: number | null
           seller_name?: string | null
           seller_phone?: string | null
           settlement_locked?: boolean | null
@@ -2152,6 +2156,8 @@ export type Database = {
           pickup_address?: string | null
           pickup_location?: Json | null
           pickup_status?: string | null
+          seller_latitude?: number | null
+          seller_longitude?: number | null
           seller_name?: string | null
           seller_phone?: string | null
           settlement_locked?: boolean | null

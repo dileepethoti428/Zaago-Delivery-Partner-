@@ -174,7 +174,19 @@ const Home = () => {
 
       const { data: assignedOrders, error: assignedError } = await supabase
         .from('orders')
-        .select('*')
+        .select(`
+          *,
+          sellers:user_id (
+            id,
+            name,
+            email,
+            phone,
+            business_name,
+            latitude,
+            longitude,
+            address
+          )
+        `)
         .eq('agent_id', agent.id)
         .in('status', ['assigned', 'picked_up', 'in_transit'])
         .order('created_at', { ascending: false });
@@ -187,34 +199,64 @@ const Home = () => {
         delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate'
       }));
 
-      const transformedAssignedOrders: Order[] = (assignedOrders || []).map((order: any) => ({
-        id: order.id,
-        customer_name: order.customer_name || '',
-        customer_phone: order.customer_phone || '',
-        address: order.address,
-        items: Array.isArray(order.items) ? order.items : [],
-        total: order.total || 0,
-        status: order.status,
-        delivery_date: order.delivery_date || '',
-        created_at: order.created_at,
-        payment_status: order.payment_status || '',
-        coordinates: order.coordinates || undefined,
-        distance_km: order.distance_km || undefined,
-        delivery_time: order.delivery_time || undefined,
-        products_count: Array.isArray(order.items) ? order.items.length : 1,
-        restaurant: order.restaurant || undefined,
-        backend_calculated: false,
-        delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
-        scheduled_time: order.scheduled_time || undefined,
-        order_placed_at: new Date(order.created_at),
-        agent_payout: order.agent_payout || undefined,
-        estimated_time_minutes: order.estimated_time_minutes || undefined,
-        subscription_id: order.subscription_id || undefined,
-        delivery_slots: order.delivery_slots || undefined,
-        pickup_location: order.pickup_location || undefined,
-        pickup_address: order.pickup_address || undefined,
-        seller_phone: order.seller_phone || undefined,
-        seller_name: order.seller_name || undefined
+      const transformedAssignedOrders: Order[] = await Promise.all((assignedOrders || []).map(async (order: any) => {
+        let pickupLocation = order.pickup_location;
+        let pickupAddress = order.pickup_address;
+        let sellerName = order.seller_name;
+        let sellerPhone = order.seller_phone;
+        
+        // If pickup location is missing, fetch from seller data
+        if (!pickupLocation && order.items && order.items.length > 0) {
+          const sellerId = order.items[0].seller_id;
+          
+          if (sellerId) {
+            const { data: sellerData } = await supabase
+              .from('sellers')
+              .select('name, phone, latitude, longitude, address, business_name')
+              .eq('user_id', sellerId)
+              .single();
+            
+            if (sellerData && sellerData.latitude && sellerData.longitude) {
+              pickupLocation = {
+                lat: sellerData.latitude,
+                lng: sellerData.longitude
+              };
+              pickupAddress = sellerData.address || sellerData.business_name || 'Pickup Location';
+              sellerName = sellerData.name || sellerData.business_name;
+              sellerPhone = sellerData.phone;
+            }
+          }
+        }
+        
+        return {
+          id: order.id,
+          customer_name: order.customer_name || '',
+          customer_phone: order.customer_phone || '',
+          address: order.address,
+          items: Array.isArray(order.items) ? order.items : [],
+          total: order.total || 0,
+          status: order.status,
+          delivery_date: order.delivery_date || '',
+          created_at: order.created_at,
+          payment_status: order.payment_status || '',
+          coordinates: order.coordinates || undefined,
+          distance_km: order.distance_km || undefined,
+          delivery_time: order.delivery_time || undefined,
+          products_count: Array.isArray(order.items) ? order.items.length : 1,
+          restaurant: order.restaurant || undefined,
+          backend_calculated: false,
+          delivery_type: order.subscription_id || order.delivery_time_slot ? 'scheduled' : 'immediate',
+          scheduled_time: order.scheduled_time || undefined,
+          order_placed_at: new Date(order.created_at),
+          agent_payout: order.agent_payout || undefined,
+          estimated_time_minutes: order.estimated_time_minutes || undefined,
+          subscription_id: order.subscription_id || undefined,
+          delivery_slots: order.delivery_slots || undefined,
+          pickup_location: pickupLocation,
+          pickup_address: pickupAddress,
+          seller_phone: sellerPhone,
+          seller_name: sellerName
+        };
       }));
 
       const allOrders = [...transformedAvailableOrders, ...transformedAssignedOrders];
@@ -271,24 +313,26 @@ const Home = () => {
 
       if (!agent) return;
 
-      const { error } = await supabase
-        .from('orders')
-        .update({ 
-          status: 'assigned', 
-          agent_id: agent.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId)
-        .eq('status', 'packed');
-
-      if (error) throw error;
-
-      toast({
-        title: "Order Accepted!",
-        description: "You have successfully accepted this order.",
+      const { data, error } = await supabase.functions.invoke('accept-order', {
+        body: { order_id: orderId, agent_id: agent.id }
       });
 
-      await fetchOrders();
+      if (error) {
+        console.error('Error accepting order:', error);
+        toast({
+          title: "Error",
+          description: "Failed to accept order. Please try again.",
+          variant: "destructive"
+        });
+      } else if (data?.success) {
+        toast({
+          title: "Success",
+          description: "Order accepted successfully!",
+        });
+        
+        // Refresh orders to show updated state with pickup location
+        await fetchOrders();
+      }
     } catch (error) {
       console.error('Error accepting order:', error);
       toast({
@@ -650,38 +694,61 @@ const Home = () => {
                               {order.seller_name || 'Restaurant'} • Order #{order.id.substring(0, 8)}...
                             </p>
                           </div>
-                          {/* Pickup Location */}
-                          {order.status === 'assigned' && (
-                            <div 
-                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors"
-                              onClick={() => {
-                                if (order.pickup_location) {
-                                  const { lat, lng } = order.pickup_location;
-                                  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-                                  window.open(googleMapsUrl, '_blank');
-                                } else if (order.pickup_address) {
-                                  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.pickup_address)}&travelmode=driving`;
-                                  window.open(googleMapsUrl, '_blank');
-                                } else {
-                                  toast({
-                                    title: "Location Not Available",
-                                    description: "Pickup location information is not available for this order.",
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
-                            >
-                              <MapPin className="w-3 h-3 mr-1" />
-                              {order.pickup_address 
-                                ? order.pickup_address.length > 25 
-                                  ? `${order.pickup_address.substring(0, 25)}...` 
-                                  : order.pickup_address
-                                : order.pickup_location 
-                                  ? `${order.pickup_location.lat.toFixed(4)}, ${order.pickup_location.lng.toFixed(4)}`
-                                  : 'Pickup Location'
-                              }
-                            </div>
-                          )}
+                           {/* Pickup Location */}
+                           {order.status === 'assigned' && (
+                             <div 
+                               className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors"
+                               onClick={async () => {
+                                 if (order.pickup_location) {
+                                   const { lat, lng } = order.pickup_location;
+                                   const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+                                   window.open(googleMapsUrl, '_blank');
+                                 } else if (order.pickup_address) {
+                                   const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.pickup_address)}&travelmode=driving`;
+                                   window.open(googleMapsUrl, '_blank');
+                                 } else {
+                                   // Try to fetch seller location if missing
+                                   try {
+                                     if (order.items && order.items.length > 0) {
+                                       const sellerId = order.items[0].seller_id;
+                                       
+                                       if (sellerId) {
+                                         const { data: sellerData } = await supabase
+                                           .from('sellers')
+                                           .select('name, phone, latitude, longitude, address, business_name')
+                                           .eq('user_id', sellerId)
+                                           .single();
+                                         
+                                         if (sellerData && sellerData.latitude && sellerData.longitude) {
+                                           const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${sellerData.latitude},${sellerData.longitude}&travelmode=driving`;
+                                           window.open(googleMapsUrl, '_blank');
+                                           return;
+                                         }
+                                       }
+                                     }
+                                   } catch (error) {
+                                     console.error('Error fetching seller location:', error);
+                                   }
+                                   
+                                   toast({
+                                     title: "Pickup Location Issue",
+                                     description: "Unable to get pickup location. Please contact support or check seller details.",
+                                     variant: "destructive",
+                                   });
+                                 }
+                               }}
+                             >
+                               <MapPin className="w-3 h-3 mr-1" />
+                               {order.pickup_address 
+                                 ? order.pickup_address.length > 25 
+                                   ? `${order.pickup_address.substring(0, 25)}...` 
+                                   : order.pickup_address
+                                 : order.pickup_location 
+                                   ? `${order.pickup_location.lat.toFixed(4)}, ${order.pickup_location.lng.toFixed(4)}`
+                                   : 'Pickup Location'
+                               }
+                             </div>
+                           )}
                         </div>
 
                         {/* Delivery Timer */}
