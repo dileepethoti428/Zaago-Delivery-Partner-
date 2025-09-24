@@ -446,9 +446,6 @@ const Home = () => {
               <MapPin className="w-3 h-3 mr-1 text-red-500" />
               <span>Tap to set location</span>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
-              "Ready to deliver excellence today"
-            </p>
           </div>
           
           <div className="flex items-center space-x-2">
@@ -529,11 +526,19 @@ const Home = () => {
       </div>
 
       <div className="flex-1 bg-gray-50">
-        {/* Orders Header */}
+        {/* Orders Header with Greeting */}
         <div className="px-4 py-4 bg-white border-b border-gray-100">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {getGreeting()}{agentName ? `, ${capitalizeWords(agentName)}!` : '!'}
+            </h2>
+            <p className="text-sm text-gray-600 italic">
+              "Ready to deliver excellence today"
+            </p>
+          </div>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Orders ({availableOrders.length})</h2>
+              <h3 className="text-md font-medium text-gray-800">Orders ({availableOrders.length})</h3>
               <p className="text-sm text-gray-500">Available orders and your assignments</p>
             </div>
             <Select value={sortBy} onValueChange={setSortBy}>
