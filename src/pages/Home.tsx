@@ -849,7 +849,7 @@ const Home = () => {
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No orders available</h3>
                 <p className="text-gray-500 mb-4">
-                  Check back later for new delivery opportunities
+                  There are no orders around 15 km
                 </p>
                 {!isOnline && (
                   <Button
