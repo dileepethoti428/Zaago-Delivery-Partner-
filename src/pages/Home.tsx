@@ -670,10 +670,10 @@ const Home = () => {
                             order.subscription_id || 
                             order.delivery_slots ||
                             order.scheduled_time ||
-                            order.delivery_date !== new Date().toISOString().split('T')[0]
+                            (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])
                           );
                           
-                          return (
+                          return isScheduledOrder ? (
                             <div className="mb-4">
                               <div className="bg-blue-50 p-3 rounded-lg flex items-center justify-between">
                                 <div className="flex items-center">
@@ -699,7 +699,7 @@ const Home = () => {
                                 </div>
                               </div>
                             </div>
-                          );
+                          ) : null;
                         })()}
 
                         {/* Address */}
@@ -790,7 +790,7 @@ const Home = () => {
                             <Button 
                               variant="outline"
                               onClick={() => handleRejectOrder(order.id)}
-                              className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-100 h-12 rounded-lg font-medium"
+                              className="flex-1 border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400 h-12 rounded-lg font-medium"
                               disabled={rejectingOrders[order.id]}
                             >
                               {rejectingOrders[order.id] ? (
