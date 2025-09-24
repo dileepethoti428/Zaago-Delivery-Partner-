@@ -612,12 +612,48 @@ const Home = () => {
     }
   }, [location.address, location.latitude, location.longitude]);
 
+  // Set up real-time subscription for order updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('orders-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: 'status=eq.packed'
+        },
+        (payload) => {
+          console.log('📦 Order packed, refreshing available orders...');
+          fetchOrdersForRefresh();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('🆕 New order created, refreshing...');
+          fetchOrdersForRefresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   useEffect(() => {
     fetchAgentName();
     fetchOrders();
     
-    // Reasonable refresh interval - every 2 minutes for new orders
-    const interval = setInterval(fetchOrders, 120000);
+    // Backup refresh interval - every 5 minutes
+    const interval = setInterval(fetchOrders, 300000);
     return () => clearInterval(interval);
   }, []);
 
