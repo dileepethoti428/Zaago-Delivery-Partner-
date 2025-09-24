@@ -1054,25 +1054,10 @@ const Home = () => {
                                     <span className="text-xs text-gray-500">Updating...</span>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center">
-                                    <span>{`${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
-                                    <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
-                                    {order.distance_source && (
-                                      <span 
-                                        className={`ml-1 px-1 py-0.5 text-xs rounded ${
-                                          order.distance_source === 'realtime' ? 'bg-green-100 text-green-700' :
-                                          order.distance_source === 'cached' ? 'bg-blue-100 text-blue-700' :
-                                          order.distance_source === 'fallback' ? 'bg-yellow-100 text-yellow-700' :
-                                          'bg-red-100 text-red-700'
-                                        }`}
-                                        title={`Distance source: ${order.distance_source}`}
-                                      >
-                                        {order.distance_source === 'realtime' ? '🎯' : 
-                                         order.distance_source === 'cached' ? '📍' :
-                                         order.distance_source === 'fallback' ? '📐' : '⚠️'}
-                                      </span>
-                                    )}
-                                  </div>
+                                   <div className="flex items-center">
+                                     <span>{`${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
+                                     <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
+                                   </div>
                                 )}
                               </span>
                             </div>
