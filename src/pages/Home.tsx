@@ -910,10 +910,13 @@ const Home = () => {
         calculateOrderDistances(orders).then(async (updatedOrders) => {
           // Calculate accurate payouts using backend for updated distances
           const ordersWithPayouts = await Promise.all(
-            updatedOrders.map(async (order) => ({
-              ...order,
-              agent_payout: order.agent_payout || await updatePayoutFromBackend(order.distance_km || 2.5, order.id)
-            }))
+            updatedOrders.map(async (order) => {
+              const backendPayout = await updatePayoutFromBackend(order.distance_km || 2.5, order.id);
+              return {
+                ...order,
+                agent_payout: backendPayout // Always update with fresh calculation
+              };
+            })
           );
           setOrders(ordersWithPayouts);
         });
@@ -931,10 +934,13 @@ const Home = () => {
       
       // Recalculate payouts using backend for all orders with updated distances
       const ordersWithUpdatedPayouts = await Promise.all(
-        updatedOrders.map(async (order) => ({
-          ...order,
-          agent_payout: order.agent_payout || await updatePayoutFromBackend(order.distance_km || 2.5, order.id)
-        }))
+        updatedOrders.map(async (order) => {
+          const backendPayout = await updatePayoutFromBackend(order.distance_km || 2.5, order.id);
+          return {
+            ...order,
+            agent_payout: backendPayout // Always refresh payout calculation
+          };
+        })
       );
       
       setOrders(ordersWithUpdatedPayouts);
@@ -1365,8 +1371,8 @@ const Home = () => {
                             <div className="flex items-center">
                               <IndianRupee className="w-4 h-4 text-green-600 mr-1" />
                               <span className="text-sm text-green-800">Agent payout: </span>
-                              <span className="text-sm font-bold text-green-800" title="Estimated payout based on delivery distance">
-                                ₹{order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)}
+                              <span className="text-sm font-bold text-green-800" title="Real-time payout based on current distance">
+                                ₹{calculateAgentPayout(order.distance_km || 2.5)}
                               </span>
                             </div>
                             <div className="flex items-center">
