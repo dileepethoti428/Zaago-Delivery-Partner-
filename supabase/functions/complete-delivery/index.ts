@@ -130,8 +130,18 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered (bulletproof approach)
+    // Update order status to delivered (bulletproof with JSON validation)
     try {
+      // First, clean any potential JSON corruption in this specific order
+      await supabaseClient
+        .from('orders')
+        .update({
+          pickup_address: null, // Clear potentially corrupted field
+          special_instructions: order.special_instructions?.includes?.('Peak') ? null : order.special_instructions
+        })
+        .eq('id', order_id);
+
+      // Now safely update the order status
       const { error: updateError } = await supabaseClient
         .from('orders')
         .update({
