@@ -362,7 +362,7 @@ const Home = () => {
     return updatedOrders;
   };
 
-  // Calculate agent payout - Minimum ₹12 for distance <= 1km
+  // Calculate agent payout - Synchronous for immediate display
   const calculateAgentPayout = (distance: number): number => {
     // Minimum ₹12 for any distance <= 1km
     if (distance <= 1) {
@@ -378,8 +378,8 @@ const Home = () => {
     return Math.round(totalPayout * 100) / 100; // Round to 2 decimal places
   };
 
-  // Get accurate payout from backend
-  const getBackendPayout = async (distance: number, orderId?: string): Promise<number> => {
+  // Get accurate payout from backend - Async function for data processing
+  const updatePayoutFromBackend = async (distance: number, orderId?: string): Promise<number> => {
     try {
       const { data, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
         body: {
@@ -912,7 +912,7 @@ const Home = () => {
           const ordersWithPayouts = await Promise.all(
             updatedOrders.map(async (order) => ({
               ...order,
-              agent_payout: order.agent_payout || await getBackendPayout(order.distance_km || 2.5, order.id)
+              agent_payout: order.agent_payout || await updatePayoutFromBackend(order.distance_km || 2.5, order.id)
             }))
           );
           setOrders(ordersWithPayouts);
@@ -933,7 +933,7 @@ const Home = () => {
       const ordersWithUpdatedPayouts = await Promise.all(
         updatedOrders.map(async (order) => ({
           ...order,
-          agent_payout: order.agent_payout || await getBackendPayout(order.distance_km || 2.5, order.id)
+          agent_payout: order.agent_payout || await updatePayoutFromBackend(order.distance_km || 2.5, order.id)
         }))
       );
       
