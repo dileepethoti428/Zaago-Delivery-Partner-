@@ -282,7 +282,7 @@ serve(async (req) => {
         results.push({
           agent_id: setting.agent_id,
           status: 'error',
-          message: error.message
+          message: error instanceof Error ? error.message : 'Unknown error occurred'
         });
       }
     }
@@ -307,7 +307,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
         details: "Failed to process autopay monitoring"
       }),
       {

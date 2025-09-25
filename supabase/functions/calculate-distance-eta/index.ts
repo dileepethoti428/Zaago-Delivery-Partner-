@@ -82,7 +82,7 @@ serve(async (req) => {
           throw new Error('No routes found from Mapbox')
         }
       } catch (mapboxError) {
-        console.log('Mapbox failed, using fallback:', mapboxError.message)
+        console.log('Mapbox failed, using fallback:', mapboxError instanceof Error ? mapboxError.message : 'Unknown error')
         // Fall back to Haversine calculation
         distance_km = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng)
         
@@ -131,7 +131,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Failed to calculate distance',
-        message: error.message 
+        message: error instanceof Error ? error.message : 'Unknown error occurred' 
       }),
       { 
         status: 500, 

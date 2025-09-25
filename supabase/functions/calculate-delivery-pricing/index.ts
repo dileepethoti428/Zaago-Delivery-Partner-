@@ -38,7 +38,7 @@ async function calculateDistance(origin: {lat: number, lng: number}, destination
         throw new Error('No routes found from Mapbox');
       }
     } catch (mapboxError) {
-      console.log('Mapbox failed, using fallback for distance calculation:', mapboxError.message);
+      console.log('Mapbox failed, using fallback for distance calculation:', mapboxError instanceof Error ? mapboxError.message : 'Unknown error');
       return calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng);
     }
   } else {

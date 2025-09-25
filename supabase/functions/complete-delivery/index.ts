@@ -14,7 +14,22 @@ serve(async (req) => {
   }
 
   try {
-    const { order_id, payment_method = 'Online', agent_location } = await req.json();
+    const body = await req.json();
+    const { order_id, agent_location } = body;
+    let { payment_method = 'Online' } = body;
+    
+    // Validate and sanitize payment_method
+    if (!payment_method || typeof payment_method !== 'string') {
+      payment_method = 'Online';
+    }
+    
+    // Ensure payment_method is one of the expected values
+    const validPaymentMethods = ['Online', 'COD', 'UPI', 'Card'];
+    if (!validPaymentMethods.includes(payment_method)) {
+      payment_method = 'Online';
+    }
+    
+    console.log('Complete delivery request:', { order_id, payment_method, agent_location });
 
     if (!order_id) {
       return new Response(
@@ -136,22 +151,34 @@ serve(async (req) => {
     }
 
     // Update order status to delivered FIRST (main operation - must succeed)
+    console.log('Updating order status for order:', order_id);
+    const updateData = {
+      status: 'delivered',
+      delivered_at: new Date().toISOString(),
+      payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
+    };
+    console.log('Update data:', updateData);
+    
     const { error: updateError } = await supabaseClient
       .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-      })
+      .update(updateData)
       .eq('id', order_id);
 
     if (updateError) {
       console.error('Failed to update order:', updateError);
+      console.error('Update data that failed:', updateData);
       return new Response(
-        JSON.stringify({ success: false, error: 'Failed to update order status' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to update order status', 
+          details: updateError.message,
+          debug_info: { order_id, payment_method, updateData }
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
+    
+    console.log('Order status updated successfully');
 
     // Send apology message if delivery is late
     if (isLateDelivery && orderData?.customer_phone && orderData?.customer_name && delayMinutes > 5) {

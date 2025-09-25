@@ -157,7 +157,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Settlement failed'
+        error: error instanceof Error ? error.message : 'Settlement failed'
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

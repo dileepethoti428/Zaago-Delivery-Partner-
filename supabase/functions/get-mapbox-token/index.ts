@@ -48,7 +48,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Failed to retrieve token',
-        message: error.message 
+        message: error instanceof Error ? error.message : 'Unknown error occurred' 
       }),
       { 
         status: 500, 
