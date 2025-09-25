@@ -292,6 +292,7 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
+    console.log('🚀 Starting delivery completion...', { orderId: order?.id, paymentMethod });
     setIsProcessing(true);
     try {
       const requestPayload = {
@@ -299,11 +300,16 @@ const DeliveryDetails = () => {
         payment_method: paymentMethod === 'COD' ? 'COD' : 'Online'
       };
       
+      console.log('📋 Request payload:', requestPayload);
+      
       const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
         body: requestPayload
       });
       
+      console.log('📥 Response received:', { data, error });
+      
       if (error) {
+        console.error('❌ Edge function error:', error);
         toast({
           title: "Delivery Failed",
           description: error.message || 'Failed to complete delivery',
@@ -313,6 +319,7 @@ const DeliveryDetails = () => {
       }
       
       if (data?.success) {
+        console.log('✅ Delivery completed successfully!', data);
         toast({
           title: "Product Delivered! ✅",
           description: `Order completed successfully. Earned: ₹${data.order?.payout_amount || 0}`,
@@ -320,6 +327,7 @@ const DeliveryDetails = () => {
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
+        console.error('❌ Delivery failed:', data);
         toast({
           title: "Delivery Failed",
           description: data?.error || 'Failed to complete delivery',
@@ -327,6 +335,7 @@ const DeliveryDetails = () => {
         });
       }
     } catch (error: any) {
+      console.error('❌ Unexpected error:', error);
       toast({
         title: "Delivery Failed",
         description: error?.message || "Failed to complete delivery",
