@@ -149,6 +149,19 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       case 'classic-bell':
         ringtoneFile = '/classic-bell.mp3';
         break;
+      // High-volume custom ringtones
+      case 'emergency-alarm':
+        ringtoneFile = '/emergency-alarm.mp3';
+        break;
+      case 'air-horn':
+        ringtoneFile = '/air-horn.mp3';
+        break;
+      case 'tornado-siren':
+        ringtoneFile = '/tornado-siren.mp3';
+        break;
+      case 'ship-horn':
+        ringtoneFile = '/ship-horn.mp3';
+        break;
       // Keep notification sounds separate - these are shorter, quieter
       case 'notification-sound':
         ringtoneFile = '/notification-sound.mp3';

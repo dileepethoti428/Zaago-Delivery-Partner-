@@ -38,22 +38,23 @@ import {
 
 const getRingtoneDescription = (type: string) => {
   switch (type) {
-    case 'phone-ringtone':
-      return 'Traditional phone ringing sound';
-    case 'notification-sound':
-      return 'Standard notification tone';
-    case 'iphone-notification':
-      return 'iPhone-style notification sound';
-    case 'samsung-notification':
-      return 'Samsung-style notification sound';
-    case 'android-notification':
-      return 'Android-style notification sound';
-    case 'classic-bell':
-      return 'Classic bell ringing sound';
-    case 'chimes-notification':
-      return 'Melodic chimes notification';
-    default:
-      return 'Phone ringtone';
+    case 'iphone-ringtone': return 'iPhone Classic';
+    case 'iphone-marimba': return 'iPhone Marimba';
+    case 'iphone-opening': return 'iPhone Opening';
+    case 'rapido-ringtone': return 'Rapido Style';
+    case 'classic-phone-ring': return 'Classic Phone';
+    case 'phone-ringtone': return 'Phone Ring';
+    case 'classic-bell': return 'Classic Bell';
+    case 'emergency-alarm': return 'Emergency Alarm 🚨';
+    case 'air-horn': return 'Air Horn 📯';
+    case 'tornado-siren': return 'Tornado Siren 🌪️';
+    case 'ship-horn': return 'Ship Horn ⛵';
+    case 'notification-sound': return 'Standard';
+    case 'iphone-notification': return 'iPhone Ding';
+    case 'samsung-notification': return 'Samsung';
+    case 'android-notification': return 'Android';
+    case 'chimes-notification': return 'Chimes';
+    default: return 'Default Ring';
   }
 };
 
@@ -88,7 +89,7 @@ const Settings = () => {
     location_services: true,
     ringtone_enabled: true,
     ringtone_volume: 1.0, // Maximum volume for iPhone ringtone
-    ringtone_type: 'iphone-ringtone', // Default to iPhone ringtone
+    ringtone_type: 'emergency-alarm', // Default to loudest custom ringtone
     notification_frequency: 'double',
     personal_info: {
       name: '',
@@ -170,7 +171,7 @@ const Settings = () => {
             location_services: agentSettings.location_services,
             ringtone_enabled: agentSettings.ringtone_enabled ?? true,
             ringtone_volume: agentSettings.ringtone_volume ?? 1.0, // Maximum default volume
-            ringtone_type: agentSettings.ringtone_type ?? 'iphone-ringtone', // Default to iPhone
+            ringtone_type: agentSettings.ringtone_type ?? 'emergency-alarm', // Default to loudest
             notification_frequency: agentSettings.notification_frequency ?? 'double',
             personal_info: {
               name: agent.name || '',
@@ -190,7 +191,7 @@ const Settings = () => {
             location_services: true,
             ringtone_enabled: true,
             ringtone_volume: 1.0, // Maximum default volume
-            ringtone_type: 'iphone-ringtone', // Default to iPhone
+            ringtone_type: 'emergency-alarm', // Default to loudest
             notification_frequency: 'double',
             personal_info: {
               name: agent.name || '',
@@ -498,7 +499,7 @@ const Settings = () => {
       ]
     },
     {
-      title: "iPhone Ringtone Settings",
+      title: "High-Volume Custom Ringtones",
       items: [],
       customRender: true
     },
@@ -581,7 +582,7 @@ const Settings = () => {
               <CardTitle className="text-lg">{group.title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
-              {group.customRender && group.title === "iPhone Ringtone Settings" ? (
+              {group.customRender && group.title === "High-Volume Custom Ringtones" ? (
                 <div className="space-y-6 p-4">
                   {/* Master Enable/Disable Toggle */}
                   <div className="flex items-center justify-between">
@@ -590,8 +591,8 @@ const Settings = () => {
                         <Volume2 className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">Enable iPhone Ringtones</p>
-                        <p className="text-sm text-muted-foreground">Master switch for iPhone-style notification sounds</p>
+                        <p className="font-medium text-foreground">Enable High-Volume Ringtones</p>
+                        <p className="text-sm text-muted-foreground">Master switch for loud, attention-grabbing notification sounds</p>
                       </div>
                     </div>
                     <Switch 
@@ -641,8 +642,8 @@ const Settings = () => {
                   {/* Test Rapido Ringtone */}
                   <div className="space-y-3">
                     <div>
-                      <p className="font-medium text-foreground">New Order Ringtone: iPhone Style</p>
-                      <p className="text-sm text-muted-foreground">Classic iPhone ringtone with maximum volume for urgent notifications</p>
+                      <p className="font-medium text-foreground">New Order Ringtone: High-Volume Alert</p>
+                      <p className="text-sm text-muted-foreground">Ultra-loud custom ringtone designed to grab immediate attention</p>
                     </div>
                     <Button
                       onClick={() => testRingtone()}
@@ -650,7 +651,7 @@ const Settings = () => {
                       className="w-full bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200"
                       variant="outline"
                     >
-                      🔔 Test iPhone Ringtone
+                      🚨 Test High-Volume Ringtone
                     </Button>
                   </div>
 
@@ -658,8 +659,8 @@ const Settings = () => {
                   <div className="space-y-4 border-t pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-foreground">Continuous Ringing (iPhone Style)</p>
-                        <p className="text-sm text-muted-foreground">Ring continuously until you respond to new orders (iPhone style)</p>
+                        <p className="font-medium text-foreground">Continuous Ringing (High-Volume)</p>
+                        <p className="text-sm text-muted-foreground">Ring continuously until you respond to new orders (ultra-loud alerts)</p>
                       </div>
                       <Switch 
                         checked={continuousRingingEnabled}
@@ -803,13 +804,17 @@ const Settings = () => {
                           <SelectValue />
                         </SelectTrigger>
                          <SelectContent>
-                           <SelectItem value="phone-ringtone">Classic Phone Ring</SelectItem>
-                           <SelectItem value="notification-sound">Default Notification</SelectItem>
-                           <SelectItem value="iphone-notification">iPhone Style</SelectItem>
-                           <SelectItem value="samsung-notification">Samsung Style</SelectItem>
-                           <SelectItem value="android-notification">Android Style</SelectItem>
+                           <SelectItem value="emergency-alarm">🚨 Emergency Alarm (LOUD)</SelectItem>
+                           <SelectItem value="air-horn">📯 Air Horn (VERY LOUD)</SelectItem>
+                           <SelectItem value="tornado-siren">🌪️ Tornado Siren (EXTREME)</SelectItem>
+                           <SelectItem value="ship-horn">⛵ Ship Horn (POWERFUL)</SelectItem>
+                           <SelectItem value="iphone-ringtone">iPhone Classic</SelectItem>
+                           <SelectItem value="iphone-marimba">iPhone Marimba</SelectItem>
+                           <SelectItem value="rapido-ringtone">Rapido Style</SelectItem>
+                           <SelectItem value="classic-phone-ring">Classic Phone Ring</SelectItem>
                            <SelectItem value="classic-bell">Classic Bell</SelectItem>
-                           <SelectItem value="chimes-notification">Chimes</SelectItem>
+                           <SelectItem value="phone-ringtone">Standard Phone</SelectItem>
+                           <SelectItem value="notification-sound">Notification Ding</SelectItem>
                          </SelectContent>
                       </Select>
                     ) : item.action === "notification_pattern" ? (
