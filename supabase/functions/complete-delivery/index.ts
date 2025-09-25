@@ -141,7 +141,7 @@ serve(async (req) => {
     
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Get order details with detailed logging
+    // Get order details with detailed logging and JSON validation
     console.log('📦 Looking up order:', order_id);
     
     const { data: order, error: orderError } = await supabaseClient
@@ -171,6 +171,52 @@ serve(async (req) => {
     }
     
     console.log('✅ Order found:', { id: order.id, status: order.status, customer: order.customer_name });
+
+    // Validate and sanitize JSON fields to prevent parsing errors
+    try {
+      // Ensure address is valid JSON
+      if (order.address && typeof order.address === 'string') {
+        try {
+          order.address = JSON.parse(order.address);
+        } catch (e) {
+          console.warn('⚠️ Invalid address JSON, setting to null');
+          order.address = null;
+        }
+      }
+      
+      // Ensure pickup_location is valid JSON
+      if (order.pickup_location && typeof order.pickup_location === 'string') {
+        try {
+          order.pickup_location = JSON.parse(order.pickup_location);
+        } catch (e) {
+          console.warn('⚠️ Invalid pickup_location JSON, setting to null');
+          order.pickup_location = null;
+        }
+      }
+      
+      // Ensure items is valid JSON array
+      if (order.items && typeof order.items === 'string') {
+        try {
+          order.items = JSON.parse(order.items);
+        } catch (e) {
+          console.warn('⚠️ Invalid items JSON, setting to empty array');
+          order.items = [];
+        }
+      }
+      
+      console.log('✅ Order JSON fields validated and cleaned');
+      
+    } catch (validationError) {
+      console.error('❌ Order validation failed:', validationError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Order data validation failed', 
+          details: validationError instanceof Error ? validationError.message : String(validationError)
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
     // Check if order is already delivered
     if (order.status === 'delivered') {
