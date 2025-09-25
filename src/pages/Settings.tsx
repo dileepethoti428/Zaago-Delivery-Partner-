@@ -88,7 +88,7 @@ const Settings = () => {
     location_services: true,
     ringtone_enabled: true,
     ringtone_volume: 0.8,
-    ringtone_type: 'phone-ringtone',
+    ringtone_type: 'rapido-ringtone', // Default to Rapido ringtone
     notification_frequency: 'double',
     personal_info: {
       name: '',
@@ -170,7 +170,7 @@ const Settings = () => {
             location_services: agentSettings.location_services,
             ringtone_enabled: agentSettings.ringtone_enabled ?? true,
             ringtone_volume: agentSettings.ringtone_volume ?? 0.8,
-            ringtone_type: agentSettings.ringtone_type ?? 'phone-ringtone',
+            ringtone_type: agentSettings.ringtone_type ?? 'rapido-ringtone', // Default to Rapido
             notification_frequency: agentSettings.notification_frequency ?? 'double',
             personal_info: {
               name: agent.name || '',
@@ -190,7 +190,7 @@ const Settings = () => {
             location_services: true,
             ringtone_enabled: true,
             ringtone_volume: 0.8,
-            ringtone_type: 'phone-ringtone',
+            ringtone_type: 'rapido-ringtone', // Default to Rapido
             notification_frequency: 'double',
             personal_info: {
               name: agent.name || '',

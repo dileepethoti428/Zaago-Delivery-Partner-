@@ -124,10 +124,32 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       return cleanup;
     }
 
-    // Use the selected ringtone type
-    let ringtoneFile = '/phone-ringtone.mp3'; // default
+    // Use proper ringtones instead of notification sounds
+    let ringtoneFile = '/classic-phone-ring.mp3'; // Default to actual phone ringtone
     
     switch (settings?.type) {
+      case 'rapido-ringtone':
+        ringtoneFile = '/rapido-ringtone.mp3'; // Loud bell for Rapido style
+        break;
+      case 'classic-phone-ring':
+        ringtoneFile = '/classic-phone-ring.mp3';
+        break;
+      case 'phone-ringtone':
+        ringtoneFile = '/phone-ringtone.mp3';
+        break;
+      case 'iphone-ringtone':
+        ringtoneFile = '/iphone-ringtone.mp3';
+        break;
+      case 'iphone-marimba':
+        ringtoneFile = '/iphone-marimba.mp3';
+        break;
+      case 'iphone-opening':
+        ringtoneFile = '/iphone-opening.mp3';
+        break;
+      case 'classic-bell':
+        ringtoneFile = '/classic-bell.mp3';
+        break;
+      // Keep notification sounds separate - these are shorter, quieter
       case 'notification-sound':
         ringtoneFile = '/notification-sound.mp3';
         break;
@@ -140,15 +162,11 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       case 'android-notification':
         ringtoneFile = '/android-notification.mp3';
         break;
-      case 'classic-bell':
-        ringtoneFile = '/classic-bell.mp3';
-        break;
       case 'chimes-notification':
         ringtoneFile = '/chimes-notification.mp3';
         break;
-      case 'phone-ringtone':
       default:
-        ringtoneFile = '/phone-ringtone.mp3';
+        ringtoneFile = '/classic-phone-ring.mp3'; // Always default to proper ringtone
         break;
     }
 
