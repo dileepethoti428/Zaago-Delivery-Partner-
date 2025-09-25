@@ -362,11 +362,11 @@ const Home = () => {
     return updatedOrders;
   };
 
-  // Calculate agent payout based on delivery distance (shop to customer) - New pricing structure
+  // Calculate agent payout based on delivery distance (shop to customer) - Updated pricing structure
   const calculateAgentPayout = (distance: number) => {
-    const basePay = 40; // Base pay for first 3 km  
-    const additionalDistance = Math.max(0, distance - 3); // Distance beyond 3 km
-    const perKmRate = 9; // Rate per km for additional distance
+    const basePay = 12; // ₹12 for first 1km  
+    const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1km
+    const perKmRate = 8; // ₹8 per km for additional distance
     const subtotal = basePay + (additionalDistance * perKmRate);
     
     // Check for peak hours (basic approximation for frontend)
@@ -813,6 +813,14 @@ const Home = () => {
             console.log('👤 Agent assignment changed, refreshing...');
             fetchOrdersForRefresh();
           }
+
+          // Refresh payout when order distance or other payout-affecting fields change
+          if (payload.new && payload.old && 
+              (payload.new.distance_km !== payload.old.distance_km || 
+               payload.new.agent_payout !== payload.old.agent_payout)) {
+            console.log('💰 Order payout data changed, refreshing...');
+            fetchOrdersForRefresh();
+          }
         }
       )
       .on(
@@ -833,10 +841,36 @@ const Home = () => {
           fetchOrdersForRefresh();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'earnings'
+        },
+        (payload) => {
+          console.log('💰 Earnings updated:', payload);
+          // Refresh orders to show updated payout information
+          fetchOrdersForRefresh();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'payout_config'  
+        },
+        (payload) => {
+          console.log('⚙️ Payout configuration updated:', payload);
+          // Refresh orders to recalculate payouts with new rates
+          fetchOrdersForRefresh();
+        }
+      )
       .subscribe((status) => {
         console.log('📡 Real-time subscription status:', status);
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to orders real-time updates');
+          console.log('✅ Successfully subscribed to orders, earnings, and payout config real-time updates');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Real-time subscription error');
         }
@@ -858,26 +892,40 @@ const Home = () => {
       
       if (ordersNeedingDistance.length > 0) {
         console.log(`🔄 ${ordersNeedingDistance.length} orders need distance calculation...`);
-        calculateOrderDistances(orders).then(setOrders);
+        calculateOrderDistances(orders).then(updatedOrders => {
+          // Ensure payouts are calculated with updated distances
+          const ordersWithPayouts = updatedOrders.map(order => ({
+            ...order,
+            agent_payout: order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)
+          }));
+          setOrders(ordersWithPayouts);
+        });
       }
     }
   }, [orders.length, location.latitude, location.longitude]); // Trigger when new orders are loaded or location is available
 
-  // Real-time distance updates - recalculate every 30 seconds for active orders
+  // Real-time distance and payout updates - recalculate every 30 seconds for active orders
   useEffect(() => {
     if (orders.length === 0 || !location.latitude || !location.longitude) return;
     
-    const updateDistances = async () => {
-      console.log('🔄 Updating real-time distances...');
+    const updateDistancesAndPayouts = async () => {
+      console.log('🔄 Updating real-time distances and payouts...');
       const updatedOrders = await calculateOrderDistances(orders);
-      setOrders(updatedOrders);
+      
+      // Recalculate payouts for all orders with updated distances
+      const ordersWithUpdatedPayouts = updatedOrders.map(order => ({
+        ...order,
+        agent_payout: order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)
+      }));
+      
+      setOrders(ordersWithUpdatedPayouts);
     };
 
     // Initial calculation
-    updateDistances();
+    updateDistancesAndPayouts();
     
     // Set up interval for real-time updates every 30 seconds
-    const interval = setInterval(updateDistances, 30000);
+    const interval = setInterval(updateDistancesAndPayouts, 30000);
     
     return () => clearInterval(interval);
   }, [location.latitude, location.longitude]); // Recalculate when agent location changes
