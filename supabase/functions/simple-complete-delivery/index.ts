@@ -125,11 +125,11 @@ serve(async (req) => {
 
     console.log('✅ Order updated successfully');
 
-    // Create simple earnings record (optional - don't fail if this fails)
+    // Create earnings record if it doesn't exist (handle duplicate prevention)
     try {
-      await supabaseClient
+      const { error: earningsError } = await supabaseClient
         .from('earnings')
-        .insert({
+        .upsert({
           agent_id: agent.id,
           order_id: order_id,
           amount: 35, // Default payout
@@ -137,8 +137,14 @@ serve(async (req) => {
           distance_km: 2.5,
           payment_method: payment_method === 'COD' ? 'COD' : 'Online',
           description: `Simple delivery completion for order ${order_id.substring(0, 8)}`
+        }, {
+          onConflict: 'agent_id,order_id',
+          ignoreDuplicates: true
         });
-      console.log('✅ Earnings record created');
+      
+      if (!earningsError) {
+        console.log('✅ Earnings record created/updated');
+      }
     } catch (earningsError) {
       console.warn('⚠️ Earnings creation failed (continuing anyway):', earningsError);
     }
