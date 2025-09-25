@@ -249,54 +249,45 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered using safe function
-    console.log('💾 Starting order status update using safe function...');
+    // Update order status to delivered
+    console.log('💾 Starting order status update...');
+    
+    const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
     
     try {
-      // Use the new safe delivery completion function
-      const { data: completionResult, error: completionError } = await supabaseClient
-        .rpc('complete_delivery_safe', {
-          p_order_id: order_id,
-          p_agent_id: agent.id,
-          p_payment_method: payment_method
-        });
+      const { error: updateError } = await supabaseClient
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: new Date().toISOString(),
+          payment_status: payment_status
+        })
+        .eq('id', order_id);
 
-      if (completionError) {
-        console.error('❌ Failed to complete delivery via RPC:', completionError);
+      if (updateError) {
+        console.error('❌ Failed to update order:', updateError);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Failed to complete delivery',
-            details: completionError.message,
-            recoverable: true
+          JSON.stringify({
+            success: false,
+            error: 'Failed to update order status',
+            details: updateError.message
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+          }
         );
       }
 
-      if (!completionResult?.success) {
-        console.error('❌ Delivery completion failed:', completionResult);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: completionResult?.error || 'Delivery completion failed',
-            details: completionResult?.details || 'Unknown error',
-            recoverable: true
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
-
-      console.log('✅ Order status updated successfully via safe function');
+      console.log('✅ Order status updated successfully');
       
     } catch (dbError) {
-      console.error('❌ Database operation failed:', dbError);
+      console.error('❌ Database error:', dbError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Database operation failed', 
-          details: dbError instanceof Error ? dbError.message : String(dbError),
-          recoverable: true
+          details: dbError instanceof Error ? dbError.message : String(dbError)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
