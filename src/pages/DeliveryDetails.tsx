@@ -47,7 +47,6 @@ const DeliveryDetails = () => {
   const [payout, setPayout] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [showFallbackOption, setShowFallbackOption] = useState(false);
   useEffect(() => {
     if (orderId) {
       fetchOrderDetails();
@@ -237,52 +236,6 @@ const DeliveryDetails = () => {
     }
   };
 
-  // Fallback simple delivery completion
-  const completeDeliverySimple = async (paymentMethod: string) => {
-    setIsProcessing(true);
-    try {
-      const requestPayload = {
-        order_id: order?.id,
-        payment_method: paymentMethod === 'COD' ? 'COD' : 'Online'
-      };
-      
-      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
-        body: requestPayload
-      });
-      
-      if (error) {
-        toast({
-          title: "Simple Delivery Failed",
-          description: error.message || 'Failed to complete delivery using fallback method',
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      if (data?.success) {
-        toast({
-          title: "Delivery Completed (Simple Mode)",
-          description: `Order completed successfully. Earned: ₹${data.order?.payout_amount || 0}`,
-        });
-        window.dispatchEvent(new CustomEvent('orderCompleted'));
-        navigate('/home');
-      } else {
-        toast({
-          title: "Simple Delivery Failed",
-          description: data?.error || 'Failed to complete delivery',
-          variant: "destructive"
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Simple Delivery Failed",
-        description: error?.message || "Fallback delivery completion failed",
-        variant: "destructive"
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
   const handleCancelDelivery = async () => {
     if (!order) return;
     setIsCancelling(true);
@@ -338,134 +291,45 @@ const DeliveryDetails = () => {
       setIsCancelling(false);
     }
   };
-  const completeDeliveryDirect = async (paymentMethod: string, retryCount: number = 0) => {
-    console.log('🚀 Starting delivery completion, attempt:', retryCount + 1);
+  const completeDeliveryDirect = async (paymentMethod: string) => {
     setIsProcessing(true);
-    
     try {
-      // Check session validity before making request
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !sessionData.session) {
-        console.log('🔄 Session invalid, attempting refresh...');
-        
-        const { error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (refreshError) {
-          console.error('❌ Session refresh failed:', refreshError);
-          toast({
-            title: "Session Expired",
-            description: "Your session has expired. Please refresh the app and log in again.",
-            variant: "destructive"
-          });
-          // Optionally redirect to login
-          setTimeout(() => window.location.reload(), 3000);
-          return;
-        }
-        
-        console.log('✅ Session refreshed successfully');
-      }
-      
-      const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
-      const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
-      
       const requestPayload = {
         order_id: order?.id,
-        payment_method: methodParam,
-        agent_location: agentLocation
+        payment_method: paymentMethod === 'COD' ? 'COD' : 'Online'
       };
       
-      console.log('📤 Sending request:', { order_id: order?.id, payment_method: methodParam });
-      
-      const { data, error } = await supabase.functions.invoke('complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
         body: requestPayload
       });
       
-      console.log('📥 Response received:', { data, error });
-      
       if (error) {
-        console.error('❌ Edge function error:', error);
-        
-        // Handle specific error responses with action_required
-        if (data?.action_required) {
-          handleErrorWithAction(data, error, paymentMethod, retryCount);
-          return;
-        }
-        
-        // Enhanced retry logic for recoverable errors
-        const isRecoverable = error.message?.includes('timeout') || 
-                             error.message?.includes('network') ||
-                             error.message?.includes('connection') ||
-                             (data?.recoverable === true);
-        
-        if (retryCount === 0 && isRecoverable) {
-          console.log('🔄 Retrying delivery completion due to recoverable error...');
-          setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 3000);
-          return;
-        }
-        
-        // Show fallback option after failure
-        setShowFallbackOption(true);
-        
-        // Enhanced error message handling
-        let userFriendlyMessage = data?.user_message || 'Failed to complete delivery';
-        
         toast({
           title: "Delivery Failed",
-          description: userFriendlyMessage + ' Try the simple completion method below.',
+          description: error.message || 'Failed to complete delivery',
           variant: "destructive"
         });
         return;
       }
       
       if (data?.success) {
-        console.log('✅ Delivery completed successfully');
-        setShowFallbackOption(false);
         toast({
           title: "Product Delivered! ✅",
-          description: `Order completed. Distance: ${data.order?.distance_km || 0}km, Earned: ₹${data.order?.payout_amount || 0}`
+          description: `Order completed successfully. Earned: ₹${data.order?.payout_amount || 0}`,
         });
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
-        console.error('❌ Delivery completion failed:', data);
-        
-        // Handle specific error responses with action_required
-        if (data?.action_required) {
-          handleErrorWithAction(data, null, paymentMethod, retryCount);
-          return;
-        }
-        
-        setShowFallbackOption(true);
-        const errorMsg = data?.user_message || data?.error || 'Unknown error occurred';
         toast({
           title: "Delivery Failed",
-          description: errorMsg + ' Try the simple completion method below.',
+          description: data?.error || 'Failed to complete delivery',
           variant: "destructive"
         });
       }
     } catch (error: any) {
-      console.error('❌ Request error:', error);
-      
-      // Enhanced retry logic for network errors
-      const isNetworkError = error?.name === 'TypeError' || 
-                           error?.message?.includes('fetch') ||
-                           error?.message?.includes('network');
-      
-      if (retryCount === 0 && isNetworkError) {
-        console.log('🔄 Retrying delivery completion due to network error...');
-        setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 3000);
-        return;
-      }
-      
-      setShowFallbackOption(true);
-      const errorMessage = isNetworkError 
-        ? "Network error occurred. Please check your connection and try the simple completion method."
-        : (error?.message || "Unexpected error occurred. Try the simple completion method.");
-        
       toast({
         title: "Delivery Failed",
-        description: errorMessage,
+        description: error?.message || "Failed to complete delivery",
         variant: "destructive"
       });
     } finally {
@@ -473,61 +337,6 @@ const DeliveryDetails = () => {
     }
   };
 
-  // Handle errors with specific actions required
-  const handleErrorWithAction = (data: any, error: any, paymentMethod: string, retryCount: number) => {
-    const { action_required, user_message } = data;
-    
-    switch (action_required) {
-      case 'reauth':
-        toast({
-          title: "Authentication Required",
-          description: user_message || "Please refresh the app and log in again.",
-          variant: "destructive"
-        });
-        setTimeout(() => window.location.reload(), 3000);
-        break;
-        
-      case 'retry':
-        if (retryCount === 0) {
-          console.log('🔄 Server requested retry, attempting once more...');
-          setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 2000);
-        } else {
-          setShowFallbackOption(true);
-          toast({
-            title: "Delivery Failed",
-            description: user_message + " Try the simple completion method below.",
-            variant: "destructive"
-          });
-        }
-        break;
-        
-      case 'use_fallback':
-        setShowFallbackOption(true);
-        toast({
-          title: "Data Issue Detected",
-          description: user_message + " Please use the simple completion method below.",
-          variant: "destructive"
-        });
-        break;
-        
-      case 'refresh_orders':
-        toast({
-          title: "Order Not Found",
-          description: user_message || "This order may have been completed or cancelled.",
-          variant: "destructive"
-        });
-        setTimeout(() => navigate('/home'), 2000);
-        break;
-        
-      default:
-        setShowFallbackOption(true);
-        toast({
-          title: "Delivery Failed",
-          description: user_message + " Try the simple completion method below.",
-          variant: "destructive"
-        });
-    }
-  };
   if (isLoading) {
     return <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
@@ -779,22 +588,9 @@ const DeliveryDetails = () => {
                    <CheckCircle2 className="w-3 h-3" />
                    <span className="text-xs">{isProcessing ? 'Processing...' : 'Product Delivered'}</span>
                  </Button>
-               </div>
-               
-               {/* Fallback simple completion button */}
-               {showFallbackOption && (
-                 <Button 
-                   variant="secondary" 
-                   className="w-full flex items-center justify-center space-x-1 h-8 text-xs" 
-                   onClick={() => completeDeliverySimple(order.payment_status === 'paid' ? 'Online' : 'COD')} 
-                   disabled={isProcessing}
-                 >
-                   <CheckCircle2 className="w-3 h-3" />
-                   <span>Try Simple Delivery Completion</span>
-                 </Button>
-               )}
-               
-               <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
+                </div>
+
+                <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
                  <X className="w-3 h-3" />
                  <span className="text-sm">{isCancelling ? 'Cancelling...' : 'Cancel Delivery'}</span>
                </Button>
