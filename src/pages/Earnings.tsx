@@ -137,59 +137,70 @@ const Earnings = () => {
 
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+      
+      // Fix week start calculation
+      const currentWeekStart = new Date(now);
+      currentWeekStart.setDate(now.getDate() - now.getDay());
+      currentWeekStart.setHours(0, 0, 0, 0);
+      
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // Get accurate distance data from delivery_history (completed deliveries)
-      const { data: todayData } = await supabase
+      // Get delivery history and earnings data for distance synchronization
+      const { data: todayData, error: todayError } = await supabase
         .from('delivery_history')
-        .select('distance_traveled, pickup_location, delivery_address, order_id')
+        .select('distance_traveled, delivery_payout, order_id')
         .eq('agent_id', agent.id)
         .gte('delivery_date', todayStart.toISOString().split('T')[0]);
 
-      const { data: weekData } = await supabase
+      const { data: weekData, error: weekError } = await supabase
         .from('delivery_history')  
-        .select('distance_traveled, pickup_location, delivery_address, order_id')
+        .select('distance_traveled, delivery_payout, order_id')
         .eq('agent_id', agent.id)
-        .gte('delivery_date', weekStart.toISOString().split('T')[0]);
+        .gte('delivery_date', currentWeekStart.toISOString().split('T')[0]);
 
-      const { data: monthData } = await supabase
+      const { data: monthData, error: monthError } = await supabase
         .from('delivery_history')
-        .select('distance_traveled, pickup_location, delivery_address, order_id')
+        .select('distance_traveled, delivery_payout, order_id')
         .eq('agent_id', agent.id)
         .gte('delivery_date', monthStart.toISOString().split('T')[0]);
 
-      // Calculate accurate distances using backend calculation for records missing distance_traveled
-      const calculateAccurateDistance = async (records: any[]) => {
+      // Also get earnings data for cross-reference
+      const { data: earningsData } = await supabase
+        .from('earnings')
+        .select('order_id, distance_km, amount, created_at')
+        .eq('agent_id', agent.id);
+
+      console.log('🔍 Distance sync debug:', {
+        todayRecords: todayData?.length || 0,
+        weekRecords: weekData?.length || 0,
+        monthRecords: monthData?.length || 0,
+        earningsRecords: earningsData?.length || 0,
+        todayError,
+        weekError,
+        monthError
+      });
+
+      // Calculate accurate distances - prioritize delivery_history distance_traveled, then cross-reference with earnings
+      const calculateAccurateDistance = async (historyRecords: any[]) => {
         let totalDistance = 0;
         
-        for (const record of records || []) {
+        for (const record of historyRecords || []) {
           if (record.distance_traveled && record.distance_traveled > 0) {
-            // Use existing accurate distance
+            // Use accurate distance from delivery_history (updated by completion functions)
             totalDistance += record.distance_traveled;
-          } else if (record.pickup_location && record.delivery_address?.coordinates) {
-            // Calculate missing distance using backend service
-            try {
-              const { data: distanceResult } = await supabase.functions.invoke('calculate-distance-eta', {
-                body: {
-                  origin: record.pickup_location,
-                  destination: record.delivery_address.coordinates
-                }
-              });
-              
-              if (distanceResult?.success && distanceResult?.distance_km) {
-                totalDistance += distanceResult.distance_km;
-                console.log(`📏 Backend calculated distance for order ${record.order_id}: ${distanceResult.distance_km}km`);
-              } else {
-                console.warn(`⚠️  Failed to calculate distance for order ${record.order_id}`);
-                totalDistance += 2.5; // fallback distance
-              }
-            } catch (error) {
-              console.error(`❌ Error calculating distance for order ${record.order_id}:`, error);
-              totalDistance += 2.5; // fallback distance  
-            }
+            console.log(`📏 Using delivery_history distance for order ${record.order_id}: ${record.distance_traveled}km`);
           } else {
-            totalDistance += 2.5; // fallback distance when no location data
+            // Cross-reference with earnings table for distance_km
+            const earningRecord = earningsData?.find(e => e.order_id === record.order_id);
+            if (earningRecord?.distance_km && earningRecord.distance_km > 0) {
+              totalDistance += earningRecord.distance_km;
+              console.log(`📏 Using earnings distance for order ${record.order_id}: ${earningRecord.distance_km}km`);
+            } else {
+              // Use a realistic fallback based on typical delivery distance
+              const fallbackDistance = 3.5; // More realistic average delivery distance
+              totalDistance += fallbackDistance;
+              console.log(`📏 Using fallback distance for order ${record.order_id}: ${fallbackDistance}km`);
+            }
           }
         }
         
@@ -203,17 +214,16 @@ const Earnings = () => {
         calculateAccurateDistance(monthData)
       ]);
 
-      setDistanceStats({
+      const finalStats = {
         distance_today: Math.round(distance_today * 10) / 10,
         distance_week: Math.round(distance_week * 10) / 10,
         distance_month: Math.round(distance_month * 10) / 10
-      });
+      };
 
-      console.log('📊 Updated distance stats with backend accuracy:', {
-        today: Math.round(distance_today * 10) / 10,
-        week: Math.round(distance_week * 10) / 10,
-        month: Math.round(distance_month * 10) / 10
-      });
+      setDistanceStats(finalStats);
+
+      console.log('📊 Updated distance stats with backend sync:', finalStats);
+      
       
     } catch (error) {
       console.error('Error fetching distance stats:', error);
@@ -303,31 +313,46 @@ const Earnings = () => {
         .eq('agent_id', agent.id)
         .order('completed_at', { ascending: false });
 
-      // Format recent earnings for display
+      // Format recent earnings for display with synced distance data
       const recentData = (earnings || []).slice(0, 10).map(earning => {
         const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
         
-        // Use distance from earnings table (most accurate) or delivery history as fallback
-        const distance = earning.distance_km || historyData?.distance_traveled || 0;
+        // Prioritize distance from delivery_history (most accurate), then earnings table
+        let distance = 0;
+        let distanceSource: 'backend' | 'history' | 'delivery' = 'delivery';
         
-        // Calculate breakdown using actual payout config
-        const basePay = payoutConfig?.base_pay_amount || 15;
-        const baseDistanceKm = payoutConfig?.base_pay_distance_km || 1;
-        const perKmRate = payoutConfig ? 
-          (payoutConfig.per_km_min_rate + payoutConfig.per_km_max_rate) / 2 : 12;
+        if (historyData?.distance_traveled && historyData.distance_traveled > 0) {
+          distance = historyData.distance_traveled;
+          distanceSource = 'history';
+        } else if (earning.distance_km && earning.distance_km > 0) {
+          distance = earning.distance_km;
+          distanceSource = 'backend';
+        } else {
+          distance = 3.5; // Realistic fallback
+          distanceSource = 'delivery';
+        }
+        
+        // Calculate breakdown using actual payout config - standardized calculation
+        const basePay = 40; // ₹40 base pay for up to 3km
+        const baseDistanceKm = 3;
+        const perKmRate = 9; // ₹9 per km after 3km
         
         const distancePay = distance > baseDistanceKm ? 
           (distance - baseDistanceKm) * perKmRate : 0;
         
         // Check if this was a peak hour delivery
         const earningTime = new Date(earning.created_at).toTimeString().substring(0, 5);
-        const isPeakHour = payoutConfig && 
-          earningTime >= payoutConfig.peak_hour_start && 
-          earningTime <= payoutConfig.peak_hour_end;
+        const isPeakHour = earningTime >= '06:00' && earningTime <= '12:00';
         
-        // Calculate if peak bonus was earned (simplified - actual logic is more complex)
-        const peakBonus = isPeakHour && (earning.amount || 0) > (basePay + distancePay) ? 
-          Math.max(0, (earning.amount || 0) - basePay - distancePay) : 0;
+        // Calculate surge (15% during peak hours)
+        const subtotal = basePay + distancePay;
+        const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
+        const totalBeforeFee = subtotal + surgeAmount;
+        const platformFee = 13;
+        const expectedTotal = totalBeforeFee - platformFee;
+        
+        // Calculate actual peak bonus based on difference from expected
+        const peakBonus = Math.max(0, (earning.amount || 0) - expectedTotal);
         
         return {
           id: earning.id,
@@ -341,7 +366,7 @@ const Earnings = () => {
           }),
           delivery_date: historyData?.delivery_date || earning.created_at,
           distance_km: distance,
-          distance_source: 'delivery' as 'backend' | 'history' | 'delivery',
+          distance_source: distanceSource,
           breakdown: {
             base_pay: basePay,
             distance_pay: distancePay,
