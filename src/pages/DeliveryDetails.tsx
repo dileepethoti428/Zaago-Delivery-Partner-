@@ -315,11 +315,24 @@ const DeliveryDetails = () => {
       
       if (error) {
         console.error('DeliveryDetails: Edge function error:', error);
-        // Show specific error message from the function
-        const errorMessage = error.message || 'Failed to complete delivery';
+        
+        // Provide more specific error messages based on the error
+        let userFriendlyMessage = 'Failed to complete delivery';
+        if (error.message?.includes('corrupted data')) {
+          userFriendlyMessage = 'Order data issue detected. Please contact support.';
+        } else if (error.message?.includes('authentication')) {
+          userFriendlyMessage = 'Please log out and log back in, then try again.';
+        } else if (error.message?.includes('Agent not found')) {
+          userFriendlyMessage = 'Agent verification failed. Please contact admin.';
+        } else if (error.message?.includes('Order not found')) {
+          userFriendlyMessage = 'This order no longer exists in the system.';
+        } else {
+          userFriendlyMessage = error.message || 'Failed to complete delivery';
+        }
+        
         toast({
           title: "Delivery Failed",
-          description: errorMessage,
+          description: userFriendlyMessage,
           variant: "destructive"
         });
         return;
