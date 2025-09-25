@@ -130,22 +130,19 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered
-    const updateData = {
-      status: 'delivered',
-      delivered_at: new Date().toISOString(),
-      payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-    };
-    
+    // Update order status to delivered (bulletproof approach)
     try {
       const { error: updateError } = await supabaseClient
         .from('orders')
-        .update(updateData)
+        .update({
+          status: 'delivered',
+          delivered_at: new Date().toISOString(),
+          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
+        })
         .eq('id', order_id);
 
       if (updateError) {
         console.error('Failed to update order:', updateError);
-        
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -167,79 +164,17 @@ serve(async (req) => {
       );
     }
 
-    // For COD orders, automatically settle the amount
-    let codSettlementResult = null;
-    if (payment_method === 'COD') {
-      try {
-        const { data: settlementData, error: settlementError } = await supabaseClient.rpc('settle_cod_automatically', {
-          p_agent_id: agent.id,
-          p_order_id: order_id,
-          p_cod_amount: order.total
-        });
-
-        if (settlementError) {
-          console.warn('COD settlement error:', settlementError);
-        } else {
-          codSettlementResult = settlementData;
-        }
-      } catch (error) {
-        console.warn('COD settlement failed:', error);
-      }
-    }
-
-    // Process payout safely
-    let payoutResult = null;
+    // Create earnings record (simple and safe)
     try {
-      const { data: payoutData, error: payoutError } = await supabaseClient.rpc('process_delivery_payout_safe', {
-        p_agent_id: agent.id,
-        p_order_id: order_id,
-        p_distance_km: distance_km,
-        p_delivery_time: new Date().toISOString()
-      });
+      const { data: existingEarning } = await supabaseClient
+        .from('earnings')
+        .select('id')
+        .eq('agent_id', agent.id)
+        .eq('order_id', order_id)
+        .single();
 
-      if (payoutError) {
-        console.warn('Payout processing error:', payoutError);
-      } else {
-        payoutResult = payoutData;
-        if (payoutResult?.payout_details?.total_payout) {
-          payout_amount = payoutResult.payout_details.total_payout;
-        }
-      }
-    } catch (error) {
-      console.warn('Payout processing failed:', error);
-    }
-
-    // Update delivery history with details
-    try {
-      const { error: historyUpdateError } = await supabaseClient
-        .from('delivery_history')
-        .update({
-          delivery_notes: `Completed by ${agent.name}. Distance: ${distance_km.toFixed(2)}km`,
-          distance_traveled: distance_km,
-          delivery_payout: payout_amount,
-          agent_location: agent_location
-        })
-        .eq('order_id', order_id);
-
-      if (historyUpdateError) {
-        console.warn('Could not update delivery history details:', historyUpdateError);
-      }
-    } catch (historyError) {
-      console.warn('Delivery history update failed:', historyError);
-    }
-
-    // Check if earnings already exist to prevent duplicates
-    const { data: existingEarning } = await supabaseClient
-      .from('earnings')
-      .select('id')
-      .eq('agent_id', agent.id)
-      .eq('order_id', order_id)
-      .single();
-
-    // Only create earnings if none exist and payout function didn't succeed
-    if (!existingEarning && (!payoutResult || !payoutResult.success)) {
-      try {
-        const { error: earningsError } = await supabaseClient
+      if (!existingEarning) {
+        await supabaseClient
           .from('earnings')
           .insert({
             agent_id: agent.id,
@@ -250,20 +185,16 @@ serve(async (req) => {
             payment_method: payment_method === 'COD' ? 'COD' : 'Online',
             description: `Delivery payout for order ${order_id.substring(0, 8)}`
           });
-
-        if (earningsError) {
-          console.warn('Failed to create earnings record:', earningsError);
-        }
-      } catch (earningsCreateError) {
-        console.warn('Earnings creation failed:', earningsCreateError);
       }
+    } catch (earningsError) {
+      console.warn('Earnings creation failed:', earningsError);
     }
 
-    // Update agent statistics
+    // Update agent statistics (simple approach)
     try {
       const { data: currentAgent } = await supabaseClient
         .from('delivery_agents')
-        .select('total_deliveries, deliveries_today, total_earnings')
+        .select('total_deliveries, total_earnings')
         .eq('id', agent.id)
         .single();
 
@@ -272,7 +203,6 @@ serve(async (req) => {
           .from('delivery_agents')
           .update({
             total_deliveries: (currentAgent.total_deliveries || 0) + 1,
-            deliveries_today: (currentAgent.deliveries_today || 0) + 1,
             total_earnings: (currentAgent.total_earnings || 0) + payout_amount,
             last_delivery_at: new Date().toISOString()
           })
@@ -280,21 +210,6 @@ serve(async (req) => {
       }
     } catch (statsError) {
       console.warn('Agent stats update failed:', statsError);
-    }
-
-    // Create order tracking record
-    try {
-      await supabaseClient
-        .from('order_tracking')
-        .insert({
-          order_id: order_id,
-          status: 'delivered',
-          timestamp: new Date().toISOString(),
-          location: order.address?.coordinates || null,
-          notes: `Order delivered by ${agent.name}`
-        });
-    } catch (trackingError) {
-      console.warn('Order tracking creation failed:', trackingError);
     }
 
     return new Response(
