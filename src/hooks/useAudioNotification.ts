@@ -14,113 +14,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const currentRingtoneType = useRef<string>('');
 
-  // Initialize or update audio when settings change
-  useEffect(() => {
-    // Only proceed if enabled
-    if (settings?.enabled === false) {
-      cleanup();
-      return;
-    }
-
-    // Use the selected ringtone type
-    let ringtoneFile = '/phone-ringtone.mp3'; // default
-    
-    switch (settings?.type) {
-      case 'notification-sound':
-        ringtoneFile = '/notification-sound.mp3';
-        break;
-      case 'iphone-notification':
-        ringtoneFile = '/iphone-notification.mp3';
-        break;
-      case 'samsung-notification':
-        ringtoneFile = '/samsung-notification.mp3';
-        break;
-      case 'android-notification':
-        ringtoneFile = '/android-notification.mp3';
-        break;
-      case 'classic-bell':
-        ringtoneFile = '/classic-bell.mp3';
-        break;
-      case 'chimes-notification':
-        ringtoneFile = '/chimes-notification.mp3';
-        break;
-      case 'phone-ringtone':
-      default:
-        ringtoneFile = '/phone-ringtone.mp3';
-        break;
-    }
-
-    // Check if we need to create new audio or just update existing
-    const needsNewAudio = !audioRef.current || currentRingtoneType.current !== (settings?.type || 'phone-ringtone');
-    
-    if (needsNewAudio) {
-      // Cleanup existing audio first
-      cleanup();
-      
-      // Create new audio element
-      audioRef.current = new Audio(ringtoneFile);
-      audioRef.current.volume = (settings?.volume || 0.8) * 1.5; // 50% boost
-      audioRef.current.playbackRate = 1.2; // Faster playback for urgency
-      audioRef.current.preload = 'auto';
-      currentRingtoneType.current = settings?.type || 'phone-ringtone';
-      
-      console.log(`Audio initialized with ${ringtoneFile}`);
-      
-      // Setup Web Audio API for volume amplification after audio loads
-      const setupWebAudio = () => {
-        try {
-          if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-          }
-          
-          if (audioContextRef.current && audioRef.current && !sourceNodeRef.current) {
-            sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
-            gainNodeRef.current = audioContextRef.current.createGain();
-            gainNodeRef.current.gain.value = (settings?.volume || 0.8) * 3.0; // 3x amplification
-            sourceNodeRef.current.connect(gainNodeRef.current);
-            gainNodeRef.current.connect(audioContextRef.current.destination);
-            console.log(`Web Audio API setup complete for ${ringtoneFile} with 3x amplification`);
-          }
-        } catch (error) {
-          console.warn('Web Audio API setup failed, using standard audio:', error);
-        }
-      };
-      
-      // Setup Web Audio after audio loads
-      audioRef.current.addEventListener('loadeddata', setupWebAudio, { once: true });
-      audioRef.current.addEventListener('canplaythrough', setupWebAudio, { once: true });
-      
-      // Handle audio loading errors
-      audioRef.current.addEventListener('error', (e) => {
-        console.error(`Error loading ringtone audio ${ringtoneFile}:`, e);
-      });
-    } else if (audioRef.current && gainNodeRef.current) {
-      // Just update volume if audio exists
-      audioRef.current.volume = (settings?.volume || 0.8) * 1.5;
-      gainNodeRef.current.gain.value = (settings?.volume || 0.8) * 3.0;
-    }
-
-    // Cleanup function
-    function cleanup() {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current = null;
-      }
-      if (sourceNodeRef.current) {
-        sourceNodeRef.current.disconnect();
-        sourceNodeRef.current = null;
-      }
-      if (gainNodeRef.current) {
-        gainNodeRef.current.disconnect();
-        gainNodeRef.current = null;
-      }
-      // Don't close audioContext as it might be shared
-    }
-
-    return cleanup;
-  }, [settings]);
-
+  // Always define all callbacks first to maintain hook order
   const playRingtone = useCallback(async () => {
     if (!audioRef.current) return;
 
@@ -204,6 +98,124 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
   const testRingtone = useCallback(() => {
     playRingtone();
   }, [playRingtone]);
+
+  // Initialize or update audio when settings change
+  useEffect(() => {
+    // Cleanup function must be defined here to avoid hook order issues
+    const cleanup = () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
+      }
+      if (gainNodeRef.current) {
+        gainNodeRef.current.disconnect();
+        gainNodeRef.current = null;
+      }
+    };
+
+    // Only proceed if enabled
+    if (settings?.enabled === false) {
+      cleanup();
+      return cleanup;
+    }
+
+    // Use the selected ringtone type
+    let ringtoneFile = '/phone-ringtone.mp3'; // default
+    
+    switch (settings?.type) {
+      case 'notification-sound':
+        ringtoneFile = '/notification-sound.mp3';
+        break;
+      case 'iphone-notification':
+        ringtoneFile = '/iphone-notification.mp3';
+        break;
+      case 'samsung-notification':
+        ringtoneFile = '/samsung-notification.mp3';
+        break;
+      case 'android-notification':
+        ringtoneFile = '/android-notification.mp3';
+        break;
+      case 'classic-bell':
+        ringtoneFile = '/classic-bell.mp3';
+        break;
+      case 'chimes-notification':
+        ringtoneFile = '/chimes-notification.mp3';
+        break;
+      case 'phone-ringtone':
+      default:
+        ringtoneFile = '/phone-ringtone.mp3';
+        break;
+    }
+
+    // Check if we need to create new audio or just update existing
+    const needsNewAudio = !audioRef.current || currentRingtoneType.current !== (settings?.type || 'phone-ringtone');
+    
+    if (needsNewAudio) {
+      // Cleanup existing audio first
+      cleanup();
+      
+      // Create new audio element
+      audioRef.current = new Audio(ringtoneFile);
+      
+      // Fix volume calculation - ensure it never exceeds 1.0
+      const baseVolume = Math.min(settings?.volume || 0.8, 1.0);
+      audioRef.current.volume = Math.min(baseVolume, 1.0); // Clamp to max 1.0
+      
+      audioRef.current.playbackRate = 1.2; // Faster playback for urgency
+      audioRef.current.preload = 'auto';
+      currentRingtoneType.current = settings?.type || 'phone-ringtone';
+      
+      console.log(`Audio initialized with ${ringtoneFile}, volume: ${audioRef.current.volume}`);
+      
+      // Setup Web Audio API for volume amplification after audio loads
+      const setupWebAudio = () => {
+        try {
+          if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          }
+          
+          if (audioContextRef.current && audioRef.current && !sourceNodeRef.current) {
+            sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
+            gainNodeRef.current = audioContextRef.current.createGain();
+            
+            // Use Web Audio API for amplification beyond 1.0
+            const amplification = Math.min((settings?.volume || 0.8) * 3.0, 5.0); // Max 5x amplification
+            gainNodeRef.current.gain.value = amplification;
+            
+            sourceNodeRef.current.connect(gainNodeRef.current);
+            gainNodeRef.current.connect(audioContextRef.current.destination);
+            console.log(`Web Audio API setup complete for ${ringtoneFile} with ${amplification}x amplification`);
+          }
+        } catch (error) {
+          console.warn('Web Audio API setup failed, using standard audio:', error);
+        }
+      };
+      
+      // Setup Web Audio after audio loads
+      audioRef.current.addEventListener('loadeddata', setupWebAudio, { once: true });
+      audioRef.current.addEventListener('canplaythrough', setupWebAudio, { once: true });
+      
+      // Handle audio loading errors
+      audioRef.current.addEventListener('error', (e) => {
+        console.error(`Error loading ringtone audio ${ringtoneFile}:`, e);
+      });
+    } else if (audioRef.current && gainNodeRef.current) {
+      // Just update volume if audio exists
+      const baseVolume = Math.min(settings?.volume || 0.8, 1.0);
+      audioRef.current.volume = Math.min(baseVolume, 1.0); // Clamp to max 1.0
+      
+      // Update Web Audio API gain if available
+      const amplification = Math.min((settings?.volume || 0.8) * 3.0, 5.0);
+      gainNodeRef.current.gain.value = amplification;
+    }
+
+    return cleanup;
+  }, [settings]);
 
   return { playNotificationSound, testRingtone };
 };
