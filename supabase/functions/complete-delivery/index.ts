@@ -182,34 +182,142 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered FIRST (main operation - must succeed)
-    console.log('Updating order status for order:', order_id);
+    // STEP 1: DETAILED DATA INSPECTION
+    console.log('=== DEBUGGING: Order Data Inspection ===');
+    console.log('Order ID:', order_id);
+    console.log('Order status:', order.status);
+    console.log('Order address type:', typeof order.address);
+    console.log('Order address value:', order.address);
+    console.log('Order items type:', typeof order.items);
+    console.log('Order items value:', order.items);
+    console.log('Order pickup_location type:', typeof order.pickup_location);
+    console.log('Order pickup_location value:', order.pickup_location);
+    console.log('Order pickup_address type:', typeof order.pickup_address);
+    console.log('Order pickup_address value:', order.pickup_address);
+    console.log('Order special_instructions:', order.special_instructions);
+    console.log('Full order object keys:', Object.keys(order));
+    
+    // Check for any problematic fields
+    let hasProblematicData = false;
+    const problematicFields = [];
+    
+    if (order.pickup_address && typeof order.pickup_address === 'string' && order.pickup_address.includes('Peak')) {
+      hasProblematicData = true;
+      problematicFields.push('pickup_address contains "Peak"');
+    }
+    
+    if (order.address && typeof order.address === 'string') {
+      hasProblematicData = true;
+      problematicFields.push('address is string instead of JSONB');
+    }
+    
+    if (order.items && typeof order.items === 'string') {
+      hasProblematicData = true;
+      problematicFields.push('items is string instead of JSONB');
+    }
+    
+    if (hasProblematicData) {
+      console.error('=== PROBLEMATIC DATA DETECTED ===');
+      console.error('Problematic fields:', problematicFields);
+      console.error('This order needs data cleanup before processing');
+    }
+
+    // STEP 2: PRE-UPDATE DATA PREPARATION WITH VALIDATION
+    console.log('=== DEBUGGING: Preparing update data ===');
     
     const deliveredAt = new Date().toISOString();
     const paymentStatus = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    console.log('Update data prepared:', { 
-      order_id, 
-      status: 'delivered', 
-      delivered_at: deliveredAt, 
-      payment_status: paymentStatus 
-    });
+    const updateData = {
+      status: 'delivered',
+      delivered_at: deliveredAt,
+      payment_status: paymentStatus,
+      updated_at: new Date().toISOString()
+    };
     
-    // Use robust update with proper error handling and validation
-    const { data: updateResult, error: updateError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: deliveredAt,
-        payment_status: paymentStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order_id)
-      .select('id, status, delivered_at, payment_status');
+    console.log('Update data prepared:', updateData);
+    console.log('Update data JSON:', JSON.stringify(updateData));
+    
+    // STEP 3: ATTEMPT DATABASE UPDATE WITH DETAILED ERROR HANDLING
+    console.log('=== DEBUGGING: Starting database update ===');
+    console.log('Updating order status for order:', order_id);
+    
+    let updateResult, updateError;
+    
+    try {
+      const result = await supabaseClient
+        .from('orders')
+        .update(updateData)
+        .eq('id', order_id)
+        .select('id, status, delivered_at, payment_status');
+      
+      updateResult = result.data;
+      updateError = result.error;
+      
+      console.log('Database update completed');
+      console.log('Update result:', updateResult);
+      console.log('Update error:', updateError);
+      
+    } catch (dbError) {
+      console.error('=== DATABASE UPDATE EXCEPTION ===');
+      console.error('Exception type:', typeof dbError);
+      console.error('Exception message:', dbError instanceof Error ? dbError.message : String(dbError));
+      console.error('Exception stack:', dbError instanceof Error ? dbError.stack : 'No stack');
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Database update exception occurred', 
+          details: dbError instanceof Error ? dbError.message : String(dbError),
+          debug_info: { 
+            order_id, 
+            payment_method,
+            update_data: updateData,
+            exception_type: typeof dbError
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
     if (updateError) {
-      console.error('Failed to update order:', updateError);
-      console.error('Order ID:', order_id);
+      console.error('=== DATABASE UPDATE ERROR ===');
+      console.error('Error object:', updateError);
+      console.error('Error message:', updateError.message);
+      console.error('Error code:', updateError.code);
+      console.error('Error details:', updateError.details);
+      console.error('Error hint:', updateError.hint);
+      console.error('Order ID that failed:', order_id);
+      console.error('Update data that failed:', updateData);
+      
+      // Check if this is the specific JSON error we've been seeing
+      if (updateError.message?.includes('invalid input syntax for type json')) {
+        console.error('=== JSON SYNTAX ERROR DETECTED ===');
+        console.error('This is the JSON parsing error we have been debugging');
+        console.error('The error details suggest corrupted JSON data in the database');
+        
+        // Try to identify which field is causing the issue
+        if (updateError.details?.includes('Peak')) {
+          console.error('The error is related to "Peak" token - likely in pickup_address field');
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Database contains corrupted JSON data', 
+            details: 'Order contains invalid JSON data that prevents updates. Admin intervention required.',
+            debug_info: { 
+              order_id, 
+              error_type: 'json_corruption',
+              error_message: updateError.message,
+              error_code: updateError.code,
+              error_details: updateError.details,
+              problematic_fields: problematicFields.length > 0 ? problematicFields : 'none detected in initial scan'
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
       
       return new Response(
         JSON.stringify({ 
@@ -220,7 +328,9 @@ serve(async (req) => {
             order_id, 
             payment_method, 
             error_code: updateError.code,
-            error_details: updateError.details
+            error_details: updateError.details,
+            error_hint: updateError.hint,
+            update_data: updateData
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -251,30 +361,52 @@ serve(async (req) => {
       }
     }
 
-    // For COD orders, automatically settle the amount from agent wallet to admin
+    // STEP 4: COD SETTLEMENT WITH DEBUGGING
     let codSettlementResult = null;
     if (payment_method === 'COD') {
+      console.log('=== DEBUGGING: COD Settlement Process ===');
+      console.log('Processing COD settlement for agent:', agent.id);
+      console.log('Order total:', order.total);
+      
       try {
+        console.log('Calling settle_cod_automatically RPC...');
         const { data: settlementData, error: settlementError } = await supabaseClient.rpc('settle_cod_automatically', {
           p_agent_id: agent.id,
           p_order_id: order_id,
           p_cod_amount: order.total
         });
 
+        console.log('COD RPC completed');
+        console.log('Settlement data:', settlementData);
+        console.log('Settlement error:', settlementError);
+
         if (settlementError) {
-          console.error('COD settlement error:', settlementError);
+          console.error('=== COD SETTLEMENT ERROR ===');
+          console.error('Settlement error object:', settlementError);
+          console.error('Settlement error message:', settlementError.message);
+          console.error('Settlement error code:', settlementError.code);
+          console.error('Settlement error details:', settlementError.details);
         } else {
           codSettlementResult = settlementData;
-          console.log('COD settlement result:', settlementData);
+          console.log('COD settlement successful:', settlementData);
         }
       } catch (error) {
-        console.error('COD settlement failed:', error);
+        console.error('=== COD SETTLEMENT EXCEPTION ===');
+        console.error('COD settlement exception:', error);
+        console.error('Exception type:', typeof error);
+        console.error('Exception message:', error instanceof Error ? error.message : String(error));
       }
     }
 
-    // NOW process payout safely (after order is delivered)
+    // STEP 5: PAYOUT PROCESSING WITH DEBUGGING
     let payoutResult = null;
+    console.log('=== DEBUGGING: Payout Processing ===');
+    console.log('Processing payout for agent:', agent.id);
+    console.log('Distance:', distance_km, 'km');
+    console.log('Expected payout amount:', payout_amount);
+    
     try {
+      console.log('Calling process_delivery_payout_safe RPC...');
       const { data: payoutData, error: payoutError } = await supabaseClient.rpc('process_delivery_payout_safe', {
         p_agent_id: agent.id,
         p_order_id: order_id,
@@ -282,15 +414,29 @@ serve(async (req) => {
         p_delivery_time: new Date().toISOString()
       });
 
+      console.log('Payout RPC completed');
+      console.log('Payout data:', payoutData);
+      console.log('Payout error:', payoutError);
+
       if (payoutError) {
-        console.error('Payout processing error:', payoutError);
+        console.error('=== PAYOUT PROCESSING ERROR ===');
+        console.error('Payout error object:', payoutError);
+        console.error('Payout error message:', payoutError.message);
+        console.error('Payout error code:', payoutError.code);
+        console.error('Payout error details:', payoutError.details);
       } else {
         payoutResult = payoutData;
-        payout_amount = payoutResult?.payout_details?.total_payout || payout_amount;
-        console.log('Payout processed:', payoutResult);
+        if (payoutResult?.payout_details?.total_payout) {
+          payout_amount = payoutResult.payout_details.total_payout;
+        }
+        console.log('Payout processing successful:', payoutResult);
+        console.log('Final payout amount:', payout_amount);
       }
     } catch (error) {
-      console.error('Payout processing failed:', error);
+      console.error('=== PAYOUT PROCESSING EXCEPTION ===');
+      console.error('Payout processing exception:', error);
+      console.error('Exception type:', typeof error);
+      console.error('Exception message:', error instanceof Error ? error.message : String(error));
     }
 
     // The trigger will handle delivery_history creation, but let's also try to update it with more details

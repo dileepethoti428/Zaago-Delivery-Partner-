@@ -291,54 +291,107 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
+    console.log('=== FRONTEND DEBUGGING: Starting delivery completion ===');
+    console.log('Order ID:', order?.id);
+    console.log('Payment method received:', paymentMethod);
+    
     setIsProcessing(true);
     try {
-      console.log('DeliveryDetails: Starting delivery completion with method:', paymentMethod);
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
+      console.log('Agent location from storage:', agentLocation);
 
       // Map payment methods to function input ('COD' or 'Online')
       const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
-      console.log('DeliveryDetails: Calling complete-delivery with:', {
+      console.log('Mapped payment method:', methodParam);
+      
+      const requestPayload = {
         order_id: order?.id,
-        payment_method: methodParam
-      });
+        payment_method: methodParam,
+        agent_location: agentLocation
+      };
       
+      console.log('=== REQUEST PAYLOAD ===');
+      console.log('Payload object:', requestPayload);
+      console.log('Payload JSON string:', JSON.stringify(requestPayload));
+      console.log('Order ID type:', typeof requestPayload.order_id);
+      console.log('Payment method type:', typeof requestPayload.payment_method);
+      
+      console.log('Calling complete-delivery edge function...');
       const { data, error } = await supabase.functions.invoke('complete-delivery', {
-        body: {
-          order_id: order?.id,
-          payment_method: methodParam,
-          agent_location: agentLocation
-        }
+        body: requestPayload
       });
       
-      console.log('DeliveryDetails: Edge function response:', { data, error });
+      console.log('=== EDGE FUNCTION RESPONSE ===');
+      console.log('Response data:', data);
+      console.log('Response error:', error);
+      console.log('Data type:', typeof data);
+      console.log('Error type:', typeof error);
       
       if (error) {
-        console.error('DeliveryDetails: Edge function error:', error);
+        console.error('=== FRONTEND: Edge function error detected ===');
+        console.error('Error object keys:', Object.keys(error));
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
+        console.error('Error debug_info:', error.debug_info);
+        console.error('Full error object:', JSON.stringify(error, null, 2));
         
         // Provide more specific error messages based on the error
         let userFriendlyMessage = 'Failed to complete delivery';
-        if (error.message?.includes('corrupted data')) {
+        let shouldShowRetry = true;
+        
+        if (error.message?.includes('Database contains corrupted JSON data')) {
+          userFriendlyMessage = 'Order data is corrupted. Please contact support immediately.';
+          shouldShowRetry = false;
+          console.error('CRITICAL: Database corruption detected!');
+        } else if (error.message?.includes('invalid input syntax for type json')) {
+          userFriendlyMessage = 'Database error detected. Order may have corrupted data. Contact support.';
+          shouldShowRetry = false;
+          console.error('CRITICAL: JSON syntax error in database!');
+        } else if (error.message?.includes('corrupted data')) {
           userFriendlyMessage = 'Order data issue detected. Please contact support.';
+          shouldShowRetry = false;
         } else if (error.message?.includes('authentication')) {
           userFriendlyMessage = 'Please log out and log back in, then try again.';
         } else if (error.message?.includes('Agent not found')) {
           userFriendlyMessage = 'Agent verification failed. Please contact admin.';
+          shouldShowRetry = false;
         } else if (error.message?.includes('Order not found')) {
           userFriendlyMessage = 'This order no longer exists in the system.';
+          shouldShowRetry = false;
         } else {
           userFriendlyMessage = error.message || 'Failed to complete delivery';
         }
         
+        // Log any debug info from the backend
+        if (error.debug_info) {
+          console.error('=== BACKEND DEBUG INFO ===');
+          console.error('Debug info:', error.debug_info);
+          if (error.debug_info.problematic_fields) {
+            console.error('Problematic fields:', error.debug_info.problematic_fields);
+          }
+          if (error.debug_info.error_type) {
+            console.error('Error type from backend:', error.debug_info.error_type);
+          }
+          if (error.debug_info.order_id) {
+            console.error('Backend order ID:', error.debug_info.order_id);
+          }
+        }
+        
         toast({
           title: "Delivery Failed",
-          description: userFriendlyMessage,
+          description: userFriendlyMessage + (shouldShowRetry ? ' You can try again.' : ''),
           variant: "destructive"
         });
         return;
       }
       
+      console.log('=== SUCCESS RESPONSE ===');
+      console.log('Success data:', data);
+      console.log('Success flag:', data?.success);
+      console.log('Order data:', data?.order);
+      
       if (data?.success) {
+        console.log('Delivery completion successful!');
         toast({
           title: "Successfully Delivered! ✅",
           description: `Order completed. Distance: ${data.order?.distance_km?.toFixed(2) || 0}km, Earned: ₹${data.order?.payout_amount || 0}`
@@ -347,6 +400,7 @@ const DeliveryDetails = () => {
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
+        console.error('Success flag false or missing');
         const errorMsg = data?.error || 'Failed to complete delivery';
         console.error('DeliveryDetails: Server error:', errorMsg);
         toast({
