@@ -16,7 +16,10 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
 
   // Always define all callbacks first to maintain hook order
   const playRingtone = useCallback(async () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current) {
+      console.warn('No audio element available for playback');
+      return;
+    }
 
     try {
       // Reset audio to beginning
@@ -27,71 +30,105 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         await audioContextRef.current.resume();
       }
       
+      // Verify audio is ready for playback
+      if (audioRef.current.readyState < 2) {
+        console.warn('Audio not ready for playback, attempting fallback');
+        throw new Error('Audio not ready');
+      }
+      
       // Play the ringtone
       const playPromise = audioRef.current.play();
       
       if (playPromise !== undefined) {
         await playPromise;
+        console.log('Ringtone played successfully');
       }
     } catch (error) {
       console.error('Error playing ringtone:', error);
-      // Fallback to system beep if audio fails
-      if (window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate([200, 100, 200]);
+      
+      // Try fallback notification sound if main ringtone fails
+      try {
+        const fallbackAudio = new Audio('/notification-sound.mp3');
+        fallbackAudio.volume = 1.0;
+        await fallbackAudio.play();
+        console.log('Fallback notification played successfully');
+      } catch (fallbackError) {
+        console.error('Fallback audio also failed:', fallbackError);
+        
+        // Last resort: vibration only
+        if (window.navigator && window.navigator.vibrate) {
+          window.navigator.vibrate([400, 100, 400, 100, 400]);
+          console.log('Using vibration fallback');
+        }
       }
     }
   }, []);
 
-  const playNotificationSound = useCallback(() => {
+  const playNotificationSound = useCallback(async () => {
     // Don't play if disabled
-    if (settings?.enabled === false) return;
+    if (settings?.enabled === false) {
+      console.log('Audio notifications disabled');
+      return;
+    }
     
     try {
+      console.log('Playing notification sound with frequency:', settings?.frequency || 'double');
+      
       // Ensure audio context is resumed (required by some browsers)
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
+        await audioContextRef.current.resume();
       }
       
       // Play based on frequency setting
       const frequency = settings?.frequency || 'double';
       
       if (frequency === 'single') {
-        playRingtone();
+        await playRingtone();
       } else if (frequency === 'double') {
-        playRingtone();
-        setTimeout(() => playRingtone(), 100);
+        await playRingtone();
+        setTimeout(() => playRingtone(), 300);
       } else if (frequency === 'continuous') {
-        // Continuous pattern: 10 rapid-fire rings in 3 seconds
-        playRingtone(); // Immediate
-        setTimeout(() => playRingtone(), 100);
-        setTimeout(() => playRingtone(), 400);
-        setTimeout(() => playRingtone(), 800);
+        // Continuous pattern: Extended pattern for critical delivery alerts
+        console.log('Playing continuous notification pattern');
+        await playRingtone(); // Immediate
+        setTimeout(() => playRingtone(), 300);
+        setTimeout(() => playRingtone(), 700);
         setTimeout(() => playRingtone(), 1200);
-        setTimeout(() => playRingtone(), 1600);
-        setTimeout(() => playRingtone(), 2000);
-        setTimeout(() => playRingtone(), 2300);
-        setTimeout(() => playRingtone(), 2600);
+        setTimeout(() => playRingtone(), 1800);
+        setTimeout(() => playRingtone(), 2500);
         setTimeout(() => playRingtone(), 3000);
+        setTimeout(() => playRingtone(), 3500);
+        setTimeout(() => playRingtone(), 4000);
+        setTimeout(() => playRingtone(), 4500);
       }
       
-      // Intense vibration pattern for mobile devices
+      // Enhanced vibration pattern for mobile devices
       if (window.navigator && window.navigator.vibrate) {
+        console.log('Triggering vibration pattern');
         // Immediate strong vibration
-        window.navigator.vibrate([400, 100, 400, 100, 400]);
-        // Follow-up vibrations
-        setTimeout(() => {
-          if (window.navigator && window.navigator.vibrate) {
-            window.navigator.vibrate([200, 100, 200, 100, 200]);
-          }
-        }, 1500);
-        setTimeout(() => {
-          if (window.navigator && window.navigator.vibrate) {
-            window.navigator.vibrate([300, 100, 300]);
-          }
-        }, 2500);
+        window.navigator.vibrate([500, 150, 500, 150, 500]);
+        // Follow-up vibrations for continuous alerts
+        if (frequency === 'continuous') {
+          setTimeout(() => {
+            if (window.navigator && window.navigator.vibrate) {
+              window.navigator.vibrate([300, 100, 300, 100, 300]);
+            }
+          }, 2000);
+          setTimeout(() => {
+            if (window.navigator && window.navigator.vibrate) {
+              window.navigator.vibrate([400, 100, 400]);
+            }
+          }, 4000);
+        }
       }
     } catch (error) {
       console.error('Error playing notification sound:', error);
+      
+      // Emergency fallback with vibration
+      if (window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate([1000, 200, 1000, 200, 1000]);
+        console.log('Using emergency vibration fallback');
+      }
     }
   }, [playRingtone, settings]);
 
@@ -193,13 +230,41 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       // Create new audio element
       audioRef.current = new Audio(ringtoneFile);
       
-      // Set maximum volume for iPhone ringtones
+      console.log(`Initializing audio with file: ${ringtoneFile}`);
+      
+      // Set maximum volume for ringtones
       const baseVolume = settings?.volume || 1.0;
       audioRef.current.volume = 1.0; // Always max volume for ringtones
       
       audioRef.current.playbackRate = 1.2; // Faster playback for urgency
       audioRef.current.preload = 'auto';
       currentRingtoneType.current = settings?.type || 'phone-ringtone';
+      
+      // Add comprehensive error handling
+      audioRef.current.addEventListener('error', (e) => {
+        console.error(`Error loading ringtone audio ${ringtoneFile}:`, e);
+        console.warn('Attempting to use fallback notification sound');
+        
+        // Try to load fallback sound
+        try {
+          const fallbackAudio = new Audio('/notification-sound.mp3');
+          fallbackAudio.volume = 1.0;
+          fallbackAudio.preload = 'auto';
+          audioRef.current = fallbackAudio;
+          console.log('Successfully loaded fallback notification sound');
+        } catch (fallbackError) {
+          console.error('Fallback audio also failed to load:', fallbackError);
+        }
+      });
+      
+      // Add success logging
+      audioRef.current.addEventListener('loadeddata', () => {
+        console.log(`Audio loaded successfully: ${ringtoneFile}, duration: ${audioRef.current?.duration}s`);
+      });
+      
+      audioRef.current.addEventListener('canplaythrough', () => {
+        console.log(`Audio ready for playback: ${ringtoneFile}`);
+      });
       
       console.log(`Audio initialized with ${ringtoneFile}, volume: ${audioRef.current.volume}`);
       
