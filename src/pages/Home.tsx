@@ -65,16 +65,16 @@ interface Order {
   total: number;
   status: string;
   delivery_date: string;
+  delivery_time?: string; // Actual delivery time from backend
+  delivery_time_slot?: string; // Time slot from backend
   created_at: string;
   payment_status: string;
   coordinates?: { lat: number; lng: number };
   distance_km?: number;
-  delivery_time?: string;
   products_count?: number;
   restaurant?: string;
   backend_calculated?: boolean;
   delivery_type?: 'immediate' | 'scheduled' | 'book_now_pay_later';
-  scheduled_time?: string;
   order_placed_at?: Date;
   agent_payout?: number;
   estimated_time_minutes?: number;
@@ -362,20 +362,36 @@ const Home = () => {
     return updatedOrders;
   };
 
-  // Calculate agent payout - Synchronous for immediate display
+  // Calculate agent payout - Match backend pricing structure
   const calculateAgentPayout = (distance: number): number => {
-    // Minimum ₹12 for any distance <= 1km
-    if (distance <= 1) {
-      return 12;
-    }
+    // Base fare for first 3 km: ₹40
+    const baseFare = 40;
     
-    // ₹12 for first 1km + ₹8 per additional km
-    const basePay = 12;
-    const additionalDistance = distance - 1;
-    const perKmRate = 8;
-    const totalPayout = basePay + (additionalDistance * perKmRate);
+    // Additional distance beyond 3 km
+    const additionalDistance = Math.max(0, distance - 3);
     
-    return Math.round(totalPayout * 100) / 100; // Round to 2 decimal places
+    // Per km rate for additional distance: ₹9
+    const perKmRate = 9;
+    const distanceFare = additionalDistance * perKmRate;
+    
+    // Subtotal before platform fee
+    const subtotal = baseFare + distanceFare;
+    
+    // Peak hour surge: 15% if current time is peak
+    const isPeakHour = () => {
+      const currentHour = new Date().getHours();
+      const isWeekend = [0, 6].includes(new Date().getDay());
+      const isLunchRush = currentHour >= 12 && currentHour < 14;
+      const isDinnerRush = currentHour >= 19 && currentHour < 22;
+      return isLunchRush || isDinnerRush || isWeekend;
+    };
+    
+    const surgeAmount = isPeakHour() ? subtotal * 0.15 : 0;
+    
+    // Agent payout (total - platform fee of ₹13)
+    const agentPayout = (subtotal + surgeAmount) - 13;
+    
+    return Math.max(12, Math.round(agentPayout * 100) / 100); // Minimum ₹12, round to 2 decimal places
   };
 
   // Get accurate payout from backend - Async function for data processing
@@ -383,9 +399,11 @@ const Home = () => {
     try {
       const { data, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
         body: {
-          distance_km: distance,
-          delivery_time: new Date().toISOString(),
-          order_id: orderId
+          order_id: orderId,
+          agent_location: location.latitude && location.longitude ? {
+            lat: location.latitude,
+            lng: location.longitude
+          } : null
         }
       });
 
@@ -396,7 +414,7 @@ const Home = () => {
       console.warn('Backend payout calculation failed:', error);
     }
 
-    // Use frontend fallback
+    // Use frontend fallback (now matches backend structure)
     return calculateAgentPayout(distance);
   };
 
@@ -458,24 +476,27 @@ const Home = () => {
       products_count: Array.isArray(order.items) ? order.items.length : 1,
       restaurant: order.restaurant || undefined,
       backend_calculated: false,
-      // Improved delivery type logic
+      // Improved delivery type logic based on actual backend fields
       delivery_type: (() => {
         // Priority 1: Subscription orders
         if (order.subscription_id) return 'scheduled';
         
         // Priority 2: Orders with delivery time slots (scheduled)
-        if (order.delivery_time_slot || order.scheduled_time) return 'scheduled';
+        if (order.delivery_time_slot) return 'scheduled';
         
-        // Priority 3: Book now pay later orders (need specific criteria)
-        // Only mark as book_now_pay_later if it has specific flag or future delivery date
-        if (order.payment_status === 'Pending' && (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])) {
+        // Priority 3: Orders with specific delivery time (not immediate)
+        if (order.delivery_time && order.delivery_time !== 'Immediate') return 'scheduled';
+        
+        // Priority 4: Book now pay later orders (future delivery date)
+        if (order.payment_status === 'Pending' && 
+            order.delivery_date && 
+            order.delivery_date !== new Date().toISOString().split('T')[0]) {
           return 'book_now_pay_later';
         }
         
         // Default: Immediate delivery
         return 'immediate';
       })(),
-      scheduled_time: order.scheduled_time || undefined,
       order_placed_at: new Date(order.created_at),
       agent_payout: order.agent_payout || undefined,
       estimated_time_minutes: order.estimated_time_minutes || undefined,
@@ -1297,15 +1318,15 @@ const Home = () => {
 
                          {/* Delivery Timer */}
                          <div className="mb-4">
-                           <DeliveryTimer
-                             deliveryType={order.delivery_type}
-                             scheduledTime={order.scheduled_time}
-                             orderPlacedAt={order.order_placed_at}
-                             subscriptionId={order.subscription_id}
-                             deliveryTime={order.delivery_time}
-                             deliverySlots={order.delivery_slots}
-                             paymentStatus={order.payment_status}
-                           />
+                            <DeliveryTimer
+                              deliveryType={order.delivery_type}
+                              scheduledTime={order.delivery_time}
+                              orderPlacedAt={order.order_placed_at}
+                              subscriptionId={order.subscription_id}
+                              deliveryTime={order.delivery_time}
+                              deliverySlots={order.delivery_slots}
+                              paymentStatus={order.payment_status}
+                            />
                          </div>
 
                         {/* Address */}

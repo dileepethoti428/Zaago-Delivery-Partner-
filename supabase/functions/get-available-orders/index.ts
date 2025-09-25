@@ -19,14 +19,36 @@ function calculateHaversineDistance(lat1: number, lng1: number, lat2: number, ln
   return R * c;
 }
 
-// Calculate agent payout based on distance
+// Calculate agent payout based on distance - Match frontend structure
 function calculateAgentPayout(distance: number): number {
-  const basePay = 20; // Base pay for first 1 km
-  const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1 km
-  const perKmRate = 15; // Rate per km for additional distance
-  const distancePay = additionalDistance * perKmRate;
+  // Base fare for first 3 km: ₹40
+  const baseFare = 40;
   
-  return Math.round((basePay + distancePay) * 100) / 100; // Round to 2 decimal places
+  // Additional distance beyond 3 km
+  const additionalDistance = Math.max(0, distance - 3);
+  
+  // Per km rate for additional distance: ₹9
+  const perKmRate = 9;
+  const distanceFare = additionalDistance * perKmRate;
+  
+  // Subtotal before platform fee
+  const subtotal = baseFare + distanceFare;
+  
+  // Peak hour surge: 15% if current time is peak
+  const isPeakHour = () => {
+    const currentHour = new Date().getHours();
+    const isWeekend = [0, 6].includes(new Date().getDay());
+    const isLunchRush = currentHour >= 12 && currentHour < 14;
+    const isDinnerRush = currentHour >= 19 && currentHour < 22;
+    return isLunchRush || isDinnerRush || isWeekend;
+  };
+  
+  const surgeAmount = isPeakHour() ? subtotal * 0.15 : 0;
+  
+  // Agent payout (total - platform fee of ₹13)
+  const agentPayout = (subtotal + surgeAmount) - 13;
+  
+  return Math.max(12, Math.round(agentPayout * 100) / 100);
 }
 async function calculateDistance(origin: {lat: number, lng: number}, destination: {lat: number, lng: number}): Promise<number> {
   const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN');
@@ -307,17 +329,33 @@ serve(async (req) => {
             
             // Include orders within 50km radius (expanded for better coverage)
             if (totalDistance <= 50) {
-              const agentPayout = calculateAgentPayout(totalDistance);
+              // Calculate shop-to-customer distance for accurate payout
+              const shopToCustomerDistance = pickupLocation ? 
+                await calculateDistance(
+                  { lat: pickupLocation.lat, lng: pickupLocation.lng },
+                  { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+                ).catch(() => totalDistance) : totalDistance;
+              
+              const agentPayout = calculateAgentPayout(shopToCustomerDistance);
               nearbyOrders.push({
                 ...order,
-                distance_km: Math.round(totalDistance * 10) / 10, // Round to 1 decimal place
+                distance_km: shopToCustomerDistance, // Actual delivery distance (shop to customer)
+                total_distance: totalDistance, // Total distance (agent to shop + shop to customer)
                 agent_payout: agentPayout,
-                estimated_time_minutes: Math.ceil(totalDistance * 2), // 2 minutes per km
+                estimated_delivery_time: Math.ceil(shopToCustomerDistance * 2), // 2 minutes per km for delivery
+                backend_calculated: true,
                 pickup_location: pickupLocation,
                 pickup_address: pickupAddress,
                 pickup_status: 'pending',
                 seller_name: sellerName,
-                seller_phone: sellerPhone
+                seller_phone: sellerPhone,
+                // Improved delivery type detection using actual backend fields
+                delivery_type: order.subscription_id ? 'scheduled' : 
+                             order.delivery_time_slot ? 'scheduled' :
+                             (order.delivery_time && order.delivery_time !== 'Immediate') ? 'scheduled' :
+                             (order.payment_status === 'Pending' && 
+                              order.delivery_date && 
+                              order.delivery_date !== new Date().toISOString().split('T')[0]) ? 'book_now_pay_later' : 'immediate'
               });
             }
           } catch (distanceError) {
