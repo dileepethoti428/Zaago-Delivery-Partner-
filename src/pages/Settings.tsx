@@ -87,8 +87,8 @@ const Settings = () => {
     vibration: false,
     location_services: true,
     ringtone_enabled: true,
-    ringtone_volume: 0.8,
-    ringtone_type: 'rapido-ringtone', // Default to Rapido ringtone
+    ringtone_volume: 0.9, // Increased volume for iPhone ringtone
+    ringtone_type: 'iphone-ringtone', // Default to iPhone ringtone
     notification_frequency: 'double',
     personal_info: {
       name: '',
@@ -169,8 +169,8 @@ const Settings = () => {
             vibration: agentSettings.vibration,
             location_services: agentSettings.location_services,
             ringtone_enabled: agentSettings.ringtone_enabled ?? true,
-            ringtone_volume: agentSettings.ringtone_volume ?? 0.8,
-            ringtone_type: agentSettings.ringtone_type ?? 'rapido-ringtone', // Default to Rapido
+            ringtone_volume: agentSettings.ringtone_volume ?? 0.9, // Higher default volume
+            ringtone_type: agentSettings.ringtone_type ?? 'iphone-ringtone', // Default to iPhone
             notification_frequency: agentSettings.notification_frequency ?? 'double',
             personal_info: {
               name: agent.name || '',
@@ -189,8 +189,8 @@ const Settings = () => {
             vibration: false,
             location_services: true,
             ringtone_enabled: true,
-            ringtone_volume: 0.8,
-            ringtone_type: 'rapido-ringtone', // Default to Rapido
+            ringtone_volume: 0.9, // Higher default volume
+            ringtone_type: 'iphone-ringtone', // Default to iPhone
             notification_frequency: 'double',
             personal_info: {
               name: agent.name || '',
@@ -498,7 +498,7 @@ const Settings = () => {
       ]
     },
     {
-      title: "Rapido Ringtone Settings",
+      title: "iPhone Ringtone Settings",
       items: [],
       customRender: true
     },
@@ -581,7 +581,7 @@ const Settings = () => {
               <CardTitle className="text-lg">{group.title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
-              {group.customRender && group.title === "Rapido Ringtone Settings" ? (
+              {group.customRender && group.title === "iPhone Ringtone Settings" ? (
                 <div className="space-y-6 p-4">
                   {/* Master Enable/Disable Toggle */}
                   <div className="flex items-center justify-between">
@@ -590,8 +590,8 @@ const Settings = () => {
                         <Volume2 className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">Enable Rapido Ringtones</p>
-                        <p className="text-sm text-muted-foreground">Master switch for all notification sounds</p>
+                        <p className="font-medium text-foreground">Enable iPhone Ringtones</p>
+                        <p className="text-sm text-muted-foreground">Master switch for iPhone-style notification sounds</p>
                       </div>
                     </div>
                     <Switch 
@@ -641,8 +641,8 @@ const Settings = () => {
                   {/* Test Rapido Ringtone */}
                   <div className="space-y-3">
                     <div>
-                      <p className="font-medium text-foreground">New Order Ringtone: Rapido Style</p>
-                      <p className="text-sm text-muted-foreground">Loud and urgent ringtone designed to grab attention like Rapido notifications</p>
+                      <p className="font-medium text-foreground">New Order Ringtone: iPhone Style</p>
+                      <p className="text-sm text-muted-foreground">Classic iPhone ringtone with maximum volume for urgent notifications</p>
                     </div>
                     <Button
                       onClick={() => testRingtone()}
@@ -650,7 +650,7 @@ const Settings = () => {
                       className="w-full bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200"
                       variant="outline"
                     >
-                      🔔 Test Rapido Ringtone
+                      🔔 Test iPhone Ringtone
                     </Button>
                   </div>
 
@@ -658,8 +658,8 @@ const Settings = () => {
                   <div className="space-y-4 border-t pt-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-foreground">Continuous Ringing (for New Orders)</p>
-                        <p className="text-sm text-muted-foreground">Ring continuously until you respond to new orders (like Rapido)</p>
+                        <p className="font-medium text-foreground">Continuous Ringing (iPhone Style)</p>
+                        <p className="text-sm text-muted-foreground">Ring continuously until you respond to new orders (iPhone style)</p>
                       </div>
                       <Switch 
                         checked={continuousRingingEnabled}
