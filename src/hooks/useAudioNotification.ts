@@ -180,9 +180,9 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       // Create new audio element
       audioRef.current = new Audio(ringtoneFile);
       
-      // Fix volume calculation - ensure it never exceeds 1.0
-      const baseVolume = Math.min(settings?.volume || 0.8, 1.0);
-      audioRef.current.volume = Math.min(baseVolume, 1.0); // Clamp to max 1.0
+      // Set maximum volume for iPhone ringtones
+      const baseVolume = settings?.volume || 1.0;
+      audioRef.current.volume = 1.0; // Always max volume for ringtones
       
       audioRef.current.playbackRate = 1.2; // Faster playback for urgency
       audioRef.current.preload = 'auto';
@@ -201,8 +201,8 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
             sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
             gainNodeRef.current = audioContextRef.current.createGain();
             
-            // Use Web Audio API for amplification beyond 1.0
-            const amplification = Math.min((settings?.volume || 0.8) * 3.0, 5.0); // Max 5x amplification
+            // Use Web Audio API for maximum amplification for iPhone ringtones
+            const amplification = Math.min((settings?.volume || 1.0) * 4.0, 6.0); // Max 6x amplification for iPhone
             gainNodeRef.current.gain.value = amplification;
             
             sourceNodeRef.current.connect(gainNodeRef.current);
@@ -224,11 +224,10 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       });
     } else if (audioRef.current && gainNodeRef.current) {
       // Just update volume if audio exists
-      const baseVolume = Math.min(settings?.volume || 0.8, 1.0);
-      audioRef.current.volume = Math.min(baseVolume, 1.0); // Clamp to max 1.0
+      audioRef.current.volume = 1.0; // Always max volume for ringtones
       
-      // Update Web Audio API gain if available
-      const amplification = Math.min((settings?.volume || 0.8) * 3.0, 5.0);
+      // Update Web Audio API gain for maximum amplification
+      const amplification = Math.min((settings?.volume || 1.0) * 4.0, 6.0);
       gainNodeRef.current.gain.value = amplification;
     }
 

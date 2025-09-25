@@ -87,7 +87,7 @@ const Settings = () => {
     vibration: false,
     location_services: true,
     ringtone_enabled: true,
-    ringtone_volume: 0.9, // Increased volume for iPhone ringtone
+    ringtone_volume: 1.0, // Maximum volume for iPhone ringtone
     ringtone_type: 'iphone-ringtone', // Default to iPhone ringtone
     notification_frequency: 'double',
     personal_info: {
@@ -169,7 +169,7 @@ const Settings = () => {
             vibration: agentSettings.vibration,
             location_services: agentSettings.location_services,
             ringtone_enabled: agentSettings.ringtone_enabled ?? true,
-            ringtone_volume: agentSettings.ringtone_volume ?? 0.9, // Higher default volume
+            ringtone_volume: agentSettings.ringtone_volume ?? 1.0, // Maximum default volume
             ringtone_type: agentSettings.ringtone_type ?? 'iphone-ringtone', // Default to iPhone
             notification_frequency: agentSettings.notification_frequency ?? 'double',
             personal_info: {
@@ -189,7 +189,7 @@ const Settings = () => {
             vibration: false,
             location_services: true,
             ringtone_enabled: true,
-            ringtone_volume: 0.9, // Higher default volume
+            ringtone_volume: 1.0, // Maximum default volume
             ringtone_type: 'iphone-ringtone', // Default to iPhone
             notification_frequency: 'double',
             personal_info: {
