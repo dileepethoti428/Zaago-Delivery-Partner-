@@ -238,9 +238,9 @@ serve(async (req) => {
     
     filteredOrders = ordersWithSlots;
 
-    // Apply 15km radius filtering if agent location is available
+    // Apply 50km radius filtering if agent location is available
     if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
-      console.log('Applying 15km radius filter for agent location:', {
+      console.log('Applying 50km radius filter for agent location:', {
         lat: agentLocation.latitude,
         lng: agentLocation.longitude
       });
@@ -305,8 +305,8 @@ serve(async (req) => {
             
             console.log(`Order ${order.id} total distance: ${totalDistance.toFixed(2)}km`);
             
-            // Only include orders within 15km total radius
-            if (totalDistance <= 15) {
+            // Only include orders within 50km total radius (increased for better coverage)
+            if (totalDistance <= 50) {
               const agentPayout = calculateAgentPayout(totalDistance);
               nearbyOrders.push({
                 ...order,
@@ -333,7 +333,7 @@ serve(async (req) => {
       }
       
       filteredOrders = nearbyOrders;
-      console.log(`After 15km filtering: ${filteredOrders.length} orders remain`);
+      console.log(`After 50km filtering: ${filteredOrders.length} orders remain`);
     } else {
       console.log('No agent location available, skipping distance filtering');
     }
