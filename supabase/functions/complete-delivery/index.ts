@@ -253,23 +253,33 @@ serve(async (req) => {
     console.log('💾 Starting order status update...');
     
     try {
-      // Clean special instructions if they contain problematic data
+      // Clean all potentially problematic JSON fields
       let cleanInstructions = order.special_instructions;
-      if (typeof order.special_instructions === 'string' && order.special_instructions.includes('Peak')) {
-        console.log('🧹 Cleaning corrupted special_instructions field');
-        cleanInstructions = null;
+      let cleanPickupAddress = order.pickup_address;
+      
+      // Handle special_instructions
+      if (typeof order.special_instructions === 'string') {
+        if (order.special_instructions.includes('Peak') || order.special_instructions.includes('{') || order.special_instructions.includes('[')) {
+          console.log('🧹 Cleaning corrupted special_instructions field');
+          cleanInstructions = null;
+        }
+      }
+      
+      // Handle pickup_address - force to null if it's causing issues
+      if (order.pickup_address) {
+        console.log('🧹 Clearing pickup_address to avoid JSON issues');
+        cleanPickupAddress = null;
       }
 
-      // Use a single update operation for atomicity
+      // Use a single update operation for atomicity with minimal fields
       const updatePayload = {
         status: 'delivered',
         delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-        special_instructions: cleanInstructions,
-        pickup_address: null // Clear potentially corrupted field
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
       };
       
       console.log('📝 Update payload prepared:', Object.keys(updatePayload));
+      console.log('📝 Payment status will be set to:', updatePayload.payment_status);
 
       const { error: updateError } = await supabaseClient
         .from('orders')
