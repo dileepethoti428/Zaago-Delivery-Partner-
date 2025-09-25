@@ -99,13 +99,26 @@ serve(async (req) => {
     const now = new Date().toISOString();
     
     console.log('💾 Using new simplified stored procedure to complete delivery...');
+    console.log('🔍 Parameters:', { 
+      order_id: order_id, 
+      order_id_type: typeof order_id,
+      agent_id: agent.id, 
+      agent_id_type: typeof agent.id,
+      payment_status 
+    });
+    
+    // Ensure UUIDs are properly formatted strings (PostgreSQL expects string format for UUID parameters)
+    const orderIdStr = String(order_id).trim();
+    const agentIdStr = String(agent.id).trim();
+    
+    console.log('🔍 Converted parameters:', { orderIdStr, agentIdStr, payment_status });
     
     // Use the new simplified stored procedure that avoids JSON parsing issues
     const { error: updateError } = await supabaseClient.rpc('simple_complete_delivery', {
-      p_order_id: order_id,
+      p_order_id: orderIdStr,
       p_new_status: 'delivered',
       p_new_payment_status: payment_status,
-      p_agent_id: agent.id
+      p_agent_id: agentIdStr
     });
         
     if (updateError) {
