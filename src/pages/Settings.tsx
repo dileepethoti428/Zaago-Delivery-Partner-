@@ -98,6 +98,10 @@ const Settings = () => {
     }
   });
 
+  // Continuous ringing settings
+  const [continuousRingingEnabled, setContinuousRingingEnabled] = useState(false);
+  const [maxRepetitions, setMaxRepetitions] = useState(12); // Default 12 repetitions (1 minute)
+
   // Update notification systems to use the settings
   const updatedRingtoneSettings: RingtoneSettings = {
     enabled: settings.ringtone_enabled,
@@ -107,6 +111,29 @@ const Settings = () => {
   };
   
   const { testRingtone } = useAudioNotification(updatedRingtoneSettings);
+
+  // Test continuous ringing function
+  const testContinuousRinging = () => {
+    if (!settings.ringtone_enabled) return;
+    
+    const interval = setInterval(() => {
+      testRingtone();
+    }, 300); // Ring every 300ms for urgency
+    
+    // Stop after 15 seconds (test duration)
+    setTimeout(() => {
+      clearInterval(interval);
+      toast({
+        title: "Test Complete",
+        description: "15-second continuous ringing test finished.",
+      });
+    }, 15000);
+    
+    toast({
+      title: "Testing Continuous Ringing",
+      description: "Playing 15-second continuous ringing pattern...",
+    });
+  };
 
   useEffect(() => {
     fetchAgentSettings();
@@ -471,46 +498,9 @@ const Settings = () => {
       ]
     },
     {
-      title: "Ringtone Settings",
-      items: [
-        {
-          icon: Volume2,
-          title: "Ringtone Enabled",
-          description: "Enable/disable ringtone for new orders",
-          action: "toggle",
-          color: "text-primary",
-          enabled: settings.ringtone_enabled,
-          key: "ringtone_enabled"
-        },
-        {
-          icon: Volume2,
-          title: "Ringtone Volume",
-          description: `Volume: ${Math.round(settings.ringtone_volume * 100)}%`,
-          action: "ringtone_volume",
-          color: "text-primary"
-        },
-        {
-          icon: Bell,
-          title: "Ringtone Type",
-          description: getRingtoneDescription(settings.ringtone_type),
-          action: "ringtone_type",
-          color: "text-primary"
-        },
-        {
-          icon: Bell,
-          title: "Notification Pattern",
-          description: settings.notification_frequency === 'single' ? 'Single Ring' : settings.notification_frequency === 'double' ? 'Double Ring' : 'Continuous',
-          action: "notification_pattern",
-          color: "text-primary"
-        },
-        {
-          icon: Play,
-          title: "Test Ringtone",
-          description: "Test your current ringtone settings",
-          action: "test_ringtone",
-          color: "text-primary"
-        }
-      ]
+      title: "Rapido Ringtone Settings",
+      items: [],
+      customRender: true
     },
     {
       title: "Delivery Settings",
@@ -591,9 +581,127 @@ const Settings = () => {
               <CardTitle className="text-lg">{group.title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
-              {group.items.map((item, itemIndex) => {
-                const IconComponent = item.icon;
-                return (
+              {group.customRender && group.title === "Rapido Ringtone Settings" ? (
+                <div className="space-y-6 p-4">
+                  {/* Master Enable/Disable Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Volume2 className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">Enable Rapido Ringtones</p>
+                        <p className="text-sm text-muted-foreground">Master switch for all notification sounds</p>
+                      </div>
+                    </div>
+                    <Switch 
+                      checked={settings.ringtone_enabled}
+                      onCheckedChange={(checked) => {
+                        if (isEditMode) {
+                          setSettings(prev => ({ ...prev, ringtone_enabled: checked }));
+                        } else {
+                          updateSetting('ringtone_enabled', checked);
+                        }
+                      }}
+                      disabled={loading}
+                      className="data-[state=checked]:bg-primary"
+                    />
+                  </div>
+
+                  {/* Volume Control */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          <Volume2 className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">Volume: {Math.round(settings.ringtone_volume * 100)}%</p>
+                          <p className="text-sm text-muted-foreground">Adjust ringtone volume level</p>
+                        </div>
+                      </div>
+                    </div>
+                    <Slider
+                      value={[settings.ringtone_volume * 100]}
+                      onValueChange={(values) => {
+                        const volume = values[0] / 100;
+                        if (isEditMode) {
+                          setSettings(prev => ({ ...prev, ringtone_volume: volume }));
+                        } else {
+                          updateSetting('ringtone_volume', volume);
+                        }
+                      }}
+                      max={100}
+                      step={5}
+                      className="w-full"
+                      disabled={!settings.ringtone_enabled}
+                    />
+                  </div>
+
+                  {/* Test Rapido Ringtone */}
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-medium text-foreground">New Order Ringtone: Rapido Style</p>
+                      <p className="text-sm text-muted-foreground">Loud and urgent ringtone designed to grab attention like Rapido notifications</p>
+                    </div>
+                    <Button
+                      onClick={() => testRingtone()}
+                      disabled={!settings.ringtone_enabled}
+                      className="w-full bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200"
+                      variant="outline"
+                    >
+                      🔔 Test Rapido Ringtone
+                    </Button>
+                  </div>
+
+                  {/* Continuous Ringing Settings */}
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">Continuous Ringing (for New Orders)</p>
+                        <p className="text-sm text-muted-foreground">Ring continuously until you respond to new orders (like Rapido)</p>
+                      </div>
+                      <Switch 
+                        checked={continuousRingingEnabled}
+                        onCheckedChange={setContinuousRingingEnabled}
+                        disabled={!settings.ringtone_enabled}
+                        className="data-[state=checked]:bg-primary"
+                      />
+                    </div>
+
+                    {continuousRingingEnabled && (
+                      <>
+                        <div className="space-y-3">
+                          <div>
+                            <p className="font-medium text-foreground">Max Repetitions: {maxRepetitions} ({Math.round(maxRepetitions * 5 / 60)} minutes)</p>
+                            <p className="text-sm text-muted-foreground">Maximum number of times to repeat before auto-stopping</p>
+                          </div>
+                          <Slider
+                            value={[maxRepetitions]}
+                            onValueChange={(values) => setMaxRepetitions(values[0])}
+                            min={6}
+                            max={48}
+                            step={1}
+                            className="w-full"
+                          />
+                        </div>
+
+                        <Button
+                          onClick={testContinuousRinging}
+                          disabled={!settings.ringtone_enabled}
+                          variant="outline"
+                          className="w-full"
+                        >
+                          🧪 Test Continuous Ringing (15s)
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                group.items.map((item, itemIndex) => {
+                  const IconComponent = item.icon;
+                  return (
                   <div
                     key={itemIndex}
                     className={`flex items-center justify-between p-3 rounded-lg transition-smooth ${
@@ -752,8 +860,9 @@ const Settings = () => {
                       />
                     ) : null}
                   </div>
-                );
-              })}
+                 );
+                })
+              )}
             </CardContent>
           </Card>
         ))}
