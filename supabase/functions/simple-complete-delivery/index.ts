@@ -161,8 +161,25 @@ serve(async (req) => {
       if (!earningsError) {
         console.log('✅ Earnings record created/updated with accurate data');
       }
-    } catch (earningsError) {
-      console.warn('⚠️ Earnings creation failed (continuing anyway):', earningsError);
+      
+      // Also update delivery_history with accurate distance
+      const { error: historyError } = await supabaseClient
+        .from('delivery_history')
+        .update({
+          distance_traveled: distance_km,
+          delivery_payout: agent_payout,
+          updated_at: now
+        })
+        .eq('order_id', order_id)
+        .eq('agent_id', agent.id);
+      
+      if (!historyError) {
+        console.log('✅ Delivery history updated with accurate distance');
+      } else {
+        console.warn('⚠️ Failed to update delivery history distance:', historyError);
+      }
+    } catch (error) {
+      console.warn('⚠️ Earnings/History update failed (continuing anyway):', error);
     }
 
     return new Response(

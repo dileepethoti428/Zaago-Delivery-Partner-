@@ -307,9 +307,8 @@ const Earnings = () => {
       const recentData = (earnings || []).slice(0, 10).map(earning => {
         const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
         
-        // Use actual delivered distance from delivery history
-        // Note: This is the final delivery distance, which may differ from initial estimates
-        const distance = historyData?.distance_traveled || 0;
+        // Use distance from earnings table (most accurate) or delivery history as fallback
+        const distance = earning.distance_km || historyData?.distance_traveled || 0;
         
         // Calculate breakdown using actual payout config
         const basePay = payoutConfig?.base_pay_amount || 15;
