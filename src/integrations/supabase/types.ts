@@ -226,9 +226,13 @@ export type Database = {
           id: string
           language: string | null
           location_services: boolean | null
+          notification_frequency: string | null
           personal_info: Json | null
           preferred_areas: Json | null
           push_notifications: boolean | null
+          ringtone_enabled: boolean | null
+          ringtone_type: string | null
+          ringtone_volume: number | null
           sound_alerts: boolean | null
           updated_at: string | null
           vehicle_info: Json | null
@@ -241,9 +245,13 @@ export type Database = {
           id?: string
           language?: string | null
           location_services?: boolean | null
+          notification_frequency?: string | null
           personal_info?: Json | null
           preferred_areas?: Json | null
           push_notifications?: boolean | null
+          ringtone_enabled?: boolean | null
+          ringtone_type?: string | null
+          ringtone_volume?: number | null
           sound_alerts?: boolean | null
           updated_at?: string | null
           vehicle_info?: Json | null
@@ -256,9 +264,13 @@ export type Database = {
           id?: string
           language?: string | null
           location_services?: boolean | null
+          notification_frequency?: string | null
           personal_info?: Json | null
           preferred_areas?: Json | null
           push_notifications?: boolean | null
+          ringtone_enabled?: boolean | null
+          ringtone_type?: string | null
+          ringtone_volume?: number | null
           sound_alerts?: boolean | null
           updated_at?: string | null
           vehicle_info?: Json | null
@@ -2078,6 +2090,8 @@ export type Database = {
         Row: {
           address: Json
           agent_id: string | null
+          agent_notification_sent: boolean | null
+          agent_notification_sent_at: string | null
           created_at: string
           customer_name: string | null
           customer_phone: string | null
@@ -2109,6 +2123,8 @@ export type Database = {
         Insert: {
           address: Json
           agent_id?: string | null
+          agent_notification_sent?: boolean | null
+          agent_notification_sent_at?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -2140,6 +2156,8 @@ export type Database = {
         Update: {
           address?: Json
           agent_id?: string | null
+          agent_notification_sent?: boolean | null
+          agent_notification_sent_at?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null

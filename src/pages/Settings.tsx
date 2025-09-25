@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -30,7 +32,8 @@ import {
   Save,
   X,
   Palette,
-  MessageCircle
+  MessageCircle,
+  Play
 } from "lucide-react";
 
 const Settings = () => {
@@ -46,6 +49,10 @@ const Settings = () => {
     sound_alerts: true,
     vibration: false,
     location_services: true,
+    ringtone_enabled: true,
+    ringtone_volume: 0.8,
+    ringtone_type: 'phone-ringtone',
+    notification_frequency: 'double',
     personal_info: {
       name: '',
       phone: '',
@@ -58,6 +65,10 @@ const Settings = () => {
     sound_alerts: true,
     vibration: false,
     location_services: true,
+    ringtone_enabled: true,
+    ringtone_volume: 0.8,
+    ringtone_type: 'phone-ringtone',
+    notification_frequency: 'double',
     personal_info: {
       name: '',
       phone: '',
@@ -65,6 +76,16 @@ const Settings = () => {
       vehicle: 'Honda Civic 2020'
     }
   });
+
+  // Update notification systems to use the settings
+  const updatedRingtoneSettings: RingtoneSettings = {
+    enabled: settings.ringtone_enabled,
+    volume: settings.ringtone_volume,
+    type: settings.ringtone_type,
+    frequency: settings.notification_frequency
+  };
+  
+  const { testRingtone } = useAudioNotification(updatedRingtoneSettings);
 
   useEffect(() => {
     fetchAgentSettings();
@@ -99,6 +120,10 @@ const Settings = () => {
             sound_alerts: agentSettings.sound_alerts,
             vibration: agentSettings.vibration,
             location_services: agentSettings.location_services,
+            ringtone_enabled: agentSettings.ringtone_enabled ?? true,
+            ringtone_volume: agentSettings.ringtone_volume ?? 0.8,
+            ringtone_type: agentSettings.ringtone_type ?? 'phone-ringtone',
+            notification_frequency: agentSettings.notification_frequency ?? 'double',
             personal_info: {
               name: agent.name || '',
               phone: agent.phone || '',
@@ -115,6 +140,10 @@ const Settings = () => {
             sound_alerts: true,
             vibration: false,
             location_services: true,
+            ringtone_enabled: true,
+            ringtone_volume: 0.8,
+            ringtone_type: 'phone-ringtone',
+            notification_frequency: 'double',
             personal_info: {
               name: agent.name || '',
               phone: agent.phone || '',
@@ -131,7 +160,7 @@ const Settings = () => {
     }
   };
 
-  const updateSetting = async (key: string, value: boolean) => {
+  const updateSetting = async (key: string, value: boolean | number | string) => {
     if (!agentId) return;
 
     setLoading(true);
@@ -297,7 +326,14 @@ const Settings = () => {
         title: "Settings Saved",
         description: "All your settings have been updated successfully.",
       });
-
+      // Update notification systems to use the new settings
+      const updatedRingtoneSettings: RingtoneSettings = {
+        enabled: settings.ringtone_enabled,
+        volume: settings.ringtone_volume,
+        type: settings.ringtone_type,
+        frequency: settings.notification_frequency
+      };
+      
       // Refresh data to ensure UI is in sync
       await fetchAgentSettings();
       
@@ -410,6 +446,48 @@ const Settings = () => {
           action: "theme",
           color: "text-primary",
           theme: theme
+        }
+      ]
+    },
+    {
+      title: "Ringtone Settings",
+      items: [
+        {
+          icon: Volume2,
+          title: "Ringtone Enabled",
+          description: "Enable/disable ringtone for new orders",
+          action: "toggle",
+          color: "text-primary",
+          enabled: settings.ringtone_enabled,
+          key: "ringtone_enabled"
+        },
+        {
+          icon: Volume2,
+          title: "Ringtone Volume",
+          description: `Volume: ${Math.round(settings.ringtone_volume * 100)}%`,
+          action: "ringtone_volume",
+          color: "text-primary"
+        },
+        {
+          icon: Bell,
+          title: "Ringtone Type",
+          description: settings.ringtone_type === 'phone-ringtone' ? 'Phone Ringtone' : 'Notification Sound',
+          action: "ringtone_type",
+          color: "text-primary"
+        },
+        {
+          icon: Bell,
+          title: "Notification Pattern",
+          description: settings.notification_frequency === 'single' ? 'Single Ring' : settings.notification_frequency === 'double' ? 'Double Ring' : 'Continuous',
+          action: "notification_pattern",
+          color: "text-primary"
+        },
+        {
+          icon: Play,
+          title: "Test Ringtone",
+          description: "Test your current ringtone settings",
+          action: "test_ringtone",
+          color: "text-primary"
         }
       ]
     },
@@ -531,7 +609,7 @@ const Settings = () => {
                               className="h-8"
                             />
                           </div>
-                        ) : item.title === "Vehicle Information" && isEditMode ? (
+        ) : item.title === "Vehicle Information" && isEditMode ? (
                           <Input
                             value={settings.personal_info.vehicle}
                             onChange={(e) => setSettings(prev => ({
@@ -541,6 +619,10 @@ const Settings = () => {
                             placeholder="Vehicle Information"
                             className="h-8 mt-2"
                           />
+                        ) : item.action === "ringtone_volume" && !isEditMode ? (
+                          <div className="mt-2">
+                            <div className="text-sm text-muted-foreground mb-1">Volume: {Math.round(settings.ringtone_volume * 100)}%</div>
+                          </div>
                         ) : (
                           <p className="text-sm text-muted-foreground">{item.description}</p>
                         )}
@@ -560,6 +642,72 @@ const Settings = () => {
                         disabled={loading}
                         className="data-[state=checked]:bg-primary"
                       />
+                    ) : item.action === "ringtone_volume" ? (
+                      <div className="w-32">
+                        <Slider
+                          value={[settings.ringtone_volume * 100]}
+                          onValueChange={(values) => {
+                            const volume = values[0] / 100;
+                            if (isEditMode) {
+                              setSettings(prev => ({ ...prev, ringtone_volume: volume }));
+                            } else {
+                              updateSetting('ringtone_volume', volume);
+                            }
+                          }}
+                          max={100}
+                          step={5}
+                          className="w-full"
+                        />
+                      </div>
+                    ) : item.action === "ringtone_type" ? (
+                      <Select 
+                        value={settings.ringtone_type} 
+                        onValueChange={(value) => {
+                          if (isEditMode) {
+                            setSettings(prev => ({ ...prev, ringtone_type: value }));
+                          } else {
+                            updateSetting('ringtone_type', value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="phone-ringtone">Phone Ringtone</SelectItem>
+                          <SelectItem value="notification-sound">Notification Sound</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : item.action === "notification_pattern" ? (
+                      <Select 
+                        value={settings.notification_frequency} 
+                        onValueChange={(value) => {
+                          if (isEditMode) {
+                            setSettings(prev => ({ ...prev, notification_frequency: value }));
+                          } else {
+                            updateSetting('notification_frequency', value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="single">Single</SelectItem>
+                          <SelectItem value="double">Double</SelectItem>
+                          <SelectItem value="continuous">Continuous</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : item.action === "test_ringtone" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => testRingtone()}
+                        disabled={!settings.ringtone_enabled}
+                      >
+                        <Play className="w-4 h-4 mr-1" />
+                        Test
+                      </Button>
                     ) : item.action === "theme" ? (
                       <Select value={theme} onValueChange={setTheme}>
                         <SelectTrigger className="w-32">

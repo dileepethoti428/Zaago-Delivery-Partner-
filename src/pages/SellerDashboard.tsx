@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { useAudioNotification } from "@/hooks/useAudioNotification";
+import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Package, 
@@ -36,7 +36,16 @@ interface Order {
 const SellerDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { playNotificationSound } = useAudioNotification();
+  
+  // Ringtone settings state
+  const [ringtoneSettings, setRingtoneSettings] = useState<RingtoneSettings>({
+    enabled: true,
+    volume: 0.8,
+    type: 'phone-ringtone',
+    frequency: 'double'
+  });
+  
+  const { playNotificationSound } = useAudioNotification(ringtoneSettings);
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +53,42 @@ const SellerDashboard = () => {
   const [recentPackedNotifications, setRecentPackedNotifications] = useState<Set<string>>(new Set());
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('disconnected');
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  // Load seller settings
+  const loadSellerSettings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+
+      // Get agent details (sellers might also have agent accounts)
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (agent) {
+        // Get agent settings
+        const { data: agentSettings } = await supabase
+          .from('agent_settings')
+          .select('ringtone_enabled, ringtone_volume, ringtone_type, notification_frequency')
+          .eq('agent_id', agent.id)
+          .maybeSingle();
+
+        if (agentSettings) {
+          setRingtoneSettings({
+            enabled: agentSettings.ringtone_enabled ?? true,
+            volume: agentSettings.ringtone_volume ?? 0.8,
+            type: agentSettings.ringtone_type ?? 'phone-ringtone',
+            frequency: agentSettings.notification_frequency ?? 'double'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading seller settings:', error);
+    }
+  };
 
   // Add debug log helper
   const addDebugLog = (message: string) => {
@@ -153,7 +198,10 @@ const SellerDashboard = () => {
     }, 30000);
 
     try {
-      // Play the ringtone (removed)
+      // Play the ringtone only if enabled
+      if (ringtoneSettings.enabled) {
+        playNotificationSound();
+      }
       addDebugLog(`✅ Ringtone played successfully for new order: ${orderData.id}`);
       
       // Show toast notification
@@ -198,7 +246,10 @@ const SellerDashboard = () => {
     }, 30000);
 
     try {
-      // Play the ringtone (removed)
+      // Play the ringtone only if enabled
+      if (ringtoneSettings.enabled) {
+        playNotificationSound();
+      }
       addDebugLog(`✅ Ringtone played successfully for packed order: ${orderData.id}`);
       
       // Show toast notification

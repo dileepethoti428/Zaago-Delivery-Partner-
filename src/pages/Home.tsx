@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useGeolocation } from "@/hooks/useGeolocation";
-import { useAudioNotification } from "@/hooks/useAudioNotification";
+import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   MapPin, 
@@ -97,7 +97,16 @@ interface Order {
 const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { playNotificationSound } = useAudioNotification();
+  
+  // Ringtone settings state
+  const [ringtoneSettings, setRingtoneSettings] = useState<RingtoneSettings>({
+    enabled: true,
+    volume: 0.8,
+    type: 'phone-ringtone',
+    frequency: 'double'
+  });
+  
+  const { playNotificationSound } = useAudioNotification(ringtoneSettings);
   
   // Get current location with backend saving 
   const location = useGeolocation({
@@ -125,6 +134,46 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
+
+  // Load agent settings on component mount
+  useEffect(() => {
+    loadAgentSettings();
+  }, []);
+
+  const loadAgentSettings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+
+      // Get agent details
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (agent) {
+        // Get agent settings
+        const { data: agentSettings } = await supabase
+          .from('agent_settings')
+          .select('ringtone_enabled, ringtone_volume, ringtone_type, notification_frequency')
+          .eq('agent_id', agent.id)
+          .maybeSingle();
+
+        if (agentSettings) {
+          setRingtoneSettings({
+            enabled: agentSettings.ringtone_enabled ?? true,
+            volume: agentSettings.ringtone_volume ?? 0.8,
+            type: agentSettings.ringtone_type ?? 'phone-ringtone',
+            frequency: agentSettings.notification_frequency ?? 'double'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading agent settings:', error);
+    }
+  };
 
   // Check if a new order should trigger notification sound
   const shouldPlayNotificationForOrder = (orderData: any): boolean => {
@@ -178,7 +227,10 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone (removed)
+    // Play the ringtone only if enabled
+    if (ringtoneSettings.enabled) {
+      playNotificationSound();
+    }
     
     // Show toast notification
     toast({
@@ -207,7 +259,10 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone (removed)
+    // Play the ringtone only if enabled
+    if (ringtoneSettings.enabled) {
+      playNotificationSound();
+    }
     
     // Show toast notification
     toast({

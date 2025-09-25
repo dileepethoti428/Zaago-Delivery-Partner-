@@ -1,16 +1,27 @@
 import { useRef, useCallback, useEffect } from 'react';
 
-export const useAudioNotification = () => {
+export interface RingtoneSettings {
+  enabled: boolean;
+  volume: number;
+  type: string;
+  frequency: string;
+}
+
+export const useAudioNotification = (settings?: RingtoneSettings) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
 
   // Initialize audio on first use
   useEffect(() => {
-    if (!audioRef.current) {
-      // Use phone-ringtone.mp3 directly (notification-sound.mp3 is broken)
-      audioRef.current = new Audio('/phone-ringtone.mp3');
-      audioRef.current.volume = 1.0; // Maximum volume
+    if (!audioRef.current && settings?.enabled !== false) {
+      // Use the selected ringtone type
+      const ringtoneFile = settings?.type === 'notification-sound' 
+        ? '/notification-sound.mp3' 
+        : '/phone-ringtone.mp3';
+      
+      audioRef.current = new Audio(ringtoneFile);
+      audioRef.current.volume = settings?.volume || 0.8;
       audioRef.current.playbackRate = 1.2; // Faster playback for urgency
       audioRef.current.preload = 'auto';
       
@@ -23,7 +34,7 @@ export const useAudioNotification = () => {
           if (audioContextRef.current && audioRef.current) {
             const source = audioContextRef.current.createMediaElementSource(audioRef.current);
             gainNodeRef.current = audioContextRef.current.createGain();
-            gainNodeRef.current.gain.value = 3.0; // Even higher amplification
+            gainNodeRef.current.gain.value = (settings?.volume || 0.8) * 3.0; // Amplification based on user setting
             source.connect(gainNodeRef.current);
             gainNodeRef.current.connect(audioContextRef.current.destination);
             console.log('Web Audio API setup complete with 3x amplification');
@@ -50,7 +61,7 @@ export const useAudioNotification = () => {
         audioRef.current.currentTime = 0;
       }
     };
-  }, []);
+  }, [settings]);
 
   const playRingtone = useCallback(async () => {
     if (!audioRef.current) return;
@@ -75,23 +86,36 @@ export const useAudioNotification = () => {
   }, []);
 
   const playNotificationSound = useCallback(() => {
+    // Don't play if disabled
+    if (settings?.enabled === false) return;
+    
     try {
       // Ensure audio context is resumed (required by some browsers)
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume();
       }
       
-      // Immediate urgent burst pattern: 10 rapid-fire rings in 3 seconds
-      playRingtone(); // Immediate
-      setTimeout(() => playRingtone(), 100); // Quick double burst
-      setTimeout(() => playRingtone(), 400);
-      setTimeout(() => playRingtone(), 800);
-      setTimeout(() => playRingtone(), 1200);
-      setTimeout(() => playRingtone(), 1600);
-      setTimeout(() => playRingtone(), 2000);
-      setTimeout(() => playRingtone(), 2300);
-      setTimeout(() => playRingtone(), 2600);
-      setTimeout(() => playRingtone(), 3000);
+      // Play based on frequency setting
+      const frequency = settings?.frequency || 'double';
+      
+      if (frequency === 'single') {
+        playRingtone();
+      } else if (frequency === 'double') {
+        playRingtone();
+        setTimeout(() => playRingtone(), 100);
+      } else if (frequency === 'continuous') {
+        // Continuous pattern: 10 rapid-fire rings in 3 seconds
+        playRingtone(); // Immediate
+        setTimeout(() => playRingtone(), 100);
+        setTimeout(() => playRingtone(), 400);
+        setTimeout(() => playRingtone(), 800);
+        setTimeout(() => playRingtone(), 1200);
+        setTimeout(() => playRingtone(), 1600);
+        setTimeout(() => playRingtone(), 2000);
+        setTimeout(() => playRingtone(), 2300);
+        setTimeout(() => playRingtone(), 2600);
+        setTimeout(() => playRingtone(), 3000);
+      }
       
       // Intense vibration pattern for mobile devices
       if (window.navigator && window.navigator.vibrate) {
@@ -112,7 +136,11 @@ export const useAudioNotification = () => {
     } catch (error) {
       console.error('Error playing notification sound:', error);
     }
+  }, [playRingtone, settings]);
+
+  const testRingtone = useCallback(() => {
+    playRingtone();
   }, [playRingtone]);
 
-  return { playNotificationSound };
+  return { playNotificationSound, testRingtone };
 };
