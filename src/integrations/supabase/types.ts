@@ -4541,6 +4541,10 @@ export type Database = {
         Args: { end_date: string; start_date: string; target_seller_id: string }
         Returns: string
       }
+      delete_orders_with_related_data: {
+        Args: { order_ids: string[] }
+        Returns: undefined
+      }
       ensure_delivery_data_consistency: {
         Args: Record<PropertyKey, never>
         Returns: undefined
