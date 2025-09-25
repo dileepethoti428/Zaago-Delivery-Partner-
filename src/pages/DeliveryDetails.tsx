@@ -47,6 +47,7 @@ const DeliveryDetails = () => {
   const [payout, setPayout] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showFallbackOption, setShowFallbackOption] = useState(false);
   useEffect(() => {
     if (orderId) {
       fetchOrderDetails();
@@ -235,6 +236,53 @@ const DeliveryDetails = () => {
       setShowPaymentDialog(true);
     }
   };
+
+  // Fallback simple delivery completion
+  const completeDeliverySimple = async (paymentMethod: string) => {
+    setIsProcessing(true);
+    try {
+      const requestPayload = {
+        order_id: order?.id,
+        payment_method: paymentMethod === 'COD' ? 'COD' : 'Online'
+      };
+      
+      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
+        body: requestPayload
+      });
+      
+      if (error) {
+        toast({
+          title: "Simple Delivery Failed",
+          description: error.message || 'Failed to complete delivery using fallback method',
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      if (data?.success) {
+        toast({
+          title: "Delivery Completed (Simple Mode)",
+          description: `Order completed successfully. Earned: ₹${data.order?.payout_amount || 0}`,
+        });
+        window.dispatchEvent(new CustomEvent('orderCompleted'));
+        navigate('/home');
+      } else {
+        toast({
+          title: "Simple Delivery Failed",
+          description: data?.error || 'Failed to complete delivery',
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Simple Delivery Failed",
+        description: error?.message || "Fallback delivery completion failed",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
   const handleCancelDelivery = async () => {
     if (!order) return;
     setIsCancelling(true);
@@ -290,19 +338,12 @@ const DeliveryDetails = () => {
       setIsCancelling(false);
     }
   };
-  const completeDeliveryDirect = async (paymentMethod: string) => {
-    console.log('=== FRONTEND DEBUGGING: Starting delivery completion ===');
-    console.log('Order ID:', order?.id);
-    console.log('Payment method received:', paymentMethod);
-    
+  const completeDeliveryDirect = async (paymentMethod: string, retryCount: number = 0) => {
     setIsProcessing(true);
     try {
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
-      console.log('Agent location from storage:', agentLocation);
-
-      // Map payment methods to function input ('COD' or 'Online')
+      
       const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
-      console.log('Mapped payment method:', methodParam);
       
       const requestPayload = {
         order_id: order?.id,
@@ -310,108 +351,82 @@ const DeliveryDetails = () => {
         agent_location: agentLocation
       };
       
-      console.log('=== REQUEST PAYLOAD ===');
-      console.log('Payload object:', requestPayload);
-      console.log('Payload JSON string:', JSON.stringify(requestPayload));
-      console.log('Order ID type:', typeof requestPayload.order_id);
-      console.log('Payment method type:', typeof requestPayload.payment_method);
-      
-      console.log('Calling complete-delivery edge function...');
       const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: requestPayload
       });
       
-      console.log('=== EDGE FUNCTION RESPONSE ===');
-      console.log('Response data:', data);
-      console.log('Response error:', error);
-      console.log('Data type:', typeof data);
-      console.log('Error type:', typeof error);
-      
       if (error) {
-        console.error('=== FRONTEND: Edge function error detected ===');
-        console.error('Error object keys:', Object.keys(error));
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        console.error('Error debug_info:', error.debug_info);
-        console.error('Full error object:', JSON.stringify(error, null, 2));
+        // If this is not a retry and error suggests temporary issue, try once more
+        if (retryCount === 0 && (
+          error.message?.includes('timeout') || 
+          error.message?.includes('network') ||
+          error.message?.includes('connection')
+        )) {
+          console.log('Retrying delivery completion due to network issue...');
+          setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 2000);
+          return;
+        }
         
-        // Provide more specific error messages based on the error
+        // Show fallback option after first failure
+        setShowFallbackOption(true);
+        
+        // Determine user-friendly error message
         let userFriendlyMessage = 'Failed to complete delivery';
         let shouldShowRetry = true;
         
-        if (error.message?.includes('Database contains corrupted JSON data')) {
-          userFriendlyMessage = 'Order data is corrupted. Please contact support immediately.';
-          shouldShowRetry = false;
-          console.error('CRITICAL: Database corruption detected!');
-        } else if (error.message?.includes('invalid input syntax for type json')) {
-          userFriendlyMessage = 'Database error detected. Order may have corrupted data. Contact support.';
-          shouldShowRetry = false;
-          console.error('CRITICAL: JSON syntax error in database!');
-        } else if (error.message?.includes('corrupted data')) {
-          userFriendlyMessage = 'Order data issue detected. Please contact support.';
-          shouldShowRetry = false;
+        if (error.message?.includes('corrupted') || error.message?.includes('invalid input syntax for type json')) {
+          userFriendlyMessage = 'Order data issue detected. Please try the simple completion method below.';
+          shouldShowRetry = true;
         } else if (error.message?.includes('authentication')) {
           userFriendlyMessage = 'Please log out and log back in, then try again.';
         } else if (error.message?.includes('Agent not found')) {
           userFriendlyMessage = 'Agent verification failed. Please contact admin.';
           shouldShowRetry = false;
         } else if (error.message?.includes('Order not found')) {
-          userFriendlyMessage = 'This order no longer exists in the system.';
+          userFriendlyMessage = 'This order no longer exists.';
           shouldShowRetry = false;
         } else {
           userFriendlyMessage = error.message || 'Failed to complete delivery';
         }
         
-        // Log any debug info from the backend
-        if (error.debug_info) {
-          console.error('=== BACKEND DEBUG INFO ===');
-          console.error('Debug info:', error.debug_info);
-          if (error.debug_info.problematic_fields) {
-            console.error('Problematic fields:', error.debug_info.problematic_fields);
-          }
-          if (error.debug_info.error_type) {
-            console.error('Error type from backend:', error.debug_info.error_type);
-          }
-          if (error.debug_info.order_id) {
-            console.error('Backend order ID:', error.debug_info.order_id);
-          }
-        }
-        
         toast({
           title: "Delivery Failed",
-          description: userFriendlyMessage + (shouldShowRetry ? ' You can try again.' : ''),
+          description: userFriendlyMessage + (shouldShowRetry ? ' Try the simple completion method below.' : ''),
           variant: "destructive"
         });
         return;
       }
       
-      console.log('=== SUCCESS RESPONSE ===');
-      console.log('Success data:', data);
-      console.log('Success flag:', data?.success);
-      console.log('Order data:', data?.order);
-      
       if (data?.success) {
-        console.log('Delivery completion successful!');
+        setShowFallbackOption(false); // Hide fallback on success
         toast({
           title: "Successfully Delivered! ✅",
-          description: `Order completed. Distance: ${data.order?.distance_km?.toFixed(2) || 0}km, Earned: ₹${data.order?.payout_amount || 0}`
+          description: `Order completed. Distance: ${data.order?.distance_km || 0}km, Earned: ₹${data.order?.payout_amount || 0}`
         });
-        // Notify other screens to refresh
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
-        console.error('Success flag false or missing');
+        setShowFallbackOption(true);
         const errorMsg = data?.error || 'Failed to complete delivery';
-        console.error('DeliveryDetails: Server error:', errorMsg);
         toast({
           title: "Delivery Failed",
-          description: errorMsg,
+          description: errorMsg + ' Try the simple completion method below.',
           variant: "destructive"
         });
       }
     } catch (error: any) {
-      console.error('DeliveryDetails: Delivery completion error:', error);
-      const errorMessage = error?.message || "Unable to complete delivery. Please try again.";
+      // If this is not a retry, try once more for network errors
+      if (retryCount === 0 && (
+        error?.name === 'TypeError' ||
+        error?.message?.includes('fetch')
+      )) {
+        console.log('Retrying delivery completion due to fetch error...');
+        setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 2000);
+        return;
+      }
+      
+      setShowFallbackOption(true);
+      const errorMessage = error?.message || "Unable to complete delivery. Try the simple completion method below.";
       toast({
         title: "Delivery Failed",
         description: errorMessage,
@@ -661,24 +676,37 @@ const DeliveryDetails = () => {
               <span>DELIVERY ACTIONS</span>
             </h3>
             
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-1">
-                <Button variant="outline" className="flex items-center justify-center space-x-1 h-8 border-border hover:bg-secondary px-2" onClick={handleNavigation}>
-                  <Navigation className="w-3 h-3" />
-                  <span className="text-xs">Navigate to Customer</span>
-                </Button>
-                
-                <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
-                </Button>
-              </div>
-              
-              <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
-                <X className="w-3 h-3" />
-                <span className="text-sm">{isCancelling ? 'Cancelling...' : 'Cancel Delivery'}</span>
-              </Button>
-            </div>
+             <div className="space-y-2">
+               <div className="grid grid-cols-2 gap-1">
+                 <Button variant="outline" className="flex items-center justify-center space-x-1 h-8 border-border hover:bg-secondary px-2" onClick={handleNavigation}>
+                   <Navigation className="w-3 h-3" />
+                   <span className="text-xs">Navigate to Customer</span>
+                 </Button>
+                 
+                 <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
+                   <CheckCircle2 className="w-3 h-3" />
+                   <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                 </Button>
+               </div>
+               
+               {/* Fallback simple completion button */}
+               {showFallbackOption && (
+                 <Button 
+                   variant="secondary" 
+                   className="w-full flex items-center justify-center space-x-1 h-8 text-xs" 
+                   onClick={() => completeDeliverySimple(order.payment_status === 'paid' ? 'Online' : 'COD')} 
+                   disabled={isProcessing}
+                 >
+                   <CheckCircle2 className="w-3 h-3" />
+                   <span>Try Simple Delivery Completion</span>
+                 </Button>
+               )}
+               
+               <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
+                 <X className="w-3 h-3" />
+                 <span className="text-sm">{isCancelling ? 'Cancelling...' : 'Cancel Delivery'}</span>
+               </Button>
+             </div>
           </div>
         </CardContent>
       </Card>

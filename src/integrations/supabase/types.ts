@@ -4948,6 +4948,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      mark_order_as_packed: {
+        Args: { order_id: string }
+        Returns: undefined
+      }
       mark_payout_paid: {
         Args: { payout_id: string }
         Returns: undefined
