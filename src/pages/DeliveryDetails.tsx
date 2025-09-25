@@ -97,7 +97,8 @@ const DeliveryDetails = () => {
     if (!pickupLocation || !pickupLocation.lat || !pickupLocation.lng) {
       console.warn('No valid pickup location available in order');
       setDistance(2.5); // fallback
-      setPayout(35); // fallback payout
+      // Use new rates for fallback: ₹12 for first 1km + ₹8 per km after
+      setPayout(Math.round(12 + (2.5 - 1) * 8)); // ₹24 for 2.5km
       return;
     }
     
@@ -106,7 +107,8 @@ const DeliveryDetails = () => {
     if (!customerCoords) {
       console.warn('No customer coordinates available');
       setDistance(2.5); // fallback
-      setPayout(35); // fallback payout
+      // Use new rates for fallback: ₹12 for first 1km + ₹8 per km after
+      setPayout(Math.round(12 + (2.5 - 1) * 8)); // ₹24 for 2.5km
       return;
     }
 
@@ -115,8 +117,11 @@ const DeliveryDetails = () => {
       console.log('🚚 Using pickup location:', pickupLocation, 'to customer:', customerCoords);
       const distanceResult = await calculateRealTimeDistance(pickupLocation, customerCoords, order.id);
       const dist = distanceResult.distance_km;
-      // Use edge function for accurate real-time pricing
-      const calculatedPayout = dist <= 3 ? 40 : 40 + (dist - 3) * 9;
+      
+      // Calculate payout using NEW rates: ₹12 for first 1km, ₹8 per km after
+      const basePay = 12; // ₹12 for first 1km
+      const perKmRate = 8; // ₹8 per km after first 1km
+      const calculatedPayout = dist <= 1 ? basePay : basePay + (dist - 1) * perKmRate;
       
       // Immediate state updates for fast UI response
       setDistance(dist);
@@ -125,9 +130,10 @@ const DeliveryDetails = () => {
       console.log('✅ Pickup-to-customer distance calculated:', dist, 'km, Payout:', Math.round(calculatedPayout), 'Source:', distanceResult.source);
     } catch (error) {
       console.error('Error calculating distance:', error);
-      // Fast fallback
+      // Fast fallback with new rates
       setDistance(2.5);
-      setPayout(35);
+      // Use new rates: ₹12 for first 1km + ₹8 per km after
+      setPayout(Math.round(12 + (2.5 - 1) * 8)); // ₹24 for 2.5km
     }
   };
   const fetchOrderDetails = async () => {
