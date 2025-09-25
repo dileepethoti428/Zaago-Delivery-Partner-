@@ -14,7 +14,46 @@ serve(async (req) => {
   }
 
   try {
-    const { qr_code_data, payment_method = 'prepaid' } = await req.json();
+    // Enhanced request body parsing with better error handling
+    let body;
+    let rawBody = '';
+    
+    try {
+      rawBody = await req.text();
+      console.log('Raw request body:', rawBody);
+      
+      if (!rawBody || rawBody.trim() === '') {
+        throw new Error('Empty request body');
+      }
+      
+      body = JSON.parse(rawBody);
+      console.log('Parsed request body:', body);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw body that failed to parse:', rawBody);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Invalid request format. Please ensure request body is valid JSON.',
+          details: `JSON parsing failed: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+          received_body: rawBody
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    let { qr_code_data, payment_method = 'prepaid' } = body;
+    
+    // Enhanced payment method validation and sanitization
+    if (!payment_method || typeof payment_method !== 'string') {
+      console.log('Invalid payment_method received, defaulting to prepaid:', payment_method);
+      payment_method = 'prepaid';
+    } else {
+      // Clean the payment method string
+      payment_method = payment_method.toString().trim();
+    }
+    
+    console.log('QR delivery request validated:', { qr_code_data, payment_method });
 
     if (!qr_code_data) {
       return new Response(
@@ -138,18 +177,54 @@ serve(async (req) => {
     }
 
     // Update order status to delivered
-    // Use raw SQL to bypass RLS policies that might interfere
-    const { error: updateError } = await supabaseClient.rpc('update_order_status', {
-      p_order_id: order.id,
-      p_new_status: 'delivered',
-      p_new_payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-      p_agent_id: agent.id
-    });
+    console.log('Updating order status for order:', order.id);
+    
+    // Prepare update data with validation
+    const updateData = {
+      status: 'delivered',
+      delivered_at: new Date().toISOString(),
+      payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
+    };
+    
+    console.log('Update data prepared:', JSON.stringify(updateData));
+    
+    try {
+      const { error: updateError } = await supabaseClient
+        .from('orders')
+        .update(updateData)
+        .eq('id', order.id);
 
-    if (updateError) {
-      console.error('Failed to update order:', updateError);
+      if (updateError) {
+        console.error('Failed to update order:', updateError);
+        console.error('Update data that failed:', JSON.stringify(updateData));
+        console.error('Order ID:', order.id);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to update order status', 
+            details: updateError.message,
+            debug_info: { 
+              order_id: order.id, 
+              payment_method, 
+              updateData,
+              error_code: updateError.code,
+              error_details: updateError.details
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+      
+      console.log('Order status updated successfully');
+    } catch (dbError) {
+      console.error('Database operation failed with exception:', dbError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Failed to update order status' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Database operation failed', 
+          details: dbError instanceof Error ? dbError.message : String(dbError)
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -301,11 +376,20 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('QR Complete Delivery Error:', error);
+    console.error('QR Complete Delivery Error - Full Details:');
+    console.error('Error type:', typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    console.error('Request method:', req.method);
+    console.error('Request URL:', req.url);
+    console.error('Request headers:', Object.fromEntries(req.headers.entries()));
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: 'Failed to complete delivery. Please try again.' 
+        error: 'Failed to complete delivery. Please try again.',
+        details: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
