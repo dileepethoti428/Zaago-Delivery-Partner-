@@ -98,25 +98,22 @@ serve(async (req) => {
     const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
     const now = new Date().toISOString();
     
-    console.log('💾 Performing minimal update...');
+    console.log('💾 Performing minimal update using stored procedure to bypass triggers...');
     
-    // Try the simplest possible update with minimal fields
-    const { error: updateError } = await supabaseClient
-      .from('orders')
-      .update({ 
-        status: 'delivered',
-        delivered_at: now,
-        payment_status: payment_status
-      })
-      .eq('id', order_id)
-      .eq('agent_id', agent.id);
+    // Use the stored procedure to bypass any problematic triggers
+    const { error: updateError } = await supabaseClient.rpc('update_order_status', {
+      p_order_id: order_id,
+      p_new_status: 'delivered',
+      p_new_payment_status: payment_status,
+      p_agent_id: agent.id
+    });
         
     if (updateError) {
-      console.error('❌ Update failed:', updateError);
+      console.error('❌ Stored procedure failed:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to update order status',
+          error: 'Failed to update order status via stored procedure',
           details: updateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
@@ -158,7 +155,8 @@ serve(async (req) => {
           customer_name: order.customer_name,
           total: order.total,
           payment_method,
-          status: 'delivered'
+          status: 'delivered',
+          payout_amount: 35 // Include payout amount for UI display
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
