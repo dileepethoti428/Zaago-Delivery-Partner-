@@ -7,25 +7,34 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('🚀 Complete delivery request started');
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Parse request body
+    // Parse request body with detailed logging
     let body;
     try {
       const rawBody = await req.text();
+      console.log('📥 Raw request body length:', rawBody.length);
+      
       if (!rawBody || rawBody.trim() === '') {
+        console.error('❌ Empty request body received');
         throw new Error('Empty request body');
       }
+      
       body = JSON.parse(rawBody);
+      console.log('✅ Request body parsed successfully, keys:', Object.keys(body));
     } catch (parseError) {
+      console.error('❌ JSON parse error:', parseError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Invalid request format. Please ensure request body is valid JSON.',
+          details: parseError instanceof Error ? parseError.message : String(parseError)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
@@ -34,7 +43,18 @@ serve(async (req) => {
     const { order_id, agent_location } = body;
     let { payment_method } = body;
     
-    // Validate payment method
+    console.log('📋 Request parameters:', { order_id, payment_method, has_agent_location: !!agent_location });
+    
+    // Validate required parameters
+    if (!order_id) {
+      console.error('❌ Missing order_id in request');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order ID is required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+    
+    // Validate and normalize payment method
     if (!payment_method || typeof payment_method !== 'string') {
       payment_method = 'Online';
     } else {
@@ -43,61 +63,114 @@ serve(async (req) => {
     
     const validPaymentMethods = ['Online', 'COD', 'UPI', 'Card'];
     if (!validPaymentMethods.includes(payment_method)) {
+      console.warn('⚠️ Invalid payment method provided:', payment_method, 'using Online as fallback');
       payment_method = 'Online';
     }
 
-    if (!order_id) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Order ID is required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
+    console.log('💳 Using payment method:', payment_method);
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get authenticated user
-    const authHeader = req.headers.get('Authorization')!;
-    const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    // Get authenticated user with detailed logging
+    const authHeader = req.headers.get('Authorization');
+    console.log('🔐 Auth header present:', !!authHeader);
     
-    if (authError || !userData.user) {
+    if (!authHeader) {
+      console.error('❌ No authorization header provided');
       return new Response(
-        JSON.stringify({ success: false, error: 'Authentication required' }),
+        JSON.stringify({ success: false, error: 'Authentication required - no authorization header' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
+    
+    const token = authHeader.replace('Bearer ', '');
+    console.log('🔑 Token extracted, length:', token.length);
+    
+    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError) {
+      console.error('❌ Auth error:', authError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Authentication failed', details: authError.message }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+    
+    if (!userData.user) {
+      console.error('❌ No user data returned from auth');
+      return new Response(
+        JSON.stringify({ success: false, error: 'User not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+    
+    console.log('✅ User authenticated:', userData.user.email);
 
-    // Get agent info
+    // Get agent info with detailed logging
+    console.log('👤 Looking up agent for email:', userData.user.email);
+    
     const { data: agent, error: agentError } = await supabaseClient
       .from('delivery_agents')
-      .select('id, email, name')
+      .select('id, email, name, is_active')
       .eq('email', userData.user.email)
       .eq('is_active', true)
       .single();
 
-    if (agentError || !agent) {
+    if (agentError) {
+      console.error('❌ Agent lookup error:', agentError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Agent lookup failed', 
+          details: agentError.message
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
+
+    if (!agent) {
+      console.error('❌ No active agent found for email:', userData.user.email);
       return new Response(
         JSON.stringify({ success: false, error: 'Agent not found or inactive' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
+    
+    console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Get order details
+    // Get order details with detailed logging
+    console.log('📦 Looking up order:', order_id);
+    
     const { data: order, error: orderError } = await supabaseClient
       .from('orders')
       .select('*')
       .eq('id', order_id)
       .single();
 
-    if (orderError || !order) {
+    if (orderError) {
+      console.error('❌ Order lookup error:', orderError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Order lookup failed', 
+          details: orderError.message 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    if (!order) {
+      console.error('❌ Order not found:', order_id);
       return new Response(
         JSON.stringify({ success: false, error: 'Order not found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
     }
+    
+    console.log('✅ Order found:', { id: order.id, status: order.status, customer: order.customer_name });
 
     // Check if order is already delivered
     if (order.status === 'delivered') {
@@ -130,46 +203,50 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered (safe approach)
+    // Update order status to delivered with transaction safety
+    console.log('💾 Starting order status update...');
+    
     try {
-      // Clean special instructions if they contain corrupted data
-      const cleanInstructions = typeof order.special_instructions === 'string' && 
-                               order.special_instructions.includes('Peak') 
-                               ? null 
-                               : order.special_instructions;
+      // Clean special instructions if they contain problematic data
+      let cleanInstructions = order.special_instructions;
+      if (typeof order.special_instructions === 'string' && order.special_instructions.includes('Peak')) {
+        console.log('🧹 Cleaning corrupted special_instructions field');
+        cleanInstructions = null;
+      }
 
-      // First update to clean any potential corruption
-      await supabaseClient
-        .from('orders')
-        .update({
-          pickup_address: null, // Clear potentially corrupted field
-          special_instructions: cleanInstructions
-        })
-        .eq('id', order_id);
+      // Use a single update operation for atomicity
+      const updatePayload = {
+        status: 'delivered',
+        delivered_at: new Date().toISOString(),
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
+        special_instructions: cleanInstructions,
+        pickup_address: null // Clear potentially corrupted field
+      };
+      
+      console.log('📝 Update payload prepared:', Object.keys(updatePayload));
 
-      // Now safely update the order status
       const { error: updateError } = await supabaseClient
         .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-        })
+        .update(updatePayload)
         .eq('id', order_id);
 
       if (updateError) {
-        console.error('Failed to update order:', updateError);
+        console.error('❌ Failed to update order:', updateError);
         return new Response(
           JSON.stringify({ 
             success: false, 
             error: 'Failed to update order status', 
-            details: updateError.message
+            details: updateError.message,
+            code: updateError.code
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         );
       }
+      
+      console.log('✅ Order status updated successfully');
+      
     } catch (dbError) {
-      console.error('Database operation failed:', dbError);
+      console.error('❌ Database operation failed:', dbError);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -245,13 +322,23 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Complete Delivery Error:', error);
+    console.error('❌ Complete Delivery Error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    
+    // Determine if this is a recoverable error
+    const isRecoverable = error instanceof Error && (
+      error.message.includes('timeout') ||
+      error.message.includes('network') ||
+      error.message.includes('connection')
+    );
     
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: 'Failed to complete delivery. Please try again.',
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
+        recoverable: isRecoverable,
+        timestamp: new Date().toISOString()
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );

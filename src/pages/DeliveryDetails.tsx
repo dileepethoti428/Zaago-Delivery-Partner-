@@ -339,10 +339,11 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string, retryCount: number = 0) => {
+    console.log('🚀 Starting delivery completion, attempt:', retryCount + 1);
     setIsProcessing(true);
+    
     try {
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
-      
       const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
       
       const requestPayload = {
@@ -351,42 +352,53 @@ const DeliveryDetails = () => {
         agent_location: agentLocation
       };
       
+      console.log('📤 Sending request:', { order_id: order?.id, payment_method: methodParam });
+      
       const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: requestPayload
       });
       
+      console.log('📥 Response received:', { data, error });
+      
       if (error) {
-        // If this is not a retry and error suggests temporary issue, try once more
-        if (retryCount === 0 && (
-          error.message?.includes('timeout') || 
-          error.message?.includes('network') ||
-          error.message?.includes('connection')
-        )) {
-          console.log('Retrying delivery completion due to network issue...');
-          setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 2000);
+        console.error('❌ Edge function error:', error);
+        
+        // Enhanced retry logic for recoverable errors
+        const isRecoverable = error.message?.includes('timeout') || 
+                             error.message?.includes('network') ||
+                             error.message?.includes('connection') ||
+                             (data?.recoverable === true);
+        
+        if (retryCount === 0 && isRecoverable) {
+          console.log('🔄 Retrying delivery completion due to recoverable error...');
+          setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 3000);
           return;
         }
         
-        // Show fallback option after first failure
+        // Show fallback option after failure
         setShowFallbackOption(true);
         
-        // Determine user-friendly error message
+        // Enhanced error message handling
         let userFriendlyMessage = 'Failed to complete delivery';
         let shouldShowRetry = true;
         
-        if (error.message?.includes('corrupted') || error.message?.includes('invalid input syntax for type json')) {
-          userFriendlyMessage = 'Order data issue detected. Please try the simple completion method below.';
-          shouldShowRetry = true;
-        } else if (error.message?.includes('authentication')) {
-          userFriendlyMessage = 'Please log out and log back in, then try again.';
-        } else if (error.message?.includes('Agent not found')) {
-          userFriendlyMessage = 'Agent verification failed. Please contact admin.';
+        // Parse detailed error information
+        if (error.message?.includes('invalid input syntax for type json') || 
+            error.message?.includes('corrupted') || 
+            error.message?.includes('Peak')) {
+          userFriendlyMessage = 'Order data corruption detected. Use the simple completion method below.';
+        } else if (error.message?.includes('Authentication') || error.message?.includes('auth')) {
+          userFriendlyMessage = 'Authentication issue. Please refresh the app and try again.';
+        } else if (error.message?.includes('Agent not found') || error.message?.includes('inactive')) {
+          userFriendlyMessage = 'Agent verification failed. Please contact support.';
           shouldShowRetry = false;
         } else if (error.message?.includes('Order not found')) {
-          userFriendlyMessage = 'This order no longer exists.';
+          userFriendlyMessage = 'This order no longer exists in the system.';
           shouldShowRetry = false;
+        } else if (error.message?.includes('Database operation failed')) {
+          userFriendlyMessage = 'Database error occurred. Try the simple completion method.';
         } else {
-          userFriendlyMessage = error.message || 'Failed to complete delivery';
+          userFriendlyMessage = error.message || 'Unexpected error occurred';
         }
         
         toast({
@@ -398,7 +410,8 @@ const DeliveryDetails = () => {
       }
       
       if (data?.success) {
-        setShowFallbackOption(false); // Hide fallback on success
+        console.log('✅ Delivery completed successfully');
+        setShowFallbackOption(false);
         toast({
           title: "Product Delivered! ✅",
           description: `Order completed. Distance: ${data.order?.distance_km || 0}km, Earned: ₹${data.order?.payout_amount || 0}`
@@ -406,8 +419,9 @@ const DeliveryDetails = () => {
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
+        console.error('❌ Delivery completion failed:', data);
         setShowFallbackOption(true);
-        const errorMsg = data?.error || 'Failed to complete delivery';
+        const errorMsg = data?.error || 'Unknown error occurred';
         toast({
           title: "Delivery Failed",
           description: errorMsg + ' Try the simple completion method below.',
@@ -415,18 +429,24 @@ const DeliveryDetails = () => {
         });
       }
     } catch (error: any) {
-      // If this is not a retry, try once more for network errors
-      if (retryCount === 0 && (
-        error?.name === 'TypeError' ||
-        error?.message?.includes('fetch')
-      )) {
-        console.log('Retrying delivery completion due to fetch error...');
-        setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 2000);
+      console.error('❌ Request error:', error);
+      
+      // Enhanced retry logic for network errors
+      const isNetworkError = error?.name === 'TypeError' || 
+                           error?.message?.includes('fetch') ||
+                           error?.message?.includes('network');
+      
+      if (retryCount === 0 && isNetworkError) {
+        console.log('🔄 Retrying delivery completion due to network error...');
+        setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 3000);
         return;
       }
       
       setShowFallbackOption(true);
-      const errorMessage = error?.message || "Unable to complete delivery. Try the simple completion method below.";
+      const errorMessage = isNetworkError 
+        ? "Network error occurred. Please check your connection and try the simple completion method."
+        : (error?.message || "Unexpected error occurred. Try the simple completion method.");
+        
       toast({
         title: "Delivery Failed",
         description: errorMessage,
