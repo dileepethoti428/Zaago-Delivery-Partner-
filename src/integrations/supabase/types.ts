@@ -5075,6 +5075,15 @@ export type Database = {
         Args: { p_delivery_date: string; p_subscription_id: string }
         Returns: boolean
       }
+      simple_complete_delivery: {
+        Args: {
+          p_agent_id: string
+          p_new_payment_status: string
+          p_new_status: string
+          p_order_id: string
+        }
+        Returns: undefined
+      }
       sync_special_offers_from_products: {
         Args: Record<PropertyKey, never>
         Returns: undefined

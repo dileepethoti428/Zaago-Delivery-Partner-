@@ -98,10 +98,10 @@ serve(async (req) => {
     const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
     const now = new Date().toISOString();
     
-    console.log('💾 Performing minimal update using stored procedure to bypass triggers...');
+    console.log('💾 Using new simplified stored procedure to complete delivery...');
     
-    // Use the stored procedure to bypass any problematic triggers
-    const { error: updateError } = await supabaseClient.rpc('update_order_status', {
+    // Use the new simplified stored procedure that avoids JSON parsing issues
+    const { error: updateError } = await supabaseClient.rpc('simple_complete_delivery', {
       p_order_id: order_id,
       p_new_status: 'delivered',
       p_new_payment_status: payment_status,
