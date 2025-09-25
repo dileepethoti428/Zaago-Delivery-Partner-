@@ -36,6 +36,27 @@ import {
   Play
 } from "lucide-react";
 
+const getRingtoneDescription = (type: string) => {
+  switch (type) {
+    case 'phone-ringtone':
+      return 'Traditional phone ringing sound';
+    case 'notification-sound':
+      return 'Standard notification tone';
+    case 'iphone-notification':
+      return 'iPhone-style notification sound';
+    case 'samsung-notification':
+      return 'Samsung-style notification sound';
+    case 'android-notification':
+      return 'Android-style notification sound';
+    case 'classic-bell':
+      return 'Classic bell ringing sound';
+    case 'chimes-notification':
+      return 'Melodic chimes notification';
+    default:
+      return 'Phone ringtone';
+  }
+};
+
 const Settings = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -471,7 +492,7 @@ const Settings = () => {
         {
           icon: Bell,
           title: "Ringtone Type",
-          description: settings.ringtone_type === 'phone-ringtone' ? 'Phone Ringtone' : 'Notification Sound',
+          description: getRingtoneDescription(settings.ringtone_type),
           action: "ringtone_type",
           color: "text-primary"
         },
@@ -673,10 +694,15 @@ const Settings = () => {
                         <SelectTrigger className="w-40">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="phone-ringtone">Phone Ringtone</SelectItem>
-                          <SelectItem value="notification-sound">Notification Sound</SelectItem>
-                        </SelectContent>
+                         <SelectContent>
+                           <SelectItem value="phone-ringtone">Classic Phone Ring</SelectItem>
+                           <SelectItem value="notification-sound">Default Notification</SelectItem>
+                           <SelectItem value="iphone-notification">iPhone Style</SelectItem>
+                           <SelectItem value="samsung-notification">Samsung Style</SelectItem>
+                           <SelectItem value="android-notification">Android Style</SelectItem>
+                           <SelectItem value="classic-bell">Classic Bell</SelectItem>
+                           <SelectItem value="chimes-notification">Chimes</SelectItem>
+                         </SelectContent>
                       </Select>
                     ) : item.action === "notification_pattern" ? (
                       <Select 

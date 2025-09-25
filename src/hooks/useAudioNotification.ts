@@ -16,9 +16,32 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
   useEffect(() => {
     if (!audioRef.current && settings?.enabled !== false) {
       // Use the selected ringtone type
-      const ringtoneFile = settings?.type === 'notification-sound' 
-        ? '/notification-sound.mp3' 
-        : '/phone-ringtone.mp3';
+      let ringtoneFile = '/phone-ringtone.mp3'; // default
+      
+      switch (settings?.type) {
+        case 'notification-sound':
+          ringtoneFile = '/notification-sound.mp3';
+          break;
+        case 'iphone-notification':
+          ringtoneFile = '/iphone-notification.mp3';
+          break;
+        case 'samsung-notification':
+          ringtoneFile = '/samsung-notification.mp3';
+          break;
+        case 'android-notification':
+          ringtoneFile = '/android-notification.mp3';
+          break;
+        case 'classic-bell':
+          ringtoneFile = '/classic-bell.mp3';
+          break;
+        case 'chimes-notification':
+          ringtoneFile = '/chimes-notification.mp3';
+          break;
+        case 'phone-ringtone':
+        default:
+          ringtoneFile = '/phone-ringtone.mp3';
+          break;
+      }
       
       audioRef.current = new Audio(ringtoneFile);
       audioRef.current.volume = settings?.volume || 0.8;
