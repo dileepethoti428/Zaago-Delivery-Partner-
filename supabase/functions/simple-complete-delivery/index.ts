@@ -135,11 +135,54 @@ serve(async (req) => {
 
     console.log('✅ Order updated successfully');
 
+    // Initialize variables for distance and payout calculation
+    let finalDistance = distance_km;
+    let finalPayout = agent_payout;
+
     // Create earnings record with real-time distance and payout data
     try {
-      console.log('💰 Creating earnings record with real-time data:', { 
-        agent_payout, 
-        distance_km, 
+      // If frontend passed 0 distance, calculate it on backend
+      if (distance_km === 0) {
+        console.log('⚠️ Frontend passed 0 distance, calculating on backend...');
+        
+        // Get pickup and delivery coordinates from order
+        const { data: orderData, error: orderLookupError } = await supabaseClient
+          .from('orders')
+          .select('pickup_location, address')
+          .eq('id', order_id)
+          .single();
+        
+        if (!orderLookupError && orderData?.pickup_location && orderData?.address?.coordinates) {
+          try {
+            // Calculate distance using Mapbox or similar service
+            const { data: distanceData, error: distanceError } = await supabaseClient.functions.invoke('calculate-distance-eta', {
+              body: {
+                pickup: orderData.pickup_location,
+                delivery: orderData.address.coordinates
+              }
+            });
+            
+            if (!distanceError && distanceData?.distance_km) {
+              finalDistance = Math.max(distanceData.distance_km, 1.0); // Minimum 1km
+              // Recalculate payout: ₹12 base + ₹8 per km after first km
+              finalPayout = finalDistance <= 1 ? 12 : Math.round(12 + (finalDistance - 1) * 8);
+              console.log('✅ Backend calculated distance:', finalDistance, 'km, Payout:', finalPayout);
+            }
+          } catch (calcError) {
+            console.warn('⚠️ Backend distance calculation failed:', calcError);
+            finalDistance = 1.0; // Minimum fallback
+            finalPayout = 12; // Base payout
+          }
+        } else {
+          console.warn('⚠️ No valid coordinates for backend calculation, using minimums');
+          finalDistance = 1.0; // Minimum fallback  
+          finalPayout = 12; // Base payout
+        }
+      }
+      
+      console.log('💰 Creating earnings record with final data:', { 
+        agent_payout: finalPayout, 
+        distance_km: finalDistance, 
         payment_method 
       });
       
@@ -148,11 +191,11 @@ serve(async (req) => {
         .upsert({
           agent_id: agent.id,
           order_id: order_id,
-          amount: agent_payout, // Use real calculated payout
+          amount: finalPayout, // Use calculated payout
           status: 'completed',
-          distance_km: distance_km, // Use real distance from delivery details
+          distance_km: finalDistance, // Use calculated distance
           payment_method: payment_method === 'COD' ? 'COD' : 'Online',
-          description: `Delivery completion: ${distance_km}km distance, ₹${agent_payout} payout`
+          description: `Delivery completion: ${finalDistance}km distance, ₹${finalPayout} payout`
         }, {
           onConflict: 'agent_id,order_id',
           ignoreDuplicates: true
@@ -166,8 +209,8 @@ serve(async (req) => {
       const { error: historyError } = await supabaseClient
         .from('delivery_history')
         .update({
-          distance_traveled: distance_km,
-          delivery_payout: agent_payout,
+          distance_traveled: finalDistance,
+          delivery_payout: finalPayout,
           updated_at: now
         })
         .eq('order_id', order_id)
@@ -192,8 +235,8 @@ serve(async (req) => {
           total: order.total,
           payment_method,
           status: 'delivered',
-          distance_km: distance_km, // Include actual distance
-          payout_amount: agent_payout // Include actual payout amount
+          distance_km: finalDistance, // Use final calculated distance
+          payout_amount: finalPayout // Use final calculated payout
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

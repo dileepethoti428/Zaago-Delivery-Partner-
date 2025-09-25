@@ -82,9 +82,6 @@ const DeliveryDetails = () => {
       return;
     }
 
-    // Show immediate loading state
-    setDistance(0);
-    
     // Extract pickup location coordinates from order (handle Json type from database)
     let pickupLocation = null;
     if (order.pickup_location && typeof order.pickup_location === 'object') {
@@ -102,8 +99,8 @@ const DeliveryDetails = () => {
       return;
     }
     
-    // Extract customer coordinates from original address object if available
-    const customerCoords = extractCoordinatesFromAddress(order.original_address || order.address);
+    // Extract customer coordinates from address object
+    const customerCoords = extractCoordinatesFromAddress(order.address);
     if (!customerCoords) {
       console.warn('No customer coordinates available');
       setDistance(2.5); // fallback
@@ -116,7 +113,13 @@ const DeliveryDetails = () => {
       // Use actual pickup-to-customer distance for accurate calculation
       console.log('🚚 Using pickup location:', pickupLocation, 'to customer:', customerCoords);
       const distanceResult = await calculateRealTimeDistance(pickupLocation, customerCoords, order.id);
-      const dist = distanceResult.distance_km;
+      let dist = distanceResult.distance_km;
+      
+      // Ensure minimum distance for deliveries (avoid 0km deliveries)
+      if (dist < 0.5) {
+        console.log('⚠️ Very short distance detected:', dist, 'km. Using minimum 1km for fair pricing.');
+        dist = 1.0; // Minimum 1km for any delivery
+      }
       
       // Calculate payout using NEW rates: ₹12 for first 1km, ₹8 per km after
       const basePay = 12; // ₹12 for first 1km
@@ -127,7 +130,7 @@ const DeliveryDetails = () => {
       setDistance(dist);
       setPayout(Math.round(calculatedPayout));
       
-      console.log('✅ Pickup-to-customer distance calculated:', dist, 'km, Payout:', Math.round(calculatedPayout), 'Source:', distanceResult.source);
+      console.log('✅ Distance calculated:', dist, 'km, Payout:', Math.round(calculatedPayout), 'Source:', distanceResult.source);
     } catch (error) {
       console.error('Error calculating distance:', error);
       // Fast fallback with new rates
