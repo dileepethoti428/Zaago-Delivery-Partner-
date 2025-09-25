@@ -243,10 +243,10 @@ const Earnings = () => {
         return;
       }
 
-      // Fetch earnings with proper date filtering
+      // Fetch earnings with proper date filtering and include distance_km
       const { data: earnings, error: earningsError } = await supabase
         .from('earnings')
-        .select('*')
+        .select('*, distance_km')
         .eq('agent_id', agent.id)
         .order('created_at', { ascending: false});
 
@@ -491,15 +491,15 @@ const Earnings = () => {
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center p-2 bg-secondary/20 rounded-lg">
-              <p className="text-sm font-bold text-primary">{distanceStats.distance_today} km</p>
+              <p className="text-sm font-bold text-primary">{distanceStats.distance_today.toFixed(1)} km</p>
               <p className="text-xs text-muted-foreground">Today</p>
             </div>
             <div className="text-center p-2 bg-secondary/20 rounded-lg">
-              <p className="text-sm font-bold text-primary">{distanceStats.distance_week} km</p>
+              <p className="text-sm font-bold text-primary">{distanceStats.distance_week.toFixed(1)} km</p>
               <p className="text-xs text-muted-foreground">This Week</p>
             </div>
             <div className="text-center p-2 bg-secondary/20 rounded-lg">
-              <p className="text-sm font-bold text-primary">{distanceStats.distance_month} km</p>
+              <p className="text-sm font-bold text-primary">{distanceStats.distance_month.toFixed(1)} km</p>
               <p className="text-xs text-muted-foreground">This Month</p>
             </div>
           </div>
@@ -534,16 +534,16 @@ const Earnings = () => {
                     
                      <div className="text-right">
                        <p className="font-bold text-foreground">₹{earning.amount.toFixed(2)}</p>
-                       {earning.distance_km && (
-                         <div className="flex items-center justify-end space-x-1 mt-1">
-                           <Badge variant="secondary" className="text-xs">
-                             {earning.distance_km.toFixed(1)} km
-                           </Badge>
-                           <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                             Actual
-                           </Badge>
-                         </div>
-                       )}
+                        {earning.distance_km > 0 && (
+                          <div className="flex items-center justify-end space-x-1 mt-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {earning.distance_km.toFixed(1)} km
+                            </Badge>
+                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                              Live Distance
+                            </Badge>
+                          </div>
+                        )}
                      </div>
                   </div>
                   
