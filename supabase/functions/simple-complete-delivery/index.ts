@@ -16,9 +16,9 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { order_id, payment_method = 'Online' } = body;
+    const { order_id, payment_method = 'Online', distance_km = 2.5, agent_payout = 35 } = body;
     
-    console.log('📋 Request parameters:', { order_id, payment_method });
+    console.log('📋 Request parameters:', { order_id, payment_method, distance_km, agent_payout });
     
     if (!order_id) {
       return new Response(
@@ -135,25 +135,31 @@ serve(async (req) => {
 
     console.log('✅ Order updated successfully');
 
-    // Create earnings record if it doesn't exist (handle duplicate prevention)
+    // Create earnings record with real-time distance and payout data
     try {
+      console.log('💰 Creating earnings record with real-time data:', { 
+        agent_payout, 
+        distance_km, 
+        payment_method 
+      });
+      
       const { error: earningsError } = await supabaseClient
         .from('earnings')
         .upsert({
           agent_id: agent.id,
           order_id: order_id,
-          amount: 35, // Default payout
+          amount: agent_payout, // Use real calculated payout
           status: 'completed',
-          distance_km: 2.5,
+          distance_km: distance_km, // Use real distance from delivery details
           payment_method: payment_method === 'COD' ? 'COD' : 'Online',
-          description: `Simple delivery completion for order ${order_id.substring(0, 8)}`
+          description: `Delivery completion: ${distance_km}km distance, ₹${agent_payout} payout`
         }, {
           onConflict: 'agent_id,order_id',
           ignoreDuplicates: true
         });
       
       if (!earningsError) {
-        console.log('✅ Earnings record created/updated');
+        console.log('✅ Earnings record created/updated with accurate data');
       }
     } catch (earningsError) {
       console.warn('⚠️ Earnings creation failed (continuing anyway):', earningsError);
@@ -169,7 +175,8 @@ serve(async (req) => {
           total: order.total,
           payment_method,
           status: 'delivered',
-          payout_amount: 35 // Include payout amount for UI display
+          distance_km: distance_km, // Include actual distance
+          payout_amount: agent_payout // Include actual payout amount
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

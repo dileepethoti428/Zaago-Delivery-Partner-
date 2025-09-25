@@ -298,15 +298,17 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
-    console.log('🚀 Starting delivery completion...', { orderId: order?.id, paymentMethod });
+    console.log('🚀 Starting delivery completion...', { orderId: order?.id, paymentMethod, distance, payout });
     setIsProcessing(true);
     try {
       const requestPayload = {
         order_id: order?.id,
-        payment_method: paymentMethod === 'COD' ? 'COD' : 'Online'
+        payment_method: paymentMethod === 'COD' ? 'COD' : 'Online',
+        distance_km: distance, // Pass real-time distance
+        agent_payout: payout    // Pass calculated payout
       };
       
-      console.log('📋 Request payload:', requestPayload);
+      console.log('📋 Request payload with real-time data:', requestPayload);
       
       const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
         body: requestPayload
@@ -328,7 +330,7 @@ const DeliveryDetails = () => {
         console.log('✅ Delivery completed successfully!', data);
         toast({
           title: "Product Delivered! ✅",
-          description: `Order completed successfully. Earned: ₹${data.order?.payout_amount || 0}`,
+          description: `Order completed successfully. Distance: ${data.order?.distance_km || distance}km, Earned: ₹${data.order?.payout_amount || payout}`,
         });
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
