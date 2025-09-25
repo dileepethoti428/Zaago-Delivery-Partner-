@@ -195,73 +195,39 @@ serve(async (req) => {
       payment_status: paymentStatus 
     });
     
-    try {
-      // Use a more targeted SQL update to avoid JSON validation issues
-      // This bypasses the ORM and any potential JSON field validation problems
-      const { data: updateResult, error: updateError } = await supabaseClient
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: deliveredAt,
-          payment_status: paymentStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', order_id)
-        .select('id, status, delivered_at, payment_status');
+    // Use robust update with proper error handling and validation
+    const { data: updateResult, error: updateError } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'delivered',
+        delivered_at: deliveredAt,
+        payment_status: paymentStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order_id)
+      .select('id, status, delivered_at, payment_status');
 
-      if (updateError) {
-        console.error('Failed to update order:', updateError);
-        console.error('Order ID:', order_id);
-        
-        // Try a simpler approach - just update the status first
-        console.log('Trying simplified update approach...');
-        const { error: simpleUpdateError } = await supabaseClient
-          .from('orders')
-          .update({ status: 'delivered' })
-          .eq('id', order_id);
-          
-        if (simpleUpdateError) {
-          console.error('Simple update also failed:', simpleUpdateError);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Failed to update order status - database contains corrupted data', 
-              details: updateError.message,
-              debug_info: { 
-                order_id, 
-                payment_method, 
-                error_code: updateError.code,
-                error_details: updateError.details,
-                suggestion: 'This order may have corrupted JSON data that needs manual cleanup'
-              }
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-          );
-        }
-        
-        // If simple update worked, try to update the other fields separately
-        await supabaseClient
-          .from('orders')
-          .update({
-            delivered_at: deliveredAt,
-            payment_status: paymentStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', order_id);
-      }
+    if (updateError) {
+      console.error('Failed to update order:', updateError);
+      console.error('Order ID:', order_id);
       
-      console.log('Order status updated successfully');
-    } catch (dbError) {
-      console.error('Database operation failed with exception:', dbError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Database operation failed', 
-          details: dbError instanceof Error ? dbError.message : String(dbError)
+          error: 'Failed to update order status', 
+          details: updateError.message,
+          debug_info: { 
+            order_id, 
+            payment_method, 
+            error_code: updateError.code,
+            error_details: updateError.details
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
+    
+    console.log('Order status updated successfully');
 
     // Send apology message if delivery is late
     if (isLateDelivery && orderData?.customer_phone && orderData?.customer_name && delayMinutes > 5) {

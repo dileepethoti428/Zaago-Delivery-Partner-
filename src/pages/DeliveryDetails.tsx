@@ -302,24 +302,29 @@ const DeliveryDetails = () => {
         order_id: order?.id,
         payment_method: methodParam
       });
-      const {
-        data,
-        error
-      } = await supabase.functions.invoke('complete-delivery', {
+      
+      const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: {
           order_id: order?.id,
           payment_method: methodParam,
           agent_location: agentLocation
         }
       });
-      console.log('DeliveryDetails: Edge function response:', {
-        data,
-        error
-      });
+      
+      console.log('DeliveryDetails: Edge function response:', { data, error });
+      
       if (error) {
         console.error('DeliveryDetails: Edge function error:', error);
-        throw error;
+        // Show specific error message from the function
+        const errorMessage = error.message || 'Failed to complete delivery';
+        toast({
+          title: "Delivery Failed",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        return;
       }
+      
       if (data?.success) {
         toast({
           title: "Successfully Delivered! ✅",
@@ -331,13 +336,18 @@ const DeliveryDetails = () => {
       } else {
         const errorMsg = data?.error || 'Failed to complete delivery';
         console.error('DeliveryDetails: Server error:', errorMsg);
-        throw new Error(errorMsg);
+        toast({
+          title: "Delivery Failed",
+          description: errorMsg,
+          variant: "destructive"
+        });
       }
     } catch (error: any) {
       console.error('DeliveryDetails: Delivery completion error:', error);
+      const errorMessage = error?.message || "Unable to complete delivery. Please try again.";
       toast({
         title: "Delivery Failed",
-        description: error?.message || "Unable to complete delivery. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
