@@ -249,64 +249,45 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered with transaction safety
-    console.log('💾 Starting order status update...');
+    // Update order status to delivered using safe function
+    console.log('💾 Starting order status update using safe function...');
     
     try {
-      // First, disable the problematic validation trigger
-      console.log('🔧 Disabling validation trigger temporarily...');
-      const { error: disableError } = await supabaseClient.rpc('execute', {
-        sql: 'ALTER TABLE public.orders DISABLE TRIGGER validate_order_json_trigger;'
-      });
-      
-      if (disableError) {
-        console.log('⚠️ Warning: Could not disable trigger:', disableError.message);
-        // Continue anyway, might still work
-      } else {
-        console.log('✅ Validation trigger disabled successfully');
-      }
+      // Use the new safe delivery completion function
+      const { data: completionResult, error: completionError } = await supabaseClient
+        .rpc('complete_delivery_safe', {
+          p_order_id: order_id,
+          p_agent_id: agent.id,
+          p_payment_method: payment_method
+        });
 
-      // Use a simple, clean update operation
-      const updatePayload = {
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-      };
-      
-      console.log('📝 Update payload prepared:', Object.keys(updatePayload));
-      console.log('📝 Payment status will be set to:', updatePayload.payment_status);
-
-      const { error: updateError } = await supabaseClient
-        .from('orders')
-        .update(updatePayload)
-        .eq('id', order_id);
-
-      // Re-enable the validation trigger
-      console.log('🔧 Re-enabling validation trigger...');
-      const { error: enableError } = await supabaseClient.rpc('execute', {
-        sql: 'ALTER TABLE public.orders ENABLE TRIGGER validate_order_json_trigger;'
-      });
-      
-      if (enableError) {
-        console.log('⚠️ Warning: Could not re-enable trigger:', enableError.message);
-      } else {
-        console.log('✅ Validation trigger re-enabled successfully');
-      }
-
-      if (updateError) {
-        console.error('❌ Failed to update order:', updateError);
+      if (completionError) {
+        console.error('❌ Failed to complete delivery via RPC:', completionError);
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Failed to update order status', 
-            details: updateError.message,
-            code: updateError.code
+            error: 'Failed to complete delivery',
+            details: completionError.message,
+            recoverable: true
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         );
       }
-      
-      console.log('✅ Order status updated successfully');
+
+      if (!completionResult?.success) {
+        console.error('❌ Delivery completion failed:', completionResult);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: completionResult?.error || 'Delivery completion failed',
+            details: completionResult?.details || 'Unknown error',
+            recoverable: true
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      console.log('✅ Order status updated successfully via safe function');
       
     } catch (dbError) {
       console.error('❌ Database operation failed:', dbError);
@@ -314,7 +295,8 @@ serve(async (req) => {
         JSON.stringify({ 
           success: false, 
           error: 'Database operation failed', 
-          details: dbError instanceof Error ? dbError.message : String(dbError)
+          details: dbError instanceof Error ? dbError.message : String(dbError),
+          recoverable: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
