@@ -400,7 +400,7 @@ const DeliveryDetails = () => {
       if (data?.success) {
         setShowFallbackOption(false); // Hide fallback on success
         toast({
-          title: "Successfully Delivered! ✅",
+          title: "Product Delivered! ✅",
           description: `Order completed. Distance: ${data.order?.distance_km || 0}km, Earned: ₹${data.order?.payout_amount || 0}`
         });
         window.dispatchEvent(new CustomEvent('orderCompleted'));
@@ -685,7 +685,7 @@ const DeliveryDetails = () => {
                  
                  <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
                    <CheckCircle2 className="w-3 h-3" />
-                   <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                   <span className="text-xs">{isProcessing ? 'Processing...' : 'Product Delivered'}</span>
                  </Button>
                </div>
                
