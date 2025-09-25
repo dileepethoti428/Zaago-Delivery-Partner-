@@ -33,8 +33,10 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid request format. Please ensure request body is valid JSON.',
-          details: parseError instanceof Error ? parseError.message : String(parseError)
+          error: 'Invalid request format',
+          details: parseError instanceof Error ? parseError.message : String(parseError),
+          action_required: 'refresh_app',
+          user_message: 'Please refresh the app and try again'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
@@ -74,14 +76,19 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get authenticated user with detailed logging
+    // Enhanced authentication with detailed session validation
     const authHeader = req.headers.get('Authorization');
     console.log('🔐 Auth header present:', !!authHeader);
     
-    if (!authHeader) {
-      console.error('❌ No authorization header provided');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('❌ Invalid or missing authorization header');
       return new Response(
-        JSON.stringify({ success: false, error: 'Authentication required - no authorization header' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Authentication required',
+          action_required: 'reauth',
+          user_message: 'Your session has expired. Please refresh the app and log in again.'
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
@@ -89,12 +96,53 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
     console.log('🔑 Token extracted, length:', token.length);
     
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
-    
-    if (authError) {
-      console.error('❌ Auth error:', authError);
+    // Enhanced token validation
+    if (token.length < 50) {
+      console.error('❌ Token appears to be malformed, length:', token.length);
       return new Response(
-        JSON.stringify({ success: false, error: 'Authentication failed', details: authError.message }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Invalid authentication token',
+          action_required: 'reauth',
+          user_message: 'Authentication token is invalid. Please refresh the app.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+    
+    let userData;
+    try {
+      const authResult = await supabaseClient.auth.getUser(token);
+      userData = authResult.data;
+      
+      if (authResult.error) {
+        console.error('❌ Auth validation error:', authResult.error);
+        const isTokenExpired = authResult.error.message?.includes('expired') || 
+                               authResult.error.message?.includes('invalid') ||
+                               authResult.error.status === 401;
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Authentication failed',
+            details: authResult.error.message,
+            action_required: isTokenExpired ? 'reauth' : 'retry',
+            user_message: isTokenExpired 
+              ? 'Your session has expired. Please refresh the app and log in again.'
+              : 'Authentication error occurred. Please try again.'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        );
+      }
+    } catch (authError) {
+      console.error('❌ Auth request failed:', authError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Authentication system error',
+          action_required: 'retry',
+          user_message: 'Authentication system temporarily unavailable. Please try again.'
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
@@ -102,7 +150,12 @@ serve(async (req) => {
     if (!userData.user) {
       console.error('❌ No user data returned from auth');
       return new Response(
-        JSON.stringify({ success: false, error: 'User not found' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'User session not found',
+          action_required: 'reauth',
+          user_message: 'User session not found. Please refresh the app and log in again.'
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
@@ -249,12 +302,15 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered
-    console.log('💾 Starting order status update...');
+    // Enhanced order status update with fallback mechanism
+    console.log('💾 Starting robust order status update...');
     
     const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
+    let updateSuccess = false;
     
+    // Primary update attempt with triggers
     try {
+      console.log('🔄 Attempting primary order update with triggers...');
       const { error: updateError } = await supabaseClient
         .from('orders')
         .update({
@@ -265,29 +321,75 @@ serve(async (req) => {
         .eq('id', order_id);
 
       if (updateError) {
-        console.error('❌ Failed to update order:', updateError);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Failed to update order status',
-            details: updateError.message
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 500
+        console.error('❌ Primary update failed:', updateError);
+        
+        // Check if it's a JSON parsing error from triggers
+        if (updateError.message?.includes('invalid input syntax for type json') || 
+            updateError.message?.includes('Peak')) {
+          console.log('🔄 Detected JSON parsing error, attempting bypass method...');
+          
+          // Fallback: Direct SQL update that bypasses problematic triggers
+          const { error: sqlError } = await supabaseClient.rpc('update_order_status', {
+            p_order_id: order_id,
+            p_new_status: 'delivered',
+            p_new_payment_status: payment_status,
+            p_agent_id: agent.id
+          });
+          
+          if (sqlError) {
+            console.error('❌ SQL fallback also failed:', sqlError);
+            throw new Error(`Both update methods failed: ${updateError.message} | ${sqlError.message}`);
           }
-        );
+          
+          console.log('✅ Order updated successfully via SQL fallback');
+          updateSuccess = true;
+        } else {
+          throw updateError;
+        }
+      } else {
+        console.log('✅ Order updated successfully via primary method');
+        updateSuccess = true;
       }
-
-      console.log('✅ Order status updated successfully');
       
     } catch (dbError) {
-      console.error('❌ Database error:', dbError);
+      console.error('❌ All update attempts failed:', dbError);
+      
+      // Determine user-friendly error message and recovery action
+      let userMessage = 'Failed to complete delivery';
+      let actionRequired = 'retry';
+      
+      if (dbError instanceof Error) {
+        if (dbError.message?.includes('invalid input syntax for type json')) {
+          userMessage = 'Order data corruption detected. Please try the simple completion method.';
+          actionRequired = 'use_fallback';
+        } else if (dbError.message?.includes('not found')) {
+          userMessage = 'Order no longer exists in the system.';
+          actionRequired = 'refresh_orders';
+        } else if (dbError.message?.includes('permission') || dbError.message?.includes('access')) {
+          userMessage = 'Access denied. Please refresh the app and try again.';
+          actionRequired = 'reauth';
+        }
+      }
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Database operation failed', 
-          details: dbError instanceof Error ? dbError.message : String(dbError)
+          error: 'Database operation failed',
+          details: dbError instanceof Error ? dbError.message : String(dbError),
+          action_required: actionRequired,
+          user_message: userMessage,
+          recoverable: actionRequired !== 'refresh_orders'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+    
+    if (!updateSuccess) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Order update verification failed',
+          user_message: 'Unable to confirm delivery completion. Please check order status.'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );

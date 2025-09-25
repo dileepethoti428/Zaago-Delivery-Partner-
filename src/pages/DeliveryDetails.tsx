@@ -343,6 +343,29 @@ const DeliveryDetails = () => {
     setIsProcessing(true);
     
     try {
+      // Check session validity before making request
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData.session) {
+        console.log('🔄 Session invalid, attempting refresh...');
+        
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('❌ Session refresh failed:', refreshError);
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please refresh the app and log in again.",
+            variant: "destructive"
+          });
+          // Optionally redirect to login
+          setTimeout(() => window.location.reload(), 3000);
+          return;
+        }
+        
+        console.log('✅ Session refreshed successfully');
+      }
+      
       const agentLocation = JSON.parse(localStorage.getItem('currentLocation') || 'null');
       const methodParam = paymentMethod === 'COD' ? 'COD' : 'Online';
       
@@ -363,6 +386,12 @@ const DeliveryDetails = () => {
       if (error) {
         console.error('❌ Edge function error:', error);
         
+        // Handle specific error responses with action_required
+        if (data?.action_required) {
+          handleErrorWithAction(data, error, paymentMethod, retryCount);
+          return;
+        }
+        
         // Enhanced retry logic for recoverable errors
         const isRecoverable = error.message?.includes('timeout') || 
                              error.message?.includes('network') ||
@@ -379,31 +408,11 @@ const DeliveryDetails = () => {
         setShowFallbackOption(true);
         
         // Enhanced error message handling
-        let userFriendlyMessage = 'Failed to complete delivery';
-        let shouldShowRetry = true;
-        
-        // Parse detailed error information
-        if (error.message?.includes('invalid input syntax for type json') || 
-            error.message?.includes('corrupted') || 
-            error.message?.includes('Peak')) {
-          userFriendlyMessage = 'Order data corruption detected. Use the simple completion method below.';
-        } else if (error.message?.includes('Authentication') || error.message?.includes('auth')) {
-          userFriendlyMessage = 'Authentication issue. Please refresh the app and try again.';
-        } else if (error.message?.includes('Agent not found') || error.message?.includes('inactive')) {
-          userFriendlyMessage = 'Agent verification failed. Please contact support.';
-          shouldShowRetry = false;
-        } else if (error.message?.includes('Order not found')) {
-          userFriendlyMessage = 'This order no longer exists in the system.';
-          shouldShowRetry = false;
-        } else if (error.message?.includes('Database operation failed')) {
-          userFriendlyMessage = 'Database error occurred. Try the simple completion method.';
-        } else {
-          userFriendlyMessage = error.message || 'Unexpected error occurred';
-        }
+        let userFriendlyMessage = data?.user_message || 'Failed to complete delivery';
         
         toast({
           title: "Delivery Failed",
-          description: userFriendlyMessage + (shouldShowRetry ? ' Try the simple completion method below.' : ''),
+          description: userFriendlyMessage + ' Try the simple completion method below.',
           variant: "destructive"
         });
         return;
@@ -420,8 +429,15 @@ const DeliveryDetails = () => {
         navigate('/home');
       } else {
         console.error('❌ Delivery completion failed:', data);
+        
+        // Handle specific error responses with action_required
+        if (data?.action_required) {
+          handleErrorWithAction(data, null, paymentMethod, retryCount);
+          return;
+        }
+        
         setShowFallbackOption(true);
-        const errorMsg = data?.error || 'Unknown error occurred';
+        const errorMsg = data?.user_message || data?.error || 'Unknown error occurred';
         toast({
           title: "Delivery Failed",
           description: errorMsg + ' Try the simple completion method below.',
@@ -454,6 +470,62 @@ const DeliveryDetails = () => {
       });
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Handle errors with specific actions required
+  const handleErrorWithAction = (data: any, error: any, paymentMethod: string, retryCount: number) => {
+    const { action_required, user_message } = data;
+    
+    switch (action_required) {
+      case 'reauth':
+        toast({
+          title: "Authentication Required",
+          description: user_message || "Please refresh the app and log in again.",
+          variant: "destructive"
+        });
+        setTimeout(() => window.location.reload(), 3000);
+        break;
+        
+      case 'retry':
+        if (retryCount === 0) {
+          console.log('🔄 Server requested retry, attempting once more...');
+          setTimeout(() => completeDeliveryDirect(paymentMethod, 1), 2000);
+        } else {
+          setShowFallbackOption(true);
+          toast({
+            title: "Delivery Failed",
+            description: user_message + " Try the simple completion method below.",
+            variant: "destructive"
+          });
+        }
+        break;
+        
+      case 'use_fallback':
+        setShowFallbackOption(true);
+        toast({
+          title: "Data Issue Detected",
+          description: user_message + " Please use the simple completion method below.",
+          variant: "destructive"
+        });
+        break;
+        
+      case 'refresh_orders':
+        toast({
+          title: "Order Not Found",
+          description: user_message || "This order may have been completed or cancelled.",
+          variant: "destructive"
+        });
+        setTimeout(() => navigate('/home'), 2000);
+        break;
+        
+      default:
+        setShowFallbackOption(true);
+        toast({
+          title: "Delivery Failed",
+          description: user_message + " Try the simple completion method below.",
+          variant: "destructive"
+        });
     }
   };
   if (isLoading) {
