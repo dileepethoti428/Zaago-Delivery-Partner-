@@ -130,14 +130,20 @@ serve(async (req) => {
       }
     }
 
-    // Update order status to delivered (bulletproof with JSON validation)
+    // Update order status to delivered (safe approach)
     try {
-      // First, clean any potential JSON corruption in this specific order
+      // Clean special instructions if they contain corrupted data
+      const cleanInstructions = typeof order.special_instructions === 'string' && 
+                               order.special_instructions.includes('Peak') 
+                               ? null 
+                               : order.special_instructions;
+
+      // First update to clean any potential corruption
       await supabaseClient
         .from('orders')
         .update({
           pickup_address: null, // Clear potentially corrupted field
-          special_instructions: order.special_instructions?.includes?.('Peak') ? null : order.special_instructions
+          special_instructions: cleanInstructions
         })
         .eq('id', order_id);
 
