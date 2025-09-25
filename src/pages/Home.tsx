@@ -362,27 +362,42 @@ const Home = () => {
     return updatedOrders;
   };
 
-  // Calculate agent payout based on delivery distance (shop to customer) - Updated pricing structure
-  const calculateAgentPayout = (distance: number) => {
-    const basePay = 12; // ₹12 for first 1km  
-    const additionalDistance = Math.max(0, distance - 1); // Distance beyond 1km
-    const perKmRate = 8; // ₹8 per km for additional distance
-    const subtotal = basePay + (additionalDistance * perKmRate);
+  // Calculate agent payout - Minimum ₹12 for distance <= 1km
+  const calculateAgentPayout = (distance: number): number => {
+    // Minimum ₹12 for any distance <= 1km
+    if (distance <= 1) {
+      return 12;
+    }
     
-    // Check for peak hours (basic approximation for frontend)
-    const currentHour = new Date().getHours();
-    const isWeekend = [0, 6].includes(new Date().getDay());
-    const isPeak = (currentHour >= 12 && currentHour < 14) || (currentHour >= 19 && currentHour < 22) || isWeekend;
+    // ₹12 for first 1km + ₹8 per additional km
+    const basePay = 12;
+    const additionalDistance = distance - 1;
+    const perKmRate = 8;
+    const totalPayout = basePay + (additionalDistance * perKmRate);
     
-    // Apply surge if peak hours
-    const surgeAmount = isPeak ? subtotal * 0.15 : 0;
-    const totalWithSurge = subtotal + surgeAmount;
-    
-    // Agent gets total minus platform fee (₹13)
-    const platformFee = 13;
-    const agentPayout = Math.max(0, totalWithSurge - platformFee);
-    
-    return Math.round(agentPayout * 100) / 100; // Round to 2 decimal places
+    return Math.round(totalPayout * 100) / 100; // Round to 2 decimal places
+  };
+
+  // Get accurate payout from backend
+  const getBackendPayout = async (distance: number, orderId?: string): Promise<number> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
+        body: {
+          distance_km: distance,
+          delivery_time: new Date().toISOString(),
+          order_id: orderId
+        }
+      });
+
+      if (!error && data?.success && typeof data?.agent_payout === 'number') {
+        return Math.max(12, data.agent_payout); // Ensure minimum ₹12
+      }
+    } catch (error) {
+      console.warn('Backend payout calculation failed:', error);
+    }
+
+    // Use frontend fallback
+    return calculateAgentPayout(distance);
   };
 
   // Transform and process order data
@@ -892,12 +907,14 @@ const Home = () => {
       
       if (ordersNeedingDistance.length > 0) {
         console.log(`🔄 ${ordersNeedingDistance.length} orders need distance calculation...`);
-        calculateOrderDistances(orders).then(updatedOrders => {
-          // Ensure payouts are calculated with updated distances
-          const ordersWithPayouts = updatedOrders.map(order => ({
-            ...order,
-            agent_payout: order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)
-          }));
+        calculateOrderDistances(orders).then(async (updatedOrders) => {
+          // Calculate accurate payouts using backend for updated distances
+          const ordersWithPayouts = await Promise.all(
+            updatedOrders.map(async (order) => ({
+              ...order,
+              agent_payout: order.agent_payout || await getBackendPayout(order.distance_km || 2.5, order.id)
+            }))
+          );
           setOrders(ordersWithPayouts);
         });
       }
@@ -912,11 +929,13 @@ const Home = () => {
       console.log('🔄 Updating real-time distances and payouts...');
       const updatedOrders = await calculateOrderDistances(orders);
       
-      // Recalculate payouts for all orders with updated distances
-      const ordersWithUpdatedPayouts = updatedOrders.map(order => ({
-        ...order,
-        agent_payout: order.agent_payout || calculateAgentPayout(order.distance_km || 2.5)
-      }));
+      // Recalculate payouts using backend for all orders with updated distances
+      const ordersWithUpdatedPayouts = await Promise.all(
+        updatedOrders.map(async (order) => ({
+          ...order,
+          agent_payout: order.agent_payout || await getBackendPayout(order.distance_km || 2.5, order.id)
+        }))
+      );
       
       setOrders(ordersWithUpdatedPayouts);
     };
