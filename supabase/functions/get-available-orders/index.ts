@@ -262,7 +262,7 @@ serve(async (req) => {
 
     // Apply 15km radius filtering if agent location is available
     if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
-      console.log('Applying 50km radius filter for agent location:', {
+      console.log('Applying 200km radius filter for agent location:', {
         lat: agentLocation.latitude,
         lng: agentLocation.longitude
       });
@@ -327,8 +327,8 @@ serve(async (req) => {
             
             console.log(`Order ${order.id} total distance: ${totalDistance.toFixed(2)}km`);
             
-            // Include orders within 50km radius (expanded for better coverage)
-            if (totalDistance <= 50) {
+            // Include orders within 200km radius (support inter-city deliveries)
+            if (totalDistance <= 200) {
               // Calculate shop-to-customer distance for accurate payout
               const shopToCustomerDistance = pickupLocation ? 
                 await calculateDistance(
@@ -371,7 +371,7 @@ serve(async (req) => {
       }
       
       filteredOrders = nearbyOrders;
-      console.log(`After 50km filtering: ${filteredOrders.length} orders remain`);
+      console.log(`After 200km filtering: ${filteredOrders.length} orders remain`);
     } else {
       console.log('No agent location available, skipping distance filtering');
     }
