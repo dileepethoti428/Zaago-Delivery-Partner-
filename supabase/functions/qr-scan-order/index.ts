@@ -169,13 +169,13 @@ serve(async (req) => {
       );
     }
 
-    // If QR already scanned, prevent re-scanning
+    // If QR already scanned, prevent re-scanning with clear message
     if (qrData.is_scanned) {
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'QR code already used',
-          message: 'This QR code has already been scanned. Each QR code can only be used once.'
+          message: 'This QR code has already been scanned. Each QR code can only be used once for delivery completion.'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
