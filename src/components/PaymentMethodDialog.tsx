@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Banknote, CheckCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { CreditCard, Banknote, CheckCircle, AlertTriangle } from "lucide-react";
 
 interface PaymentMethodDialogProps {
   open: boolean;
@@ -15,7 +14,7 @@ interface PaymentMethodDialogProps {
     payment_status?: string;
   };
   onSuccess?: (paymentMethod: string) => void;
-  selectionOnly?: boolean; // New prop for QR flow
+  selectionOnly?: boolean;
 }
 
 export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, selectionOnly = true }: PaymentMethodDialogProps) => {
@@ -29,16 +28,19 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
       console.log('PaymentMethodDialog: Processing payment method:', method);
       console.log('PaymentMethodDialog: Selection only mode:', selectionOnly);
       
-      // Always run in selection-only mode - just return the method selection
-      // The actual delivery completion happens in the parent component
+      // Close dialog first
       onOpenChange(false);
-      onSuccess?.(method);
+      
+      // Add small delay to ensure dialog closes smoothly before processing
+      setTimeout(() => {
+        onSuccess?.(method);
+      }, 100);
       
     } catch (error) {
       console.error('Payment method selection error:', error);
       toast({
-        title: "Selection Failed",
-        description: "Unable to select payment method. Please try again.",
+        title: "Payment Selection Failed",
+        description: "Unable to process payment method. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -81,7 +83,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
                 className="w-full h-12 bg-gradient-neon hover:shadow-neon"
               >
                 <CheckCircle className="w-5 h-5 mr-2" />
-                Online Payment (Already Paid)
+                {isProcessing ? 'Processing...' : 'Online Payment (Already Paid)'}
               </Button>
             ) : (
               <>
@@ -91,7 +93,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
                   className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
                 >
                   <Banknote className="w-5 h-5 mr-2" />
-                  Cash on Delivery (COD)
+                  {isProcessing ? 'Processing...' : 'Cash on Delivery (COD)'}
                 </Button>
                 
                 <Button
@@ -100,7 +102,7 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
                   className="w-full h-12 bg-gradient-neon hover:shadow-neon"
                 >
                   <CreditCard className="w-5 h-5 mr-2" />
-                  Online Payment (Razorpay)
+                  {isProcessing ? 'Processing...' : 'Online Payment (Razorpay)'}
                 </Button>
               </>
             )}
