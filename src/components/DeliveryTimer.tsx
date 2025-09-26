@@ -52,84 +52,48 @@ const DeliveryTimer = ({
   }>({ minutes: 0, seconds: 0, isExpired: false });
 
   useEffect(() => {
-    // Handle countdown for immediate deliveries
-    if (deliveryType === 'immediate') {
-      // Use the actual order placed time from backend - this is critical for proper sync
-      if (!orderPlacedAt) {
-        console.warn('⚠️ No orderPlacedAt provided for immediate delivery timer');
+    // Only show countdown timer for immediate deliveries
+    if (deliveryType !== 'immediate') return;
+    
+    // Use the actual order placed time from backend - this is critical for proper sync
+    if (!orderPlacedAt) {
+      console.warn('⚠️ No orderPlacedAt provided for immediate delivery timer');
+      return;
+    }
+    
+    const actualOrderTime = new Date(orderPlacedAt);
+    console.log('🕐 Setting up immediate delivery timer for order placed at:', actualOrderTime);
+
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      
+      // Use timing from backend configuration, fallback to 20 minutes
+      const durationMinutes = immediateTimingConfig?.max_duration_minutes || 20;
+      const deliveryTime = new Date(actualOrderTime.getTime() + durationMinutes * 60 * 1000);
+      const difference = deliveryTime.getTime() - now.getTime();
+
+      console.log(`⏰ Calculating immediate delivery timer: ${durationMinutes}min from order time:`, actualOrderTime, 'Current time:', now, 'Delivery time:', deliveryTime);
+
+      if (difference <= 0) {
+        setTimeLeft({ minutes: 0, seconds: 0, isExpired: true });
+        console.log('⏰ Immediate delivery timer expired');
         return;
       }
-      
-      const actualOrderTime = new Date(orderPlacedAt);
-      console.log('🕐 Setting up immediate delivery timer for order placed at:', actualOrderTime);
 
-      const calculateTimeLeft = () => {
-        const now = new Date();
-        
-        // Use timing from backend configuration, fallback to 20 minutes
-        const durationMinutes = immediateTimingConfig?.max_duration_minutes || 20;
-        const deliveryTime = new Date(actualOrderTime.getTime() + durationMinutes * 60 * 1000);
-        const difference = deliveryTime.getTime() - now.getTime();
+      const minutes = Math.floor(difference / (1000 * 60));
+      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
 
-        console.log(`⏰ Calculating immediate delivery timer: ${durationMinutes}min from order time:`, actualOrderTime, 'Current time:', now, 'Delivery time:', deliveryTime);
+      setTimeLeft({ minutes, seconds, isExpired: false });
+    };
 
-        if (difference <= 0) {
-          setTimeLeft({ minutes: 0, seconds: 0, isExpired: true });
-          console.log('⏰ Immediate delivery timer expired');
-          return;
-        }
+    // Calculate immediately
+    calculateTimeLeft();
 
-        const minutes = Math.floor(difference / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+    // Update every second
+    const timer = setInterval(calculateTimeLeft, 1000);
 
-        setTimeLeft({ minutes, seconds, isExpired: false });
-      };
-
-      // Calculate immediately
-      calculateTimeLeft();
-
-      // Update every second
-      const timer = setInterval(calculateTimeLeft, 1000);
-
-      return () => clearInterval(timer);
-    }
-
-    // Handle countdown for scheduled deliveries AFTER acceptance
-    if (deliveryType === 'scheduled' && acceptedAt) {
-      const acceptanceTime = new Date(acceptedAt);
-      console.log('🕐 Setting up scheduled delivery countdown from acceptance at:', acceptanceTime);
-
-      const calculateTimeLeft = () => {
-        const now = new Date();
-        
-        // Use configured duration for scheduled orders after acceptance, fallback to 20 minutes
-        const durationMinutes = scheduledTimingConfig?.max_duration_minutes || 20;
-        const deliveryTime = new Date(acceptanceTime.getTime() + durationMinutes * 60 * 1000);
-        const difference = deliveryTime.getTime() - now.getTime();
-
-        console.log(`⏰ Calculating scheduled delivery countdown: ${durationMinutes}min from acceptance:`, acceptanceTime, 'Current time:', now, 'Delivery time:', deliveryTime);
-
-        if (difference <= 0) {
-          setTimeLeft({ minutes: 0, seconds: 0, isExpired: true });
-          console.log('⏰ Scheduled delivery timer expired');
-          return;
-        }
-
-        const minutes = Math.floor(difference / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-        setTimeLeft({ minutes, seconds, isExpired: false });
-      };
-
-      // Calculate immediately
-      calculateTimeLeft();
-
-      // Update every second
-      const timer = setInterval(calculateTimeLeft, 1000);
-
-      return () => clearInterval(timer);
-    }
-  }, [deliveryType, orderPlacedAt, immediateTimingConfig, acceptedAt, scheduledTimingConfig]);
+    return () => clearInterval(timer);
+  }, [deliveryType, orderPlacedAt, immediateTimingConfig]);
 
   const formatTime = (num: number): string => {
     return num.toString().padStart(2, '0');
@@ -175,55 +139,6 @@ const DeliveryTimer = ({
     }
   };
 
-  // Show countdown timer for scheduled orders if they've been accepted
-  if (deliveryType === 'scheduled' && acceptedAt) {
-    console.log('🚀 Rendering scheduled delivery countdown timer - Time left:', timeLeft);
-    
-    return (
-      <Card className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-blue-500/30 shadow-lg max-w-sm">
-        <CardContent className="p-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="p-1 bg-blue-500/20 rounded-full">
-                <Clock className="w-3 h-3 text-blue-400" />
-              </div>
-              <div>
-                <h3 className="font-medium text-foreground text-xs">Scheduled Delivery</h3>
-                <p className="text-xs text-muted-foreground">
-                  {timeLeft.isExpired ? 'Overdue' : 'Time remaining'}
-                </p>
-              </div>
-            </div>
-            <Badge className={`${timeLeft.isExpired ? 'bg-red-500' : 'bg-blue-500'} text-white animate-pulse text-xs px-2 py-0.5`}>
-              {timeLeft.isExpired ? 'Overdue' : 'Active'}
-            </Badge>
-          </div>
-          
-          <div className="mt-2 text-center">
-            <div className={`text-lg font-mono font-bold ${timeLeft.isExpired ? 'text-red-500' : 'text-blue-600'}`}>
-              {timeLeft.isExpired ? '00:00' : `${formatTime(timeLeft.minutes)}:${formatTime(timeLeft.seconds)}`}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {timeLeft.isExpired ? 'Delivery overdue' : 'Minutes remaining'}
-            </div>
-            
-            {/* Progress bar */}
-            {!timeLeft.isExpired && (
-              <div className="w-full bg-blue-100 rounded-full h-1 mt-2">
-                <div 
-                  className="bg-blue-500 h-1 rounded-full transition-all duration-1000"
-                  style={{ 
-                    width: `${Math.max(0, ((timeLeft.minutes * 60 + timeLeft.seconds) / ((scheduledTimingConfig?.max_duration_minutes || 20) * 60)) * 100)}%` 
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-  
   if (deliveryType === 'scheduled' || deliveryType === 'book_now_pay_later' || deliveryType === 'subscription') {
     const scheduleInfo = getScheduledDeliveryInfo();
     
