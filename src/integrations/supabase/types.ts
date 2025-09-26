@@ -4553,12 +4553,20 @@ export type Database = {
         Returns: Json
       }
       complete_delivery_simple: {
-        Args: {
-          p_agent_id: string
-          p_distance_km?: number
-          p_order_id: string
-          p_payment_method?: string
-        }
+        Args:
+          | {
+              p_agent_id: string
+              p_distance_km?: number
+              p_order_id: string
+              p_payment_method?: string
+            }
+          | {
+              p_agent_id: string
+              p_distance_km?: number
+              p_order_id: string
+              p_payment_method?: string
+              p_payout_amount?: number
+            }
         Returns: Json
       }
       create_admin_notification_for_agent: {

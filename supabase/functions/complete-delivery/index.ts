@@ -310,146 +310,47 @@ serve(async (req) => {
     
     console.log('💰 Final payout calculation:', { distance_km: distance_km_calc, payout_amount });
 
-    // Enhanced order status update with fallback mechanism
-    console.log('💾 Starting robust order status update...');
+    // Use the safe database function to complete delivery
+    console.log('💾 Using safe delivery completion function...');
     
-    const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
     let updateSuccess = false;
     
-    // Primary update attempt with triggers
     try {
-      console.log('🔄 Attempting primary order update with triggers...');
-      const { error: updateError } = await supabaseClient
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          payment_status: payment_status
-        })
-        .eq('id', order_id);
-
-      if (updateError) {
-        console.error('❌ Primary update failed:', updateError);
-        
-        // Check if it's a JSON parsing error from triggers
-        if (updateError.message?.includes('invalid input syntax for type json') || 
-            updateError.message?.includes('Peak')) {
-          console.log('🔄 Detected JSON parsing error, attempting bypass method...');
-          
-          // Fallback: Direct SQL update that bypasses problematic triggers
-          const { error: sqlError } = await supabaseClient.rpc('update_order_status', {
-            p_order_id: order_id,
-            p_new_status: 'delivered',
-            p_new_payment_status: payment_status,
-            p_agent_id: agent.id
-          });
-          
-          if (sqlError) {
-            console.error('❌ SQL fallback also failed:', sqlError);
-            throw new Error(`Both update methods failed: ${updateError.message} | ${sqlError.message}`);
-          }
-          
-          console.log('✅ Order updated successfully via SQL fallback');
-          updateSuccess = true;
-        } else {
-          throw updateError;
-        }
-      } else {
-        console.log('✅ Order updated successfully via primary method');
-        updateSuccess = true;
+      const { data: completionResult, error: completionError } = await supabaseClient.rpc('complete_delivery_simple', {
+        p_order_id: order_id,
+        p_agent_id: agent.id,
+        p_payout_amount: payout_amount,
+        p_distance_km: distance_km_calc,
+        p_payment_method: payment_method
+      });
+      
+      if (completionError) {
+        console.error('❌ Safe completion failed:', completionError);
+        throw completionError;
       }
       
-    } catch (dbError) {
-      console.error('❌ All update attempts failed:', dbError);
-      
-      // Determine user-friendly error message and recovery action
-      let userMessage = 'Failed to complete delivery';
-      let actionRequired = 'retry';
-      
-      if (dbError instanceof Error) {
-        if (dbError.message?.includes('invalid input syntax for type json')) {
-          userMessage = 'Order data corruption detected. Please try the simple completion method.';
-          actionRequired = 'use_fallback';
-        } else if (dbError.message?.includes('not found')) {
-          userMessage = 'Order no longer exists in the system.';
-          actionRequired = 'refresh_orders';
-        } else if (dbError.message?.includes('permission') || dbError.message?.includes('access')) {
-          userMessage = 'Access denied. Please refresh the app and try again.';
-          actionRequired = 'reauth';
-        }
+      if (!completionResult || !completionResult.success) {
+        console.error('❌ Completion function returned failure:', completionResult);
+        throw new Error(completionResult?.error || 'Unknown completion error');
       }
       
+      console.log('✅ Delivery completed successfully via safe function:', completionResult);
+      updateSuccess = true;
+      
+    } catch (safeError) {
+      console.error('❌ Safe completion method failed:', safeError);
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Database operation failed',
-          details: dbError instanceof Error ? dbError.message : String(dbError),
-          action_required: actionRequired,
-          user_message: userMessage,
-          recoverable: actionRequired !== 'refresh_orders'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-    
-    if (!updateSuccess) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Order update verification failed',
-          user_message: 'Unable to confirm delivery completion. Please check order status.'
+        JSON.stringify({
+          success: false,
+          error: 'Failed to complete delivery',
+          details: safeError instanceof Error ? safeError.message : String(safeError)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    // Create earnings record (simple and safe)
-    try {
-      const { data: existingEarning } = await supabaseClient
-        .from('earnings')
-        .select('id')
-        .eq('agent_id', agent.id)
-        .eq('order_id', order_id)
-        .single();
-
-      if (!existingEarning) {
-        await supabaseClient
-          .from('earnings')
-          .insert({
-            agent_id: agent.id,
-            order_id: order_id,
-            amount: payout_amount,
-            status: 'completed',
-            distance_km: distance_km_calc,
-            payment_method: payment_method === 'COD' ? 'COD' : 'Online',
-            description: `Delivery payout for order ${order_id.substring(0, 8)}`
-          });
-      }
-    } catch (earningsError) {
-      console.warn('Earnings creation failed:', earningsError);
-    }
-
-    // Update agent statistics (simple approach)
-    try {
-      const { data: currentAgent } = await supabaseClient
-        .from('delivery_agents')
-        .select('total_deliveries, total_earnings')
-        .eq('id', agent.id)
-        .single();
-
-      if (currentAgent) {
-        await supabaseClient
-          .from('delivery_agents')
-          .update({
-            total_deliveries: (currentAgent.total_deliveries || 0) + 1,
-            total_earnings: (currentAgent.total_earnings || 0) + payout_amount,
-            last_delivery_at: new Date().toISOString()
-          })
-          .eq('id', agent.id);
-      }
-    } catch (statsError) {
-      console.warn('Agent stats update failed:', statsError);
-    }
+    // Skip manual earnings/stats updates - handled by database function
+    console.log('📊 Earnings and agent stats updated by database function');
 
     return new Response(
       JSON.stringify({
