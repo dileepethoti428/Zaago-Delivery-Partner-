@@ -225,23 +225,60 @@ serve(async (req) => {
           try {
             let deliverySlot = null;
             
-            if (order.delivery_time_slot.includes('-')) {
-              // Create a synthetic delivery slot for time range format like "02:00-04:00"
-              const [startTime, endTime] = order.delivery_time_slot.split('-');
-              deliverySlot = {
-                id: `slot-${order.id}`,
-                slot_name: order.delivery_time_slot,
-                start_time: `${startTime}:00`,
-                end_time: `${endTime}:00`
-              };
-            } else {
+            // Validate delivery_time_slot is not null or empty
+            const timeSlot = order.delivery_time_slot?.toString().trim();
+            if (!timeSlot) {
+              return order; // Skip processing if empty
+            }
+            
+            if (timeSlot.includes('-')) {
+              // Create a synthetic delivery slot for time range format like "02:00-04:00" or "16:00-18:00"
+              const [startTime, endTime] = timeSlot.split('-');
+              
+              // Validate both parts exist and are valid times
+              if (startTime && endTime) {
+                const formatTime = (time) => {
+                  const trimmed = time.trim();
+                  // If time is already in HH:MM:SS format, use it
+                  if (trimmed.match(/^\d{1,2}:\d{2}:\d{2}$/)) return trimmed;
+                  // If time is in HH:MM format, add seconds
+                  if (trimmed.match(/^\d{1,2}:\d{2}$/)) return `${trimmed}:00`;
+                  // Return as-is for other formats
+                  return trimmed;
+                };
+                
+                deliverySlot = {
+                  id: `slot-${order.id}`,
+                  slot_name: `${timeSlot} window`,
+                  start_time: formatTime(startTime),
+                  end_time: formatTime(endTime)
+                };
+              }
+            } else if (timeSlot.match(/^[0-9a-fA-F-]{36}$/)) {
               // Try to fetch from delivery_slots table (UUID format)
               const { data: slot } = await supabase
                 .from('delivery_slots')
                 .select('id, slot_name, start_time, end_time')
-                .eq('id', order.delivery_time_slot)
+                .eq('id', timeSlot)
                 .maybeSingle();
               deliverySlot = slot;
+            } else if (timeSlot.match(/^\d{1,2}:\d{2}(:\d{2})?$/)) {
+              // Handle single time format like "12:00:00" or "12:00"
+              const formatTime = (time) => {
+                const trimmed = time.trim();
+                // If time is already in HH:MM:SS format, use it
+                if (trimmed.match(/^\d{1,2}:\d{2}:\d{2}$/)) return trimmed;
+                // If time is in HH:MM format, add seconds
+                if (trimmed.match(/^\d{1,2}:\d{2}$/)) return `${trimmed}:00`;
+                return trimmed;
+              };
+              
+              deliverySlot = {
+                id: `slot-${order.id}`,
+                slot_name: `${timeSlot} window`,
+                start_time: formatTime(timeSlot),
+                end_time: formatTime(timeSlot)
+              };
             }
             
             return {

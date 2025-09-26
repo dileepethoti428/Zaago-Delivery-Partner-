@@ -132,9 +132,14 @@ const DeliveryTimer = ({
     let hasTimeSlot = false;
     
     if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
-      // Format time slots as intervals with robust parsing
+      // Format time slots as intervals with validation
       const formatSlotTime = (timeStr: string) => {
         try {
+          // Skip if time is "Inval" or similar invalid values
+          if (!timeStr || timeStr.toLowerCase().includes('inval') || timeStr.trim() === '') {
+            return null;
+          }
+          
           // Handle different time formats from backend
           let normalizedTime = timeStr.trim();
           
@@ -143,41 +148,12 @@ const DeliveryTimer = ({
             normalizedTime += ':00';
           }
           
-          // Ensure proper HH:MM:SS format
-          if (!normalizedTime.match(/^\d{1,2}:\d{2}:\d{2}$/)) {
-            console.warn('Invalid time format received:', timeStr);
-            // Try to extract time components manually
-            const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
-            if (timeMatch) {
-              const hour = parseInt(timeMatch[1]);
-              const minute = parseInt(timeMatch[2]);
-              if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-                const period = hour >= 12 ? 'PM' : 'AM';
-                const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                return `${displayHour}:${timeMatch[2]} ${period}`;
-              }
-            }
-            return timeStr; // Return original if manual parsing fails
-          }
-          
           // Create date object with proper ISO format
           const time = new Date(`1970-01-01T${normalizedTime}`);
           
           // Check if date is valid
           if (isNaN(time.getTime())) {
-            console.warn('Failed to parse time as Date:', normalizedTime);
-            // Manual fallback parsing
-            const parts = normalizedTime.split(':');
-            if (parts.length >= 2) {
-              const hour = parseInt(parts[0]);
-              const minute = parseInt(parts[1]);
-              if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-                const period = hour >= 12 ? 'PM' : 'AM';
-                const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
-              }
-            }
-            return timeStr;
+            return null;
           }
           
           return time.toLocaleTimeString('en-US', { 
@@ -186,24 +162,23 @@ const DeliveryTimer = ({
             hour12: true 
           });
         } catch (error) {
-          console.warn('Error formatting slot time:', timeStr, error);
-          // Final fallback - manual parsing
-          const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
-          if (timeMatch) {
-            const hour = parseInt(timeMatch[1]);
-            const minute = parseInt(timeMatch[2]);
-            if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-              const period = hour >= 12 ? 'PM' : 'AM';
-              const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-              return `${displayHour}:${timeMatch[2]} ${period}`;
-            }
-          }
-          return timeStr;
+          return null;
         }
       };
-      displayTime = `${formatSlotTime(deliverySlots.start_time)} - ${formatSlotTime(deliverySlots.end_time)}`;
-      hasTimeSlot = true;
-      console.log('Using delivery slots for time display:', displayTime);
+
+      const startFormatted = formatSlotTime(deliverySlots.start_time);
+      const endFormatted = formatSlotTime(deliverySlots.end_time);
+      
+      // Only use delivery slots if both times are valid
+      if (startFormatted && endFormatted) {
+        if (startFormatted !== endFormatted) {
+          displayTime = `${startFormatted} - ${endFormatted}`;
+        } else {
+          displayTime = startFormatted;
+        }
+        hasTimeSlot = true;
+        console.log('Using delivery slots for time display:', displayTime);
+      }
     } else if (deliveryTime && !deliveryTime.includes('min') && !deliveryTime.includes('Time to be confirmed')) {
       // Use deliveryTime only if it's not a duration (like "2 min") or confirmation message
       displayTime = deliveryTime;

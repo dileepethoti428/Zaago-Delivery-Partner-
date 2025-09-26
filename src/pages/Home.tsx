@@ -575,15 +575,7 @@ const Home = () => {
         }),
         supabase
           .from('orders')
-          .select(`
-            *,
-            delivery_slots:delivery_time_slot (
-              id,
-              slot_name,
-              start_time,
-              end_time
-            )
-          `)
+          .select('*')
           .eq('agent_id', agent.id)
           .in('status', ['assigned', 'picked_up', 'in_transit'])
           .order('created_at', { ascending: false })
