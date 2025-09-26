@@ -332,7 +332,7 @@ const DeliveryDetails = () => {
       
       console.log('📋 Request payload with real-time data:', requestPayload);
       
-      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: requestPayload
       });
       
