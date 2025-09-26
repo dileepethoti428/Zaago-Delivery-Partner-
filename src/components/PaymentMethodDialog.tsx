@@ -29,7 +29,8 @@ export const PaymentMethodDialog = ({ open, onOpenChange, order, onSuccess, sele
       console.log('PaymentMethodDialog: Processing payment method:', method);
       console.log('PaymentMethodDialog: Selection only mode:', selectionOnly);
       
-      // Default to selection-only mode - just return the method selection
+      // Always run in selection-only mode - just return the method selection
+      // The actual delivery completion happens in the parent component
       onOpenChange(false);
       onSuccess?.(method);
       

@@ -323,7 +323,7 @@ const DeliveryDetails = () => {
         console.error('❌ Edge function error:', error);
         toast({
           title: "Delivery Failed",
-          description: error.message || 'Failed to complete delivery',
+          description: `Unable to complete delivery: ${error.message || 'Unknown error'}. Please try again or contact support.`,
           variant: "destructive"
         });
         return;

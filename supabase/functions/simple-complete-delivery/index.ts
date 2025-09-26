@@ -94,40 +94,110 @@ serve(async (req) => {
 
     console.log('✅ Order found:', { id: order.id, status: order.status, customer: order.customer_name });
 
-    // MINIMAL UPDATE - just the essential fields to avoid trigger issues
+    // ROBUST UPDATE STRATEGY with multiple fallbacks
     const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
     const now = new Date().toISOString();
     
-    console.log('💾 Using new simplified stored procedure to complete delivery...');
+    console.log('💾 Attempting delivery completion with multiple strategies...');
     console.log('🔍 Parameters:', { 
       order_id: order_id, 
-      order_id_type: typeof order_id,
       agent_id: agent.id, 
-      agent_id_type: typeof agent.id,
       payment_status 
     });
     
-    // Ensure UUIDs are properly formatted strings (PostgreSQL expects string format for UUID parameters)
+    // Ensure UUIDs are properly formatted strings
     const orderIdStr = String(order_id).trim();
     const agentIdStr = String(agent.id).trim();
     
-    console.log('🔍 Converted parameters:', { orderIdStr, agentIdStr, payment_status });
+    let updateSuccessful = false;
+    let lastError = null;
     
-    // Use the new simplified stored procedure that avoids JSON parsing issues
-    const { error: updateError } = await supabaseClient.rpc('simple_complete_delivery', {
-      p_order_id: orderIdStr,
-      p_new_status: 'delivered',
-      p_new_payment_status: payment_status,
-      p_agent_id: agentIdStr
-    });
+    // STRATEGY 1: Try the new trigger-bypassing stored procedure
+    try {
+      console.log('🔄 Strategy 1: Using direct_complete_delivery (bypasses triggers)...');
+      const { data: directResult, error: directError } = await supabaseClient.rpc('direct_complete_delivery', {
+        p_order_id: orderIdStr,
+        p_new_status: 'delivered',
+        p_new_payment_status: payment_status,
+        p_agent_id: agentIdStr
+      });
+      
+      if (!directError && directResult?.success) {
+        console.log('✅ Strategy 1 successful: Order updated via direct procedure');
+        updateSuccessful = true;
+      } else {
+        console.warn('⚠️ Strategy 1 failed:', directError || directResult?.error);
+        lastError = directError || new Error(directResult?.error || 'Direct procedure failed');
+      }
+    } catch (error) {
+      console.warn('⚠️ Strategy 1 exception:', error);
+      lastError = error;
+    }
+    
+    // STRATEGY 2: Fallback to simple stored procedure (if Strategy 1 fails)
+    if (!updateSuccessful) {
+      try {
+        console.log('🔄 Strategy 2: Using simple_complete_delivery fallback...');
+        const { error: simpleError } = await supabaseClient.rpc('simple_complete_delivery', {
+          p_order_id: orderIdStr,
+          p_new_status: 'delivered',
+          p_new_payment_status: payment_status,
+          p_agent_id: agentIdStr
+        });
         
-    if (updateError) {
-      console.error('❌ Stored procedure failed:', updateError);
+        if (!simpleError) {
+          console.log('✅ Strategy 2 successful: Order updated via simple procedure');
+          updateSuccessful = true;
+        } else {
+          console.warn('⚠️ Strategy 2 failed:', simpleError);
+          lastError = simpleError;
+        }
+      } catch (error) {
+        console.warn('⚠️ Strategy 2 exception:', error);
+        lastError = error;
+      }
+    }
+    
+    // STRATEGY 3: Direct update as final fallback
+    if (!updateSuccessful) {
+      try {
+        console.log('🔄 Strategy 3: Direct table update (final fallback)...');
+        const { error: directUpdateError } = await supabaseClient
+          .from('orders')
+          .update({ 
+            status: 'delivered', 
+            payment_status: payment_status,
+            delivered_at: now,
+            updated_at: now
+          })
+          .eq('id', orderIdStr)
+          .eq('agent_id', agentIdStr);
+          
+        if (!directUpdateError) {
+          console.log('✅ Strategy 3 successful: Order updated via direct table update');
+          updateSuccessful = true;
+        } else {
+          console.error('❌ Strategy 3 also failed:', directUpdateError);
+          lastError = directUpdateError;
+        }
+      } catch (error) {
+        console.error('❌ Strategy 3 exception:', error);
+        lastError = error;
+      }
+    }
+    
+    // If all strategies failed, return error
+    if (!updateSuccessful) {
+      console.error('❌ All update strategies failed. Last error:', lastError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to update order status via stored procedure',
-          details: updateError.message
+          error: 'Failed to update order status after trying all methods',
+          details: lastError?.message || 'Unknown error',
+          debug: {
+            tried_strategies: ['direct_complete_delivery', 'simple_complete_delivery', 'direct_update'],
+            last_error: lastError?.message
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );

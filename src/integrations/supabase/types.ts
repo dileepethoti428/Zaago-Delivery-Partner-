@@ -4630,6 +4630,15 @@ export type Database = {
         Args: { order_ids: string[] }
         Returns: undefined
       }
+      direct_complete_delivery: {
+        Args: {
+          p_agent_id: string
+          p_new_payment_status: string
+          p_new_status: string
+          p_order_id: string
+        }
+        Returns: Json
+      }
       ensure_delivery_data_consistency: {
         Args: Record<PropertyKey, never>
         Returns: undefined
