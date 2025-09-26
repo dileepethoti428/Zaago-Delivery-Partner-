@@ -76,9 +76,10 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       if (error) {
         console.error('❌ QR scan error:', error);
         
-        // For function invocation errors (like 403, 400), the actual error details are in the data response
+        // For function invocation errors (like 403, 400), try to extract the actual error from the response
         if (error.message?.includes('non-2xx status code')) {
           console.log('⚠️ Non-2xx status, checking response data for specific error...');
+          // For Supabase function errors, the actual error details are often in the data response
           // Let it fall through to parse the data object for specific error details
         } else if (error.message?.includes('Authentication') || error.message?.includes('401')) {
           toast({
@@ -127,11 +128,24 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       }
 
       // Handle error responses from the edge function (both with and without error object)
-      if (!data || !data.success) {
-        const errorMsg = data?.error || data?.message || 'Invalid QR code';
+      if (error || !data || !data.success) {
+        let errorMsg = 'Invalid QR code';
+        
+        // If there's an error object and it contains a non-2xx status, try to extract details
+        if (error && error.message?.includes('non-2xx status code')) {
+          // For Supabase function errors with non-2xx status, check if data has error details
+          errorMsg = data?.error || data?.message || error.message || 'Invalid QR code';
+        } else if (data && !data.success) {
+          // If no error object but data indicates failure
+          errorMsg = data.error || data.message || 'Invalid QR code';
+        } else if (error) {
+          // For other types of errors
+          errorMsg = error.message || 'Invalid QR code';
+        }
+        
         console.error('❌ QR scan failed:', errorMsg);
         
-        // Special handling for "order not assigned" error
+        // Special handling for specific error messages
         if (errorMsg.includes('not assigned to you') || errorMsg.includes('Order is not assigned to you')) {
           toast({
             title: "🚫 Order Not Assigned to You",
