@@ -388,20 +388,11 @@ serve(async (req) => {
         } else if (
           !order.delivery_time_slot && 
           (!order.delivery_date || order.delivery_date === today) && 
-          minutesSinceCreated < 60
+          minutesSinceCreated < 30
         ) {
-          // Check if this should be immediate based on timing, regardless of payment status initially
-          if (order.payment_status === 'completed' || order.payment_status === 'paid' || order.payment_status === 'Completed') {
-            calculatedType = 'immediate';
-            console.log(`Order ${order.id} -> immediate (paid order, no time slot, created ${minutesSinceCreated} min ago)`);
-          } else if (order.payment_status === 'pending' && minutesSinceCreated < 10) {
-            // For very recent orders (under 10 min), treat as immediate even if payment pending
-            calculatedType = 'immediate';
-            console.log(`Order ${order.id} -> immediate (recent order under 10 min, payment processing)`);
-          } else {
-            calculatedType = 'book_now_pay_later';
-            console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
-          }
+          // Recent orders without specific time slot should be immediate
+          calculatedType = 'immediate';
+          console.log(`Order ${order.id} -> immediate (recent order, no time slot, created ${minutesSinceCreated} min ago)`);
         } else if (order.payment_status === 'pending') {
           calculatedType = 'book_now_pay_later';
           console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
