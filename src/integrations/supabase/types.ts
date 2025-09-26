@@ -4460,9 +4460,9 @@ export type Database = {
       }
       calculate_delivery_payout: {
         Args: {
-          agent_id_param?: string
-          delivery_time?: string
-          distance_km: number
+          p_agent_id?: string
+          p_delivery_time?: string
+          p_distance_km?: number
         }
         Returns: Json
       }
