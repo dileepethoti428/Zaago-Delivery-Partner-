@@ -565,13 +565,18 @@ const DeliveryDetails = () => {
       {/* Delivery Timer */}
       <div className="animate-slide-up">
         {(() => {
-          const determinedType = order.calculated_delivery_type || 
-            (order.subscription_id ? 'subscription' : 
-              (order.delivery_time_slot && order.delivery_time_slot.includes('-') ? 'scheduled' : 'immediate')
-            );
+          // Determine delivery type based on actual database fields only
+          let determinedType: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
           
-          console.log('🔍 DeliveryDetails - Delivery Type Debug:', {
-            calculated_delivery_type: order.calculated_delivery_type,
+          if (order.subscription_id) {
+            determinedType = 'subscription';
+          } else if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
+            determinedType = 'scheduled';
+          } else {
+            determinedType = 'immediate';
+          }
+          
+          console.log('🔍 DeliveryDetails - Fixed Delivery Type Logic:', {
             subscription_id: order.subscription_id,
             delivery_time_slot: order.delivery_time_slot,
             hasHyphen: order.delivery_time_slot && order.delivery_time_slot.includes('-'),
