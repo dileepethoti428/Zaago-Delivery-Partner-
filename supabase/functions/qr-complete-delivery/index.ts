@@ -189,69 +189,16 @@ serve(async (req) => {
       );
     }
 
-    // Update order status to delivered
-    console.log('Updating order status for order:', order.id);
-    
-    // Prepare update data with validation
-    const updateData = {
-      status: 'delivered',
-      delivered_at: new Date().toISOString(),
-      payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-    };
-    
-    console.log('Update data prepared:', JSON.stringify(updateData));
-    
-    try {
-      const { error: updateError } = await supabaseClient
-        .from('orders')
-        .update(updateData)
-        .eq('id', order.id);
+    // Order status update is now handled by the complete_delivery_simple database function
+    console.log('✅ QR code marked as scanned, proceeding with delivery completion via database function');
 
-      if (updateError) {
-        console.error('Failed to update order:', updateError);
-        console.error('Update data that failed:', JSON.stringify(updateData));
-        console.error('Order ID:', order.id);
-        
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Failed to update order status', 
-            details: updateError.message,
-            debug_info: { 
-              order_id: order.id, 
-              payment_method, 
-              updateData,
-              error_code: updateError.code,
-              error_details: updateError.details
-            }
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
-      
-      console.log('Order status updated successfully');
-    } catch (dbError) {
-      console.error('Database operation failed with exception:', dbError);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Database operation failed', 
-          details: dbError instanceof Error ? dbError.message : String(dbError)
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    // Use the simple delivery completion function with better error handling
+    // Use the complete_delivery_simple database function for consistent processing
     const distance_km = 2.5; // This should be calculated based on actual delivery route
-    let payout_amount = 12; // Default fallback - use let for reassignment
+    let payout_amount = 20; // Default minimum payout
     let completionResult = null;
 
     try {
-      // Calculate payout amount
-      payout_amount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 12;
-      
-      console.log('Calling complete_delivery_simple RPC with params:', {
+      console.log('🔄 Calling complete_delivery_simple RPC with params:', {
         p_order_id: order.id,
         p_agent_id: agent.id,
         p_payout_amount: payout_amount,
@@ -268,80 +215,43 @@ serve(async (req) => {
       });
 
       if (completionError) {
-        console.error('Delivery completion RPC error:', {
-          message: completionError.message,
-          code: completionError.code,
-          details: completionError.details
-        });
-        
-        // Don't throw here - the order is already marked as delivered, 
-        // just log the payout issue and continue
-        console.warn('Payout processing failed but order is delivered');
-        payout_amount = 12; // Use fallback
-      } else {
-        completionResult = completionData;
-        payout_amount = completionResult?.payout_amount || completionResult?.total_payout || 12;
-        console.log('Delivery completed successfully with payout:', payout_amount);
+        console.error('❌ QR Delivery completion RPC error:', completionError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to complete delivery', 
+            details: completionError.message 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
       }
+      
+      if (!completionData || !completionData.success) {
+        console.error('❌ QR Completion function returned failure:', completionData);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: completionData?.error || 'Unknown completion error',
+            details: completionData?.details || 'Delivery completion failed'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      completionResult = completionData;
+      payout_amount = completionResult.payout_amount || 20;
+      console.log('✅ QR Delivery completed successfully with payout:', payout_amount);
+      
     } catch (error) {
-      console.error('Delivery completion failed with exception:', error);
-      console.warn('Using fallback payout amount due to completion error');
-      payout_amount = 12; // Use fallback and continue
-    }
-
-    try {
-      const { error: historyUpdateError } = await supabaseClient
-        .from('delivery_history')
-        .update({
-          delivery_notes: `Completed via QR scan by ${agent.name} - Payout: ₹${payout_amount}`,
-          distance_traveled: distance_km,
-          delivery_payout: payout_amount
-        })
-        .eq('order_id', order.id);
-
-      if (historyUpdateError) {
-        console.warn('Could not update delivery history details:', historyUpdateError);
-      }
-    } catch (historyError) {
-      console.warn('Delivery history update failed:', historyError);
-    }
-
-    // Update agent statistics
-    try {
-      const { data: currentAgent } = await supabaseClient
-        .from('delivery_agents')
-        .select('total_deliveries, deliveries_today, total_earnings')
-        .eq('id', agent.id)
-        .single();
-
-      if (currentAgent) {
-        await supabaseClient
-          .from('delivery_agents')
-          .update({
-            total_deliveries: (currentAgent.total_deliveries || 0) + 1,
-            deliveries_today: (currentAgent.deliveries_today || 0) + 1,
-            total_earnings: (currentAgent.total_earnings || 0) + order.total,
-            last_delivery_at: new Date().toISOString()
-          })
-          .eq('id', agent.id);
-      }
-    } catch (statsError) {
-      console.warn('Agent stats update failed:', statsError);
-    }
-
-    // Create order tracking record
-    try {
-      await supabaseClient
-        .from('order_tracking')
-        .insert({
-          order_id: order.id,
-          status: 'delivered',
-          timestamp: new Date().toISOString(),
-          location: order.address?.coordinates || null,
-          notes: `Order delivered via QR scan by ${agent.name}`
-        });
-    } catch (trackingError) {
-      console.warn('Order tracking creation failed:', trackingError);
+      console.error('❌ QR Delivery completion failed with exception:', error);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to complete delivery', 
+          details: error instanceof Error ? error.message : String(error)
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
     return new Response(
