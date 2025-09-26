@@ -552,6 +552,8 @@ const DeliveryDetails = () => {
           paymentStatus={order.payment_status}
           deliveryTimeSlot={order.delivery_time_slot}
           immediateTimingConfig={order.immediate_timing_config}
+          acceptedAt={new Date()} // Use current time as acceptance time since agent is viewing details
+          scheduledTimingConfig={{ max_duration_minutes: 20 }} // 20 minutes for scheduled orders after acceptance
           className="w-full"
         />
       </div>
