@@ -132,10 +132,54 @@ const DeliveryTimer = ({
     let hasTimeSlot = false;
     
     if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
-      // Format time slots as intervals
+      // Format time slots as intervals with robust parsing
       const formatSlotTime = (timeStr: string) => {
         try {
-          const time = new Date(`1970-01-01T${timeStr}`);
+          // Handle different time formats from backend
+          let normalizedTime = timeStr.trim();
+          
+          // If time doesn't include seconds, add them
+          if (normalizedTime.match(/^\d{1,2}:\d{2}$/)) {
+            normalizedTime += ':00';
+          }
+          
+          // Ensure proper HH:MM:SS format
+          if (!normalizedTime.match(/^\d{1,2}:\d{2}:\d{2}$/)) {
+            console.warn('Invalid time format received:', timeStr);
+            // Try to extract time components manually
+            const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const minute = parseInt(timeMatch[2]);
+              if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+                const period = hour >= 12 ? 'PM' : 'AM';
+                const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                return `${displayHour}:${timeMatch[2]} ${period}`;
+              }
+            }
+            return timeStr; // Return original if manual parsing fails
+          }
+          
+          // Create date object with proper ISO format
+          const time = new Date(`1970-01-01T${normalizedTime}`);
+          
+          // Check if date is valid
+          if (isNaN(time.getTime())) {
+            console.warn('Failed to parse time as Date:', normalizedTime);
+            // Manual fallback parsing
+            const parts = normalizedTime.split(':');
+            if (parts.length >= 2) {
+              const hour = parseInt(parts[0]);
+              const minute = parseInt(parts[1]);
+              if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+                const period = hour >= 12 ? 'PM' : 'AM';
+                const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+              }
+            }
+            return timeStr;
+          }
+          
           return time.toLocaleTimeString('en-US', { 
             hour: 'numeric', 
             minute: '2-digit', 
@@ -143,7 +187,18 @@ const DeliveryTimer = ({
           });
         } catch (error) {
           console.warn('Error formatting slot time:', timeStr, error);
-          return timeStr.substring(0, 5); // Fallback to HH:MM format
+          // Final fallback - manual parsing
+          const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+          if (timeMatch) {
+            const hour = parseInt(timeMatch[1]);
+            const minute = parseInt(timeMatch[2]);
+            if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+              const period = hour >= 12 ? 'PM' : 'AM';
+              const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+              return `${displayHour}:${timeMatch[2]} ${period}`;
+            }
+          }
+          return timeStr;
         }
       };
       displayTime = `${formatSlotTime(deliverySlots.start_time)} - ${formatSlotTime(deliverySlots.end_time)}`;
