@@ -104,23 +104,14 @@ export const PaymentMethodDialog = ({
         
         <div className="space-y-4">
           <div className="text-center space-y-2">
-            <p className="text-foreground font-medium">
-              {order.customer_name}
-            </p>
             {order.payment_status === 'completed' ? (
-              <div className="py-4">
-                <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-green-500" />
-                </div>
-                <p className="text-lg font-bold text-green-600 mb-2">
-                  Order Completed ✅
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  This order was already delivered successfully
-                </p>
-              </div>
+              /* Don't show customer details for already delivered orders */
+              null
             ) : (
               <>
+                <p className="text-foreground font-medium">
+                  {order.customer_name}
+                </p>
                 <p className="text-lg font-bold text-primary">
                   ₹{order.total_amount}
                 </p>
@@ -134,11 +125,19 @@ export const PaymentMethodDialog = ({
           </div>
 
           {order.payment_status === 'completed' ? (
-            /* Already Delivered State - No payment options */
-            <div className="text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                No further action required
-              </p>
+            /* Already Delivered State - Just show delivered message */
+            <div className="text-center space-y-4">
+              <div className="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-10 h-10 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-green-700 mb-1">
+                  Product Already Delivered ✅
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  This order has been successfully completed
+                </p>
+              </div>
             </div>
           ) : error ? (
             /* Error State - Show Retry Button */
