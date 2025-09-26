@@ -106,39 +106,49 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         return;
       }
 
+      // Handle special "already delivered" status from qr-scan-order
+      if (data && data.status === 'already_delivered') {
+        console.log('✅ Order already delivered, showing delivered status');
+        
+        // Show a special dialog for already delivered orders
+        setScannedOrder({
+          order_id: data.order.id,
+          customer_name: data.order.customer_name,
+          customer_phone: '',
+          total_amount: data.order.total,
+          payment_status: 'completed',
+          address: null,
+          items: [],
+          special_instructions: 'This order has already been completed and delivered.',
+          delivery_time_slot: '',
+          estimated_payout: 0
+        });
+        setShowPaymentDialog(true);
+        toast({
+          title: "Product Already Delivered ✅",
+          description: `This order for ${data.order.customer_name} has already been completed.`,
+          variant: "default"
+        });
+        return;
+      }
+
       if (!data || !data.success) {
         const errorMsg = data?.error || data?.message || 'Invalid QR code';
         console.error('❌ QR scan failed:', errorMsg);
         
         // Special handling for "order not assigned" error
-        if (errorMsg.includes('not assigned to you')) {
+        if (errorMsg.includes('not assigned to you') || errorMsg.includes('Order is not assigned to you')) {
           toast({
-            title: "Order Not Assigned",
-            description: "This order is assigned to another delivery agent. Only the assigned agent can complete this delivery.",
+            title: "🚫 Order Not Assigned to You",
+            description: "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.",
             variant: "destructive"
           });
         } else if (errorMsg.includes('already delivered')) {
-          // Show a special dialog for already delivered orders
-          setScannedOrder({
-            order_id: 'delivered',
-            customer_name: 'Already Delivered',
-            customer_phone: '',
-            total_amount: 0,
-            payment_status: 'completed',
-            address: null,
-            items: [],
-            special_instructions: 'This order has already been completed and delivered.',
-            delivery_time_slot: '',
-            estimated_payout: 0
-          });
-          setShowPaymentDialog(true);
           toast({
-            title: "Order Already Delivered ✅",
-            description: "This order has already been completed.",
+            title: "Product Already Delivered ✅",
+            description: "This order has already been completed and delivered.",
             variant: "default"
           });
-          // Close the scanner and show the already delivered dialog
-          onOpenChange(false);
         } else if (errorMsg.includes('already used') || errorMsg.includes('already scanned')) {
           toast({
             title: "QR Code Already Used",
