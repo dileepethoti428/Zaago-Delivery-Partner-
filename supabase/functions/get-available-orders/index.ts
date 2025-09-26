@@ -361,7 +361,17 @@ serve(async (req) => {
         console.log(`Order ${order.id} analysis:`, JSON.stringify(orderAnalysis, null, 2));
         
         // Determine delivery type using proper logic and database timings
-        if (order.subscription_id) {
+        // Check for immediate orders first (recent orders without specific scheduling)
+        if (
+          !order.subscription_id &&
+          (!order.delivery_time_slot || order.delivery_time_slot === null || order.delivery_time_slot === '') &&
+          (!order.delivery_date || order.delivery_date === today) && 
+          minutesSinceCreated < 30
+        ) {
+          // Recent orders without specific scheduling should be immediate
+          calculatedType = 'immediate';
+          console.log(`Order ${order.id} -> immediate (recent order, no specific scheduling, created ${minutesSinceCreated} min ago)`);
+        } else if (order.subscription_id) {
           calculatedType = 'subscription';
           // Get subscription timing from database
           const subscriptionTiming = deliveryTimings?.find(t => t.delivery_type === 'subscription');
@@ -385,14 +395,6 @@ serve(async (req) => {
         } else if (order.delivery_time && order.delivery_time !== '12:00:00') {
           calculatedType = 'scheduled';
           console.log(`Order ${order.id} -> scheduled (specific time: ${order.delivery_time})`);
-        } else if (
-          !order.delivery_time_slot && 
-          (!order.delivery_date || order.delivery_date === today) && 
-          minutesSinceCreated < 30
-        ) {
-          // Recent orders without specific time slot should be immediate
-          calculatedType = 'immediate';
-          console.log(`Order ${order.id} -> immediate (recent order, no time slot, created ${minutesSinceCreated} min ago)`);
         } else if (order.payment_status === 'pending') {
           calculatedType = 'book_now_pay_later';
           console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
