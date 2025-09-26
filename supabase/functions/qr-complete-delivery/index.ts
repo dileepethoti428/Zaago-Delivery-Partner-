@@ -210,9 +210,9 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // Enhanced logging for better debugging
+    // Enhanced calculation for QR deliveries using new rates
     const distance_km = 2.5; // Default distance for QR deliveries
-    const payout_amount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 12;
+    const payout_amount = distance_km <= 1 ? 12 : 12 + (distance_km - 1) * 8; // New rates: ₹12 base + ₹8/km
 
     console.log('📊 QR Delivery Context:', {
       qr_code_data: qr_code_data.substring(0, 20) + '...',
@@ -230,31 +230,52 @@ serve(async (req) => {
     console.log('💾 Completing delivery with direct operations...');
     
     try {
-      // Bulletproof amount validation - handle all edge cases  
+      // ULTRA-BULLETPROOF amount validation with multiple safety layers
       let validatedAmount;
       
       console.log('🔍 Raw payout_amount value:', { payout_amount, type: typeof payout_amount });
       
-      // Convert to number and validate
+      // Layer 1: Basic conversion and validation
       const numericAmount = Number(payout_amount);
       
-      if (isNaN(numericAmount) || !isFinite(numericAmount) || numericAmount <= 0) {
-        console.error('❌ Invalid payout amount detected:', { 
+      // Layer 2: Comprehensive validation checks
+      const isInvalidAmount = (
+        isNaN(numericAmount) || 
+        !isFinite(numericAmount) || 
+        numericAmount <= 0 || 
+        numericAmount === null || 
+        numericAmount === undefined ||
+        typeof numericAmount !== 'number'
+      );
+      
+      if (isInvalidAmount) {
+        console.error('❌ Invalid payout amount detected, applying fallback:', { 
           payout_amount, 
           numericAmount, 
-          isNaN: isNaN(numericAmount),
-          isFinite: isFinite(numericAmount),
-          isLessThanOrEqualZero: numericAmount <= 0
+          validationChecks: {
+            isNaN: isNaN(numericAmount),
+            isFinite: isFinite(numericAmount),
+            isPositive: numericAmount > 0,
+            isNull: numericAmount === null,
+            isUndefined: numericAmount === undefined,
+            isNumber: typeof numericAmount === 'number'
+          }
         });
         
-        // Use fallback amount based on distance
-        validatedAmount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 12;
-        console.log('🔧 Using fallback payout calculation:', validatedAmount);
+        // Layer 3: Bulletproof fallback using new rates
+        validatedAmount = distance_km <= 1 ? 12 : 12 + (distance_km - 1) * 8;
+        console.log('🔧 Applied bulletproof fallback calculation:', validatedAmount);
       } else {
         validatedAmount = numericAmount;
       }
       
-      console.log('💰 Final validated amount:', { validatedAmount, type: typeof validatedAmount });
+      // Layer 4: Final safety check
+      if (!validatedAmount || validatedAmount <= 0 || isNaN(validatedAmount)) {
+        validatedAmount = 28; // Ultimate fallback for 2.5km QR delivery
+        console.log('🛡️ Applied ultimate safety fallback:', validatedAmount);
+      }
+      
+      console.log('💰 Ultra-validated amount:', { validatedAmount, type: typeof validatedAmount });
       
       // Update order status directly
       const { error: orderUpdateError } = await supabaseClient
@@ -320,15 +341,22 @@ serve(async (req) => {
         console.log('✅ Earnings record created');
       }
       
-      // Create wallet transaction with validated amount
+      // Create wallet transaction with FINAL safety validation
+      const finalAmount = Number(validatedAmount);
+      if (!finalAmount || finalAmount <= 0 || isNaN(finalAmount) || !isFinite(finalAmount)) {
+        console.error('❌ CRITICAL: Final amount validation failed, using emergency protocol');
+        throw new Error('Amount validation failed - cannot complete transaction with invalid amount');
+      }
+      
       const { error: transactionError } = await supabaseClient
         .from('agent_wallet_transactions')
         .insert({
           agent_id: agent.id,
           order_id: order.id,
-          amount: validatedAmount,
+          amount: finalAmount,
           transaction_type: 'delivery_payment',
-          description: 'QR delivery completion payout'
+          description: 'QR delivery completion payout',
+          status: 'completed'
         });
       
       if (transactionError) {

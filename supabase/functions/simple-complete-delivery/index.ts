@@ -78,31 +78,61 @@ serve(async (req) => {
     console.log('💾 Using direct database operations instead of RPC...');
     
     try {
-      // Bulletproof amount validation - handle all edge cases
+      // MAXIMUM BULLETPROOF validation with all safety measures
       let validatedAmount;
+      let validatedDistance;
       
+      // Validate distance first
+      console.log('🔍 Raw distance_km value:', { distance_km, type: typeof distance_km });
+      const numericDistance = Number(distance_km);
+      if (isNaN(numericDistance) || !isFinite(numericDistance) || numericDistance <= 0) {
+        validatedDistance = 2.5; // Safe fallback
+        console.log('⚠️ Invalid distance, using fallback:', validatedDistance);
+      } else {
+        validatedDistance = numericDistance;
+      }
+      
+      // Validate payout amount with comprehensive checks
       console.log('🔍 Raw agent_payout value:', { agent_payout, type: typeof agent_payout });
-      
-      // Convert to number and validate
       const numericAmount = Number(agent_payout);
       
-      if (isNaN(numericAmount) || !isFinite(numericAmount) || numericAmount <= 0) {
-        console.error('❌ Invalid payout amount detected:', { 
+      const hasValidAmount = (
+        !isNaN(numericAmount) && 
+        isFinite(numericAmount) && 
+        numericAmount > 0 && 
+        numericAmount !== null && 
+        numericAmount !== undefined &&
+        typeof numericAmount === 'number'
+      );
+      
+      if (!hasValidAmount) {
+        console.error('❌ Invalid payout amount, calculating bulletproof fallback:', { 
           agent_payout, 
-          numericAmount, 
-          isNaN: isNaN(numericAmount),
-          isFinite: isFinite(numericAmount),
-          isLessThanOrEqualZero: numericAmount <= 0
+          numericAmount,
+          validationResults: {
+            isNaN: isNaN(numericAmount),
+            isFinite: isFinite(numericAmount),
+            isPositive: numericAmount > 0,
+            isNotNull: numericAmount !== null,
+            isNotUndefined: numericAmount !== undefined,
+            isNumber: typeof numericAmount === 'number'
+          }
         });
         
-        // Use fallback amount based on distance
-        validatedAmount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 12;
-        console.log('🔧 Using fallback payout calculation:', validatedAmount);
+        // Use new rate calculation: ₹12 base + ₹8/km
+        validatedAmount = validatedDistance <= 1 ? 12 : 12 + (validatedDistance - 1) * 8;
+        console.log('🔧 Bulletproof fallback calculation applied:', validatedAmount);
       } else {
         validatedAmount = numericAmount;
       }
       
-      console.log('💰 Final validated amount:', { validatedAmount, type: typeof validatedAmount });
+      // Ultimate safety net
+      if (!validatedAmount || validatedAmount <= 0 || isNaN(validatedAmount)) {
+        validatedAmount = 20; // Emergency fallback
+        console.log('🛡️ Emergency fallback applied:', validatedAmount);
+      }
+      
+      console.log('💰 Maximum validated amount:', { validatedAmount, type: typeof validatedAmount });
       
       // Update order status directly
       const { error: orderUpdateError } = await supabaseClient
@@ -168,15 +198,26 @@ serve(async (req) => {
         console.log('✅ Earnings record created');
       }
       
-      // Create wallet transaction
+      // Create wallet transaction with absolute final validation
+      const absoluteFinalAmount = Number(validatedAmount);
+      
+      // Last line of defense before database insertion
+      if (!absoluteFinalAmount || absoluteFinalAmount <= 0 || isNaN(absoluteFinalAmount) || !isFinite(absoluteFinalAmount)) {
+        console.error('❌ CRITICAL ERROR: Absolute final amount validation failed');
+        throw new Error(`Fatal amount validation error: ${absoluteFinalAmount} is not a valid positive number`);
+      }
+      
+      console.log('🔒 Pre-insertion amount check passed:', { absoluteFinalAmount, type: typeof absoluteFinalAmount });
+      
       const { error: transactionError } = await supabaseClient
         .from('agent_wallet_transactions')
         .insert({
           agent_id: agent.id,
           order_id: order_id,
-          amount: validatedAmount,
+          amount: absoluteFinalAmount,
           transaction_type: 'delivery_payment',
-          description: 'Simple delivery completion payout'
+          description: 'Simple delivery completion payout',
+          status: 'completed'
         });
       
       if (transactionError) {

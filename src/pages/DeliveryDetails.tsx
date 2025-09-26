@@ -323,14 +323,36 @@ const DeliveryDetails = () => {
     setDeliveryError(null); // Clear any previous errors
     
     try {
+      // BULLETPROOF VALIDATION - Ensure no null/undefined values reach the API
+      if (!order?.id) {
+        throw new Error('Invalid order ID');
+      }
+
+      // Validate and sanitize distance
+      let validDistance = distance;
+      if (!validDistance || validDistance <= 0 || isNaN(validDistance) || !isFinite(validDistance)) {
+        console.warn('⚠️ Invalid distance detected, using fallback:', validDistance);
+        validDistance = 2.5; // Safe fallback
+      }
+
+      // Validate and sanitize payout
+      let validPayout = payout;
+      if (!validPayout || validPayout <= 0 || isNaN(validPayout) || !isFinite(validPayout)) {
+        console.warn('⚠️ Invalid payout detected, calculating fallback:', validPayout);
+        validPayout = validDistance <= 1 ? 12 : 12 + (validDistance - 1) * 8; // New rate calculation
+      }
+
+      // Validate payment method
+      const validPaymentMethod = paymentMethod === 'COD' ? 'COD' : 'Online';
+
       const requestPayload = {
-        order_id: order?.id,
-        payment_method: paymentMethod === 'COD' ? 'COD' : 'Online',
-        distance_km: distance, // Pass real-time distance
-        agent_payout: payout    // Pass calculated payout
+        order_id: order.id,
+        payment_method: validPaymentMethod,
+        distance_km: Number(validDistance), // Ensure numeric
+        agent_payout: Number(validPayout)   // Ensure numeric
       };
       
-      console.log('📋 Request payload with real-time data:', requestPayload);
+      console.log('📋 Validated request payload:', requestPayload);
       
       const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: requestPayload

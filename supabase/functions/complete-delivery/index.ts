@@ -314,31 +314,52 @@ serve(async (req) => {
     console.log('💾 Using direct database operations to complete delivery...');
     
     try {
-      // Bulletproof amount validation - handle all edge cases
+      // TRIPLE-LAYER BULLETPROOF VALIDATION SYSTEM
       let validatedAmount;
       
       console.log('🔍 Raw payout_amount value:', { payout_amount, type: typeof payout_amount });
       
-      // Convert to number and validate
+      // Layer 1: Convert to number and basic validation
       const numericAmount = Number(payout_amount);
       
-      if (isNaN(numericAmount) || !isFinite(numericAmount) || numericAmount <= 0) {
-        console.error('❌ Invalid payout amount detected:', { 
+      // Layer 2: Comprehensive validation checks
+      const isInvalidAmount = (
+        isNaN(numericAmount) || 
+        !isFinite(numericAmount) || 
+        numericAmount <= 0 || 
+        numericAmount === null || 
+        numericAmount === undefined ||
+        typeof numericAmount !== 'number'
+      );
+      
+      if (isInvalidAmount) {
+        console.error('❌ Invalid payout amount detected, applying bulletproof fallback:', { 
           payout_amount, 
-          numericAmount, 
-          isNaN: isNaN(numericAmount),
-          isFinite: isFinite(numericAmount),
-          isLessThanOrEqualZero: numericAmount <= 0
+          numericAmount,
+          validationChecks: {
+            isNaN: isNaN(numericAmount),
+            isFinite: isFinite(numericAmount),
+            isPositive: numericAmount > 0,
+            isNull: numericAmount === null,
+            isUndefined: numericAmount === undefined,
+            isNumber: typeof numericAmount === 'number'
+          }
         });
         
-        // Use fallback amount based on distance
-        validatedAmount = distance_km_calc <= 1 ? 20 : 20 + (distance_km_calc - 1) * 12;
-        console.log('🔧 Using fallback payout calculation:', validatedAmount);
+        // Layer 3: Bulletproof fallback using new rates (₹12 base + ₹8/km)
+        validatedAmount = distance_km_calc <= 1 ? 12 : 12 + (distance_km_calc - 1) * 8;
+        console.log('🔧 Applied bulletproof fallback calculation:', validatedAmount);
       } else {
         validatedAmount = numericAmount;
       }
       
-      console.log('💰 Final validated amount:', { validatedAmount, type: typeof validatedAmount });
+      // Layer 4: Ultimate safety net
+      if (!validatedAmount || validatedAmount <= 0 || isNaN(validatedAmount)) {
+        validatedAmount = 20; // Emergency fallback
+        console.log('🛡️ Applied ultimate safety fallback:', validatedAmount);
+      }
+      
+      console.log('💰 Triple-validated amount:', { validatedAmount, type: typeof validatedAmount });
       
       // Update order status to delivered
       const { error: orderUpdateError } = await supabaseClient
@@ -404,13 +425,23 @@ serve(async (req) => {
         console.log('✅ Agent wallet updated:', { previousBalance: currentBalance, addedAmount: validatedAmount, newBalance });
       }
 
-      // Create wallet transaction with validated amount
+      // Create wallet transaction with FINAL safety validation before database insertion
+      const finalTransactionAmount = Number(validatedAmount);
+      
+      // Pre-insertion validation - last line of defense
+      if (!finalTransactionAmount || finalTransactionAmount <= 0 || isNaN(finalTransactionAmount) || !isFinite(finalTransactionAmount)) {
+        console.error('❌ CRITICAL: Pre-insertion validation failed, applying emergency protocol');
+        throw new Error(`Fatal amount validation error: cannot insert ${finalTransactionAmount} into database`);
+      }
+      
+      console.log('🔒 Pre-insertion final amount check:', { finalTransactionAmount, type: typeof finalTransactionAmount });
+      
       const { error: transactionError } = await supabaseClient
         .from('agent_wallet_transactions')
         .insert({
           agent_id: agent.id,
           order_id: order_id,
-          amount: validatedAmount, // Use validated amount
+          amount: finalTransactionAmount,
           transaction_type: 'delivery_payment',
           description: 'Delivery payout for order',
           status: 'completed'
