@@ -92,6 +92,16 @@ interface Order {
   seller_name?: string;
   eta_mins?: number;
   distance_source?: 'realtime' | 'cached' | 'fallback' | 'error';
+  
+  // Backend classification fields
+  calculated_delivery_type?: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
+  immediate_timing_config?: {
+    max_duration_minutes: number;
+    time_slot_start: string;
+    time_slot_end: string;
+    slot_name: string;
+  };
+  original_created_at?: string;
 }
 
 
@@ -477,25 +487,17 @@ const Home = () => {
       products_count: Array.isArray(order.items) ? order.items.length : 1,
       restaurant: order.restaurant || undefined,
       backend_calculated: false,
-      // Improved delivery type logic based on actual backend fields
-      delivery_type: (() => {
-        // Priority 1: Subscription orders
+      // Use backend classification first, then fallback to frontend logic
+      delivery_type: order.calculated_delivery_type || (() => {
+        // Fallback frontend logic if backend doesn't provide classification
         if (order.subscription_id) return 'scheduled';
-        
-        // Priority 2: Orders with delivery time slots (scheduled)
         if (order.delivery_time_slot) return 'scheduled';
-        
-        // Priority 3: Orders with specific delivery time (not immediate)
         if (order.delivery_time && order.delivery_time !== 'Immediate') return 'scheduled';
-        
-        // Priority 4: Book now pay later orders (future delivery date)
         if (order.payment_status === 'Pending' && 
             order.delivery_date && 
             order.delivery_date !== new Date().toISOString().split('T')[0]) {
           return 'book_now_pay_later';
         }
-        
-        // Default: Immediate delivery
         return 'immediate';
       })(),
       order_placed_at: new Date(order.created_at),
@@ -507,7 +509,12 @@ const Home = () => {
       pickup_location: pickupLocation,
       pickup_address: pickupAddress,
       seller_phone: sellerPhone,
-      seller_name: sellerName
+      seller_name: sellerName,
+      
+      // Pass through backend classification and timing data
+      calculated_delivery_type: order.calculated_delivery_type,
+      immediate_timing_config: order.immediate_timing_config,
+      original_created_at: order.original_created_at
     };
   };
 

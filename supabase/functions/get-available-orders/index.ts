@@ -363,12 +363,37 @@ serve(async (req) => {
         // Determine delivery type using proper logic and database timings
         let immediateTimingConfig = null;
         
-        // Check for immediate orders first (recent orders without specific scheduling)
-        if (
+        // Classification order matters - most specific first
+        if (order.subscription_id) {
+          calculatedType = 'subscription';
+          // Get subscription timing from database
+          const subscriptionTiming = deliveryTimings?.find(t => t.delivery_type === 'subscription');
+          if (subscriptionTiming && !properTimeSlot) {
+            properTimeSlot = `${subscriptionTiming.time_slot_start.slice(0, 5)}-${subscriptionTiming.time_slot_end.slice(0, 5)}`;
+          }
+          console.log(`Order ${order.id} -> subscription (has subscription_id, time: ${properTimeSlot})`);
+        } else if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
+          calculatedType = 'scheduled';
+          console.log(`Order ${order.id} -> scheduled (has time slot: ${order.delivery_time_slot})`);
+        } else if (order.delivery_date && order.delivery_date !== today) {
+          calculatedType = 'scheduled';
+          // Assign appropriate scheduled timing if none exists
+          if (!properTimeSlot) {
+            const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
+            if (scheduledTiming) {
+              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
+            }
+          }
+          console.log(`Order ${order.id} -> scheduled (future date, time: ${properTimeSlot})`);
+        } else if (order.delivery_time && order.delivery_time !== '12:00:00') {
+          calculatedType = 'scheduled';
+          console.log(`Order ${order.id} -> scheduled (specific time: ${order.delivery_time})`);
+        } else if (
+          // Check for immediate orders (recent orders without specific scheduling)
           !order.subscription_id &&
           (!order.delivery_time_slot || order.delivery_time_slot === null || order.delivery_time_slot === '') &&
           (!order.delivery_date || order.delivery_date === today) && 
-          minutesSinceCreated < 30
+          minutesSinceCreated < 60 // Extended to 60 minutes for immediate classification
         ) {
           // Recent orders without specific scheduling should be immediate
           calculatedType = 'immediate';
@@ -393,35 +418,28 @@ serve(async (req) => {
             };
             console.log(`Order ${order.id} -> immediate (recent order, no specific scheduling, created ${minutesSinceCreated} min ago) - using fallback 20min timing`);
           }
-        } else if (order.subscription_id) {
-          calculatedType = 'subscription';
-          // Get subscription timing from database
-          const subscriptionTiming = deliveryTimings?.find(t => t.delivery_type === 'subscription');
-          if (subscriptionTiming && !properTimeSlot) {
-            properTimeSlot = `${subscriptionTiming.time_slot_start.slice(0, 5)}-${subscriptionTiming.time_slot_end.slice(0, 5)}`;
-          }
-          console.log(`Order ${order.id} -> subscription (has subscription_id, time: ${properTimeSlot})`);
-        } else if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
-          calculatedType = 'scheduled';
-          console.log(`Order ${order.id} -> scheduled (has time slot: ${order.delivery_time_slot})`);
-        } else if (order.delivery_date && order.delivery_date !== today) {
-          calculatedType = 'scheduled';
-          // Assign appropriate scheduled timing if none exists
-          if (!properTimeSlot) {
-            const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
-            if (scheduledTiming) {
-              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
-            }
-          }
-          console.log(`Order ${order.id} -> scheduled (future date, time: ${properTimeSlot})`);
-        } else if (order.delivery_time && order.delivery_time !== '12:00:00') {
-          calculatedType = 'scheduled';
-          console.log(`Order ${order.id} -> scheduled (specific time: ${order.delivery_time})`);
         } else if (order.payment_status === 'pending') {
           calculatedType = 'book_now_pay_later';
           console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
         } else {
           calculatedType = 'immediate';
+          // Get immediate delivery timing configuration for fallback immediate orders
+          const immediateTiming = deliveryTimings?.find(t => t.delivery_type === 'immediate');
+          if (immediateTiming) {
+            immediateTimingConfig = {
+              max_duration_minutes: immediateTiming.max_duration_minutes,
+              time_slot_start: immediateTiming.time_slot_start,
+              time_slot_end: immediateTiming.time_slot_end,
+              slot_name: immediateTiming.slot_name
+            };
+          } else {
+            immediateTimingConfig = {
+              max_duration_minutes: 20,
+              time_slot_start: '00:00:00',
+              time_slot_end: '23:59:59',
+              slot_name: 'Immediate Delivery'
+            };
+          }
           console.log(`Order ${order.id} -> immediate (default fallback)`);
         }
         
