@@ -230,6 +230,16 @@ serve(async (req) => {
     console.log('💾 Completing delivery with direct operations...');
     
     try {
+      // Validate amount before any database operations
+      const validatedAmount = Number(payout_amount) || 0;
+      
+      if (validatedAmount <= 0) {
+        console.error('❌ Invalid payout amount:', { payout_amount, validatedAmount });
+        throw new Error(`Invalid payout amount: ${payout_amount}`);
+      }
+      
+      console.log('💰 Validated payout amount:', validatedAmount);
+      
       // Update order status directly
       const { error: orderUpdateError } = await supabaseClient
         .from('orders')
@@ -257,7 +267,9 @@ serve(async (req) => {
         .single();
       
       const currentBalance = existingWallet?.balance || 0;
-      const newBalance = Number(currentBalance) + Number(payout_amount);
+      const newBalance = Number(currentBalance) + validatedAmount;
+      
+      console.log('💳 Wallet update:', { currentBalance, validatedAmount, newBalance });
       
       const { error: walletError } = await supabaseClient
         .from('agent_wallet')
@@ -275,13 +287,13 @@ serve(async (req) => {
         console.log('✅ Agent wallet updated with payout');
       }
       
-      // Create earnings record
+      // Create earnings record with validated amount
       const { error: earningsError } = await supabaseClient
         .from('earnings')
         .insert({
           agent_id: agent.id,
           order_id: order.id,
-          amount: payout_amount,
+          amount: validatedAmount,
           status: 'completed',
           description: `QR delivery payout: ${distance_km}km`
         });
@@ -292,13 +304,13 @@ serve(async (req) => {
         console.log('✅ Earnings record created');
       }
       
-      // Create wallet transaction
+      // Create wallet transaction with validated amount
       const { error: transactionError } = await supabaseClient
         .from('agent_wallet_transactions')
         .insert({
           agent_id: agent.id,
           order_id: order.id,
-          amount: payout_amount,
+          amount: validatedAmount,
           transaction_type: 'delivery_payment',
           description: 'QR delivery completion payout'
         });
@@ -335,11 +347,18 @@ serve(async (req) => {
       
     } catch (directOpError) {
       console.error('❌ Direct operations failed:', directOpError);
+      
+      // Check if it's a database constraint error
+      const errorMessage = directOpError instanceof Error ? directOpError.message : String(directOpError);
+      const isConstraintError = errorMessage.includes('violates not-null constraint') || 
+                               errorMessage.includes('null value in column');
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to complete delivery', 
-          details: directOpError instanceof Error ? directOpError.message : String(directOpError)
+          error: isConstraintError ? 'Database validation error - invalid payout amount' : 'Failed to complete delivery',
+          code: isConstraintError ? 'AMOUNT_VALIDATION_FAILED' : 'DIRECT_OP_FAILED',
+          details: errorMessage
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
