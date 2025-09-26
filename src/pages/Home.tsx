@@ -1285,14 +1285,15 @@ const Home = () => {
 
                          {/* Delivery Timer */}
                          <div className="mb-4">
-                               <DeliveryTimer
-                                   deliveryType={(order as any).calculated_delivery_type || (order.delivery_time_slot ? 'scheduled' : 'immediate')}
-                                   orderPlacedAt={new Date((order as any).original_created_at || order.created_at)}
-                                   deliveryTimeSlot={order.delivery_time_slot}
-                                  deliverySlots={parseDeliverySlots(order)}
-                                  paymentStatus={order.payment_status}
-                                  immediateTimingConfig={(order as any).immediate_timing_config}
-                                />
+                                <DeliveryTimer
+                                    deliveryType={(order as any).calculated_delivery_type || (order.subscription_id ? 'subscription' : (order.delivery_time_slot && order.delivery_time_slot.includes('-') ? 'scheduled' : 'immediate'))}
+                                    orderPlacedAt={new Date((order as any).original_created_at || order.created_at)}
+                                    deliveryTimeSlot={order.delivery_time_slot}
+                                    deliverySlots={parseDeliverySlots(order)}
+                                    paymentStatus={order.payment_status}
+                                    subscriptionId={order.subscription_id}
+                                    immediateTimingConfig={(order as any).immediate_timing_config}
+                                 />
                          </div>
 
                         {/* Address */}

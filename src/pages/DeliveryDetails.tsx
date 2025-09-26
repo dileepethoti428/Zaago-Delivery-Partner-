@@ -11,6 +11,7 @@ import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from "@/lib/distanceService";
 import { ArrowLeft, MapPin, Phone, Clock, Calendar, Navigation, CheckCircle2, Package, User, CreditCard, AlertCircle, X } from "lucide-react";
+import DeliveryTimer from "@/components/DeliveryTimer";
 interface Order {
   id: string;
   customer_name: string;
@@ -28,6 +29,21 @@ interface Order {
   distance_km?: number;
   backend_calculated?: boolean;
   pickup_location?: any; // Json type from database that contains {lat: number, lng: number}
+  subscription_id?: string;
+  calculated_delivery_type?: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
+  delivery_time?: string;
+  delivery_slots?: {
+    id: string;
+    slot_name: string;
+    start_time: string;
+    end_time: string;
+  };
+  immediate_timing_config?: {
+    max_duration_minutes: number;
+    time_slot_start: string;
+    time_slot_end: string;
+    slot_name: string;
+  };
 }
 const DeliveryDetails = () => {
   const {
@@ -478,6 +494,22 @@ const DeliveryDetails = () => {
             </div>}
         </CardContent>
       </Card>
+
+      {/* Delivery Timer */}
+      <div className="animate-slide-up">
+        <DeliveryTimer
+          deliveryType={order.calculated_delivery_type || (order.subscription_id ? 'subscription' : 'scheduled')}
+          scheduledTime={order.delivery_date}
+          orderPlacedAt={new Date(order.created_at)}
+          subscriptionId={order.subscription_id}
+          deliveryTime={order.delivery_time}
+          deliverySlots={order.delivery_slots}
+          paymentStatus={order.payment_status}
+          deliveryTimeSlot={order.delivery_time_slot}
+          immediateTimingConfig={order.immediate_timing_config}
+          className="w-full"
+        />
+      </div>
 
       {/* Order Details */}
       <Card className="bg-card border-border animate-slide-up">
