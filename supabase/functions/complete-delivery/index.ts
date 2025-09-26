@@ -42,7 +42,7 @@ serve(async (req) => {
       );
     }
 
-    const { order_id, agent_location } = body;
+    const { order_id, agent_location, distance_km, agent_payout } = body;
     let { payment_method } = body;
     
     console.log('📋 Request parameters:', { order_id, payment_method, has_agent_location: !!agent_location });
@@ -279,9 +279,11 @@ serve(async (req) => {
       );
     }
 
-    // Calculate distance for payout
-    let distance_km = 2.5; // Default fallback
-    let payout_amount = 35; // Default fallback
+    // Calculate distance for payout with guaranteed non-null values
+    let distance_km_calc = distance_km || 2.5; // Use provided or fallback
+    let payout_amount = agent_payout || 35; // Use provided or fallback
+    
+    console.log('💰 Initial payout calculation:', { distance_km: distance_km_calc, payout_amount });
     
     if (order.address?.coordinates && order.pickup_location) {
       try {
@@ -293,14 +295,20 @@ serve(async (req) => {
         });
 
         if (distanceData?.distance_km) {
-          distance_km = distanceData.distance_km;
+          distance_km_calc = distanceData.distance_km;
           // Calculate payout: ₹20 base + ₹12/km beyond 1km
-          payout_amount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 12;
+          payout_amount = distance_km_calc <= 1 ? 20 : 20 + (distance_km_calc - 1) * 12;
         }
       } catch (distanceError) {
         console.warn('Distance calculation failed, using defaults:', distanceError);
       }
     }
+    
+    // Ensure payout_amount is never null or zero
+    payout_amount = Math.max(payout_amount || 35, 20); // Minimum ₹20
+    distance_km_calc = Math.max(distance_km_calc || 2.5, 0.1); // Minimum 0.1km
+    
+    console.log('💰 Final payout calculation:', { distance_km: distance_km_calc, payout_amount });
 
     // Enhanced order status update with fallback mechanism
     console.log('💾 Starting robust order status update...');
@@ -412,7 +420,7 @@ serve(async (req) => {
             order_id: order_id,
             amount: payout_amount,
             status: 'completed',
-            distance_km: distance_km,
+            distance_km: distance_km_calc,
             payment_method: payment_method === 'COD' ? 'COD' : 'Online',
             description: `Delivery payout for order ${order_id.substring(0, 8)}`
           });
@@ -451,7 +459,7 @@ serve(async (req) => {
           id: order_id,
           customer_name: order.customer_name,
           total: order.total,
-          distance_km: Math.round(distance_km * 100) / 100,
+          distance_km: Math.round(distance_km_calc * 100) / 100,
           payout_amount: Math.round(payout_amount),
           payment_method
         }
