@@ -565,7 +565,12 @@ const DeliveryDetails = () => {
       {/* Delivery Timer */}
       <div className="animate-slide-up">
         <DeliveryTimer
-          deliveryType={order.calculated_delivery_type || (order.subscription_id ? 'subscription' : 'scheduled')}
+          deliveryType={
+            order.calculated_delivery_type || 
+            (order.subscription_id ? 'subscription' : 
+              (order.delivery_time_slot && order.delivery_time_slot.includes('-') ? 'scheduled' : 'immediate')
+            )
+          }
           scheduledTime={order.delivery_date}
           orderPlacedAt={new Date(order.created_at)}
           subscriptionId={order.subscription_id}
