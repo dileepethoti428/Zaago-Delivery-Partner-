@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.simple-complete-delivery]
 verify_jwt = true
+
+[functions.qr-scan-order]
+verify_jwt = true
+
+[functions.qr-complete-delivery]
+verify_jwt = true

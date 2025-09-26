@@ -15,16 +15,30 @@ interface QrScannerDialogProps {
 interface ScannedOrder {
   order_id: string;
   customer_name: string;
+  customer_phone?: string;
   total_amount: number;
   payment_status: string;
+  address?: any;
+  items?: any[];
+  special_instructions?: string;
+  delivery_time_slot?: string;
+  estimated_payout?: number;
+}
+
+interface PaymentOption {
+  value: string;
+  label: string;
+  description: string;
 }
 
 export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) => {
   const { toast } = useToast();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedOrder, setScannedOrder] = useState<ScannedOrder | null>(null);
+  const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentQrCode, setCurrentQrCode] = useState<string>('');
 
   const handleScan = async (detectedCodes: any[]) => {
     if (!detectedCodes || detectedCodes.length === 0) return;
@@ -32,106 +46,94 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     const result = detectedCodes[0].rawValue;
     try {
       setIsScanning(false);
+      setCurrentQrCode(result);
       
-      // First, check if QR code exists (regardless of scan status)
-      const { data: qrData, error } = await supabase
-        .from('order_qr_codes')
-        .select(`
-          order_id,
-          is_scanned,
-          scanned_at,
-          orders (
-            id,
-            total,
-            customer_name,
-            status,
-            payment_status,
-            delivered_at
-          )
-        `)
-        .eq('qr_code_data', result)
-        .single();
-
-      if (error || !qrData) {
-        toast({
-          title: "Invalid QR Code",
-          description: "This QR code is not valid",
-          variant: "destructive"
-        });
-        onOpenChange(false);
-        return;
-      }
-
-      const order = qrData.orders as any;
+      console.log('🔍 Scanning QR code:', result);
       
-      // Check if order is already delivered
-      if (order.status === 'delivered') {
-        const deliveredDate = new Date(order.delivered_at).toLocaleDateString();
-        toast({
-          title: "Product Already Delivered! ✅",
-          description: `This order for ${order.customer_name} was delivered on ${deliveredDate}`,
-          variant: "default"
-        });
-        onOpenChange(false);
-        return;
-      }
+      // Use the new qr-scan-order function to validate and get order info
+      const { data, error } = await supabase.functions.invoke('qr-scan-order', {
+        body: {
+          qr_code_data: result
+        }
+      });
 
-      // Check if QR code was already scanned but order not delivered
-      if (qrData.is_scanned) {
-        const scannedDate = new Date(qrData.scanned_at).toLocaleDateString();
+      console.log('📱 QR scan response:', { data, error });
+
+      if (error) {
+        console.error('❌ QR scan error:', error);
         toast({
-          title: "QR Code Already Used",
-          description: `This QR code was already scanned on ${scannedDate}`,
+          title: "Scan Failed",
+          description: error.message || "Unable to process QR code. Please try again.",
           variant: "destructive"
         });
         onOpenChange(false);
         return;
       }
 
-      // Check if order is ready for delivery
-      if (order.status !== 'assigned') {
-        toast({
-          title: "Order Not Ready",
-          description: "This order is not assigned for delivery yet",
-          variant: "destructive"
-        });
+      if (!data || !data.success) {
+        const errorMsg = data?.error || data?.message || 'Invalid QR code';
+        console.error('❌ QR scan failed:', errorMsg);
+        
+        // Special handling for "order not assigned" error
+        if (errorMsg.includes('not assigned to you')) {
+          toast({
+            title: "Order Not Assigned",
+            description: "This order is assigned to another delivery agent. Only the assigned agent can complete this delivery.",
+            variant: "destructive"
+          });
+        } else if (errorMsg.includes('already delivered')) {
+          toast({
+            title: "Order Already Delivered ✅",
+            description: "This order has already been completed.",
+            variant: "default"
+          });
+        } else if (errorMsg.includes('already used')) {
+          toast({
+            title: "QR Code Already Used",
+            description: "This QR code has already been scanned.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Invalid QR Code",
+            description: errorMsg,
+            variant: "destructive"
+          });
+        }
         onOpenChange(false);
         return;
       }
 
-      // Set scanned order data for delivery
+      const order = data.order;
+      const paymentOpts = data.payment_options || [];
+      
+      // Set scanned order data
       setScannedOrder({
         order_id: order.id,
         customer_name: order.customer_name,
+        customer_phone: order.customer_phone,
         total_amount: order.total,
-        payment_status: order.payment_status
+        payment_status: 'pending', // Will be set based on selection
+        address: order.address,
+        items: order.items,
+        special_instructions: order.special_instructions,
+        delivery_time_slot: order.delivery_time_slot,
+        estimated_payout: order.estimated_payout
       });
+
+      setPaymentOptions(paymentOpts);
 
       toast({
-        title: "QR Code Scanned!",
-        description: `Order for ${order.customer_name} - ₹${order.total}`,
+        title: "QR Code Scanned! 📱",
+        description: `Order for ${order.customer_name} - ₹${order.total}. Estimated payout: ₹${order.estimated_payout}`,
       });
 
-      // Store QR data for later use
-      localStorage.setItem('last_scanned_qr', result);
-
-      // Close scanner
+      // Close scanner and show payment options
       onOpenChange(false);
-
-      // For prepaid orders, complete delivery directly
-      if (order.payment_status === 'paid' || order.payment_status === 'paid_online') {
-        await completeDelivery(result, 'paid_online');
-        toast({
-          title: "Product Delivered! ✅",
-          description: `Successfully delivered to ${order.customer_name}`,
-        });
-      } else {
-        // For COD orders, show payment options
-        setShowPaymentDialog(true);
-      }
+      setShowPaymentDialog(true);
 
     } catch (error) {
-      console.error('QR Scan error:', error);
+      console.error('❌ QR Scan error:', error);
       toast({
         title: "Scan Failed",
         description: "Unable to process QR code. Please try again.",
@@ -150,38 +152,57 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     });
   };
 
-  const completeDelivery = async (qrCodeData: string, paymentMethod: string) => {
+  const completeDelivery = async (paymentMethod: string) => {
+    if (!currentQrCode) {
+      toast({
+        title: "Error",
+        description: "No QR code data available",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
+      console.log('🚚 Completing delivery with payment method:', paymentMethod);
+      
       const { data, error } = await supabase.functions.invoke('qr-complete-delivery', {
         body: {
-          qr_code_data: qrCodeData,
+          qr_code_data: currentQrCode,
           payment_method: paymentMethod
         }
       });
 
-      if (error) throw error;
+      console.log('📦 Delivery completion response:', { data, error });
 
-      if (data.success) {
+      if (error) {
+        console.error('❌ Delivery completion error:', error);
+        throw new Error(error.message || 'Failed to complete delivery');
+      }
+
+      if (data && data.success) {
         toast({
           title: "Product Delivered! ✅",
-          description: `Successfully delivered to ${data.order.customer_name}`,
+          description: `Successfully delivered to ${data.order.customer_name}. Earned: ₹${data.order.payout_amount}`,
         });
         
         // Reset states
         setScannedOrder(null);
         setShowPaymentDialog(false);
+        setCurrentQrCode('');
         
-        // Refresh the orders list by dispatching a custom event with order id
-        window.dispatchEvent(new CustomEvent('orderCompleted', { detail: { orderId: data.order.id } }));
+        // Refresh the orders list by dispatching a custom event
+        window.dispatchEvent(new CustomEvent('orderCompleted', { 
+          detail: { orderId: data.order.id } 
+        }));
       } else {
-        throw new Error(data.error || 'Failed to complete delivery');
+        throw new Error(data?.error || 'Failed to complete delivery');
       }
     } catch (error) {
-      console.error('Complete delivery error:', error);
+      console.error('❌ Complete delivery error:', error);
       toast({
         title: "Delivery Failed",
-        description: "Unable to complete delivery. Please try again.",
+        description: error instanceof Error ? error.message : "Unable to complete delivery. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -192,7 +213,9 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
   const resetScanner = () => {
     setIsScanning(true);
     setScannedOrder(null);
+    setPaymentOptions([]);
     setShowPaymentDialog(false);
+    setCurrentQrCode('');
   };
 
   return (
@@ -256,16 +279,14 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         </DialogContent>
       </Dialog>
 
-      {scannedOrder && scannedOrder.payment_status !== 'paid' && scannedOrder.payment_status !== 'paid_online' && (
+      {scannedOrder && (
         <PaymentMethodDialog
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
           order={scannedOrder}
           selectionOnly={true}
           onSuccess={async (paymentMethod) => {
-            const qrCodeData = localStorage.getItem('last_scanned_qr') || '';
-            await completeDelivery(qrCodeData, paymentMethod);
-            localStorage.removeItem('last_scanned_qr');
+            await completeDelivery(paymentMethod);
           }}
         />
       )}

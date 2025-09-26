@@ -94,7 +94,7 @@ serve(async (req) => {
       );
     }
 
-    // Validate QR code and get order details
+    // Validate QR code and get order details with agent assignment
     const { data: qrData, error: qrError } = await supabaseClient
       .from('order_qr_codes')
       .select(`
@@ -110,7 +110,8 @@ serve(async (req) => {
           status,
           payment_status,
           special_instructions,
-          delivery_time_slot
+          delivery_time_slot,
+          agent_id
         )
       `)
       .eq('qr_code_data', qr_code_data)
@@ -155,6 +156,18 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: false, error: 'Order not ready for delivery' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Check if order is assigned to this agent
+    if (order.agent_id !== agent.id) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Order is not assigned to you. Only the assigned delivery agent can complete this order.',
+          message: 'This order is assigned to another agent. Please contact support if you believe this is an error.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
 
@@ -250,10 +263,30 @@ serve(async (req) => {
       }
     }
 
-    // The trigger will handle delivery_history creation, but let's update it with QR-specific details
-    const distance_km = 2.5;
-    let payout_amount = 27.5;
+    // Calculate accurate distance and payout using the fixed function
+    const distance_km = 2.5; // This should be calculated based on actual delivery route
+    let payout_amount = 12; // Default fallback
     let payoutResult = null;
+
+    // Use the new fixed calculate_delivery_payout function
+    try {
+      const { data: calculationData, error: calculationError } = await supabaseClient.rpc('calculate_delivery_payout', {
+        p_distance_km: distance_km,
+        p_delivery_time: new Date().toISOString(),
+        p_agent_id: agent.id
+      });
+
+      if (calculationError) {
+        console.error('Payout calculation error:', calculationError);
+        payout_amount = 12; // Use base rate as fallback
+      } else {
+        payout_amount = calculationData?.total_payout || 12;
+        console.log('Payout calculated:', calculationData);
+      }
+    } catch (error) {
+      console.error('Payout calculation failed:', error);
+      payout_amount = 12; // Use base rate as fallback
+    }
 
     // Process payout safely
     try {
@@ -268,6 +301,7 @@ serve(async (req) => {
         console.error('Payout processing error:', payoutError);
       } else {
         payoutResult = payoutData;
+        // Use the calculated payout or the processed amount, whichever is available
         payout_amount = payoutResult?.payout_details?.total_payout || payout_amount;
         console.log('Payout processed:', payoutResult);
       }
@@ -364,12 +398,20 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Order completed successfully!',
+        message: 'Order completed successfully via QR scan!',
         order: {
           id: order.id,
           customer_name: order.customer_name,
           total: order.total,
-          payment_method
+          payment_method,
+          distance_km,
+          payout_amount,
+          agent_name: agent.name
+        },
+        delivery_details: {
+          completed_at: new Date().toISOString(),
+          completed_by: agent.name,
+          method: 'QR_SCAN'
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
