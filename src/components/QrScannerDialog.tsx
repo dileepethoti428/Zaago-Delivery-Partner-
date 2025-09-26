@@ -152,6 +152,12 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
             description: "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.",
             variant: "destructive"
           });
+        } else if (errorMsg.includes('Order not ready for delivery') || errorMsg.includes('not ready for delivery')) {
+          toast({
+            title: "Order Not Ready",
+            description: "This order is not ready for delivery. Please check the order status.",
+            variant: "destructive"
+          });
         } else if (errorMsg.includes('already delivered')) {
           toast({
             title: "Product Already Delivered ✅",
