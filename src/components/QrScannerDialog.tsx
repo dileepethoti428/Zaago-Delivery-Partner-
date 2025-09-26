@@ -146,7 +146,11 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         console.error('❌ QR scan failed:', errorMsg);
         
         // Special handling for specific error messages
-        if (errorMsg.includes('not assigned to you') || errorMsg.includes('Order is not assigned to you')) {
+        // For 403 errors, Supabase returns generic "Edge Function returned a non-2xx status code" 
+        // which means the order is not assigned to this user
+        if (errorMsg.includes('not assigned to you') || 
+            errorMsg.includes('Order is not assigned to you') ||
+            (errorMsg.includes('Edge Function returned a non-2xx status code') && error && error.message?.includes('non-2xx status code'))) {
           toast({
             title: "🚫 Order Not Assigned to You",
             description: "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.",
@@ -170,10 +174,10 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
             description: "This QR code was already scanned. If the previous delivery failed, please contact admin for assistance.",
             variant: "destructive"
           });
-        } else if (errorMsg.includes('not ready') || errorMsg.includes('status')) {
+        } else if (errorMsg.includes('not ready')) {
           toast({
-            title: "Order Not Ready",
-            description: "This order is not ready for delivery. Please check the order status.",
+            title: "🚫 Order Not Assigned to You",
+            description: "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.",
             variant: "destructive"
           });
         } else {
