@@ -237,7 +237,7 @@ serve(async (req) => {
               
               // Validate both parts exist and are valid times
               if (startTime && endTime) {
-                const formatTime = (time) => {
+                const formatTime = (time: string) => {
                   const trimmed = time.trim();
                   // If time is already in HH:MM:SS format, use it
                   if (trimmed.match(/^\d{1,2}:\d{2}:\d{2}$/)) return trimmed;
@@ -263,8 +263,9 @@ serve(async (req) => {
                 .maybeSingle();
               deliverySlot = slot;
             } else if (timeSlot.match(/^\d{1,2}:\d{2}(:\d{2})?$/)) {
-              // Handle single time format like "12:00:00" or "12:00"
-              const formatTime = (time) => {
+              // Handle single time format - DON'T create synthetic ranges for actual delivery times
+              // Instead, let the frontend handle display of single times
+              const formatTime = (time: string) => {
                 const trimmed = time.trim();
                 // If time is already in HH:MM:SS format, use it
                 if (trimmed.match(/^\d{1,2}:\d{2}:\d{2}$/)) return trimmed;
@@ -273,12 +274,16 @@ serve(async (req) => {
                 return trimmed;
               };
               
-              deliverySlot = {
-                id: `slot-${order.id}`,
-                slot_name: `${timeSlot} window`,
-                start_time: formatTime(timeSlot),
-                end_time: formatTime(timeSlot)
-              };
+              // Only create synthetic slots for subscription orders, not regular orders
+              if (order.subscription_id) {
+                deliverySlot = {
+                  id: `slot-${order.id}`,
+                  slot_name: `${timeSlot} window`,
+                  start_time: formatTime(timeSlot),
+                  end_time: formatTime(timeSlot)
+                };
+              }
+              // For regular orders, don't create synthetic slots - let frontend handle
             }
             
             return {
@@ -391,15 +396,24 @@ serve(async (req) => {
                   // Check if this is a subscription order
                   if (order.subscription_id) return 'scheduled';
                   
-                  // Check for book now pay later (pending payment with future delivery)
-                  if (order.payment_status === 'pending' || order.payment_status === 'Pending') {
-                    return 'book_now_pay_later';
+                  // Check if this has actual delivery time slot (not generic time)
+                  if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
+                    return 'scheduled';
                   }
                   
-                  // Check if this is a scheduled order (has delivery_time_slot or delivery_date in future)
-                  if (order.delivery_time_slot || 
-                      (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0]) ||
-                      (order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00')) {
+                  // Check for book now pay later (pending payment + future delivery date)
+                  if (order.payment_status === 'pending' || order.payment_status === 'Pending') {
+                    const today = new Date().toISOString().split('T')[0];
+                    if (order.delivery_date && order.delivery_date > today) {
+                      return 'book_now_pay_later';
+                    }
+                    // If delivery date is today or in past with pending payment, treat as immediate
+                    return 'immediate';
+                  }
+                  
+                  // Check if this is a scheduled order (has specific time or future date)
+                  if ((order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00') ||
+                      (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])) {
                     return 'scheduled';
                   }
                   

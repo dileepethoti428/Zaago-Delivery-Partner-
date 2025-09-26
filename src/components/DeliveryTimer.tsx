@@ -165,19 +165,20 @@ const DeliveryTimer = ({
         displayTime = scheduleInfo.time;
         console.log('Using scheduleInfo time for display:', displayTime);
       } else {
-        // Order-type specific fallbacks - avoid showing same time for all
+        // Order-type specific fallbacks based on actual order characteristics
         if (isSubscription) {
           displayTime = '6:00 AM - 10:00 AM';
           hasTimeSlot = true;
-          console.log('Using subscription fallback time');
+          console.log('Using subscription morning slot fallback');
         } else if (isBookNowPayLater) {
           displayTime = 'Schedule on payment'; 
           hasTimeSlot = false;
           console.log('Using book now pay later fallback');
         } else {
-          displayTime = 'Time TBD';
+          // For regular orders with generic "12:00:00" time, show appropriate message
+          displayTime = 'Delivery time varies';
           hasTimeSlot = false;
-          console.warn('No valid time data found for scheduled order');
+          console.warn('Generic delivery time detected, showing generic message');
         }
       }
     }
