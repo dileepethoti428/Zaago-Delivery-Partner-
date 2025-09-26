@@ -76,34 +76,28 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       if (error) {
         console.error('❌ QR scan error:', error);
         
-        // Enhanced error handling with specific status codes
-        if (error.message?.includes('Authentication') || error.message?.includes('401')) {
+        // For function invocation errors (like 403, 400), the actual error details are in the data response
+        if (error.message?.includes('non-2xx status code')) {
+          console.log('⚠️ Non-2xx status, checking response data for specific error...');
+          // Let it fall through to parse the data object for specific error details
+        } else if (error.message?.includes('Authentication') || error.message?.includes('401')) {
           toast({
             title: "Authentication Error",
             description: "Please log out and log back in, then try again.",
             variant: "destructive"
           });
-        } else if (error.message?.includes('403') || error.message?.includes('not assigned')) {
-          toast({
-            title: "Access Denied",
-            description: "This order is assigned to another delivery agent.",
-            variant: "destructive"
-          });
-        } else if (error.message?.includes('400') || error.message?.includes('already used')) {
-          toast({
-            title: "QR Code Already Used",
-            description: "This QR code was already scanned. If delivery failed, contact admin.",
-            variant: "destructive"
-          });
+          onOpenChange(false);
+          return;
         } else {
+          // Only show generic error for actual network/connection issues
           toast({
             title: "Scan Failed", 
             description: error.message || "Unable to process QR code. Please try again.",
             variant: "destructive"
           });
+          onOpenChange(false);
+          return;
         }
-        onOpenChange(false);
-        return;
       }
 
       // Handle special "already delivered" status from qr-scan-order
@@ -132,6 +126,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         return;
       }
 
+      // Handle error responses from the edge function (both with and without error object)
       if (!data || !data.success) {
         const errorMsg = data?.error || data?.message || 'Invalid QR code';
         console.error('❌ QR scan failed:', errorMsg);
