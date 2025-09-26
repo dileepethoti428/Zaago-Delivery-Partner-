@@ -27,12 +27,18 @@ serve(async (req) => {
       );
     }
 
-    const supabaseClient = createClient(
+    // Create separate clients to avoid read-only transaction issues
+    const authClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+    
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Authentication check
+    // Authentication check using anon client
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
@@ -42,9 +48,12 @@ serve(async (req) => {
     }
     
     const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    // Use auth client for token validation to avoid polluting service client
+    const { data: userData, error: authError } = await authClient.auth.getUser(token);
     
     if (authError || !userData.user) {
+      console.error('❌ Authentication failed:', authError);
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid authentication', code: 'AUTH_INVALID' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
@@ -53,8 +62,8 @@ serve(async (req) => {
 
     console.log('✅ User authenticated:', userData.user.email);
 
-    // Get agent info
-    const { data: agent, error: agentError } = await supabaseClient
+    // Get agent info using service client for data operations
+    const { data: agent, error: agentError } = await serviceClient
       .from('delivery_agents')
       .select('id, email, name')
       .eq('email', userData.user.email)
@@ -62,6 +71,7 @@ serve(async (req) => {
       .single();
 
     if (agentError || !agent) {
+      console.error('❌ Agent lookup failed:', agentError);
       return new Response(
         JSON.stringify({ success: false, error: 'Agent not found or inactive', code: 'AGENT_NOT_FOUND' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
@@ -70,8 +80,8 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Get the order to validate
-    const { data: order, error: orderError } = await supabaseClient
+    // Get the order to validate using service client
+    const { data: order, error: orderError } = await serviceClient
       .from('orders')
       .select('id, status, customer_name, total, agent_id')
       .eq('id', order_id)
@@ -99,8 +109,8 @@ serve(async (req) => {
     
     console.log('💾 Using direct table operations for delivery completion...');
     
-    // Update order directly instead of using stored procedure
-    const { error: updateError } = await supabaseClient
+    // Update order directly using service client for write operations
+    const { error: updateError } = await serviceClient
       .from('orders')
       .update({
         status: 'delivered',
@@ -126,9 +136,9 @@ serve(async (req) => {
 
     console.log('✅ Delivery completed successfully');
 
-    // Optional: Create earnings record (non-blocking)
+    // Optional: Create earnings record (non-blocking) using service client
     try {
-      const { error: earningsError } = await supabaseClient
+      const { error: earningsError } = await serviceClient
         .from('earnings')
         .upsert({
           agent_id: agent.id,
@@ -147,8 +157,8 @@ serve(async (req) => {
         console.log('✅ Earnings record created');
       }
       
-      // Update delivery history if exists
-      await supabaseClient
+      // Update delivery history if exists using service client
+      await serviceClient
         .from('delivery_history')
         .update({
           distance_traveled: distance_km,
