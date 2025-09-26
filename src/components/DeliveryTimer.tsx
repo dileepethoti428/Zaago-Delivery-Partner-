@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Timer, Calendar } from "lucide-react";
+import { formatTimeSlot } from "@/lib/deliverySlotParser";
 
 interface DeliveryTimerProps {
   deliveryType: 'immediate' | 'scheduled' | 'book_now_pay_later';
@@ -131,43 +132,11 @@ const DeliveryTimer = ({
     let displayTime = null;
     let hasTimeSlot = false;
     
+    // First, try to parse directly from deliverySlots
     if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
-      // Format time slots as intervals with validation
-      const formatSlotTime = (timeStr: string) => {
-        try {
-          // Skip if time is "Inval" or similar invalid values
-          if (!timeStr || timeStr.toLowerCase().includes('inval') || timeStr.trim() === '') {
-            return null;
-          }
-          
-          // Handle different time formats from backend
-          let normalizedTime = timeStr.trim();
-          
-          // If time doesn't include seconds, add them
-          if (normalizedTime.match(/^\d{1,2}:\d{2}$/)) {
-            normalizedTime += ':00';
-          }
-          
-          // Create date object with proper ISO format
-          const time = new Date(`1970-01-01T${normalizedTime}`);
-          
-          // Check if date is valid
-          if (isNaN(time.getTime())) {
-            return null;
-          }
-          
-          return time.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit', 
-            hour12: true 
-          });
-        } catch (error) {
-          return null;
-        }
-      };
-
-      const startFormatted = formatSlotTime(deliverySlots.start_time);
-      const endFormatted = formatSlotTime(deliverySlots.end_time);
+      // Format time slots as intervals with enhanced validation using utility
+      const startFormatted = formatTimeSlot(deliverySlots.start_time);
+      const endFormatted = formatTimeSlot(deliverySlots.end_time);
       
       // Only use delivery slots if both times are valid
       if (startFormatted && endFormatted) {
@@ -177,20 +146,35 @@ const DeliveryTimer = ({
           displayTime = startFormatted;
         }
         hasTimeSlot = true;
-        console.log('Using delivery slots for time display:', displayTime);
+        console.log('✅ Using delivery slots for time display:', displayTime);
+      } else {
+        console.warn('❌ Invalid delivery slot times:', { start: deliverySlots.start_time, end: deliverySlots.end_time });
       }
-    } else if (deliveryTime && !deliveryTime.includes('min') && !deliveryTime.includes('Time to be confirmed')) {
-      // Use deliveryTime only if it's not a duration (like "2 min") or confirmation message
-      displayTime = deliveryTime;
-      console.log('Using deliveryTime for display:', displayTime);
-    } else if (scheduleInfo?.time) {
-      displayTime = scheduleInfo.time;
-      console.log('Using scheduleInfo time for display:', displayTime);
-    } else {
-      // For scheduled orders, show default time slots if backend data is incomplete
-      displayTime = isSubscription ? '6:00 AM - 10:00 AM' : (isBookNowPayLater ? '6:00 AM - 10:00 AM' : '6:00 AM - 10:00 AM');
-      hasTimeSlot = true;
-      console.warn('Using fallback time slot for order');
+    }
+    
+    // Fallback to other time sources if slots are not available or invalid
+    if (!displayTime) {
+      if (deliveryTime && !deliveryTime.includes('min') && !deliveryTime.includes('Time to be confirmed') && !deliveryTime.includes('TBD')) {
+        // Use deliveryTime if it's not a duration or confirmation message
+        displayTime = deliveryTime;
+        console.log('Using deliveryTime for display:', displayTime);
+      } else if (scheduleInfo?.time) {
+        displayTime = scheduleInfo.time;
+        console.log('Using scheduleInfo time for display:', displayTime);
+      } else {
+        // Enhanced fallback based on order type
+        if (isSubscription) {
+          displayTime = '6:00 AM - 10:00 AM';
+          hasTimeSlot = true;
+        } else if (isBookNowPayLater) {
+          displayTime = '6:00 AM - 10:00 AM'; 
+          hasTimeSlot = true;
+        } else {
+          displayTime = '6:00 AM - 10:00 AM';
+          hasTimeSlot = true;
+        }
+        console.warn('Using fallback time slot for order type:', deliveryType);
+      }
     }
     
     const title = isSubscription ? 'Subscription Delivery' : (isBookNowPayLater ? 'Book Now Pay Later' : 'Scheduled Delivery');
