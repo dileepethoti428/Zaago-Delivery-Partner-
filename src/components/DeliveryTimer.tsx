@@ -41,6 +41,7 @@ const DeliveryTimer = ({
     
     // Use the actual order placed time from backend, fallback to current time
     const actualOrderTime = orderPlacedAt ? new Date(orderPlacedAt) : new Date();
+    console.log('🕐 Setting up immediate delivery timer for order placed at:', actualOrderTime);
 
     const calculateTimeLeft = () => {
       const now = new Date();
@@ -49,6 +50,7 @@ const DeliveryTimer = ({
 
       if (difference <= 0) {
         setTimeLeft({ minutes: 0, seconds: 0, isExpired: true });
+        console.log('⏰ Immediate delivery timer expired');
         return;
       }
 
@@ -242,6 +244,55 @@ const DeliveryTimer = ({
                 <Badge variant="outline" className={`text-xs ${isBookNowPayLater ? 'bg-orange-500/20 text-orange-700 border-orange-500/30' : isSubscription ? 'bg-purple-500/20 text-purple-700 border-purple-500/30' : 'bg-blue-500/20 text-blue-700 border-blue-500/30'}`}>
                   Time Slot
                 </Badge>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show immediate delivery countdown timer
+  if (deliveryType === 'immediate') {
+    console.log('🚀 Rendering immediate delivery timer - Time left:', timeLeft);
+    
+    return (
+      <Card className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30 shadow-lg max-w-sm">
+        <CardContent className="p-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="p-1 bg-green-500/20 rounded-full">
+                <Clock className="w-3 h-3 text-green-400" />
+              </div>
+              <div>
+                <h3 className="font-medium text-foreground text-xs">Immediate Delivery</h3>
+                <p className="text-xs text-muted-foreground">
+                  {timeLeft.isExpired ? 'Overdue' : 'Time remaining'}
+                </p>
+              </div>
+            </div>
+            <Badge className="bg-green-500 text-white animate-pulse text-xs px-2 py-0.5">
+              {timeLeft.isExpired ? 'Overdue' : 'Live'}
+            </Badge>
+          </div>
+          
+          <div className="mt-2 text-center">
+            <div className={`text-lg font-mono font-bold ${timeLeft.isExpired ? 'text-red-500' : 'text-green-600'}`}>
+              {timeLeft.isExpired ? '00:00' : `${formatTime(timeLeft.minutes)}:${formatTime(timeLeft.seconds)}`}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {timeLeft.isExpired ? 'Delivery overdue' : 'Minutes remaining'}
+            </div>
+            
+            {/* Progress bar */}
+            {!timeLeft.isExpired && (
+              <div className="w-full bg-green-100 rounded-full h-1 mt-2">
+                <div 
+                  className="bg-green-500 h-1 rounded-full transition-all duration-1000"
+                  style={{ 
+                    width: `${Math.max(0, ((timeLeft.minutes * 60 + timeLeft.seconds) / (20 * 60)) * 100)}%` 
+                  }}
+                />
               </div>
             )}
           </div>
