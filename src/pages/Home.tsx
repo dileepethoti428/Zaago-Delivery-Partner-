@@ -1286,7 +1286,7 @@ const Home = () => {
                          {/* Delivery Timer */}
                          <div className="mb-4">
                                <DeliveryTimer
-                                   deliveryType={(order as any).calculated_delivery_type || 'immediate'}
+                                   deliveryType={(order as any).calculated_delivery_type || (order.delivery_time_slot ? 'scheduled' : 'immediate')}
                                    orderPlacedAt={new Date((order as any).original_created_at || order.created_at)}
                                    deliveryTimeSlot={order.delivery_time_slot}
                                   deliverySlots={parseDeliverySlots(order)}
