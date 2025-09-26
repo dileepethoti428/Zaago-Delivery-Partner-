@@ -310,48 +310,126 @@ serve(async (req) => {
     
     console.log('💰 Final payout calculation:', { distance_km: distance_km_calc, payout_amount });
 
-    // Use the safe database function to complete delivery
-    console.log('💾 Using safe delivery completion function...');
-    
-    let updateSuccess = false;
+    // Use direct database operations with bulletproof validation
+    console.log('💾 Using direct database operations to complete delivery...');
     
     try {
-      console.log('🔄 Calling complete_delivery_simple with params:', {
-        p_order_id: order_id,
-        p_agent_id: agent.id,
-        p_payout_amount: payout_amount,
-        p_distance_km: distance_km_calc,
-        p_payment_method: payment_method
-      });
+      // Bulletproof amount validation - handle all edge cases
+      let validatedAmount;
       
-      const { data: completionResult, error: completionError } = await supabaseClient.rpc('complete_delivery_simple', {
-        p_order_id: order_id,
-        p_agent_id: agent.id,
-        p_payout_amount: payout_amount,
-        p_distance_km: distance_km_calc,
-        p_payment_method: payment_method
-      });
+      console.log('🔍 Raw payout_amount value:', { payout_amount, type: typeof payout_amount });
       
-      if (completionError) {
-        console.error('❌ Safe completion failed:', completionError);
-        throw completionError;
+      // Convert to number and validate
+      const numericAmount = Number(payout_amount);
+      
+      if (isNaN(numericAmount) || !isFinite(numericAmount) || numericAmount <= 0) {
+        console.error('❌ Invalid payout amount detected:', { 
+          payout_amount, 
+          numericAmount, 
+          isNaN: isNaN(numericAmount),
+          isFinite: isFinite(numericAmount),
+          isLessThanOrEqualZero: numericAmount <= 0
+        });
+        
+        // Use fallback amount based on distance
+        validatedAmount = distance_km_calc <= 1 ? 20 : 20 + (distance_km_calc - 1) * 12;
+        console.log('🔧 Using fallback payout calculation:', validatedAmount);
+      } else {
+        validatedAmount = numericAmount;
       }
       
-      if (!completionResult || !completionResult.success) {
-        console.error('❌ Completion function returned failure:', completionResult);
-        throw new Error(completionResult?.error || 'Unknown completion error');
+      console.log('💰 Final validated amount:', { validatedAmount, type: typeof validatedAmount });
+      
+      // Update order status to delivered
+      const { error: orderUpdateError } = await supabaseClient
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: new Date().toISOString(),
+          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order_id)
+        .eq('agent_id', agent.id);
+
+      if (orderUpdateError) {
+        console.error('❌ Order update failed:', orderUpdateError);
+        throw new Error(`Order update failed: ${orderUpdateError.message}`);
       }
+
+      console.log('✅ Order marked as delivered');
+
+      // Create earnings record with validated amount
+      const { error: earningsError } = await supabaseClient
+        .from('earnings')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: validatedAmount, // Use validated amount
+          status: 'completed',
+          description: `Delivery payout: ${distance_km_calc}km`
+        });
+
+      if (earningsError) {
+        console.error('❌ Earnings creation failed:', earningsError);
+        // Don't fail the whole operation for earnings issues
+      } else {
+        console.log('✅ Earnings record created with amount:', validatedAmount);
+      }
+
+      // Update agent wallet with validated amount - add to existing balance
+      const { data: currentWallet } = await supabaseClient
+        .from('agent_wallet')
+        .select('balance')
+        .eq('agent_id', agent.id)
+        .single();
+
+      const currentBalance = currentWallet?.balance || 0;
+      const newBalance = currentBalance + validatedAmount;
+
+      const { error: walletError } = await supabaseClient
+        .from('agent_wallet')
+        .upsert({
+          agent_id: agent.id,
+          balance: newBalance,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'agent_id'
+        });
+
+      if (walletError) {
+        console.error('❌ Wallet update failed:', walletError);
+        // Don't fail the whole operation for wallet issues
+      } else {
+        console.log('✅ Agent wallet updated:', { previousBalance: currentBalance, addedAmount: validatedAmount, newBalance });
+      }
+
+      // Create wallet transaction with validated amount
+      const { error: transactionError } = await supabaseClient
+        .from('agent_wallet_transactions')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: validatedAmount, // Use validated amount
+          transaction_type: 'delivery_payment',
+          description: 'Delivery payout for order',
+          status: 'completed'
+        });
+
+      if (transactionError) {
+        console.error('❌ Transaction creation failed:', transactionError);
+        throw new Error(`Transaction creation failed: ${transactionError.message}`);
+      }
+
+      console.log('✅ Wallet transaction created with amount:', validatedAmount);
       
-      console.log('✅ Delivery completed successfully via safe function:', completionResult);
-      updateSuccess = true;
-      
-    } catch (safeError) {
-      console.error('❌ Safe completion method failed:', safeError);
+    } catch (directError) {
+      console.error('❌ Direct completion method failed:', directError);
       return new Response(
         JSON.stringify({
           success: false,
           error: 'Failed to complete delivery',
-          details: safeError instanceof Error ? safeError.message : String(safeError)
+          details: directError instanceof Error ? directError.message : String(directError)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
