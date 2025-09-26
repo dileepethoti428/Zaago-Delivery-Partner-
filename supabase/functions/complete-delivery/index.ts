@@ -316,6 +316,14 @@ serve(async (req) => {
     let updateSuccess = false;
     
     try {
+      console.log('🔄 Calling complete_delivery_simple with params:', {
+        p_order_id: order_id,
+        p_agent_id: agent.id,
+        p_payout_amount: payout_amount,
+        p_distance_km: distance_km_calc,
+        p_payment_method: payment_method
+      });
+      
       const { data: completionResult, error: completionError } = await supabaseClient.rpc('complete_delivery_simple', {
         p_order_id: order_id,
         p_agent_id: agent.id,

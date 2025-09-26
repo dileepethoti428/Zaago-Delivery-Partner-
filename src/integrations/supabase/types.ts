@@ -4553,20 +4553,13 @@ export type Database = {
         Returns: Json
       }
       complete_delivery_simple: {
-        Args:
-          | {
-              p_agent_id: string
-              p_distance_km?: number
-              p_order_id: string
-              p_payment_method?: string
-            }
-          | {
-              p_agent_id: string
-              p_distance_km?: number
-              p_order_id: string
-              p_payment_method?: string
-              p_payout_amount?: number
-            }
+        Args: {
+          p_agent_id: string
+          p_distance_km?: number
+          p_order_id: string
+          p_payment_method?: string
+          p_payout_amount?: number
+        }
         Returns: Json
       }
       create_admin_notification_for_agent: {
@@ -5187,15 +5180,6 @@ export type Database = {
       should_skip_delivery_for_vacation_v3: {
         Args: { p_delivery_date: string; p_subscription_id: string }
         Returns: boolean
-      }
-      simple_complete_delivery: {
-        Args: {
-          p_agent_id: string
-          p_new_payment_status: string
-          p_new_status: string
-          p_order_id: string
-        }
-        Returns: undefined
       }
       sync_special_offers_from_products: {
         Args: Record<PropertyKey, never>

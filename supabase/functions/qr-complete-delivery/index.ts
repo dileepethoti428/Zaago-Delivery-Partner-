@@ -244,22 +244,27 @@ serve(async (req) => {
 
     // Use the simple delivery completion function with better error handling
     const distance_km = 2.5; // This should be calculated based on actual delivery route
-    let payout_amount = 12; // Default fallback
+    let payout_amount = 12; // Default fallback - use let for reassignment
     let completionResult = null;
 
     try {
+      // Calculate payout amount
+      payout_amount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 12;
+      
       console.log('Calling complete_delivery_simple RPC with params:', {
-        p_agent_id: agent.id,
         p_order_id: order.id,
-        p_payment_method: payment_method,
-        p_distance_km: distance_km
+        p_agent_id: agent.id,
+        p_payout_amount: payout_amount,
+        p_distance_km: distance_km,
+        p_payment_method: payment_method
       });
 
       const { data: completionData, error: completionError } = await supabaseClient.rpc('complete_delivery_simple', {
-        p_agent_id: agent.id,
         p_order_id: order.id,
-        p_payment_method: payment_method,
-        p_distance_km: distance_km
+        p_agent_id: agent.id,
+        p_payout_amount: payout_amount,
+        p_distance_km: distance_km,
+        p_payment_method: payment_method
       });
 
       if (completionError) {
