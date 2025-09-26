@@ -118,11 +118,27 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
             variant: "destructive"
           });
         } else if (errorMsg.includes('already delivered')) {
+          // Show a special dialog for already delivered orders
+          setScannedOrder({
+            order_id: 'delivered',
+            customer_name: 'Already Delivered',
+            customer_phone: '',
+            total_amount: 0,
+            payment_status: 'completed',
+            address: null,
+            items: [],
+            special_instructions: 'This order has already been completed and delivered.',
+            delivery_time_slot: '',
+            estimated_payout: 0
+          });
+          setShowPaymentDialog(true);
           toast({
             title: "Order Already Delivered ✅",
             description: "This order has already been completed.",
             variant: "default"
           });
+          // Close the scanner and show the already delivered dialog
+          onOpenChange(false);
         } else if (errorMsg.includes('already used') || errorMsg.includes('already scanned')) {
           toast({
             title: "QR Code Already Used",

@@ -74,7 +74,12 @@ export const PaymentMethodDialog = ({
       <DialogContent className="bg-card border-border max-w-sm">
         <DialogHeader>
           <DialogTitle className="text-foreground text-center">
-            {error ? (
+            {order.payment_status === 'completed' ? (
+              <>
+                <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                Order Already Delivered
+              </>
+            ) : error ? (
               <>
                 <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-destructive" />
                 Delivery Failed
@@ -87,7 +92,9 @@ export const PaymentMethodDialog = ({
             )}
           </DialogTitle>
           <DialogDescription className="text-center">
-            {error ? (
+            {order.payment_status === 'completed' ? (
+              <span className="text-muted-foreground">This order has already been completed and delivered.</span>
+            ) : error ? (
               <span className="text-destructive">{error}</span>
             ) : (
               "Select payment method to complete the delivery"
@@ -100,17 +107,40 @@ export const PaymentMethodDialog = ({
             <p className="text-foreground font-medium">
               {order.customer_name}
             </p>
-            <p className="text-lg font-bold text-primary">
-              ₹{order.total_amount}
-            </p>
-            {!error && (
-              <p className="text-sm text-muted-foreground">
-                Please select payment method to complete
-              </p>
+            {order.payment_status === 'completed' ? (
+              <div className="py-4">
+                <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-green-500" />
+                </div>
+                <p className="text-lg font-bold text-green-600 mb-2">
+                  Order Completed ✅
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  This order was already delivered successfully
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-lg font-bold text-primary">
+                  ₹{order.total_amount}
+                </p>
+                {!error && (
+                  <p className="text-sm text-muted-foreground">
+                    Please select payment method to complete
+                  </p>
+                )}
+              </>
             )}
           </div>
 
-          {error ? (
+          {order.payment_status === 'completed' ? (
+            /* Already Delivered State - No payment options */
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                No further action required
+              </p>
+            </div>
+          ) : error ? (
             /* Error State - Show Retry Button */
             <div className="space-y-3">
               <Button
