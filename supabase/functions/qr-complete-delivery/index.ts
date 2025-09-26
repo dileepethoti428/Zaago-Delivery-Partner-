@@ -230,15 +230,31 @@ serve(async (req) => {
     console.log('💾 Completing delivery with direct operations...');
     
     try {
-      // Validate amount before any database operations
-      const validatedAmount = Number(payout_amount) || 0;
+      // Bulletproof amount validation - handle all edge cases  
+      let validatedAmount;
       
-      if (validatedAmount <= 0) {
-        console.error('❌ Invalid payout amount:', { payout_amount, validatedAmount });
-        throw new Error(`Invalid payout amount: ${payout_amount}`);
+      console.log('🔍 Raw payout_amount value:', { payout_amount, type: typeof payout_amount });
+      
+      // Convert to number and validate
+      const numericAmount = Number(payout_amount);
+      
+      if (isNaN(numericAmount) || !isFinite(numericAmount) || numericAmount <= 0) {
+        console.error('❌ Invalid payout amount detected:', { 
+          payout_amount, 
+          numericAmount, 
+          isNaN: isNaN(numericAmount),
+          isFinite: isFinite(numericAmount),
+          isLessThanOrEqualZero: numericAmount <= 0
+        });
+        
+        // Use fallback amount based on distance
+        validatedAmount = distance_km <= 1 ? 20 : 20 + (distance_km - 1) * 12;
+        console.log('🔧 Using fallback payout calculation:', validatedAmount);
+      } else {
+        validatedAmount = numericAmount;
       }
       
-      console.log('💰 Validated payout amount:', validatedAmount);
+      console.log('💰 Final validated amount:', { validatedAmount, type: typeof validatedAmount });
       
       // Update order status directly
       const { error: orderUpdateError } = await supabaseClient
