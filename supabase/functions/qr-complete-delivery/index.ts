@@ -242,78 +242,37 @@ serve(async (req) => {
       );
     }
 
-    // For COD orders, automatically settle the amount from agent wallet to admin
-    let codSettlementResult = null;
-    if (payment_method === 'COD') {
-      try {
-        const { data: settlementData, error: settlementError } = await supabaseClient.rpc('settle_cod_automatically', {
-          p_agent_id: agent.id,
-          p_order_id: order.id,
-          p_cod_amount: order.total
-        });
-
-        if (settlementError) {
-          console.error('COD settlement error:', settlementError);
-        } else {
-          codSettlementResult = settlementData;
-          console.log('COD settlement result:', settlementData);
-        }
-      } catch (error) {
-        console.error('COD settlement failed:', error);
-      }
-    }
-
-    // Calculate accurate distance and payout using the fixed function
+    // Use the simple delivery completion function
     const distance_km = 2.5; // This should be calculated based on actual delivery route
     let payout_amount = 12; // Default fallback
-    let payoutResult = null;
+    let completionResult = null;
 
-    // Use the new fixed calculate_delivery_payout function
     try {
-      const { data: calculationData, error: calculationError } = await supabaseClient.rpc('calculate_delivery_payout', {
-        p_distance_km: distance_km,
-        p_delivery_time: new Date().toISOString(),
-        p_agent_id: agent.id
-      });
-
-      if (calculationError) {
-        console.error('Payout calculation error:', calculationError);
-        payout_amount = 12; // Use base rate as fallback
-      } else {
-        payout_amount = calculationData?.total_payout || 12;
-        console.log('Payout calculated:', calculationData);
-      }
-    } catch (error) {
-      console.error('Payout calculation failed:', error);
-      payout_amount = 12; // Use base rate as fallback
-    }
-
-    // Process payout safely
-    try {
-      const { data: payoutData, error: payoutError } = await supabaseClient.rpc('process_delivery_payout_safe', {
+      const { data: completionData, error: completionError } = await supabaseClient.rpc('complete_delivery_simple', {
         p_agent_id: agent.id,
         p_order_id: order.id,
-        p_distance_km: distance_km,
-        p_delivery_time: new Date().toISOString()
+        p_payment_method: payment_method,
+        p_distance_km: distance_km
       });
 
-      if (payoutError) {
-        console.error('Payout processing error:', payoutError);
+      if (completionError) {
+        console.error('Delivery completion error:', completionError);
+        throw new Error(`Failed to complete delivery: ${completionError.message}`);
       } else {
-        payoutResult = payoutData;
-        // Use the calculated payout or the processed amount, whichever is available
-        payout_amount = payoutResult?.payout_details?.total_payout || payout_amount;
-        console.log('Payout processed:', payoutResult);
+        completionResult = completionData;
+        payout_amount = completionResult?.payout_amount || 12;
+        console.log('Delivery completed successfully:', completionResult);
       }
     } catch (error) {
-      console.error('Payout processing failed:', error);
+      console.error('Delivery completion failed:', error);
+      throw error;
     }
 
     try {
       const { error: historyUpdateError } = await supabaseClient
         .from('delivery_history')
         .update({
-          delivery_notes: `Completed via QR scan by ${agent.name}${payoutResult ? ' - Payout: ₹' + payout_amount : ''}`,
+          delivery_notes: `Completed via QR scan by ${agent.name} - Payout: ₹${payout_amount}`,
           distance_traveled: distance_km,
           delivery_payout: payout_amount
         })
@@ -324,37 +283,6 @@ serve(async (req) => {
       }
     } catch (historyError) {
       console.warn('Delivery history update failed:', historyError);
-    }
-
-    // Check if earnings already exist to prevent duplicate constraint violations
-    const { data: existingEarning } = await supabaseClient
-      .from('earnings')
-      .select('id')
-      .eq('agent_id', agent.id)
-      .eq('order_id', order.id)
-      .single();
-
-    // Only create earnings if none exist and payout function didn't succeed
-    if (!existingEarning && (!payoutResult || !payoutResult.success)) {
-      try {
-        const { error: earningsError } = await supabaseClient
-          .from('earnings')
-          .insert({
-            agent_id: agent.id,
-            order_id: order.id,
-            amount: payout_amount,
-            status: 'completed',
-            distance_km: distance_km,
-            payment_method: payment_method === 'COD' ? 'COD' : 'Online',
-            description: `Delivery payout for order ${order.id.substring(0, 8)}`
-          });
-
-        if (earningsError) {
-          console.warn('Failed to create earnings record:', earningsError);
-        }
-      } catch (earningsCreateError) {
-        console.warn('Earnings creation failed:', earningsCreateError);
-      }
     }
 
     // Update agent statistics
