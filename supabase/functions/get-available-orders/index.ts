@@ -369,9 +369,6 @@ serve(async (req) => {
             properTimeSlot = `${subscriptionTiming.time_slot_start.slice(0, 5)}-${subscriptionTiming.time_slot_end.slice(0, 5)}`;
           }
           console.log(`Order ${order.id} -> subscription (has subscription_id, time: ${properTimeSlot})`);
-        } else if (order.payment_status === 'pending') {
-          calculatedType = 'book_now_pay_later';
-          console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
         } else if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
           calculatedType = 'scheduled';
           console.log(`Order ${order.id} -> scheduled (has time slot: ${order.delivery_time_slot})`);
@@ -388,9 +385,29 @@ serve(async (req) => {
         } else if (order.delivery_time && order.delivery_time !== '12:00:00') {
           calculatedType = 'scheduled';
           console.log(`Order ${order.id} -> scheduled (specific time: ${order.delivery_time})`);
+        } else if (
+          !order.delivery_time_slot && 
+          (!order.delivery_date || order.delivery_date === today) && 
+          minutesSinceCreated < 60
+        ) {
+          // Check if this should be immediate based on timing, regardless of payment status initially
+          if (order.payment_status === 'completed' || order.payment_status === 'paid' || order.payment_status === 'Completed') {
+            calculatedType = 'immediate';
+            console.log(`Order ${order.id} -> immediate (paid order, no time slot, created ${minutesSinceCreated} min ago)`);
+          } else if (order.payment_status === 'pending' && minutesSinceCreated < 10) {
+            // For very recent orders (under 10 min), treat as immediate even if payment pending
+            calculatedType = 'immediate';
+            console.log(`Order ${order.id} -> immediate (recent order under 10 min, payment processing)`);
+          } else {
+            calculatedType = 'book_now_pay_later';
+            console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
+          }
+        } else if (order.payment_status === 'pending') {
+          calculatedType = 'book_now_pay_later';
+          console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
         } else {
           calculatedType = 'immediate';
-          console.log(`Order ${order.id} -> immediate (default)`);
+          console.log(`Order ${order.id} -> immediate (default fallback)`);
         }
         
         // Check if order has address with coordinates
