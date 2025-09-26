@@ -242,12 +242,19 @@ serve(async (req) => {
       );
     }
 
-    // Use the simple delivery completion function
+    // Use the simple delivery completion function with better error handling
     const distance_km = 2.5; // This should be calculated based on actual delivery route
     let payout_amount = 12; // Default fallback
     let completionResult = null;
 
     try {
+      console.log('Calling complete_delivery_simple RPC with params:', {
+        p_agent_id: agent.id,
+        p_order_id: order.id,
+        p_payment_method: payment_method,
+        p_distance_km: distance_km
+      });
+
       const { data: completionData, error: completionError } = await supabaseClient.rpc('complete_delivery_simple', {
         p_agent_id: agent.id,
         p_order_id: order.id,
@@ -256,16 +263,25 @@ serve(async (req) => {
       });
 
       if (completionError) {
-        console.error('Delivery completion error:', completionError);
-        throw new Error(`Failed to complete delivery: ${completionError.message}`);
+        console.error('Delivery completion RPC error:', {
+          message: completionError.message,
+          code: completionError.code,
+          details: completionError.details
+        });
+        
+        // Don't throw here - the order is already marked as delivered, 
+        // just log the payout issue and continue
+        console.warn('Payout processing failed but order is delivered');
+        payout_amount = 12; // Use fallback
       } else {
         completionResult = completionData;
-        payout_amount = completionResult?.payout_amount || 12;
-        console.log('Delivery completed successfully:', completionResult);
+        payout_amount = completionResult?.payout_amount || completionResult?.total_payout || 12;
+        console.log('Delivery completed successfully with payout:', payout_amount);
       }
     } catch (error) {
-      console.error('Delivery completion failed:', error);
-      throw error;
+      console.error('Delivery completion failed with exception:', error);
+      console.warn('Using fallback payout amount due to completion error');
+      payout_amount = 12; // Use fallback and continue
     }
 
     try {
