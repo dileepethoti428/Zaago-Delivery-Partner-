@@ -361,6 +361,8 @@ serve(async (req) => {
         console.log(`Order ${order.id} analysis:`, JSON.stringify(orderAnalysis, null, 2));
         
         // Determine delivery type using proper logic and database timings
+        let immediateTimingConfig = null;
+        
         // Check for immediate orders first (recent orders without specific scheduling)
         if (
           !order.subscription_id &&
@@ -370,7 +372,27 @@ serve(async (req) => {
         ) {
           // Recent orders without specific scheduling should be immediate
           calculatedType = 'immediate';
-          console.log(`Order ${order.id} -> immediate (recent order, no specific scheduling, created ${minutesSinceCreated} min ago)`);
+          
+          // Get immediate delivery timing configuration from database
+          const immediateTiming = deliveryTimings?.find(t => t.delivery_type === 'immediate');
+          if (immediateTiming) {
+            immediateTimingConfig = {
+              max_duration_minutes: immediateTiming.max_duration_minutes,
+              time_slot_start: immediateTiming.time_slot_start,
+              time_slot_end: immediateTiming.time_slot_end,
+              slot_name: immediateTiming.slot_name
+            };
+            console.log(`Order ${order.id} -> immediate (recent order, no specific scheduling, created ${minutesSinceCreated} min ago) - using ${immediateTiming.max_duration_minutes}min timing`);
+          } else {
+            // Fallback to 20 minutes if no database config
+            immediateTimingConfig = {
+              max_duration_minutes: 20,
+              time_slot_start: '00:00:00',
+              time_slot_end: '23:59:59',
+              slot_name: 'Immediate Delivery'
+            };
+            console.log(`Order ${order.id} -> immediate (recent order, no specific scheduling, created ${minutesSinceCreated} min ago) - using fallback 20min timing`);
+          }
         } else if (order.subscription_id) {
           calculatedType = 'subscription';
           // Get subscription timing from database
@@ -487,7 +509,9 @@ serve(async (req) => {
                 delivery_type: calculatedType,
                 delivery_time_slot: properTimeSlot || order.delivery_time_slot,
                 // Preserve original created_at for accurate timer calculations
-                original_created_at: order.created_at
+                original_created_at: order.created_at,
+                // Add immediate timing configuration for frontend
+                immediate_timing_config: immediateTimingConfig
               });
             }
           } catch (distanceError) {

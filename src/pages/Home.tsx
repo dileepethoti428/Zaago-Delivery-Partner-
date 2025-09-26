@@ -1278,13 +1278,14 @@ const Home = () => {
 
                          {/* Delivery Timer */}
                          <div className="mb-4">
-                             <DeliveryTimer
-                                 deliveryType={(order as any).calculated_delivery_type || (order as any).delivery_type || 'immediate'}
-                                 orderPlacedAt={new Date((order as any).original_created_at || order.created_at)}
-                                 deliveryTimeSlot={order.delivery_time_slot}
-                                deliverySlots={parseDeliverySlots(order)}
-                                paymentStatus={order.payment_status}
-                              />
+                              <DeliveryTimer
+                                  deliveryType={(order as any).calculated_delivery_type || (order as any).delivery_type || 'immediate'}
+                                  orderPlacedAt={new Date((order as any).original_created_at || order.created_at)}
+                                  deliveryTimeSlot={order.delivery_time_slot}
+                                 deliverySlots={parseDeliverySlots(order)}
+                                 paymentStatus={order.payment_status}
+                                 immediateTimingConfig={(order as any).immediate_timing_config}
+                               />
                          </div>
 
                         {/* Address */}

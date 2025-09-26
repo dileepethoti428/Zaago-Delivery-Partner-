@@ -19,6 +19,12 @@ interface DeliveryTimerProps {
   }; // For timing intervals
   paymentStatus?: string; // For book now pay later orders
   deliveryTimeSlot?: string; // Backend provided time slot (e.g., "06:00-10:00")
+  immediateTimingConfig?: {
+    max_duration_minutes: number;
+    time_slot_start: string;
+    time_slot_end: string;
+    slot_name: string;
+  };
 }
 
 const DeliveryTimer = ({ 
@@ -30,7 +36,8 @@ const DeliveryTimer = ({
   deliveryTime,
   deliverySlots,
   paymentStatus,
-  deliveryTimeSlot
+  deliveryTimeSlot,
+  immediateTimingConfig
 }: DeliveryTimerProps) => {
   const [timeLeft, setTimeLeft] = useState<{
     minutes: number;
@@ -52,8 +59,13 @@ const DeliveryTimer = ({
 
     const calculateTimeLeft = () => {
       const now = new Date();
-      const deliveryTime = new Date(actualOrderTime.getTime() + 20 * 60 * 1000); // 20 minutes after actual order time
+      
+      // Use timing from backend configuration, fallback to 20 minutes
+      const durationMinutes = immediateTimingConfig?.max_duration_minutes || 20;
+      const deliveryTime = new Date(actualOrderTime.getTime() + durationMinutes * 60 * 1000);
       const difference = deliveryTime.getTime() - now.getTime();
+
+      console.log(`⏰ Calculating immediate delivery timer: ${durationMinutes}min from order time:`, actualOrderTime, 'Current time:', now, 'Delivery time:', deliveryTime);
 
       if (difference <= 0) {
         setTimeLeft({ minutes: 0, seconds: 0, isExpired: true });
@@ -74,7 +86,7 @@ const DeliveryTimer = ({
     const timer = setInterval(calculateTimeLeft, 1000);
 
     return () => clearInterval(timer);
-  }, [deliveryType, orderPlacedAt]);
+  }, [deliveryType, orderPlacedAt, immediateTimingConfig]);
 
   const formatTime = (num: number): string => {
     return num.toString().padStart(2, '0');
