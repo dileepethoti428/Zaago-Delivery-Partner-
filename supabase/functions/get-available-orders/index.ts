@@ -386,13 +386,26 @@ serve(async (req) => {
                 pickup_status: 'pending',
                 seller_name: sellerName,
                 seller_phone: sellerPhone,
-                // Improved delivery type detection using actual backend fields
-                delivery_type: order.subscription_id ? 'scheduled' : 
-                             order.delivery_time_slot ? 'scheduled' :
-                             (order.delivery_time && order.delivery_time !== 'Immediate') ? 'scheduled' :
-                             (order.payment_status === 'Pending' && 
-                              order.delivery_date && 
-                              order.delivery_date !== new Date().toISOString().split('T')[0]) ? 'book_now_pay_later' : 'immediate'
+                // Improved delivery type detection with better logic
+                delivery_type: (() => {
+                  // Check if this is a subscription order
+                  if (order.subscription_id) return 'scheduled';
+                  
+                  // Check for book now pay later (pending payment with future delivery)
+                  if (order.payment_status === 'pending' || order.payment_status === 'Pending') {
+                    return 'book_now_pay_later';
+                  }
+                  
+                  // Check if this is a scheduled order (has delivery_time_slot or delivery_date in future)
+                  if (order.delivery_time_slot || 
+                      (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0]) ||
+                      (order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00')) {
+                    return 'scheduled';
+                  }
+                  
+                  // Default to immediate for orders without specific scheduling
+                  return 'immediate';
+                })()
               });
             }
           } catch (distanceError) {

@@ -154,26 +154,31 @@ const DeliveryTimer = ({
     
     // Fallback to other time sources if slots are not available or invalid
     if (!displayTime) {
-      if (deliveryTime && !deliveryTime.includes('min') && !deliveryTime.includes('Time to be confirmed') && !deliveryTime.includes('TBD')) {
-        // Use deliveryTime if it's not a duration or confirmation message
-        displayTime = deliveryTime;
-        console.log('Using deliveryTime for display:', displayTime);
+      if (deliveryTime && !deliveryTime.includes('min') && !deliveryTime.includes('Time to be confirmed') && !deliveryTime.includes('TBD') && deliveryTime !== '12:00:00') {
+        // Use deliveryTime if it's not a generic default or confirmation message
+        const formattedTime = formatTimeSlot(deliveryTime);
+        if (formattedTime) {
+          displayTime = formattedTime;
+          console.log('Using deliveryTime for display:', displayTime);
+        }
       } else if (scheduleInfo?.time) {
         displayTime = scheduleInfo.time;
         console.log('Using scheduleInfo time for display:', displayTime);
       } else {
-        // Enhanced fallback based on order type
+        // Order-type specific fallbacks - avoid showing same time for all
         if (isSubscription) {
           displayTime = '6:00 AM - 10:00 AM';
           hasTimeSlot = true;
+          console.log('Using subscription fallback time');
         } else if (isBookNowPayLater) {
-          displayTime = '6:00 AM - 10:00 AM'; 
-          hasTimeSlot = true;
+          displayTime = 'Schedule on payment'; 
+          hasTimeSlot = false;
+          console.log('Using book now pay later fallback');
         } else {
-          displayTime = '6:00 AM - 10:00 AM';
-          hasTimeSlot = true;
+          displayTime = 'Time TBD';
+          hasTimeSlot = false;
+          console.warn('No valid time data found for scheduled order');
         }
-        console.warn('Using fallback time slot for order type:', deliveryType);
       }
     }
     

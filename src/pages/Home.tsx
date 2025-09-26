@@ -1278,15 +1278,36 @@ const Home = () => {
 
                          {/* Delivery Timer */}
                          <div className="mb-4">
-                            <DeliveryTimer
-                              deliveryType={order.delivery_type}
-                              scheduledTime={order.delivery_time}
-                              orderPlacedAt={order.order_placed_at}
-                              subscriptionId={order.subscription_id}
-                              deliveryTime={order.delivery_time}
-                              deliverySlots={order.delivery_slots}
-                              paymentStatus={order.payment_status}
-                            />
+                             <DeliveryTimer
+                               deliveryType={(() => {
+                                 // Use backend-provided delivery_type if available, otherwise determine based on order data
+                                 if (order.delivery_type) return order.delivery_type;
+                                 
+                                 // Subscription orders are always scheduled
+                                 if (order.subscription_id) return 'scheduled';
+                                 
+                                 // Book now pay later orders
+                                 if (order.payment_status === 'pending' || order.payment_status === 'Pending') {
+                                   return 'book_now_pay_later';
+                                 }
+                                 
+                                 // Scheduled orders (have delivery_time_slot or future delivery_date)
+                                 if (order.delivery_time_slot || 
+                                     (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0]) ||
+                                     (order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00')) {
+                                   return 'scheduled';
+                                 }
+                                 
+                                 // Default to immediate for orders without specific scheduling
+                                 return 'immediate';
+                               })()}
+                               scheduledTime={order.delivery_date}
+                               orderPlacedAt={new Date(order.created_at)}
+                               subscriptionId={order.subscription_id}
+                               deliveryTime={order.delivery_time_slot || order.delivery_time}
+                               deliverySlots={parseDeliverySlots(order)}
+                               paymentStatus={order.payment_status}
+                             />
                          </div>
 
                         {/* Address */}
