@@ -97,38 +97,30 @@ serve(async (req) => {
     // Determine payment status
     const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
     
-    console.log('💾 Using ultra-simple delivery completion...');
+    console.log('💾 Using direct table operations for delivery completion...');
     
-    // Use the new ultra-simple stored procedure
-    const { data: result, error: completionError } = await supabaseClient.rpc('ultra_simple_complete_delivery', {
-      p_order_id: order_id,
-      p_agent_id: agent.id,
-      p_payment_status: payment_status
-    });
+    // Update order directly instead of using stored procedure
+    const { error: updateError } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'delivered',
+        payment_status: payment_status,
+        delivered_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order_id)
+      .eq('agent_id', agent.id);
         
-    if (completionError) {
-      console.error('❌ Delivery completion failed:', completionError);
+    if (updateError) {
+      console.error('❌ Delivery completion failed:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Failed to complete delivery',
-          code: 'COMPLETION_FAILED',
-          details: completionError.message
+          code: 'UPDATE_FAILED',
+          details: updateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    if (!result || !result.success) {
-      const errorMsg = result?.error || 'Unknown error during completion';
-      console.error('❌ Completion procedure returned error:', errorMsg);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: errorMsg,
-          code: 'PROCEDURE_FAILED'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 

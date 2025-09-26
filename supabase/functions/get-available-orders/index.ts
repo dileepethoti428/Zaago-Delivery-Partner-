@@ -447,7 +447,6 @@ serve(async (req) => {
           }
           console.log(`Order ${order.id} -> scheduled (fallback classification, minutes since created: ${minutesSinceCreated}, delivery_date: ${order.delivery_date}, time_slot: ${order.delivery_time_slot})`);
         }
-        }
         
         // Check if order has address with coordinates
         if (order.address && order.address.coordinates && order.address.coordinates.lat && order.address.coordinates.lng) {
