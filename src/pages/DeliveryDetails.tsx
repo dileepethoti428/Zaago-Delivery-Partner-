@@ -320,6 +320,8 @@ const DeliveryDetails = () => {
   const completeDeliveryDirect = async (paymentMethod: string) => {
     console.log('🚀 Starting delivery completion...', { orderId: order?.id, paymentMethod, distance, payout });
     setIsProcessing(true);
+    setDeliveryError(null); // Clear any previous errors
+    
     try {
       const requestPayload = {
         order_id: order?.id,
@@ -338,9 +340,11 @@ const DeliveryDetails = () => {
       
       if (error) {
         console.error('❌ Edge function error:', error);
+        const errorMessage = error.message || 'Unknown error';
+        setDeliveryError(errorMessage);
         toast({
           title: "Delivery Failed",
-          description: `Unable to complete delivery: ${error.message || 'Unknown error'}. Please try again or contact support.`,
+          description: `Unable to complete delivery: ${errorMessage}. Please try again or contact support.`,
           variant: "destructive"
         });
         return;
@@ -356,17 +360,21 @@ const DeliveryDetails = () => {
         navigate('/home');
       } else {
         console.error('❌ Delivery failed:', data);
+        const errorMessage = data?.error || 'Failed to complete delivery';
+        setDeliveryError(errorMessage);
         toast({
           title: "Delivery Failed",
-          description: data?.error || 'Failed to complete delivery',
+          description: errorMessage,
           variant: "destructive"
         });
       }
     } catch (error: any) {
       console.error('❌ Unexpected error:', error);
+      const errorMessage = error?.message || "Failed to complete delivery";
+      setDeliveryError(errorMessage);
       toast({
         title: "Delivery Failed",
-        description: error?.message || "Failed to complete delivery",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -376,7 +384,7 @@ const DeliveryDetails = () => {
 
   const handleRetryDelivery = () => {
     setDeliveryError(null);
-    // The PaymentMethodDialog will handle calling completeDeliveryDirect again
+    setIsProcessing(false);
   };
 
   if (isLoading) {
