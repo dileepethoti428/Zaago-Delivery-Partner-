@@ -676,10 +676,10 @@ const DeliveryDetails = () => {
                    <span className="text-xs">Navigate to Customer</span>
                  </Button>
                  
-                 <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
-                   <CheckCircle2 className="w-3 h-3" />
-                   <span className="text-xs">{isProcessing ? 'Processing...' : 'Product Delivered'}</span>
-                 </Button>
+                  <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                  </Button>
                 </div>
 
                 <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
