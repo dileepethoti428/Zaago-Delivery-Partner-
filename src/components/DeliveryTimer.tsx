@@ -5,7 +5,7 @@ import { Clock, Timer, Calendar } from "lucide-react";
 import { formatTimeSlot } from "@/lib/deliverySlotParser";
 
 interface DeliveryTimerProps {
-  deliveryType: 'immediate' | 'scheduled' | 'book_now_pay_later';
+  deliveryType: 'immediate' | 'scheduled' | 'book_now_pay_later' | 'subscription';
   scheduledTime?: string; // For scheduled deliveries
   orderPlacedAt?: Date; // When the order was placed
   className?: string;
@@ -18,17 +18,19 @@ interface DeliveryTimerProps {
     end_time: string;
   }; // For timing intervals
   paymentStatus?: string; // For book now pay later orders
+  deliveryTimeSlot?: string; // Backend provided time slot (e.g., "06:00-10:00")
 }
 
 const DeliveryTimer = ({ 
   deliveryType, 
   scheduledTime, 
-  orderPlacedAt, // Remove default value here
+  orderPlacedAt,
   className = "",
   subscriptionId,
   deliveryTime,
   deliverySlots,
-  paymentStatus
+  paymentStatus,
+  deliveryTimeSlot
 }: DeliveryTimerProps) => {
   const [timeLeft, setTimeLeft] = useState<{
     minutes: number;
@@ -118,29 +120,46 @@ const DeliveryTimer = ({
     }
   };
 
-  if (deliveryType === 'scheduled' || deliveryType === 'book_now_pay_later') {
+  if (deliveryType === 'scheduled' || deliveryType === 'book_now_pay_later' || deliveryType === 'subscription') {
     const scheduleInfo = getScheduledDeliveryInfo();
     
     // Different display for subscription vs book now pay later vs regular scheduled orders
-    const isSubscription = Boolean(subscriptionId);
+    const isSubscription = deliveryType === 'subscription' || Boolean(subscriptionId);
     const isBookNowPayLater = deliveryType === 'book_now_pay_later';
+    const isScheduled = deliveryType === 'scheduled';
     
     console.log('DeliveryTimer Debug - Order data:', {
+      deliveryType,
+      deliveryTimeSlot,
       deliverySlots,
       deliveryTime,
       scheduledTime,
       scheduleInfo,
       isSubscription,
       isBookNowPayLater,
+      isScheduled,
       paymentStatus
     });
     
-    // Determine display time - prioritize delivery slots for timing intervals
+    // Determine display time - prioritize backend deliveryTimeSlot
     let displayTime = null;
     let hasTimeSlot = false;
     
-    // First, try to parse delivery slots for time ranges (subscription and scheduled orders)
-    if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
+    // First priority: Backend provided deliveryTimeSlot (e.g., "06:00-10:00")
+    if (deliveryTimeSlot && deliveryTimeSlot.includes('-')) {
+      const [startTime, endTime] = deliveryTimeSlot.split('-');
+      const startFormatted = formatTimeSlot(startTime);
+      const endFormatted = formatTimeSlot(endTime);
+      
+      if (startFormatted && endFormatted) {
+        displayTime = `${startFormatted} - ${endFormatted}`;
+        hasTimeSlot = true;
+        console.log('✅ Using backend deliveryTimeSlot:', displayTime);
+      }
+    }
+    
+    // Second priority: Frontend delivery slots for time ranges
+    if (!displayTime && deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
       const startFormatted = formatTimeSlot(deliverySlots.start_time);
       const endFormatted = formatTimeSlot(deliverySlots.end_time);
       
@@ -177,7 +196,7 @@ const DeliveryTimer = ({
         if (isSubscription) {
           displayTime = '6:00 AM - 10:00 AM';
           hasTimeSlot = true;
-          console.log('Using subscription morning delivery slot');
+          console.log('Using subscription morning delivery slot fallback');
         } else if (isBookNowPayLater) {
           displayTime = 'Schedule on payment'; 
           hasTimeSlot = false;

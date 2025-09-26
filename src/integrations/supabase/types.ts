@@ -1401,6 +1401,45 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_timings: {
+        Row: {
+          created_at: string
+          delivery_type: string
+          id: string
+          is_active: boolean
+          max_duration_minutes: number
+          priority: number
+          slot_name: string
+          time_slot_end: string
+          time_slot_start: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_type: string
+          id?: string
+          is_active?: boolean
+          max_duration_minutes?: number
+          priority?: number
+          slot_name: string
+          time_slot_end: string
+          time_slot_start: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_type?: string
+          id?: string
+          is_active?: boolean
+          max_duration_minutes?: number
+          priority?: number
+          slot_name?: string
+          time_slot_end?: string
+          time_slot_start?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       delivery_zones: {
         Row: {
           created_at: string
@@ -3847,6 +3886,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_player_ids: {
+        Row: {
+          created_at: string
+          device_info: Json | null
+          id: string
+          is_active: boolean
+          player_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_info?: Json | null
+          id?: string
+          is_active?: boolean
+          player_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_info?: Json | null
+          id?: string
+          is_active?: boolean
+          player_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_product_frequency: {
         Row: {
           created_at: string
@@ -4446,6 +4515,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      cancel_vacation_and_resume_subscription: {
+        Args: { p_vacation_id: string }
+        Returns: Json
+      }
       check_rate_limit: {
         Args: {
           action_type: string
@@ -4513,6 +4586,10 @@ export type Database = {
         }
         Returns: string
       }
+      create_order_from_existing_subscription: {
+        Args: { p_order_type?: string; p_subscription_id: string }
+        Returns: string
+      }
       create_order_from_subscription: {
         Args: { p_order_type?: string; p_subscription_id: string }
         Returns: string
@@ -4567,7 +4644,7 @@ export type Database = {
       }
       generate_order_qr_code: {
         Args: { order_uuid: string }
-        Returns: string
+        Returns: undefined
       }
       get_agent_distance_stats: {
         Args: { agent_uuid: string }
@@ -4884,6 +4961,12 @@ export type Database = {
           valid_until: string
         }[]
       }
+      get_user_player_ids: {
+        Args: { target_user_id: string }
+        Returns: {
+          player_id: string
+        }[]
+      }
       get_users_by_role: {
         Args: { target_role: Database["public"]["Enums"]["app_role"] }
         Returns: {
@@ -4951,6 +5034,10 @@ export type Database = {
           p_user_agent?: string
         }
         Returns: undefined
+      }
+      manual_subscription_recovery: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       manual_trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
@@ -5087,6 +5174,10 @@ export type Database = {
       sync_special_offers_from_products: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      sync_user_player_id: {
+        Args: { device_info?: Json; player_id: string; target_user_id: string }
+        Returns: boolean
       }
       trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
