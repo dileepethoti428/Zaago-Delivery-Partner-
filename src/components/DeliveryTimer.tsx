@@ -39,8 +39,13 @@ const DeliveryTimer = ({
   useEffect(() => {
     if (deliveryType !== 'immediate') return;
     
-    // Use the actual order placed time from backend, fallback to current time
-    const actualOrderTime = orderPlacedAt ? new Date(orderPlacedAt) : new Date();
+    // Use the actual order placed time from backend - this is critical for proper sync
+    if (!orderPlacedAt) {
+      console.warn('⚠️ No orderPlacedAt provided for immediate delivery timer');
+      return;
+    }
+    
+    const actualOrderTime = new Date(orderPlacedAt);
     console.log('🕐 Setting up immediate delivery timer for order placed at:', actualOrderTime);
 
     const calculateTimeLeft = () => {
@@ -134,18 +139,24 @@ const DeliveryTimer = ({
     let displayTime = null;
     let hasTimeSlot = false;
     
-    // First, try to parse directly from deliverySlots (actual time ranges)
+    // First, try to parse delivery slots for time ranges (subscription and scheduled orders)
     if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
-      // Only use delivery slots if they represent actual time ranges, not synthetic ones
       const startFormatted = formatTimeSlot(deliverySlots.start_time);
       const endFormatted = formatTimeSlot(deliverySlots.end_time);
       
-      if (startFormatted && endFormatted && startFormatted !== endFormatted) {
-        displayTime = `${startFormatted} - ${endFormatted}`;
-        hasTimeSlot = true;
-        console.log('✅ Using actual delivery slots for time display:', displayTime);
-      } else {
-        console.warn('❌ Skipping synthetic or invalid delivery slot times:', { start: deliverySlots.start_time, end: deliverySlots.end_time });
+      if (startFormatted && endFormatted) {
+        // For subscription orders, always show time range (even if times are same)
+        if (isSubscription) {
+          displayTime = `${startFormatted} - ${endFormatted}`;
+          hasTimeSlot = true;
+          console.log('✅ Using subscription delivery slots:', displayTime);
+        } 
+        // For other orders, only show range if times are different
+        else if (startFormatted !== endFormatted) {
+          displayTime = `${startFormatted} - ${endFormatted}`;
+          hasTimeSlot = true;
+          console.log('✅ Using scheduled delivery slots:', displayTime);
+        }
       }
     }
     

@@ -1279,47 +1279,44 @@ const Home = () => {
                          {/* Delivery Timer */}
                          <div className="mb-4">
                              <DeliveryTimer
-                               deliveryType={(() => {
-                // Improved delivery type detection based on actual backend data
-                if (order.delivery_type) return order.delivery_type;
-                
-                // Subscription orders are always scheduled with morning slots
-                if (order.subscription_id) return 'scheduled';
-                
-                // Orders with actual time slots (not generic "12:00:00") are scheduled  
-                if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
-                  return 'scheduled';
-                }
-                
-                // Immediate orders: pending payment with today's delivery date and generic time
-                if ((order.payment_status === 'pending' || order.payment_status === 'Pending') && 
-                    order.delivery_date === new Date().toISOString().split('T')[0] &&
-                    (order.delivery_time === '12:00:00' || !order.delivery_time_slot)) {
-                  return 'immediate';
-                }
-                
-                // Book now pay later: pending payment with future delivery date
-                if ((order.payment_status === 'pending' || order.payment_status === 'Pending') && 
-                    order.delivery_date > new Date().toISOString().split('T')[0]) {
-                  return 'book_now_pay_later';
-                }
-                
-                // Scheduled orders have specific times or future dates
-                if ((order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00') ||
-                    (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])) {
-                  return 'scheduled';
-                }
-                
-                // Default to immediate for remaining orders
-                return 'immediate';
-                               })()}
-                               scheduledTime={order.delivery_date}
-                               orderPlacedAt={new Date(order.created_at)}
-                               subscriptionId={order.subscription_id}
-                               deliveryTime={order.delivery_time_slot || order.delivery_time}
-                               deliverySlots={parseDeliverySlots(order)}
-                               paymentStatus={order.payment_status}
-                             />
+                                deliveryType={(() => {
+                                  // Use backend-calculated delivery_type if available (best sync)
+                                  if (order.delivery_type) {
+                                    console.log(`Using backend delivery_type for order ${order.id}:`, order.delivery_type);
+                                    return order.delivery_type as 'immediate' | 'scheduled' | 'book_now_pay_later';
+                                  }
+                                  
+                                  // Fallback calculation (should match backend logic)
+                                  const today = new Date().toISOString().split('T')[0];
+                                  
+                                  // 1. Subscription orders are always scheduled
+                                  if (order.subscription_id) return 'scheduled';
+                                  
+                                  // 2. Book now pay later: pending payment with future delivery date
+                                  if ((order.payment_status === 'pending' || order.payment_status === 'Pending') && 
+                                      order.delivery_date && order.delivery_date > today) {
+                                    return 'book_now_pay_later';
+                                  }
+                                  
+                                  // 3. Scheduled orders: have real time slots or future dates
+                                  const hasRealTimeSlot = order.delivery_time_slot && 
+                                                         order.delivery_time_slot.includes('-') && 
+                                                         order.delivery_time_slot !== '12:00-12:00';
+                                                         
+                                  if (hasRealTimeSlot || (order.delivery_date && order.delivery_date > today)) {
+                                    return 'scheduled';
+                                  }
+                                  
+                                  // 4. Default to immediate
+                                  return 'immediate';
+                                })()}
+                                scheduledTime={order.delivery_date}
+                                orderPlacedAt={new Date(order.created_at)} // Use actual backend timestamp
+                                subscriptionId={order.subscription_id}
+                                deliveryTime={order.delivery_time_slot || order.delivery_time}
+                                deliverySlots={parseDeliverySlots(order)}
+                                paymentStatus={order.payment_status}
+                              />
                          </div>
 
                         {/* Address */}

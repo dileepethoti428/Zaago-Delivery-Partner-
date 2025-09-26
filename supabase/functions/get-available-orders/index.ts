@@ -216,12 +216,21 @@ serve(async (req) => {
     const resolvedOrders = await Promise.all(userOrdersPromises);
     filteredOrders = resolvedOrders.filter(order => order !== null);
 
-    // Fetch delivery slots only for subscription orders
+    // Process delivery slots based on order type - avoid synthetic slots for immediate orders
     const ordersWithSlots = await Promise.all(
       filteredOrders.map(async (order) => {
-        // Only fetch delivery slots for orders that have subscription_id (subscription orders)
-        // Regular immediate orders should not have delivery slots regardless of delivery_time_slot value
-        if (order.subscription_id && order.delivery_time_slot) {
+        const today = new Date().toISOString().split('T')[0];
+        const orderCreatedAt = new Date(order.created_at);
+        const now = new Date();
+        const minutesSinceCreated = Math.floor((now.getTime() - orderCreatedAt.getTime()) / (1000 * 60));
+        
+        // Only process delivery slots for non-immediate orders
+        const isImmediate = !order.subscription_id && 
+                           (!order.delivery_time_slot || !order.delivery_time_slot.includes('-')) &&
+                           (!order.delivery_date || order.delivery_date <= today) &&
+                           minutesSinceCreated < 30; // Recent orders are likely immediate
+        
+        if (!isImmediate && order.delivery_time_slot) {
           try {
             let deliverySlot = null;
             
@@ -274,16 +283,27 @@ serve(async (req) => {
                 return trimmed;
               };
               
-              // Only create synthetic slots for subscription orders, not regular orders
+              // Create proper time slots for subscription orders (morning delivery windows)
               if (order.subscription_id) {
+                // Subscription orders get morning delivery windows
                 deliverySlot = {
                   id: `slot-${order.id}`,
-                  slot_name: `${timeSlot} window`,
+                  slot_name: 'Morning Delivery',
+                  start_time: '06:00:00',
+                  end_time: '10:00:00'
+                };
+              } else {
+                // For scheduled orders with single time, create a 2-hour window
+                const baseTime = new Date(`2000-01-01 ${formatTime(timeSlot)}`);
+                const endTime = new Date(baseTime.getTime() + 2 * 60 * 60 * 1000);
+                
+                deliverySlot = {
+                  id: `slot-${order.id}`,
+                  slot_name: `${timeSlot} delivery window`,
                   start_time: formatTime(timeSlot),
-                  end_time: formatTime(timeSlot)
+                  end_time: endTime.toTimeString().slice(0, 8)
                 };
               }
-              // For regular orders, don't create synthetic slots - let frontend handle
             }
             
             return {
@@ -391,31 +411,58 @@ serve(async (req) => {
                 pickup_status: 'pending',
                 seller_name: sellerName,
                 seller_phone: sellerPhone,
-                // Improved delivery type detection with better logic
+                // Improved delivery type detection with proper sync logic
                 delivery_type: (() => {
-                  // Check if this is a subscription order
-                  if (order.subscription_id) return 'scheduled';
+                  const today = new Date().toISOString().split('T')[0];
+                  const orderCreatedAt = new Date(order.created_at);
+                  const now = new Date();
+                  const timeDifference = now.getTime() - orderCreatedAt.getTime();
+                  const minutesSinceCreated = Math.floor(timeDifference / (1000 * 60));
                   
-                  // Check if this has actual delivery time slot (not generic time)
-                  if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
+                  console.log(`Order ${order.id} analysis:`, {
+                    subscription_id: order.subscription_id,
+                    payment_status: order.payment_status,
+                    delivery_date: order.delivery_date,
+                    delivery_time_slot: order.delivery_time_slot,
+                    delivery_time: order.delivery_time,
+                    created_at: order.created_at,
+                    minutes_since_created: minutesSinceCreated
+                  });
+                  
+                  // 1. Subscription orders are always scheduled with morning delivery windows
+                  if (order.subscription_id) {
+                    console.log(`Order ${order.id} -> subscription (scheduled)`);
                     return 'scheduled';
                   }
                   
-                  // Check for book now pay later (pending payment + future delivery date)
-                  if (order.payment_status === 'pending' || order.payment_status === 'Pending') {
-                    const today = new Date().toISOString().split('T')[0];
-                    if (order.delivery_date && order.delivery_date > today) {
-                      return 'book_now_pay_later';
-                    }
-                    // If delivery date is today or in past with pending payment, treat as immediate
-                    return 'immediate';
+                  // 2. Book now pay later: pending payment with future delivery date
+                  if ((order.payment_status === 'pending' || order.payment_status === 'Pending') && 
+                      order.delivery_date && order.delivery_date > today) {
+                    console.log(`Order ${order.id} -> book now pay later`);
+                    return 'book_now_pay_later';
                   }
                   
-                  // Check if this is a scheduled order (has specific time or future date)
-                  if ((order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00') ||
-                      (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])) {
+                  // 3. Scheduled orders: have specific time slots (not generic times) OR future delivery dates
+                  const hasRealTimeSlot = order.delivery_time_slot && 
+                                         order.delivery_time_slot.includes('-') && 
+                                         order.delivery_time_slot !== '12:00-12:00' &&
+                                         !order.delivery_time_slot.includes('Immediate');
+                                         
+                  const hasFutureDeliveryDate = order.delivery_date && order.delivery_date > today;
+                  
+                  const hasSpecificDeliveryTime = order.delivery_time && 
+                                                 order.delivery_time !== 'Immediate' && 
+                                                 order.delivery_time !== '12:00:00' &&
+                                                 !order.delivery_time.includes('min');
+                  
+                  if (hasRealTimeSlot || hasFutureDeliveryDate || hasSpecificDeliveryTime) {
+                    console.log(`Order ${order.id} -> scheduled (time slot: ${hasRealTimeSlot}, future date: ${hasFutureDeliveryDate}, specific time: ${hasSpecificDeliveryTime})`);
                     return 'scheduled';
                   }
+                  
+                  // 4. Everything else is immediate (recent orders with no specific scheduling)
+                  console.log(`Order ${order.id} -> immediate (default)`);
+                  return 'immediate';
                   
                   // Default to immediate for orders without specific scheduling
                   return 'immediate';
