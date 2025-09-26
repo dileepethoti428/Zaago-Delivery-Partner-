@@ -343,7 +343,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
-          amount: number
+          amount?: number
           created_at?: string | null
           description?: string | null
           id?: string
@@ -4465,6 +4465,10 @@ export type Database = {
           p_distance_km?: number
         }
         Returns: Json
+      }
+      calculate_delivery_payout_safe: {
+        Args: { p_distance_km?: number; p_transaction_type?: string }
+        Returns: number
       }
       calculate_distance: {
         Args:
