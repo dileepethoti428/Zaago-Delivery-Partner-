@@ -63,6 +63,7 @@ const DeliveryDetails = () => {
   const [payout, setPayout] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
   useEffect(() => {
     if (orderId) {
       fetchOrderDetails();
@@ -373,6 +374,11 @@ const DeliveryDetails = () => {
     }
   };
 
+  const handleRetryDelivery = () => {
+    setDeliveryError(null);
+    // The PaymentMethodDialog will handle calling completeDeliveryDirect again
+  };
+
   if (isLoading) {
     return <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
@@ -655,16 +661,24 @@ const DeliveryDetails = () => {
         </Card>}
 
       {/* Payment Method Dialog */}
-      {order && <PaymentMethodDialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog} selectionOnly={true} order={{
-      order_id: order.id,
-      customer_name: order.customer_name,
-      total_amount: order.total,
-      payment_status: order.payment_status
-    }} onSuccess={async paymentMethod => {
-      console.log('DeliveryDetails: Payment method selected:', paymentMethod);
-      setShowPaymentDialog(false);
-      await completeDeliveryDirect(paymentMethod);
-    }} />}
+      {order && <PaymentMethodDialog 
+        open={showPaymentDialog} 
+        onOpenChange={setShowPaymentDialog} 
+        selectionOnly={true}
+        error={deliveryError}
+        onRetry={handleRetryDelivery}
+        order={{
+          order_id: order.id,
+          customer_name: order.customer_name,
+          total_amount: order.total,
+          payment_status: order.payment_status
+        }} 
+        onSuccess={async (paymentMethod) => {
+          console.log('DeliveryDetails: Payment method selected:', paymentMethod);
+          setShowPaymentDialog(false);
+          await completeDeliveryDirect(paymentMethod);
+        }} 
+      />}
 
       {/* Navigation Map */}
       {order && <NavigationMap open={showNavigationMap} onOpenChange={setShowNavigationMap} customerLocation={order.address?.coordinates || {

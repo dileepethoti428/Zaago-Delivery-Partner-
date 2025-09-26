@@ -5192,6 +5192,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      ultra_simple_complete_delivery: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_status: string
+        }
+        Returns: Json
+      }
       update_order_status: {
         Args: {
           p_agent_id: string

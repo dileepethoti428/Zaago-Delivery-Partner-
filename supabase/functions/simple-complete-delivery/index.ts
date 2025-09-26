@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('🚀 Simple complete delivery request started');
+  console.log('🚀 Ultra-simple delivery completion request started');
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -16,13 +16,13 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { order_id, payment_method = 'Online', distance_km = 2.5, agent_payout = 35 } = body;
+    const { order_id, payment_method = 'Online', distance_km = 1, agent_payout = 12 } = body;
     
     console.log('📋 Request parameters:', { order_id, payment_method, distance_km, agent_payout });
     
     if (!order_id) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Order ID is required' }),
+        JSON.stringify({ success: false, error: 'Order ID is required', code: 'MISSING_ORDER_ID' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -32,11 +32,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Simple authentication check
+    // Authentication check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Authentication required' }),
+        JSON.stringify({ success: false, error: 'Authentication required', code: 'AUTH_REQUIRED' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
@@ -46,7 +46,7 @@ serve(async (req) => {
     
     if (authError || !userData.user) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Invalid authentication' }),
+        JSON.stringify({ success: false, error: 'Invalid authentication', code: 'AUTH_INVALID' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
@@ -63,14 +63,14 @@ serve(async (req) => {
 
     if (agentError || !agent) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Agent not found or inactive' }),
+        JSON.stringify({ success: false, error: 'Agent not found or inactive', code: 'AGENT_NOT_FOUND' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Get the order first to check it exists and belongs to this agent
+    // Get the order to validate
     const { data: order, error: orderError } = await supabaseClient
       .from('orders')
       .select('id, status, customer_name, total, agent_id')
@@ -80,178 +80,93 @@ serve(async (req) => {
 
     if (orderError || !order) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Order not found or not assigned to this agent' }),
+        JSON.stringify({ success: false, error: 'Order not found or not assigned to this agent', code: 'ORDER_NOT_FOUND' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
     }
 
     if (order.status === 'delivered') {
       return new Response(
-        JSON.stringify({ success: true, message: 'Order already delivered' }),
+        JSON.stringify({ success: true, message: 'Order already delivered', code: 'ALREADY_DELIVERED' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('✅ Order found:', { id: order.id, status: order.status, customer: order.customer_name });
+    console.log('✅ Order validated:', { id: order.id, status: order.status, customer: order.customer_name });
 
-    // ROBUST UPDATE APPROACH - Multiple strategies for maximum reliability
+    // Determine payment status
     const payment_status = payment_method.toUpperCase() === 'COD' ? 'paid_cod' : 'paid_online';
-    const now = new Date().toISOString();
     
-    console.log('💾 Using ultra-robust delivery completion function...');
-    console.log('🔍 Parameters:', { 
-      order_id: order_id, 
-      order_id_type: typeof order_id,
-      agent_id: agent.id, 
-      agent_id_type: typeof agent.id,
-      payment_status 
-    });
+    console.log('💾 Using ultra-simple delivery completion...');
     
-    // Ensure UUIDs are properly formatted strings
-    const orderIdStr = String(order_id).trim();
-    const agentIdStr = String(agent.id).trim();
-    
-    console.log('🔍 Converted parameters:', { orderIdStr, agentIdStr, payment_status });
-    
-    // Try the new ultra-robust stored procedure first
-    const { data: procedureResult, error: procedureError } = await supabaseClient.rpc('direct_complete_delivery', {
-      p_order_id: orderIdStr,
-      p_new_status: 'delivered',
-      p_new_payment_status: payment_status,
-      p_agent_id: agentIdStr
+    // Use the new ultra-simple stored procedure
+    const { data: result, error: completionError } = await supabaseClient.rpc('ultra_simple_complete_delivery', {
+      p_order_id: order_id,
+      p_agent_id: agent.id,
+      p_payment_status: payment_status
     });
         
-    if (procedureError) {
-      console.error('❌ Primary stored procedure failed:', procedureError);
-      
-      // Fallback: Direct table update
-      console.log('🔄 Attempting fallback direct update...');
-      const { error: directUpdateError } = await supabaseClient
-        .from('orders')
-        .update({
-          status: 'delivered',
-          payment_status: payment_status,
-          delivered_at: now,
-          updated_at: now
-        })
-        .eq('id', orderIdStr)
-        .eq('agent_id', agentIdStr);
-      
-      if (directUpdateError) {
-        console.error('❌ Fallback update also failed:', directUpdateError);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'All delivery completion methods failed',
-            details: `Primary: ${procedureError.message}, Fallback: ${directUpdateError.message}`
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        );
-      }
-      
-      console.log('✅ Fallback update succeeded');
-    } else if (procedureResult && !procedureResult.success) {
-      console.error('❌ Stored procedure returned error:', procedureResult.error);
+    if (completionError) {
+      console.error('❌ Delivery completion failed:', completionError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Order completion failed',
-          details: procedureResult.error
+          error: 'Failed to complete delivery',
+          code: 'COMPLETION_FAILED',
+          details: completionError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
-    } else {
-      console.log('✅ Primary stored procedure succeeded');
     }
 
-    // Initialize variables for distance and payout calculation
-    let finalDistance = distance_km;
-    let finalPayout = agent_payout;
+    if (!result || !result.success) {
+      const errorMsg = result?.error || 'Unknown error during completion';
+      console.error('❌ Completion procedure returned error:', errorMsg);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: errorMsg,
+          code: 'PROCEDURE_FAILED'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
 
-    // Create earnings record with real-time distance and payout data
+    console.log('✅ Delivery completed successfully');
+
+    // Optional: Create earnings record (non-blocking)
     try {
-      // If frontend passed 0 distance, calculate it on backend
-      if (distance_km === 0) {
-        console.log('⚠️ Frontend passed 0 distance, calculating on backend...');
-        
-        // Get pickup and delivery coordinates from order
-        const { data: orderData, error: orderLookupError } = await supabaseClient
-          .from('orders')
-          .select('pickup_location, address')
-          .eq('id', order_id)
-          .single();
-        
-        if (!orderLookupError && orderData?.pickup_location && orderData?.address?.coordinates) {
-          try {
-            // Calculate distance using Mapbox or similar service
-            const { data: distanceData, error: distanceError } = await supabaseClient.functions.invoke('calculate-distance-eta', {
-              body: {
-                pickup: orderData.pickup_location,
-                delivery: orderData.address.coordinates
-              }
-            });
-            
-            if (!distanceError && distanceData?.distance_km) {
-              finalDistance = Math.max(distanceData.distance_km, 1.0); // Minimum 1km
-              // Recalculate payout: ₹12 base + ₹8 per km after first km
-              finalPayout = finalDistance <= 1 ? 12 : Math.round(12 + (finalDistance - 1) * 8);
-              console.log('✅ Backend calculated distance:', finalDistance, 'km, Payout:', finalPayout);
-            }
-          } catch (calcError) {
-            console.warn('⚠️ Backend distance calculation failed:', calcError);
-            finalDistance = 1.0; // Minimum fallback
-            finalPayout = 12; // Base payout
-          }
-        } else {
-          console.warn('⚠️ No valid coordinates for backend calculation, using minimums');
-          finalDistance = 1.0; // Minimum fallback  
-          finalPayout = 12; // Base payout
-        }
-      }
-      
-      console.log('💰 Creating earnings record with final data:', { 
-        agent_payout: finalPayout, 
-        distance_km: finalDistance, 
-        payment_method 
-      });
-      
       const { error: earningsError } = await supabaseClient
         .from('earnings')
         .upsert({
           agent_id: agent.id,
           order_id: order_id,
-          amount: finalPayout, // Use calculated payout
+          amount: distance_km <= 1 ? 12 : Math.round(12 + (distance_km - 1) * 8),
           status: 'completed',
-          distance_km: finalDistance, // Use calculated distance
+          distance_km: distance_km,
           payment_method: payment_method === 'COD' ? 'COD' : 'Online',
-          description: `Delivery completion: ${finalDistance}km distance, ₹${finalPayout} payout`
+          description: `Delivery completed: ${distance_km}km, ${payment_method} payment`
         }, {
           onConflict: 'agent_id,order_id',
           ignoreDuplicates: true
         });
       
       if (!earningsError) {
-        console.log('✅ Earnings record created/updated with accurate data');
+        console.log('✅ Earnings record created');
       }
       
-      // Also update delivery_history with accurate distance
-      const { error: historyError } = await supabaseClient
+      // Update delivery history if exists
+      await supabaseClient
         .from('delivery_history')
         .update({
-          distance_traveled: finalDistance,
-          delivery_payout: finalPayout,
-          updated_at: now
+          distance_traveled: distance_km,
+          delivery_payout: distance_km <= 1 ? 12 : Math.round(12 + (distance_km - 1) * 8)
         })
         .eq('order_id', order_id)
         .eq('agent_id', agent.id);
-      
-      if (!historyError) {
-        console.log('✅ Delivery history updated with accurate distance');
-      } else {
-        console.warn('⚠️ Failed to update delivery history distance:', historyError);
-      }
+        
     } catch (error) {
-      console.warn('⚠️ Earnings/History update failed (continuing anyway):', error);
+      console.warn('⚠️ Earnings update failed (non-critical):', error);
     }
 
     return new Response(
@@ -262,22 +177,23 @@ serve(async (req) => {
           id: order_id,
           customer_name: order.customer_name,
           total: order.total,
-          payment_method,
+          payment_method: payment_method,
           status: 'delivered',
-          distance_km: finalDistance, // Use final calculated distance
-          payout_amount: finalPayout // Use final calculated payout
+          distance_km: distance_km,
+          payout_amount: distance_km <= 1 ? 12 : Math.round(12 + (distance_km - 1) * 8)
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('❌ Simple Complete Delivery Error:', error);
+    console.error('❌ Complete Delivery Error:', error);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: 'Failed to complete delivery',
+        code: 'INTERNAL_ERROR',
         details: error instanceof Error ? error.message : String(error)
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
