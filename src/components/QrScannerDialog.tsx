@@ -50,6 +50,20 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       
       console.log('🔍 Scanning QR code:', result);
       
+      // Check if user is authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('🔐 Current session:', !!session);
+      
+      if (!session) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to scan QR codes.",
+          variant: "destructive"
+        });
+        onOpenChange(false);
+        return;
+      }
+      
       // Use the new qr-scan-order function to validate and get order info
       const { data, error } = await supabase.functions.invoke('qr-scan-order', {
         body: {
@@ -61,11 +75,21 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
 
       if (error) {
         console.error('❌ QR scan error:', error);
-        toast({
-          title: "Scan Failed",
-          description: error.message || "Unable to process QR code. Please try again.",
-          variant: "destructive"
-        });
+        
+        // Check for specific authentication errors
+        if (error.message && error.message.includes('Authentication')) {
+          toast({
+            title: "Authentication Error",
+            description: "Please log out and log back in, then try again.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Scan Failed", 
+            description: error.message || "Unable to process QR code. Please try again.",
+            variant: "destructive"
+          });
+        }
         onOpenChange(false);
         return;
       }

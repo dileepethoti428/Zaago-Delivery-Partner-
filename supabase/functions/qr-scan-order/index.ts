@@ -13,10 +13,15 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔍 QR Scan Request started');
+    
     const body = await req.json();
     const { qr_code_data } = body;
 
+    console.log('📱 QR Code data received:', qr_code_data);
+
     if (!qr_code_data) {
+      console.error('❌ No QR code data provided');
       return new Response(
         JSON.stringify({ success: false, error: 'QR code data is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -29,16 +34,39 @@ serve(async (req) => {
     );
 
     // Get authenticated user
-    const authHeader = req.headers.get('Authorization')!;
-    const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    const authHeader = req.headers.get('Authorization');
+    console.log('🔐 Auth header present:', !!authHeader);
     
-    if (authError || !userData.user) {
+    if (!authHeader) {
+      console.error('❌ No authorization header provided');
       return new Response(
-        JSON.stringify({ success: false, error: 'Authentication required' }),
+        JSON.stringify({ success: false, error: 'Authentication required - no authorization header' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
+
+    const token = authHeader.replace('Bearer ', '');
+    console.log('🎫 Token extracted, length:', token.length);
+    
+    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError) {
+      console.error('❌ Auth error:', authError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Authentication failed: ' + authError.message }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+    
+    if (!userData.user) {
+      console.error('❌ No user data found');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Authentication required - no user found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    console.log('✅ User authenticated:', userData.user.email);
 
     // Get agent info
     const { data: agent, error: agentError } = await supabaseClient
