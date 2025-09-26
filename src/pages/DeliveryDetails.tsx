@@ -564,25 +564,42 @@ const DeliveryDetails = () => {
 
       {/* Delivery Timer */}
       <div className="animate-slide-up">
-        <DeliveryTimer
-          deliveryType={
-            order.calculated_delivery_type || 
+        {(() => {
+          const determinedType = order.calculated_delivery_type || 
             (order.subscription_id ? 'subscription' : 
               (order.delivery_time_slot && order.delivery_time_slot.includes('-') ? 'scheduled' : 'immediate')
-            )
-          }
-          scheduledTime={order.delivery_date}
-          orderPlacedAt={new Date(order.created_at)}
-          subscriptionId={order.subscription_id}
-          deliveryTime={order.delivery_time}
-          deliverySlots={order.delivery_slots}
-          paymentStatus={order.payment_status}
-          deliveryTimeSlot={order.delivery_time_slot}
-          immediateTimingConfig={order.immediate_timing_config}
-          acceptedAt={new Date()} // Use current time as acceptance time since agent is viewing details
-          scheduledTimingConfig={{ max_duration_minutes: 20 }} // 20 minutes for scheduled orders after acceptance
-          className="w-full"
-        />
+            );
+          
+          console.log('🔍 DeliveryDetails - Delivery Type Debug:', {
+            calculated_delivery_type: order.calculated_delivery_type,
+            subscription_id: order.subscription_id,
+            delivery_time_slot: order.delivery_time_slot,
+            hasHyphen: order.delivery_time_slot && order.delivery_time_slot.includes('-'),
+            determinedType: determinedType,
+            orderData: {
+              id: order.id,
+              customer_name: order.customer_name,
+              payment_status: order.payment_status
+            }
+          });
+          
+          return (
+            <DeliveryTimer
+              deliveryType={determinedType}
+              scheduledTime={order.delivery_date}
+              orderPlacedAt={new Date(order.created_at)}
+              subscriptionId={order.subscription_id}
+              deliveryTime={order.delivery_time}
+              deliverySlots={order.delivery_slots}
+              paymentStatus={order.payment_status}
+              deliveryTimeSlot={order.delivery_time_slot}
+              immediateTimingConfig={order.immediate_timing_config}
+              acceptedAt={new Date()} // Use current time as acceptance time since agent is viewing details
+              scheduledTimingConfig={{ max_duration_minutes: 20 }} // 20 minutes for scheduled orders after acceptance
+              className="w-full"
+            />
+          );
+        })()}
       </div>
 
       {/* Order Details */}
