@@ -132,23 +132,18 @@ const DeliveryTimer = ({
     let displayTime = null;
     let hasTimeSlot = false;
     
-    // First, try to parse directly from deliverySlots
+    // First, try to parse directly from deliverySlots (actual time ranges)
     if (deliverySlots && deliverySlots.start_time && deliverySlots.end_time) {
-      // Format time slots as intervals with enhanced validation using utility
+      // Only use delivery slots if they represent actual time ranges, not synthetic ones
       const startFormatted = formatTimeSlot(deliverySlots.start_time);
       const endFormatted = formatTimeSlot(deliverySlots.end_time);
       
-      // Only use delivery slots if both times are valid
-      if (startFormatted && endFormatted) {
-        if (startFormatted !== endFormatted) {
-          displayTime = `${startFormatted} - ${endFormatted}`;
-        } else {
-          displayTime = startFormatted;
-        }
+      if (startFormatted && endFormatted && startFormatted !== endFormatted) {
+        displayTime = `${startFormatted} - ${endFormatted}`;
         hasTimeSlot = true;
-        console.log('✅ Using delivery slots for time display:', displayTime);
+        console.log('✅ Using actual delivery slots for time display:', displayTime);
       } else {
-        console.warn('❌ Invalid delivery slot times:', { start: deliverySlots.start_time, end: deliverySlots.end_time });
+        console.warn('❌ Skipping synthetic or invalid delivery slot times:', { start: deliverySlots.start_time, end: deliverySlots.end_time });
       }
     }
     
@@ -165,20 +160,20 @@ const DeliveryTimer = ({
         displayTime = scheduleInfo.time;
         console.log('Using scheduleInfo time for display:', displayTime);
       } else {
-        // Order-type specific fallbacks based on actual order characteristics
+        // Specific fallbacks based on actual order type and data
         if (isSubscription) {
           displayTime = '6:00 AM - 10:00 AM';
           hasTimeSlot = true;
-          console.log('Using subscription morning slot fallback');
+          console.log('Using subscription morning delivery slot');
         } else if (isBookNowPayLater) {
           displayTime = 'Schedule on payment'; 
           hasTimeSlot = false;
-          console.log('Using book now pay later fallback');
+          console.log('Using book now pay later message');
         } else {
-          // For regular orders with generic "12:00:00" time, show appropriate message
-          displayTime = 'Delivery time varies';
+          // For other scheduled orders without specific time data
+          displayTime = 'Time will be confirmed';
           hasTimeSlot = false;
-          console.warn('Generic delivery time detected, showing generic message');
+          console.warn('Scheduled order without specific time data');
         }
       }
     }

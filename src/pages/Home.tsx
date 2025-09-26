@@ -1280,26 +1280,38 @@ const Home = () => {
                          <div className="mb-4">
                              <DeliveryTimer
                                deliveryType={(() => {
-                                 // Use backend-provided delivery_type if available, otherwise determine based on order data
-                                 if (order.delivery_type) return order.delivery_type;
-                                 
-                                 // Subscription orders are always scheduled
-                                 if (order.subscription_id) return 'scheduled';
-                                 
-                                 // Book now pay later orders
-                                 if (order.payment_status === 'pending' || order.payment_status === 'Pending') {
-                                   return 'book_now_pay_later';
-                                 }
-                                 
-                                 // Scheduled orders (have delivery_time_slot or future delivery_date)
-                                 if (order.delivery_time_slot || 
-                                     (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0]) ||
-                                     (order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00')) {
-                                   return 'scheduled';
-                                 }
-                                 
-                                 // Default to immediate for orders without specific scheduling
-                                 return 'immediate';
+                // Improved delivery type detection based on actual backend data
+                if (order.delivery_type) return order.delivery_type;
+                
+                // Subscription orders are always scheduled with morning slots
+                if (order.subscription_id) return 'scheduled';
+                
+                // Orders with actual time slots (not generic "12:00:00") are scheduled  
+                if (order.delivery_time_slot && order.delivery_time_slot.includes('-')) {
+                  return 'scheduled';
+                }
+                
+                // Immediate orders: pending payment with today's delivery date and generic time
+                if ((order.payment_status === 'pending' || order.payment_status === 'Pending') && 
+                    order.delivery_date === new Date().toISOString().split('T')[0] &&
+                    (order.delivery_time === '12:00:00' || !order.delivery_time_slot)) {
+                  return 'immediate';
+                }
+                
+                // Book now pay later: pending payment with future delivery date
+                if ((order.payment_status === 'pending' || order.payment_status === 'Pending') && 
+                    order.delivery_date > new Date().toISOString().split('T')[0]) {
+                  return 'book_now_pay_later';
+                }
+                
+                // Scheduled orders have specific times or future dates
+                if ((order.delivery_time && order.delivery_time !== 'Immediate' && order.delivery_time !== '12:00:00') ||
+                    (order.delivery_date && order.delivery_date !== new Date().toISOString().split('T')[0])) {
+                  return 'scheduled';
+                }
+                
+                // Default to immediate for remaining orders
+                return 'immediate';
                                })()}
                                scheduledTime={order.delivery_date}
                                orderPlacedAt={new Date(order.created_at)}
