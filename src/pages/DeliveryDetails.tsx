@@ -336,35 +336,66 @@ const DeliveryDetails = () => {
         body: requestPayload
       });
       
-      console.log('📥 Response received:', { data, error });
+      console.log('📥 Raw response received:', { data, error, dataType: typeof data, errorType: typeof error });
       
-      if (error) {
-        console.error('❌ Edge function error:', error);
-        const errorMessage = error.message || 'Unknown error';
-        setDeliveryError(errorMessage);
-        toast({
-          title: "Delivery Failed",
-          description: `Unable to complete delivery: ${errorMessage}. Please try again or contact support.`,
-          variant: "destructive"
-        });
-        return;
+      // Parse response - check both data and error objects for success
+      let responseData = null;
+      let isSuccess = false;
+      
+      // First check if data contains success
+      if (data && data.success === true) {
+        responseData = data;
+        isSuccess = true;
+        console.log('✅ Success found in data object:', data);
+      }
+      // Then check if error object actually contains success response (Supabase edge function quirk)
+      else if (error && typeof error === 'object') {
+        // Check if error object has success property
+        if (error.success === true) {
+          responseData = error;
+          isSuccess = true;
+          console.log('✅ Success found in error object (edge function response parsing):', error);
+        }
+        // Check if error message contains success JSON
+        else if (error.message && typeof error.message === 'string') {
+          try {
+            const parsedMessage = JSON.parse(error.message);
+            if (parsedMessage && parsedMessage.success === true) {
+              responseData = parsedMessage;
+              isSuccess = true;
+              console.log('✅ Success found in parsed error message:', parsedMessage);
+            }
+          } catch (parseError) {
+            console.log('📝 Error message is not JSON:', error.message);
+          }
+        }
       }
       
-      if (data?.success) {
-        console.log('✅ Delivery completed successfully!', data);
+      if (isSuccess && responseData) {
+        console.log('✅ Delivery completed successfully!', responseData);
         toast({
           title: "Product Delivered! ✅",
-          description: `Order completed successfully. Distance: ${data.order?.distance_km || distance}km, Earned: ₹${data.order?.payout_amount || payout}`,
+          description: `Order completed successfully. Distance: ${responseData.order?.distance_km || distance}km, Earned: ₹${responseData.order?.payout_amount || payout}`,
         });
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       } else {
-        console.error('❌ Delivery failed:', data);
-        const errorMessage = data?.error || 'Failed to complete delivery';
+        // This is a real error
+        console.error('❌ Delivery failed - real error:', { data, error });
+        let errorMessage = 'Failed to complete delivery';
+        
+        if (error && error.message && typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (data && data.error) {
+          errorMessage = data.error;
+        } else if (error) {
+          errorMessage = JSON.stringify(error);
+        }
+        
         setDeliveryError(errorMessage);
         toast({
           title: "Delivery Failed",
-          description: errorMessage,
+          description: `Unable to complete delivery: ${errorMessage}. Please try again or contact support.`,
           variant: "destructive"
         });
       }
