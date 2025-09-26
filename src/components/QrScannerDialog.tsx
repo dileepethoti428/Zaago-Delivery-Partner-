@@ -76,11 +76,23 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       if (error) {
         console.error('❌ QR scan error:', error);
         
-        // Check for specific authentication errors
-        if (error.message && error.message.includes('Authentication')) {
+        // Enhanced error handling with specific status codes
+        if (error.message?.includes('Authentication') || error.message?.includes('401')) {
           toast({
             title: "Authentication Error",
             description: "Please log out and log back in, then try again.",
+            variant: "destructive"
+          });
+        } else if (error.message?.includes('403') || error.message?.includes('not assigned')) {
+          toast({
+            title: "Access Denied",
+            description: "This order is assigned to another delivery agent.",
+            variant: "destructive"
+          });
+        } else if (error.message?.includes('400') || error.message?.includes('already used')) {
+          toast({
+            title: "QR Code Already Used",
+            description: "This QR code was already scanned. If delivery failed, contact admin.",
             variant: "destructive"
           });
         } else {
@@ -111,10 +123,16 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
             description: "This order has already been completed.",
             variant: "default"
           });
-        } else if (errorMsg.includes('already used')) {
+        } else if (errorMsg.includes('already used') || errorMsg.includes('already scanned')) {
           toast({
             title: "QR Code Already Used",
-            description: "This QR code has already been scanned.",
+            description: "This QR code was already scanned. If the previous delivery failed, please contact admin for assistance.",
+            variant: "destructive"
+          });
+        } else if (errorMsg.includes('not ready') || errorMsg.includes('status')) {
+          toast({
+            title: "Order Not Ready",
+            description: "This order is not ready for delivery. Please check the order status.",
             variant: "destructive"
           });
         } else {

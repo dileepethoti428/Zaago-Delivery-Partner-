@@ -169,16 +169,50 @@ serve(async (req) => {
       );
     }
 
-    // If QR already scanned, prevent re-scanning with clear message
+    // Enhanced QR scanning logic - Allow re-scan if delivery failed
     if (qrData.is_scanned) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'QR code already used',
-          message: 'This QR code has already been scanned. Each QR code can only be used once for delivery completion.'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
+      console.log('⚠️ QR already scanned, checking if delivery was completed...');
+      
+      // If order was delivered successfully, don't allow re-scan
+      if (order.status === 'delivered') {
+        console.log('✅ Order already delivered successfully');
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'QR code already used - order completed',
+            message: 'This delivery has already been completed successfully.'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+      
+      // If order is still assigned but QR was scanned, delivery may have failed
+      // Allow re-scanning with a warning
+      console.log('🔄 QR scanned but delivery not completed, allowing retry...');
+      
+      // Reset QR scan status to allow retry
+      const { error: resetError } = await supabaseClient
+        .from('order_qr_codes')
+        .update({ 
+          is_scanned: false,
+          scanned_at: null,
+          scanned_by: null 
+        })
+        .eq('qr_code_data', qr_code_data);
+        
+      if (resetError) {
+        console.error('❌ Failed to reset QR status:', resetError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'QR code already used',
+            message: 'This QR code has already been scanned and cannot be reset. Please contact admin.'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+      
+      console.log('✅ QR status reset successfully, proceeding with scan...');
     }
 
     // Calculate estimated payout

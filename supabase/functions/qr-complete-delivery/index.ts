@@ -154,12 +154,20 @@ serve(async (req) => {
       );
     }
 
-    // If QR already used but order not delivered, block
+    // Enhanced QR validation - Allow completion if order is ready
     if (qrData.is_scanned) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'QR code already used' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
+      console.log('⚠️ QR already scanned, but proceeding if order is still deliverable...');
+      
+      // Only block if order is already delivered
+      if (order && order.status === 'delivered') {
+        console.log('✅ Order already delivered, blocking duplicate completion');
+        return new Response(
+          JSON.stringify({ success: false, error: 'Order already completed' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+      
+      console.log('🔄 QR scanned but order not delivered, proceeding with completion...');
     }
 
     if (!order || order.status !== 'assigned') {
@@ -201,6 +209,18 @@ serve(async (req) => {
     }
 
     console.log('✅ QR code marked as scanned');
+
+    // Enhanced logging for better debugging
+    console.log('📊 QR Delivery Context:', {
+      qr_code_data: qr_code_data.substring(0, 20) + '...',
+      order_id: order.id,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      customer_name: order.customer_name,
+      order_total: order.total,
+      payment_method: payment_method,
+      order_status: order.status
+    });
 
     // Use the complete_delivery_simple database function for unified processing
     const distance_km = 2.5; // Default distance for QR deliveries
