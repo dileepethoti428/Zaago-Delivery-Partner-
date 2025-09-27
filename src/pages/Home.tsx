@@ -187,18 +187,43 @@ const Home = () => {
     }
   };
 
-  // Check if a new order should trigger notification sound
-  const shouldPlayNotificationForOrder = (orderData: any): boolean => {
-    // Only play for orders that are available to accept (packed status, no agent assigned)
-    if (orderData.status !== 'packed' || orderData.agent_id) {
+  // Check if a new order should trigger immediate notification (on INSERT)
+  const shouldPlayImmediateNotificationForOrder = (orderData: any): boolean => {
+    console.log('🔔 Checking immediate notification for new order:', orderData.id, 'Status:', orderData.status, 'Agent ID:', orderData.agent_id);
+    
+    // Don't play for orders already assigned to an agent
+    if (orderData.agent_id) {
+      console.log('⚠️ Skipping notification - order already assigned to agent');
       return false;
     }
     
     // Don't play duplicate notifications for the same order
-    if (recentNotifications.has(orderData.id)) {
+    if (recentNotifications.has(`immediate-${orderData.id}`)) {
+      console.log('⚠️ Skipping duplicate immediate notification for order:', orderData.id);
       return false;
     }
     
+    console.log('✅ Playing immediate notification for new order:', orderData.id);
+    return true;
+  };
+
+  // Check if a new order should trigger availability notification (when status changes to packed)
+  const shouldPlayAvailabilityNotificationForOrder = (orderData: any): boolean => {
+    console.log('🔔 Checking availability notification for order:', orderData.id, 'Status:', orderData.status, 'Agent ID:', orderData.agent_id);
+    
+    // Only play for orders that are packed and available to accept (no agent assigned)
+    if (orderData.status !== 'packed' || orderData.agent_id) {
+      console.log('⚠️ Skipping availability notification - not packed or already assigned');
+      return false;
+    }
+    
+    // Don't play duplicate notifications for the same order
+    if (recentNotifications.has(`availability-${orderData.id}`)) {
+      console.log('⚠️ Skipping duplicate availability notification for order:', orderData.id);
+      return false;
+    }
+    
+    console.log('✅ Playing availability notification for order:', orderData.id);
     return true;
   };
 
@@ -221,26 +246,29 @@ const Home = () => {
     return true;
   };
 
-  // Handle new order notification with debouncing
-  const handleNewOrderNotification = (orderData: any) => {
-    if (!shouldPlayNotificationForOrder(orderData)) {
+  // Handle immediate notification for new orders (INSERT event)
+  const handleImmediateOrderNotification = (orderData: any) => {
+    console.log('🚨 Processing immediate notification for new order:', orderData.id);
+    
+    if (!shouldPlayImmediateNotificationForOrder(orderData)) {
       return;
     }
 
     // Add to recent notifications to prevent duplicates
-    setRecentNotifications(prev => new Set(prev).add(orderData.id));
+    setRecentNotifications(prev => new Set(prev).add(`immediate-${orderData.id}`));
     
-    // Remove from recent notifications after 30 seconds
+    // Remove from recent notifications after 15 seconds (shorter for immediate alerts)
     setTimeout(() => {
       setRecentNotifications(prev => {
         const newSet = new Set(prev);
-        newSet.delete(orderData.id);
+        newSet.delete(`immediate-${orderData.id}`);
         return newSet;
       });
-    }, 30000);
+    }, 15000);
 
-    // Play the ringtone only if enabled and not disabled
+    // Play the ringtone immediately for new orders
     if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+      console.log('🔊 Playing immediate notification sound');
       playNotificationSound();
       setIsRingtoneDisabled(true); // Show stop button after playing
       
@@ -250,10 +278,50 @@ const Home = () => {
       }, 10000);
     }
     
-    // Show toast notification
+    // Show immediate toast notification with different styling
     toast({
-      title: "🔔 New Order Available!",
-      description: `New delivery order from ${orderData.customer_name || 'customer'}`,
+      title: "🚨 New Order Incoming!",
+      description: `Order from ${orderData.customer_name || 'customer'} is being prepared`,
+      duration: 5000,
+    });
+  };
+
+  // Handle availability notification for orders ready for pickup
+  const handleAvailabilityOrderNotification = (orderData: any) => {
+    console.log('📦 Processing availability notification for order:', orderData.id);
+    
+    if (!shouldPlayAvailabilityNotificationForOrder(orderData)) {
+      return;
+    }
+
+    // Add to recent notifications to prevent duplicates
+    setRecentNotifications(prev => new Set(prev).add(`availability-${orderData.id}`));
+    
+    // Remove from recent notifications after 30 seconds
+    setTimeout(() => {
+      setRecentNotifications(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(`availability-${orderData.id}`);
+        return newSet;
+      });
+    }, 30000);
+
+    // Play different notification sound for ready orders (could be different sound)
+    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+      console.log('🔊 Playing availability notification sound');
+      playNotificationSound();
+      setIsRingtoneDisabled(true); // Show stop button after playing
+      
+      // Auto-hide stop button after 10 seconds
+      setTimeout(() => {
+        setIsRingtoneDisabled(false);
+      }, 10000);
+    }
+    
+    // Show availability toast notification
+    toast({
+      title: "📦 Order Ready for Pickup!",
+      description: `Order from ${orderData.customer_name || 'customer'} is packed and ready`,
       duration: 4000,
     });
   };
@@ -812,11 +880,17 @@ const Home = () => {
         (payload) => {
           console.log('📝 Order updated:', payload);
           
-          // Handle pickup ready notification for agent's accepted orders
+          // Handle status change notifications
           if (payload.new && payload.old && payload.new.status !== payload.old.status) {
             console.log(`🔄 Order status changed: ${payload.old.status} → ${payload.new.status}`);
             
-            // Check if this is an agent's order becoming ready for pickup
+            // Handle availability notification when order becomes packed
+            if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
+              console.log('📦 Order became available for pickup');
+              handleAvailabilityOrderNotification(payload.new);
+            }
+            
+            // Keep existing pickup ready notification for backward compatibility
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
               handlePickupReadyNotification(payload.new, payload.old);
             }
@@ -849,12 +923,16 @@ const Home = () => {
         (payload) => {
           console.log('🆕 New order created:', payload);
           
-          // Handle notification for new available orders
+          // Handle immediate notification for new orders
           if (payload.new) {
-            handleNewOrderNotification(payload.new);
+            console.log('🚨 Triggering immediate notification for new order:', payload.new.id);
+            handleImmediateOrderNotification(payload.new);
           }
           
-          fetchOrdersForRefresh();
+          // Fetch orders with minimal delay for immediate visibility
+          setTimeout(() => {
+            fetchOrdersForRefresh();
+          }, 100); // 100ms delay for immediate response
         }
       )
       .on(
