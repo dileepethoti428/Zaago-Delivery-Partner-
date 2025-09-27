@@ -226,7 +226,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
     }
 
     // Use proper ringtones instead of notification sounds
-    let ringtoneFile = '/emergency-alarm.mp3'; // Default to emergency alarm for delivery alerts
+    let ringtoneFile = '/iphone-ringtone.mp3'; // Default to iPhone ringtone for delivery alerts
     
     switch (settings?.type) {
       case 'rapido-ringtone':
