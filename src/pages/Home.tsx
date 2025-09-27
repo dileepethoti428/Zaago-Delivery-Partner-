@@ -40,6 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
 import DeliveryTimer from "@/components/DeliveryTimer";
+import { EmergencyOrderModal } from "@/components/EmergencyOrderModal";
 
 // Get greeting based on current time
 const getGreeting = () => {
@@ -145,6 +146,10 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
+  
+  // Emergency modal state
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [emergencyOrderData, setEmergencyOrderData] = useState<Order | null>(null);
 
   // Load agent settings on component mount - deferred for faster initial load
   useEffect(() => {
@@ -395,11 +400,31 @@ const Home = () => {
       playNotificationSound();
     }
     
-    // Show packed status toast notification
+    // Show emergency modal popup instead of just toast
+    setEmergencyOrderData({
+      id: orderData.id,
+      customer_name: orderData.customer_name || 'Customer',
+      customer_phone: orderData.customer_phone || 'N/A',
+      address: normalizeAddress(orderData.address),
+      original_address: orderData.address,
+      items: orderData.items || [],
+      total: orderData.total || 0,
+      status: orderData.status,
+      delivery_date: orderData.delivery_date || new Date().toISOString(),
+      delivery_time_slot: orderData.delivery_time_slot,
+      created_at: orderData.created_at || new Date().toISOString(),
+      payment_status: orderData.payment_status || 'pending',
+      pickup_address: orderData.pickup_address,
+      seller_name: orderData.seller_name,
+      seller_phone: orderData.seller_phone
+    });
+    setShowEmergencyModal(true);
+    
+    // Also show toast notification as backup
     toast({
       title: "🚨 Order Packed & Ready!",
       description: `Order from ${orderData.customer_name || 'customer'} has been packed by seller`,
-      duration: 5000,
+      duration: 3000,
     });
   };
 
@@ -807,6 +832,25 @@ const Home = () => {
     } finally {
       setAcceptingOrders(prev => ({ ...prev, [orderId]: false }));
     }
+  };
+
+  // Emergency modal handlers
+  const handleEmergencyAcceptOrder = async (orderId: string) => {
+    await handleAcceptOrder(orderId);
+    setShowEmergencyModal(false);
+    setEmergencyOrderData(null);
+  };
+
+  const handleStopAlarm = () => {
+    stopRingtone();
+    setShowEmergencyModal(false);
+    setEmergencyOrderData(null);
+  };
+
+  const handleCloseEmergencyModal = () => {
+    stopRingtone();
+    setShowEmergencyModal(false);
+    setEmergencyOrderData(null);
   };
 
   // Reject order
@@ -1688,6 +1732,15 @@ const Home = () => {
           style={{ display: 'none' }}
         />
       </LocationPicker>
+
+      {/* Emergency Order Modal */}
+      <EmergencyOrderModal
+        isOpen={showEmergencyModal}
+        orderData={emergencyOrderData}
+        onClose={handleCloseEmergencyModal}
+        onAccept={handleEmergencyAcceptOrder}
+        onStopAlarm={handleStopAlarm}
+      />
     </div>
   );
 };
