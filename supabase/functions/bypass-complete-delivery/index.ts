@@ -70,37 +70,131 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Use the bypass function to complete the delivery
-    console.log('🔄 Calling bypass completion function...');
-    
-    const { data: result, error: bypassError } = await supabaseClient.rpc('bypass_complete_order', {
-      p_order_id: order_id,
-      p_payment_method: payment_method,
-      p_agent_id: agent.id
-    });
+    // Step 1: Get order details first
+    console.log('🔄 Getting order details...');
+    const { data: order, error: orderFetchError } = await supabaseClient
+      .from('orders')
+      .select('*')
+      .eq('id', order_id)
+      .single();
 
-    if (bypassError) {
-      console.error('❌ Bypass function failed:', bypassError);
+    if (orderFetchError || !order) {
+      console.error('❌ Order fetch failed:', orderFetchError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to complete delivery',
-          details: bypassError.message
+          error: 'Order not found',
+          details: orderFetchError?.message
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    console.log('✅ Order found:', { id: order.id, status: order.status });
+
+    // Step 2: Update order status directly
+    console.log('🔄 Updating order status...');
+    const newPaymentStatus = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+    
+    const { error: orderUpdateError } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'delivered',
+        delivered_at: new Date().toISOString(),
+        payment_status: newPaymentStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order_id)
+      .eq('agent_id', agent.id);
+
+    if (orderUpdateError) {
+      console.error('❌ Order update failed:', orderUpdateError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to update order status',
+          details: orderUpdateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('✅ Bypass function result:', result);
+    console.log('✅ Order status updated to delivered');
 
-    if (!result || !result.success) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: result?.error || 'Unknown error during delivery completion'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
+    // Step 3: Calculate payout (simple calculation)
+    const basePayout = 25; // Base payout amount
+    const distanceBonus = 0; // Can be enhanced later
+    const totalPayout = basePayout + distanceBonus;
+
+    // Step 4: Handle agent wallet update properly
+    console.log('🔄 Updating agent wallet...');
+    
+    // First get current wallet balance
+    const { data: currentWallet, error: walletFetchError } = await supabaseClient
+      .from('agent_wallet')
+      .select('balance')
+      .eq('agent_id', agent.id)
+      .single();
+
+    const currentBalance = currentWallet?.balance || 0;
+    const newBalance = currentBalance + totalPayout;
+
+    const { error: walletError } = await supabaseClient
+      .from('agent_wallet')
+      .upsert({
+        agent_id: agent.id,
+        balance: newBalance,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'agent_id'
+      });
+
+    if (walletError) {
+      console.error('❌ Wallet update failed:', walletError);
+      // Continue anyway - don't fail the delivery for wallet issues
+    } else {
+      console.log('✅ Agent wallet updated, new balance:', newBalance);
+    }
+
+    // Step 5: Create earnings record
+    console.log('🔄 Creating earnings record...');
+    const { error: earningsError } = await supabaseClient
+      .from('earnings')
+      .insert({
+        agent_id: agent.id,
+        order_id: order_id,
+        amount: totalPayout,
+        status: 'completed',
+        description: `Delivery payout for order ${order_id}`,
+        created_at: new Date().toISOString()
+      });
+
+    if (earningsError) {
+      console.error('❌ Earnings creation failed:', earningsError);
+      // Continue anyway - don't fail the delivery for earnings issues
+    } else {
+      console.log('✅ Earnings record created');
+    }
+
+    // Step 6: Create wallet transaction
+    console.log('🔄 Creating wallet transaction...');
+    const { error: transactionError } = await supabaseClient
+      .from('agent_wallet_transactions')
+      .insert({
+        agent_id: agent.id,
+        order_id: order_id,
+        amount: totalPayout,
+        transaction_type: 'delivery_payment',
+        description: 'Delivery payout',
+        status: 'completed',
+        created_at: new Date().toISOString()
+      });
+
+    if (transactionError) {
+      console.error('❌ Transaction creation failed:', transactionError);
+      // Continue anyway - don't fail the delivery for transaction issues
+    } else {
+      console.log('✅ Wallet transaction created');
     }
 
     console.log('🎉 Product delivered successfully!');
@@ -112,8 +206,8 @@ serve(async (req) => {
         order: {
           id: order_id,
           status: 'delivered',
-          payment_method: result.payment_method,
-          payout_amount: result.payout,
+          payment_method: payment_method,
+          payout_amount: totalPayout,
           agent_name: agent.name,
           completed_at: new Date().toISOString()
         }
