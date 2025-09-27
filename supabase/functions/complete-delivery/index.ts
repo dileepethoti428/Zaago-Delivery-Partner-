@@ -361,15 +361,19 @@ serve(async (req) => {
       
       console.log('💰 Triple-validated amount:', { validatedAmount, type: typeof validatedAmount });
       
-      // Update order status to delivered
+      // Update order status to delivered with safe JSON handling
+      const updateData = {
+        status: 'delivered',
+        delivered_at: new Date().toISOString(),
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log('📝 Updating order with data:', updateData);
+      
       const { error: orderUpdateError } = await supabaseClient
         .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid',
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', order_id)
         .eq('agent_id', agent.id);
 

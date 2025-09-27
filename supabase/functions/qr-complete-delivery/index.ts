@@ -277,15 +277,19 @@ serve(async (req) => {
       
       console.log('💰 Ultra-validated amount:', { validatedAmount, type: typeof validatedAmount });
       
-      // Update order status directly
+      // Update order status directly with safe data handling
+      const updateData = {
+        status: 'delivered',
+        delivered_at: new Date().toISOString(),
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log('📝 Updating order with validated data:', updateData);
+      
       const { error: orderUpdateError } = await supabaseClient
         .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', order.id)
         .eq('agent_id', agent.id);
       

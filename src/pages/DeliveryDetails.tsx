@@ -354,7 +354,7 @@ const DeliveryDetails = () => {
       
       console.log('📋 Validated request payload:', requestPayload);
       
-      const { data, error } = await supabase.functions.invoke('complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
         body: requestPayload
       });
       
