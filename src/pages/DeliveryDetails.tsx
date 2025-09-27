@@ -314,7 +314,8 @@ const DeliveryDetails = () => {
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
     try {
-      console.log('🚀 Starting bulletproof delivery completion with payment method:', paymentMethod);
+      console.log('🚀 Starting delivery completion with payment method:', paymentMethod);
+      console.log('📋 Order ID:', order?.id);
       
       setIsProcessing(true);
       setDeliveryError(null);
@@ -323,6 +324,7 @@ const DeliveryDetails = () => {
         throw new Error('Invalid order ID');
       }
 
+      console.log('📡 Invoking bypass-complete-delivery function...');
       const { data, error } = await supabase.functions.invoke('bypass-complete-delivery', {
         body: {
           order_id: order.id,
@@ -330,9 +332,11 @@ const DeliveryDetails = () => {
         }
       });
 
+      console.log('📥 Function response - data:', data, 'error:', error);
+
       if (error) {
-        console.error('❌ Delivery completion failed:', error);
-        setDeliveryError(`Delivery failed: ${error.message || 'Unknown error'}`);
+        console.error('❌ Edge function error:', error);
+        setDeliveryError(`Edge Function Error: ${error.message || JSON.stringify(error)}`);
         return;
       }
 
@@ -340,8 +344,8 @@ const DeliveryDetails = () => {
         console.error('❌ Delivery completion unsuccessful:', data);
         const errorMsg = data?.technical_details ? 
           `${data.error} (${data.technical_details})` : 
-          (data?.error || 'Unknown error');
-        setDeliveryError(`Delivery failed: ${errorMsg}`);
+          (data?.error || 'No success flag in response');
+        setDeliveryError(`Delivery Failed: ${errorMsg}`);
         return;
       }
 
@@ -356,10 +360,11 @@ const DeliveryDetails = () => {
       
     } catch (error) {
       console.error('❌ Delivery completion error:', error);
-      setDeliveryError(`Delivery failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+      setDeliveryError(`System Error: ${errorMessage}`);
       toast({
         title: "Delivery Failed",
-        description: `Unable to complete delivery: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: `Unable to complete delivery: ${errorMessage}`,
         variant: "destructive"
       });
     } finally {
