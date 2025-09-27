@@ -318,116 +318,53 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
-    console.log('🚀 Starting delivery completion...', { orderId: order?.id, paymentMethod, distance, payout });
-    setIsProcessing(true);
-    setDeliveryError(null); // Clear any previous errors
-    
     try {
-      // BULLETPROOF VALIDATION - Ensure no null/undefined values reach the API
+      console.log('🚀 Starting bulletproof delivery completion with payment method:', paymentMethod);
+      
+      setIsProcessing(true);
+      setDeliveryError(null);
+
       if (!order?.id) {
         throw new Error('Invalid order ID');
       }
 
-      // Validate and sanitize distance
-      let validDistance = distance;
-      if (!validDistance || validDistance <= 0 || isNaN(validDistance) || !isFinite(validDistance)) {
-        console.warn('⚠️ Invalid distance detected, using fallback:', validDistance);
-        validDistance = 2.5; // Safe fallback
+      const { data, error } = await supabase.functions.invoke('bulletproof-complete-delivery', {
+        body: {
+          order_id: order.id,
+          payment_method: paymentMethod
+        }
+      });
+
+      if (error) {
+        console.error('❌ Delivery completion failed:', error);
+        setDeliveryError(`Delivery failed: ${error.message || 'Unknown error'}`);
+        return;
       }
 
-      // Validate and sanitize payout
-      let validPayout = payout;
-      if (!validPayout || validPayout <= 0 || isNaN(validPayout) || !isFinite(validPayout)) {
-        console.warn('⚠️ Invalid payout detected, calculating fallback:', validPayout);
-        validPayout = validDistance <= 1 ? 12 : 12 + (validDistance - 1) * 8; // New rate calculation
+      if (!data || !data.success) {
+        console.error('❌ Delivery completion unsuccessful:', data);
+        const errorMsg = data?.technical_details ? 
+          `${data.error} (${data.technical_details})` : 
+          (data?.error || 'Unknown error');
+        setDeliveryError(`Delivery failed: ${errorMsg}`);
+        return;
       }
 
-      // Validate payment method
-      const validPaymentMethod = paymentMethod === 'COD' ? 'COD' : 'Online';
-
-      const requestPayload = {
-        order_id: order.id,
-        payment_method: validPaymentMethod,
-        distance_km: Number(validDistance), // Ensure numeric
-        agent_payout: Number(validPayout)   // Ensure numeric
-      };
-      
-      console.log('📋 Validated request payload:', requestPayload);
-      
-      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
-        body: requestPayload
+      console.log('✅ Delivery completed successfully:', data);
+      toast({
+        title: "Product Delivered! ✅", 
+        description: data.message || "Order completed successfully!"
       });
       
-      console.log('📥 Raw response received:', { data, error, dataType: typeof data, errorType: typeof error });
+      window.dispatchEvent(new CustomEvent('orderCompleted'));
+      navigate('/home');
       
-      // Parse response - check both data and error objects for success
-      let responseData = null;
-      let isSuccess = false;
-      
-      // First check if data contains success
-      if (data && data.success === true) {
-        responseData = data;
-        isSuccess = true;
-        console.log('✅ Success found in data object:', data);
-      }
-      // Then check if error object actually contains success response (Supabase edge function quirk)
-      else if (error && typeof error === 'object') {
-        // Check if error object has success property
-        if (error.success === true) {
-          responseData = error;
-          isSuccess = true;
-          console.log('✅ Success found in error object (edge function response parsing):', error);
-        }
-        // Check if error message contains success JSON
-        else if (error.message && typeof error.message === 'string') {
-          try {
-            const parsedMessage = JSON.parse(error.message);
-            if (parsedMessage && parsedMessage.success === true) {
-              responseData = parsedMessage;
-              isSuccess = true;
-              console.log('✅ Success found in parsed error message:', parsedMessage);
-            }
-          } catch (parseError) {
-            console.log('📝 Error message is not JSON:', error.message);
-          }
-        }
-      }
-      
-      if (isSuccess && responseData) {
-        console.log('✅ Delivery completed successfully!', responseData);
-        toast({
-          title: "Product Delivered! ✅",
-          description: `Order completed successfully. Distance: ${responseData.order?.distance_km || distance}km, Earned: ₹${responseData.order?.payout_amount || payout}`,
-        });
-        window.dispatchEvent(new CustomEvent('orderCompleted'));
-        navigate('/home');
-      } else {
-        // This is a real error
-        console.error('❌ Delivery failed - real error:', { data, error });
-        let errorMessage = 'Failed to complete delivery';
-        
-        if (error && error.message && typeof error.message === 'string') {
-          errorMessage = error.message;
-        } else if (data && data.error) {
-          errorMessage = data.error;
-        } else if (error) {
-          errorMessage = JSON.stringify(error);
-        }
-        
-        setDeliveryError(errorMessage);
-        toast({
-          title: "Delivery Failed",
-          description: `Unable to complete delivery: ${errorMessage}. Please try again or contact support.`,
-          variant: "destructive"
-        });
-      }
-    } catch (error: any) {
-      console.error('❌ Unexpected error:', error);
-      const errorMessage = error?.message || "Failed to complete delivery";
-      setDeliveryError(errorMessage);
+    } catch (error) {
+      console.error('❌ Delivery completion error:', error);
+      setDeliveryError(`Delivery failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       toast({
         title: "Delivery Failed",
-        description: errorMessage,
+        description: `Unable to complete delivery: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive"
       });
     } finally {
