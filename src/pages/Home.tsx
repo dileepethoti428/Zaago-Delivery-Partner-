@@ -246,6 +246,26 @@ const Home = () => {
     return true;
   };
 
+  // Check if order should trigger immediate packed status notification
+  const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
+    console.log('📦 Checking packed status notification for order:', orderData.id, 'Status:', orderData.status);
+    
+    // Only play for orders that are packed (regardless of agent assignment)
+    if (orderData.status !== 'packed') {
+      console.log('⚠️ Skipping packed notification - not packed status');
+      return false;
+    }
+    
+    // Don't play duplicate notifications for the same order (shorter window for immediate alerts)
+    if (recentNotifications.has(`packed-${orderData.id}`)) {
+      console.log('⚠️ Skipping duplicate packed notification for order:', orderData.id);
+      return false;
+    }
+    
+    console.log('✅ Playing packed status notification for order:', orderData.id);
+    return true;
+  };
+
   // Handle immediate notification for new orders (INSERT event)
   const handleImmediateOrderNotification = (orderData: any) => {
     console.log('🚨 Processing immediate notification for new order:', orderData.id);
@@ -360,6 +380,46 @@ const Home = () => {
     toast({
       title: "📦 New Order Ready for Pickup!",
       description: `Order from ${orderData.customer_name || 'customer'} is packed and available for pickup`,
+      duration: 5000,
+    });
+  };
+
+  // Handle immediate packed status notification (for any order changing to packed)
+  const handlePackedStatusNotification = (orderData: any) => {
+    console.log('📦 Processing packed status notification for order:', orderData.id);
+    
+    if (!shouldPlayPackedStatusNotificationForOrder(orderData)) {
+      return;
+    }
+
+    // Add to recent notifications to prevent duplicates (shorter window for immediate alerts)
+    setRecentNotifications(prev => new Set(prev).add(`packed-${orderData.id}`));
+    
+    // Remove from recent notifications after 5 seconds (shorter for packed alerts)
+    setTimeout(() => {
+      setRecentNotifications(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(`packed-${orderData.id}`);
+        return newSet;
+      });
+    }, 5000);
+
+    // Play high-volume ringtone immediately for packed status
+    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+      console.log('🔊 Playing packed status notification sound at high volume');
+      playNotificationSound();
+      setIsRingtoneDisabled(true); // Show stop button after playing
+      
+      // Auto-hide stop button after 10 seconds
+      setTimeout(() => {
+        setIsRingtoneDisabled(false);
+      }, 10000);
+    }
+    
+    // Show packed status toast notification
+    toast({
+      title: "🚨 Order Packed & Ready!",
+      description: `Order from ${orderData.customer_name || 'customer'} has been packed by seller`,
       duration: 5000,
     });
   };
@@ -884,7 +944,13 @@ const Home = () => {
           if (payload.new && payload.old && payload.new.status !== payload.old.status) {
             console.log(`🔄 Order status changed: ${payload.old.status} → ${payload.new.status}`);
             
-            // Handle availability notification when order becomes packed
+            // Handle immediate packed status notification for ANY order changing to packed (primary notification)
+            if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
+              console.log('🚨 Order packed - triggering immediate high-volume notification');
+              handlePackedStatusNotification(payload.new);
+            }
+            
+            // Handle availability notification when order becomes packed (for unassigned orders only)
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
               console.log('📦 Order became available for pickup');
               handleAvailabilityOrderNotification(payload.new);
