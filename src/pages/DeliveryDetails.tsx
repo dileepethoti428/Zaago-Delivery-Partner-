@@ -326,11 +326,13 @@ const DeliveryDetails = () => {
         throw new Error('Invalid order ID');
       }
 
-      console.log('📡 Invoking bypass-complete-delivery function...');
-      const { data, error } = await supabase.functions.invoke('bypass-complete-delivery', {
+      console.log('📡 Invoking simple-complete-delivery function...');
+      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
         body: {
           order_id: order.id,
-          payment_method: paymentMethod
+          payment_method: paymentMethod,
+          distance_km: distance,
+          agent_payout: payout
         }
       });
 

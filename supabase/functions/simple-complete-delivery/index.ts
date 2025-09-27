@@ -19,7 +19,7 @@ serve(async (req) => {
     const body = await req.json();
     const { order_id, payment_method = 'Online', distance_km = 2.5, agent_payout = 20 } = body;
     
-    console.log('📋 Request parameters:', { order_id, payment_method });
+    console.log('📋 Request parameters:', { order_id, payment_method, distance_km, agent_payout });
     
     if (!order_id) {
       return new Response(
@@ -78,19 +78,20 @@ serve(async (req) => {
     
     console.log('💰 Using safe values:', { safeDistance, safePayout });
 
-    // Perform direct database operations using service role
+    // Direct database update using service role to bypass RPC issues
     const now = new Date().toISOString();
+    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    // Update only essential fields to avoid JSON parsing issues
-    const { error: orderUpdateError } = await supabaseClient
+    const { data: updateResult, error: orderUpdateError } = await supabaseClient
       .from('orders')
       .update({
         status: 'delivered',
         delivered_at: now,
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
+        payment_status: payment_status,
         updated_at: now
       })
-      .eq('id', order_id);
+      .eq('id', order_id)
+      .select();
 
     if (orderUpdateError) {
       console.error('❌ Order update failed:', orderUpdateError);
@@ -101,6 +102,42 @@ serve(async (req) => {
           details: orderUpdateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (!updateResult || updateResult.length === 0) {
+      console.log('⚠️ No rows updated - order may already be delivered or not exist');
+      
+      // Check current order status
+      const { data: currentOrder } = await supabaseClient
+        .from('orders')
+        .select('status')
+        .eq('id', order_id)
+        .single();
+      
+      if (currentOrder?.status === 'delivered') {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            already_delivered: true,
+            message: 'Order was already delivered',
+            order: {
+              id: order_id,
+              status: 'delivered',
+              agent_name: agent.name
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Unable to update order. Order may not exist or already be processed.',
+          details: `Current order status: ${currentOrder?.status || 'unknown'}`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 

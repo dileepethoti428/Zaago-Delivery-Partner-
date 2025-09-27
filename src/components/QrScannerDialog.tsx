@@ -253,10 +253,22 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     try {
       console.log('🚚 Completing delivery with payment method:', paymentMethod);
       
-      const { data, error } = await supabase.functions.invoke('qr-complete-delivery', {
+      // First get order details from QR scan to pass distance and payout
+      const { data: scanData } = await supabase.functions.invoke('qr-scan-order', {
         body: {
-          qr_code_data: currentQrCode,
-          payment_method: paymentMethod
+          qr_code_data: currentQrCode
+        }
+      });
+      
+      const distance_km = scanData?.order?.distance_km || 2.5;
+      const agent_payout = scanData?.order?.estimated_payout || 24;
+      
+      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
+        body: {
+          order_id: scanData?.order?.id,
+          payment_method: paymentMethod,
+          distance_km: distance_km,
+          agent_payout: agent_payout
         }
       });
 
