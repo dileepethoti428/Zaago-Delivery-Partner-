@@ -4559,6 +4559,10 @@ export type Database = {
         Args: { p_order_id: string; p_payment_method?: string }
         Returns: undefined
       }
+      complete_delivery_minimal_update: {
+        Args: { p_order_id: string; p_payment_method?: string }
+        Returns: Json
+      }
       complete_delivery_safe: {
         Args: {
           p_agent_id: string

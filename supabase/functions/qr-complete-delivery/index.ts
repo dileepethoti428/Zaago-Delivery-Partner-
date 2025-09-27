@@ -226,27 +226,22 @@ serve(async (req) => {
       payout_amount: payout_amount
     });
 
-    // Direct minimal update to bypass JSON validation issues
-    console.log('🔄 Directly updating order status to bypass validation...');
+    // Use minimal SQL function to bypass JSON validation issues
+    console.log('🔄 Using minimal update function to bypass validation...');
     
-    const { error: updateError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order.id)
-      .eq('agent_id', agent.id);
+    const { data: result, error: updateError } = await supabaseClient
+      .rpc('complete_delivery_minimal_update', {
+        p_order_id: order.id,
+        p_payment_method: payment_method
+      });
 
-    if (updateError) {
-      console.error('❌ Direct update failed:', updateError);
+    if (updateError || !result) {
+      console.error('❌ Minimal update failed:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Failed to update order status',
-          details: updateError.message
+          details: updateError?.message || 'No result returned'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );

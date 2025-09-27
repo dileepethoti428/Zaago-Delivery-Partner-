@@ -70,26 +70,22 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Direct minimal update to bypass all issues
-    console.log('🔄 Directly updating order status...');
+    // Use minimal SQL function to bypass JSON validation issues
+    console.log('🔄 Using minimal update function...');
     
-    const { error: updateError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order_id);
+    const { data: result, error: updateError } = await supabaseClient
+      .rpc('complete_delivery_minimal_update', {
+        p_order_id: order_id,
+        p_payment_method: payment_method
+      });
 
-    if (updateError) {
-      console.error('❌ Direct update failed:', updateError);
+    if (updateError || !result) {
+      console.error('❌ Minimal update failed:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Failed to update order status',
-          details: updateError.message
+          details: updateError?.message || 'No result returned'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
