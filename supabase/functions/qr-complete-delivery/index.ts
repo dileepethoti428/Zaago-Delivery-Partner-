@@ -258,19 +258,26 @@ serve(async (req) => {
       payout_amount: payout_amount
     });
 
-    // Use minimal SQL function to bypass JSON validation issues
-    console.log('🔄 Using minimal update function to bypass validation...');
+    // Direct database update using service role to bypass RPC issues
+    console.log('🔄 Updating order status directly...');
     
-    const { data: result, error: updateError } = await supabaseClient
-      .rpc('complete_delivery_minimal_update', {
-        p_order_id: order.id,
-        p_payment_method: payment_method
-      });
-
-    console.log('🔄 Minimal update result:', { result, error: updateError });
+    const now = new Date().toISOString();
+    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+    
+    const { data: updateResult, error: updateError } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'delivered',
+        delivered_at: now,
+        payment_status: payment_status,
+        updated_at: now
+      })
+      .eq('id', order.id)
+      .eq('status', 'assigned') // Only update if still assigned (prevents race conditions)
+      .select();
 
     if (updateError) {
-      console.error('❌ Minimal update failed with error:', updateError);
+      console.error('❌ Order update failed:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -281,8 +288,8 @@ serve(async (req) => {
       );
     }
 
-    if (result === false) {
-      console.error('❌ Minimal update returned false - order may already be completed or invalid');
+    if (!updateResult || updateResult.length === 0) {
+      console.log('⚠️ No rows updated - checking current order status...');
       
       // Check if order is already delivered
       const { data: currentOrder } = await supabaseClient
@@ -312,8 +319,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Unable to complete delivery. Order may already be processed or invalid.',
-          details: 'Minimal update returned false'
+          error: 'Unable to complete delivery. Order may no longer be in assigned status.',
+          details: `Current order status: ${currentOrder?.status || 'unknown'}`
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
