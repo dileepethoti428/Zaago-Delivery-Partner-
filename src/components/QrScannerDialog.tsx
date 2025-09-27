@@ -253,26 +253,27 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     try {
       console.log('🚚 Completing delivery with payment method:', paymentMethod);
       
-      // First get order details from QR scan to pass distance and payout
-      const { data: scanData } = await supabase.functions.invoke('qr-scan-order', {
-        body: {
-          qr_code_data: currentQrCode
-        }
-      });
+      if (!scannedOrder?.order_id) {
+        throw new Error('No order found from QR scan');
+      }
       
-      const distance_km = scanData?.order?.distance_km || 2.5;
-      const agent_payout = scanData?.order?.estimated_payout || 24;
+      // Direct database update to complete delivery
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       
-      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
-        body: {
-          order_id: scanData?.order?.id,
-          payment_method: paymentMethod,
-          distance_km: distance_km,
-          agent_payout: agent_payout
-        }
-      });
+      const { data: updatedOrder, error } = await supabase
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: new Date().toISOString(),
+          payment_status: payment_status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', scannedOrder.order_id)
+        .eq('status', 'assigned') // Only update if still assigned
+        .select()
+        .single();
 
-      console.log('📦 Delivery completion response:', { data, error });
+      console.log('📦 Delivery completion response:', { updatedOrder, error });
 
       if (error) {
         console.error('❌ Delivery completion error:', error);
@@ -296,19 +297,15 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         return;
       }
 
-      if (!data || !data.success) {
-        console.error('❌ Delivery completion failed - no data or not successful:', data);
+      if (!updatedOrder) {
+        console.log('⚠️ No rows updated - order may already be delivered');
+        const { data: currentOrder } = await supabase
+          .from('orders')
+          .select('status, delivered_at')
+          .eq('id', scannedOrder.order_id)
+          .single();
         
-        const errorMessage = data?.error || 'Failed to complete delivery - no success response';
-        
-        // Handle specific error cases
-        if (errorMessage.includes('not assigned to you')) {
-          toast({
-            title: "🚫 Not Your Order", 
-            description: "This order is not assigned to you. Only the assigned delivery agent can complete this order.",
-            variant: "destructive"
-          });
-        } else if (errorMessage.includes('already')) {
+        if (currentOrder?.status === 'delivered') {
           toast({
             title: "Already Delivered ✅",
             description: "This product has already been delivered successfully!",
@@ -317,45 +314,39 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         } else {
           toast({
             title: "Delivery Failed",
-            description: errorMessage,
+            description: "Unable to update order - may not be assigned to you",
             variant: "destructive"
           });
         }
-        return;
-      }
-
-      if (data && data.success) {
-        // Check if it's an already delivered order
-        if (data.already_delivered) {
-          toast({
-            title: "Already Delivered ✅",
-            description: "🎉 This product has already been delivered successfully!",
-          });
-        } else {
-          toast({
-            title: "Product Delivered! ✅",
-            description: data.message || `Successfully delivered to ${data.order?.customer_name}`,
-          });
-        }
-        
-        // Reset states
         setScannedOrder(null);
         setShowPaymentDialog(false);
         setCurrentQrCode('');
-        
-        // Refresh the orders list by dispatching a custom event
-        window.dispatchEvent(new CustomEvent('orderCompleted', { 
-          detail: { orderId: data.order?.id } 
-        }));
-      } else {
-        throw new Error(data?.error || 'Failed to complete delivery');
+        return;
       }
+
+      // Success case
+      toast({
+        title: "Product Delivered! ✅",
+        description: `Order completed via QR scan. Earnings: ₹${scannedOrder?.estimated_payout || 25}`,
+        variant: "default"
+      });
+      
+      // Reset states
+      setScannedOrder(null);
+      setShowPaymentDialog(false);
+      setCurrentQrCode('');
+      
+      // Refresh the orders list
+      window.dispatchEvent(new CustomEvent('orderCompleted', { 
+        detail: { orderId: updatedOrder.id } 
+      }));
+      
     } catch (error) {
-      console.error('❌ Complete delivery error:', error);
+      console.error('❌ QR delivery completion error:', error);
       toast({
         title: "Delivery Failed",
-        description: error instanceof Error ? error.message : "Unable to complete delivery. Please try again.",
-        variant: "destructive"
+        description: error instanceof Error ? error.message : "QR delivery completion failed",
+        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);

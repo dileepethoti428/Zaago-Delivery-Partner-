@@ -316,9 +316,11 @@ const DeliveryDetails = () => {
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
     try {
-      console.log('🚀 Starting delivery completion with payment method:', paymentMethod);
-      console.log('📋 Order ID:', order?.id);
-      
+      console.log('🎯 Starting direct delivery completion...', { 
+        orderId: order?.id, 
+        paymentMethod 
+      });
+
       setIsProcessing(true);
       setDeliveryError(null);
 
@@ -326,53 +328,100 @@ const DeliveryDetails = () => {
         throw new Error('Invalid order ID');
       }
 
-      console.log('📡 Invoking simple-complete-delivery function...');
-      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
-        body: {
-          order_id: order.id,
-          payment_method: paymentMethod,
-          distance_km: distance,
-          agent_payout: payout
-        }
-      });
-
-      console.log('📥 Function response - data:', data, 'error:', error);
+      // Direct database update to complete delivery
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
+      
+      const { data: updatedOrder, error } = await supabase
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: new Date().toISOString(),
+          payment_status: payment_status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+        .eq('status', 'assigned') // Only update if still assigned
+        .select()
+        .single();
 
       if (error) {
-        console.error('❌ Edge function error:', error);
-        setDeliveryError(`Edge Function Error: ${error.message || JSON.stringify(error)}`);
+        // Check if order is already delivered
+        if (error.code === 'PGRST116') {
+          console.log('⚠️ No rows updated - checking if already delivered');
+          const { data: currentOrder } = await supabase
+            .from('orders')
+            .select('status, delivered_at')
+            .eq('id', order.id)
+            .single();
+          
+          if (currentOrder?.status === 'delivered') {
+            toast({
+              title: "Already Delivered",
+              description: "This order was already marked as delivered.",
+              variant: "default",
+            });
+            setOrder(prev => prev ? { 
+              ...prev, 
+              status: 'delivered',
+              delivered_at: currentOrder.delivered_at
+            } : null);
+            navigate('/home');
+            return;
+          }
+        }
+        
+        console.error('❌ Delivery completion failed:', error);
+        setDeliveryError(`Database Error: ${error.message}`);
+        toast({
+          title: "Delivery Failed",
+          description: "Failed to complete delivery. Please try again.",
+          variant: "destructive",
+        });
         return;
       }
 
-      if (!data || !data.success) {
-        console.error('❌ Delivery completion unsuccessful:', data);
-        const errorMsg = data?.technical_details ? 
-          `${data.error} (${data.technical_details})` : 
-          (data?.error || 'No success flag in response');
-        setDeliveryError(`Delivery Failed: ${errorMsg}`);
+      if (!updatedOrder) {
+        console.log('⚠️ No rows updated - order may not be assigned to you');
+        setDeliveryError('Order not updated - may not be assigned to you');
+        toast({
+          title: "Update Failed",
+          description: "Order could not be updated. Check if it's assigned to you.",
+          variant: "destructive",
+        });
         return;
       }
 
-      console.log('✅ Delivery completed successfully:', data);
-      toast({
-        title: "Product Delivered! ✅", 
-        description: data.message || "Order completed successfully!"
-      });
+      console.log('✅ Delivery completed successfully:', updatedOrder);
       
+      toast({
+        title: "Delivery Completed!",
+        description: `Order delivered successfully. Earnings: ₹${payout}`,
+        variant: "default",
+      });
+
+      // Update local order state
+      setOrder(prev => prev ? { 
+        ...prev, 
+        status: 'delivered', 
+        payment_status: payment_status,
+        delivered_at: updatedOrder.delivered_at
+      } : null);
+
       window.dispatchEvent(new CustomEvent('orderCompleted'));
       navigate('/home');
-      
+
     } catch (error) {
       console.error('❌ Delivery completion error:', error);
-      const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setDeliveryError(`System Error: ${errorMessage}`);
       toast({
         title: "Delivery Failed",
-        description: `Unable to complete delivery: ${errorMessage}`,
-        variant: "destructive"
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
+      setShowPaymentDialog(false);
     }
   };
 
