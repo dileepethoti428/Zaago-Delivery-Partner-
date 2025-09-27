@@ -235,13 +235,15 @@ serve(async (req) => {
         p_payment_method: payment_method
       });
 
-    if (updateError || !result) {
-      console.error('❌ Minimal update failed:', updateError);
+    console.log('🔄 Minimal update result:', { result, error: updateError });
+
+    if (updateError) {
+      console.error('❌ Minimal update failed with error:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Failed to update order status',
-          details: updateError?.message || 'No result returned'
+          details: updateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
