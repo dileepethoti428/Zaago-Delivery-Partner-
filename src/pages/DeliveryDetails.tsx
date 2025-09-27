@@ -328,7 +328,7 @@ const DeliveryDetails = () => {
         throw new Error('Invalid order ID');
       }
 
-      const { data, error } = await supabase.functions.invoke('bulletproof-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('bypass-complete-delivery', {
         body: {
           order_id: order.id,
           payment_method: paymentMethod

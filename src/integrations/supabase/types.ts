@@ -4449,6 +4449,14 @@ export type Database = {
         Args: { _agent_id: string; _order_id: string }
         Returns: undefined
       }
+      bypass_complete_order: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
       calculate_delivery_payout: {
         Args: {
           p_agent_id?: string
