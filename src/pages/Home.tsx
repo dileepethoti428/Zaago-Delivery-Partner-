@@ -117,7 +117,7 @@ const Home = () => {
     frequency: 'double'
   });
   
-  const { playNotificationSound } = useAudioNotification(ringtoneSettings);
+  const { playNotificationSound, stopRingtone } = useAudioNotification(ringtoneSettings);
   
   // Get current location with backend saving 
   const location = useGeolocation({
@@ -145,6 +145,7 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
+  const [isRingtoneDisabled, setIsRingtoneDisabled] = useState(false);
 
   // Load agent settings on component mount
   useEffect(() => {
@@ -175,8 +176,8 @@ const Home = () => {
         if (agentSettings) {
           setRingtoneSettings({
             enabled: agentSettings.ringtone_enabled ?? true,
-            volume: agentSettings.ringtone_volume ?? 0.8,
-            type: agentSettings.ringtone_type ?? 'phone-ringtone',
+            volume: agentSettings.ringtone_volume ?? 0.3,
+            type: agentSettings.ringtone_type ?? 'iphone-6-ringtone',
             frequency: agentSettings.notification_frequency ?? 'double'
           });
         }
@@ -238,9 +239,15 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone only if enabled
-    if (ringtoneSettings.enabled) {
+    // Play the ringtone only if enabled and not disabled
+    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
       playNotificationSound();
+      setIsRingtoneDisabled(true); // Show stop button after playing
+      
+      // Auto-hide stop button after 10 seconds
+      setTimeout(() => {
+        setIsRingtoneDisabled(false);
+      }, 10000);
     }
     
     // Show toast notification
@@ -270,9 +277,15 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone only if enabled
-    if (ringtoneSettings.enabled) {
+    // Play the ringtone only if enabled and not disabled
+    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
       playNotificationSound();
+      setIsRingtoneDisabled(true); // Show stop button after playing
+      
+      // Auto-hide stop button after 10 seconds  
+      setTimeout(() => {
+        setIsRingtoneDisabled(false);
+      }, 10000);
     }
     
     // Show toast notification
@@ -1149,10 +1162,25 @@ const Home = () => {
           >
             <div className="flex items-center">
               <QrCode className="w-4 h-4 text-gray-700 mr-1" />
-              <span className="text-xs text-gray-700">QR</span>
+              <span className="text-xs text-gray-700">Scan QR</span>
             </div>
           </Button>
         </div>
+
+        {/* Stop Ringtone Button - shows when ringtone is disabled by user */}
+        {isRingtoneDisabled && (
+          <Button
+            onClick={() => {
+              stopRingtone();
+              setIsRingtoneDisabled(false);
+            }}
+            variant="destructive"
+            className="w-full h-12 rounded-lg mt-3 bg-red-500 hover:bg-red-600 text-white font-medium"
+          >
+            <X className="w-4 h-4 mr-2" />
+            Stop Ringtone
+          </Button>
+        )}
       </div>
 
       <div className="flex-1 bg-gray-50">

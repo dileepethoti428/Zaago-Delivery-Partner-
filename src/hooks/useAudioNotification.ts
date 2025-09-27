@@ -13,6 +13,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
   const gainNodeRef = useRef<GainNode | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const currentRingtoneType = useRef<string>('');
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   // Always define all callbacks first to maintain hook order
   const playRingtone = useCallback(async () => {
@@ -86,20 +87,18 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         await playRingtone();
       } else if (frequency === 'double') {
         await playRingtone();
-        setTimeout(() => playRingtone(), 300);
+        const timeout1 = setTimeout(() => playRingtone(), 300);
+        timeoutsRef.current.push(timeout1);
       } else if (frequency === 'continuous') {
         // Continuous pattern: Extended pattern for critical delivery alerts
         console.log('Playing continuous notification pattern');
         await playRingtone(); // Immediate
-        setTimeout(() => playRingtone(), 300);
-        setTimeout(() => playRingtone(), 700);
-        setTimeout(() => playRingtone(), 1200);
-        setTimeout(() => playRingtone(), 1800);
-        setTimeout(() => playRingtone(), 2500);
-        setTimeout(() => playRingtone(), 3000);
-        setTimeout(() => playRingtone(), 3500);
-        setTimeout(() => playRingtone(), 4000);
-        setTimeout(() => playRingtone(), 4500);
+        const timeout1 = setTimeout(() => playRingtone(), 300);
+        const timeout2 = setTimeout(() => playRingtone(), 700);
+        const timeout3 = setTimeout(() => playRingtone(), 1200);
+        const timeout4 = setTimeout(() => playRingtone(), 1800);
+        const timeout5 = setTimeout(() => playRingtone(), 2500);
+        timeoutsRef.current.push(timeout1, timeout2, timeout3, timeout4, timeout5);
       }
       
       // Enhanced vibration pattern for mobile devices
@@ -131,6 +130,20 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       }
     }
   }, [playRingtone, settings]);
+
+  const stopRingtone = useCallback(() => {
+    // Clear all timeouts
+    timeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    timeoutsRef.current = [];
+    
+    // Stop audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    
+    console.log('Ringtone stopped');
+  }, []);
 
   const testRingtone = useCallback(() => {
     playRingtone();
@@ -183,6 +196,9 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       case 'iphone-opening':
         ringtoneFile = '/iphone-opening.mp3';
         break;
+      case 'iphone-6-ringtone':
+        ringtoneFile = '/iphone-6-ringtone.mp3';
+        break;
       case 'classic-bell':
         ringtoneFile = '/classic-bell.mp3';
         break;
@@ -232,9 +248,9 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       
       console.log(`Initializing audio with file: ${ringtoneFile}`);
       
-      // Set maximum volume for ringtones
-      const baseVolume = settings?.volume || 1.0;
-      audioRef.current.volume = 1.0; // Always max volume for ringtones
+      // Set reasonable volume for ringtones
+      const baseVolume = settings?.volume || 0.3;
+      audioRef.current.volume = Math.min(baseVolume, 0.5); // Reasonable volume, not max
       
       audioRef.current.playbackRate = 1.2; // Faster playback for urgency
       audioRef.current.preload = 'auto';
@@ -279,8 +295,8 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
             sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
             gainNodeRef.current = audioContextRef.current.createGain();
             
-            // Use Web Audio API for maximum amplification for iPhone ringtones
-            const amplification = Math.min((settings?.volume || 1.0) * 4.0, 6.0); // Max 6x amplification for iPhone
+            // Use Web Audio API for reasonable amplification 
+            const amplification = Math.min((settings?.volume || 0.3) * 1.5, 2.0); // Max 2x amplification
             gainNodeRef.current.gain.value = amplification;
             
             sourceNodeRef.current.connect(gainNodeRef.current);
@@ -302,15 +318,15 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       });
     } else if (audioRef.current && gainNodeRef.current) {
       // Just update volume if audio exists
-      audioRef.current.volume = 1.0; // Always max volume for ringtones
+      audioRef.current.volume = Math.min(settings?.volume || 0.3, 0.5); // Reasonable volume
       
-      // Update Web Audio API gain for maximum amplification
-      const amplification = Math.min((settings?.volume || 1.0) * 4.0, 6.0);
+      // Update Web Audio API gain for reasonable amplification
+      const amplification = Math.min((settings?.volume || 0.3) * 1.5, 2.0);
       gainNodeRef.current.gain.value = amplification;
     }
 
     return cleanup;
   }, [settings]);
 
-  return { playNotificationSound, testRingtone };
+  return { playNotificationSound, testRingtone, stopRingtone };
 };
