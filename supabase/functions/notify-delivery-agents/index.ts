@@ -74,7 +74,7 @@ serve(async (req) => {
     }
     
     // Send real-time broadcast for immediate frontend response
-    const channel = supabase.channel('agent-notifications')
+    const channel = supabase.channel('orders-realtime-updates')
     
     for (const agent of agents) {
       await channel.send({
