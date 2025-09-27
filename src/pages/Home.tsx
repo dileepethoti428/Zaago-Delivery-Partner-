@@ -929,7 +929,7 @@ const Home = () => {
         // Manual audio test
         try {
           console.log('🔊 Trying manual audio...');
-          const testAudio = new Audio('/iphone-6-ringtone.mp3');
+          const testAudio = new Audio('/iphone-6-original-ringtone.mp3');
           testAudio.volume = 0.8;
           
           // Add user interaction handler for browsers that block autoplay

@@ -80,7 +80,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       // Try fallback notification sound if main ringtone fails
       try {
         console.log('🔊 Trying fallback notification sound...');
-        const fallbackAudio = new Audio('/iphone-6-ringtone.mp3');
+        const fallbackAudio = new Audio('/iphone-6-original-ringtone.mp3');
         fallbackAudio.volume = 1.0;
         await fallbackAudio.play();
         console.log('🔊 Fallback notification played successfully');
@@ -267,7 +267,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
     }
 
     // Use proper ringtones instead of notification sounds
-    let ringtoneFile = '/iphone-6-ringtone.mp3'; // Default to iPhone 6 ringtone for delivery alerts
+    let ringtoneFile = '/iphone-6-original-ringtone.mp3'; // Default to custom iPhone 6 original ringtone
     
     switch (settings?.type) {
       case 'rapido-ringtone':
@@ -289,7 +289,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         ringtoneFile = '/iphone-opening.mp3';
         break;
       case 'iphone-6-ringtone':
-        ringtoneFile = '/iphone-6-ringtone.mp3';
+        ringtoneFile = '/iphone-6-original-ringtone.mp3';
         break;
       case 'tornado-siren':
         ringtoneFile = '/tornado-siren.mp3';
@@ -322,7 +322,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         ringtoneFile = '/notification-sound.mp3';
         break;
       default:
-        ringtoneFile = '/iphone-6-ringtone.mp3';
+        ringtoneFile = '/iphone-6-original-ringtone.mp3';
     }
 
     console.log('🔊 Selected ringtone file:', ringtoneFile);
