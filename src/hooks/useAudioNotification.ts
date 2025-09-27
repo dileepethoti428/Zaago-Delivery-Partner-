@@ -45,8 +45,23 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         console.warn('🔊 Audio not ready for playback, readyState:', audioRef.current.readyState);
         // Try to load the audio
         audioRef.current.load();
-        await new Promise((resolve) => {
-          audioRef.current!.addEventListener('canplay', resolve, { once: true });
+        
+        // Wait for audio to be ready with timeout
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            console.error('🔊 Audio loading timeout');
+            reject(new Error('Audio loading timeout'));
+          }, 5000);
+          
+          audioRef.current!.addEventListener('canplay', () => {
+            clearTimeout(timeout);
+            resolve(undefined);
+          }, { once: true });
+          
+          audioRef.current!.addEventListener('error', (e) => {
+            clearTimeout(timeout);
+            reject(e);
+          }, { once: true });
         });
       }
       
@@ -65,7 +80,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       // Try fallback notification sound if main ringtone fails
       try {
         console.log('🔊 Trying fallback notification sound...');
-        const fallbackAudio = new Audio('/emergency-alarm.mp3');
+        const fallbackAudio = new Audio('/iphone-6-ringtone.mp3');
         fallbackAudio.volume = 1.0;
         await fallbackAudio.play();
         console.log('🔊 Fallback notification played successfully');
@@ -112,6 +127,32 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
           await audioContextRef.current.resume();
           console.log('🔊 Audio context resumed:', audioContextRef.current.state);
         }
+      }
+      
+      // Check if audio is ready to play
+      if (audioRef.current.readyState < 2) {
+        console.log('🔊 Audio not ready, loading first...');
+        audioRef.current.load();
+        
+        // Wait for audio to be ready with timeout
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            console.warn('🔊 Audio loading timeout after 3 seconds');
+            resolve(undefined); // Continue anyway
+          }, 3000);
+          
+          audioRef.current!.addEventListener('canplay', () => {
+            clearTimeout(timeout);
+            console.log('🔊 Audio ready to play');
+            resolve(undefined);
+          }, { once: true });
+          
+          audioRef.current!.addEventListener('error', (e) => {
+            clearTimeout(timeout);
+            console.error('🔊 Audio loading error:', e);
+            reject(e);
+          }, { once: true });
+        });
       }
       
       // Play based on frequency setting
@@ -226,7 +267,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
     }
 
     // Use proper ringtones instead of notification sounds
-    let ringtoneFile = '/iphone-ringtone.mp3'; // Default to iPhone ringtone for delivery alerts
+    let ringtoneFile = '/iphone-6-ringtone.mp3'; // Default to iPhone 6 ringtone for delivery alerts
     
     switch (settings?.type) {
       case 'rapido-ringtone':
@@ -281,7 +322,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         ringtoneFile = '/notification-sound.mp3';
         break;
       default:
-        ringtoneFile = '/emergency-alarm.mp3';
+        ringtoneFile = '/iphone-6-ringtone.mp3';
     }
 
     console.log('🔊 Selected ringtone file:', ringtoneFile);

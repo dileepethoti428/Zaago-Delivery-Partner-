@@ -859,7 +859,7 @@ const Home = () => {
     console.log('🔊 Current ringtone settings:', ringtoneSettings);
     
     const testOrderData = {
-      id: "779469",
+      id: "550e8400-e29b-41d4-a716-446655440000", // Valid UUID for testing
       customer_name: "Test Customer",
       customer_phone: "+91 9876543210",
       address: "Test Address 123",
@@ -929,8 +929,18 @@ const Home = () => {
         // Manual audio test
         try {
           console.log('🔊 Trying manual audio...');
-          const testAudio = new Audio('/iphone-ringtone.mp3');
+          const testAudio = new Audio('/iphone-6-ringtone.mp3');
           testAudio.volume = 0.8;
+          
+          // Add user interaction handler for browsers that block autoplay
+          if (testAudio.readyState === 0) {
+            console.log('🔊 Audio not loaded, loading first...');
+            testAudio.load();
+            await new Promise((resolve) => {
+              testAudio.addEventListener('canplay', resolve, { once: true });
+            });
+          }
+          
           await testAudio.play();
           console.log('🔊 Manual audio successful');
           
