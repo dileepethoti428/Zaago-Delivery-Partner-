@@ -855,6 +855,9 @@ const Home = () => {
 
   // Test function to trigger emergency modal with sample data
   const handleTestNewOrder = async () => {
+    console.log('🚀 TEST BUTTON CLICKED! Starting handleTestNewOrder function');
+    console.log('🔊 Current ringtone settings:', ringtoneSettings);
+    
     const testOrderData = {
       id: "779469",
       customer_name: "Test Customer",
@@ -878,25 +881,73 @@ const Home = () => {
     setShowEmergencyModal(true);
     
     // Play emergency sound with explicit settings
+    console.log('🔊 About to test full backend notification flow...');
+    
+    // Test the FULL backend notification system
     try {
-      console.log('🔊 Attempting to play notification sound with settings:', ringtoneSettings);
-      await playNotificationSound();
-      console.log('🔊 Successfully triggered notification sound');
+      console.log('🚀 Calling backend mark-order-as-packed to trigger real notifications...');
+      
+      // Call the backend function to trigger real notifications
+      const { data, error } = await supabase.functions.invoke('mark-order-as-packed', {
+        body: {
+          order_id: testOrderData.id,
+          marked_by: 'test-system@zaago.com'
+        }
+      });
+      
+      if (error) {
+        console.error('🔊 Backend test call failed:', error);
+        throw error;
+      }
+      
+      console.log('🔊 Backend test call successful:', data);
+      
+      toast({
+        title: "🚨 Backend Test Triggered!",
+        description: "Real backend notification sent - sound should play soon",
+        duration: 5000,
+      });
+      
     } catch (error) {
-      console.error('🔊 Failed to play notification sound:', error);
-      // Try manual audio as backup
+      console.error('🔊 Backend test failed, trying frontend fallback:', error);
+      
+      // Fallback to frontend test
       try {
-        const testAudio = new Audio('/emergency-alarm.mp3');
-        testAudio.volume = 0.8;
-        await testAudio.play();
-        console.log('🔊 Manual audio backup successful');
-      } catch (backupError) {
-        console.error('🔊 Manual audio backup also failed:', backupError);
+        console.log('🔊 Attempting frontend fallback notification sound...');
+        await playNotificationSound();
+        console.log('🔊 Frontend fallback successful');
+        
         toast({
-          title: "Audio Test Failed",
-          description: "Please enable audio permissions in your browser",
+          title: "🔊 Frontend Test",
+          description: "Backend failed, played frontend audio instead",
           variant: "destructive"
         });
+        
+      } catch (frontendError) {
+        console.error('🔊 Frontend fallback also failed:', frontendError);
+        
+        // Manual audio test
+        try {
+          console.log('🔊 Trying manual audio...');
+          const testAudio = new Audio('/iphone-ringtone.mp3');
+          testAudio.volume = 0.8;
+          await testAudio.play();
+          console.log('🔊 Manual audio successful');
+          
+          toast({
+            title: "🔊 Manual Audio Test",
+            description: "Backend + Frontend failed, manual audio played",
+            variant: "destructive"
+          });
+          
+        } catch (manualError) {
+          console.error('🔊 Everything failed:', manualError);
+          toast({
+            title: "❌ All Audio Tests Failed",
+            description: "Please check browser permissions and try again. Error: " + manualError.message,
+            variant: "destructive"
+          });
+        }
       }
     }
   };
@@ -1431,7 +1482,7 @@ const Home = () => {
           onClick={handleTestNewOrder}
           className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg text-sm"
         >
-          ⚡ Test New Order
+          🚨 Test Backend Sound System
         </Button>
       </div>
 
