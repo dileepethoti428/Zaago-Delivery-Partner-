@@ -15,7 +15,10 @@ import {
   CheckCircle,
   Eye,
   VolumeX,
-  AlertTriangle
+  AlertTriangle,
+  Bell,
+  Volume2,
+  ChevronDown
 } from 'lucide-react';
 
 interface OrderData {
@@ -49,6 +52,7 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
   const { toast } = useToast();
   const [isAccepting, setIsAccepting] = useState(false);
   const [countdown, setCountdown] = useState(30);
+  const [showAudioControls, setShowAudioControls] = useState(false);
 
   // Auto-dismiss countdown
   useEffect(() => {
@@ -114,103 +118,116 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md mx-auto p-0 gap-0 bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-500 shadow-2xl animate-pulse">
+      <DialogContent className="max-w-md mx-auto p-0 gap-0 bg-white border-4 border-red-500 shadow-2xl">
+        {/* Close Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          className="absolute top-2 right-2 z-10 text-gray-500 hover:text-gray-700 rounded-full h-8 w-8 p-0"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+
         {/* Emergency Header */}
-        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 relative">
+        <div className="bg-red-100 border-2 border-red-400 rounded-lg m-4 p-4 relative">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-6 w-6 animate-bounce" />
+              <Bell className="h-6 w-6 text-red-600" />
               <div>
-                <h2 className="text-lg font-bold">🚨 URGENT ORDER READY!</h2>
-                <p className="text-sm opacity-90">Order Packed & Ready for Pickup</p>
+                <h2 className="text-xl font-bold text-red-600">NEW ORDER!</h2>
+                <p className="text-sm text-red-600 font-medium">IMMEDIATE ACTION REQUIRED</p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-white hover:bg-red-500 rounded-full h-8 w-8 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          {/* Countdown Timer */}
-          <div className="mt-2 text-center">
-            <Badge variant="secondary" className="bg-white/20 text-white animate-pulse">
-              Auto-dismiss in {countdown}s
+            <Badge className="bg-red-600 text-white font-bold px-3 py-1 rounded-full">
+              EMERGENCY
             </Badge>
           </div>
         </div>
 
         {/* Order Details */}
-        <div className="p-4 space-y-3">
-          {/* Customer Info */}
-          <div className="bg-white rounded-lg p-3 border border-red-200">
-            <div className="flex items-center gap-2 mb-2">
-              <User className="h-4 w-4 text-red-600" />
-              <span className="font-semibold text-red-800">Customer</span>
+        <div className="px-4 space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Order ID:</p>
+              <p className="font-bold">#{orderData.id.slice(-6).toUpperCase()}</p>
             </div>
-            <p className="font-medium">{orderData.customer_name}</p>
-            <div className="flex items-center gap-1 text-sm text-gray-600">
-              <Phone className="h-3 w-3" />
-              <span>{orderData.customer_phone}</span>
+            <div className="text-right">
+              <p className="text-sm font-medium text-gray-600">Amount:</p>
+              <p className="font-bold text-lg">₹{orderData.total}</p>
             </div>
           </div>
 
-          {/* Order Info */}
-          <div className="bg-white rounded-lg p-3 border border-red-200">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-red-600" />
-                <span className="font-semibold text-red-800">Order #{orderData.id.slice(-6).toUpperCase()}</span>
-              </div>
-              <div className="flex items-center gap-1 text-green-600 font-semibold">
-                <IndianRupee className="h-4 w-4" />
-                <span>₹{orderData.total}</span>
-              </div>
-            </div>
-            <p className="text-sm text-gray-600">{formatItems(orderData.items)}</p>
-            <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-              <Clock className="h-3 w-3" />
-              <span>Ordered at {formatTime(orderData.created_at)}</span>
-            </div>
+          <div>
+            <p className="text-sm font-medium text-gray-600">Customer:</p>
+            <p className="font-bold">{orderData.customer_name}</p>
           </div>
 
-          {/* Delivery Address */}
-          <div className="bg-white rounded-lg p-3 border border-red-200">
-            <div className="flex items-center gap-2 mb-2">
-              <MapPin className="h-4 w-4 text-red-600" />
-              <span className="font-semibold text-red-800">Delivery Address</span>
-            </div>
-            <p className="text-sm text-gray-700">{orderData.address}</p>
+          <div>
+            <p className="text-sm font-medium text-gray-600">Items:</p>
+            <p className="text-blue-600">{formatItems(orderData.items)}</p>
           </div>
 
-          {/* Pickup Location */}
-          {orderData.pickup_address && (
-            <div className="bg-white rounded-lg p-3 border border-red-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Package className="h-4 w-4 text-red-600" />
-                <span className="font-semibold text-red-800">Pickup From</span>
-              </div>
-              <p className="text-sm text-gray-700">{orderData.pickup_address}</p>
-              {orderData.seller_name && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Seller: {orderData.seller_name}
-                  {orderData.seller_phone && ` (${orderData.seller_phone})`}
-                </p>
-              )}
+          <div>
+            <p className="text-sm font-medium text-gray-600">Address:</p>
+            <p className="text-blue-600">{orderData.address}</p>
+          </div>
+        </div>
+
+        {/* Audio Alert Section */}
+        <div className="mx-4 my-4 bg-yellow-100 border-2 border-yellow-400 rounded-lg p-4">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <Volume2 className="h-5 w-5 text-yellow-700" />
+            <span className="font-bold text-yellow-700">LOUD RINGTONE PLAYING</span>
+            <Volume2 className="h-5 w-5 text-yellow-700" />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              onClick={onStopAlarm}
+              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold"
+            >
+              <VolumeX className="h-4 w-4 mr-2" />
+              STOP ALARM
+            </Button>
+            
+            <Button
+              onClick={onClose}
+              className="bg-red-500 hover:bg-red-600 text-white font-semibold"
+            >
+              <X className="h-4 w-4 mr-2" />
+              DISMISS
+            </Button>
+          </div>
+        </div>
+
+        {/* Audio Controls */}
+        <div className="mx-4 mb-4">
+          <Button
+            variant="ghost"
+            onClick={() => setShowAudioControls(!showAudioControls)}
+            className="w-full justify-between p-2 text-gray-700"
+          >
+            <div className="flex items-center gap-2">
+              <Volume2 className="h-4 w-4" />
+              <span>Audio Controls</span>
+            </div>
+            <ChevronDown className={`h-4 w-4 transition-transform ${showAudioControls ? 'rotate-180' : ''}`} />
+          </Button>
+          {showAudioControls && (
+            <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">Audio controls would go here</p>
             </div>
           )}
         </div>
 
         {/* Action Buttons */}
-        <div className="p-4 bg-gray-50 border-t space-y-2">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="px-4 pb-4">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               onClick={handleAcceptOrder}
               disabled={isAccepting}
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 shadow-lg"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-md"
             >
               {isAccepting ? (
                 <div className="flex items-center gap-2">
@@ -228,7 +245,7 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
             <Button
               onClick={handleViewDetails}
               variant="outline"
-              className="border-red-300 text-red-700 hover:bg-red-50 font-semibold py-3"
+              className="border-2 border-blue-500 text-blue-600 hover:bg-blue-50 font-bold py-3 rounded-md"
             >
               <div className="flex items-center gap-2">
                 <Eye className="h-4 w-4" />
@@ -236,17 +253,6 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
               </div>
             </Button>
           </div>
-          
-          <Button
-            onClick={onStopAlarm}
-            variant="outline"
-            className="w-full border-gray-300 text-gray-600 hover:bg-gray-100"
-          >
-            <div className="flex items-center gap-2">
-              <VolumeX className="h-4 w-4" />
-              <span>Stop Alarm</span>
-            </div>
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

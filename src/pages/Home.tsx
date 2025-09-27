@@ -853,6 +853,32 @@ const Home = () => {
     setEmergencyOrderData(null);
   };
 
+  // Test function to trigger emergency modal with sample data
+  const handleTestNewOrder = () => {
+    const testOrderData = {
+      id: "779469",
+      customer_name: "Test Customer",
+      customer_phone: "+91 9876543210",
+      address: "Test Address 123",
+      items: [{ name: "Test Item", quantity: 2 }],
+      total: 150.00,
+      created_at: new Date().toISOString(),
+      pickup_address: "Test Pickup Location",
+      seller_name: "Test Seller",
+      seller_phone: "+91 8765432109",
+      status: "packed",
+      delivery_date: new Date().toISOString(),
+      delivery_time_slot: "10:00 AM - 12:00 PM",
+      payment_status: "pending"
+    };
+    
+    setEmergencyOrderData(testOrderData);
+    setShowEmergencyModal(true);
+    
+    // Play emergency sound
+    playNotificationSound();
+  };
+
   // Reject order
   const handleRejectOrder = async (orderId: string) => {
     setRejectingOrders(prev => ({ ...prev, [orderId]: true }));
@@ -1375,6 +1401,16 @@ const Home = () => {
         <p className="text-sm text-gray-600 italic mt-1">
           "Ready to deliver excellence today"
         </p>
+      </div>
+
+      {/* Test New Order Button */}
+      <div className="px-4 py-3">
+        <Button
+          onClick={handleTestNewOrder}
+          className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg text-sm"
+        >
+          ⚡ Test New Order
+        </Button>
       </div>
 
       {/* Action Buttons */}
