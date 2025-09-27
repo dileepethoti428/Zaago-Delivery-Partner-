@@ -4555,6 +4555,10 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_delivery_bypass_validation: {
+        Args: { p_order_id: string; p_payment_method?: string }
+        Returns: undefined
+      }
       complete_delivery_safe: {
         Args: {
           p_agent_id: string

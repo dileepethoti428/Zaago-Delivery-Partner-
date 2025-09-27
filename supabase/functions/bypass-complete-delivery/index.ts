@@ -70,24 +70,22 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // SUPER SIMPLE - Just mark as delivered, no other processing
-    console.log('🔄 Marking order as delivered...');
+    // Call the bypass validation function to avoid JSON issues
+    console.log('🔄 Calling bypass validation function...');
     
-    const { error: orderUpdateError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-      })
-      .eq('id', order_id);
+    const { error: functionError } = await supabaseClient
+      .rpc('complete_delivery_bypass_validation', {
+        p_order_id: order_id,
+        p_payment_method: payment_method
+      });
 
-    if (orderUpdateError) {
-      console.error('❌ Order update failed:', orderUpdateError);
+    if (functionError) {
+      console.error('❌ Delivery completion failed:', functionError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to update order status',
-          details: orderUpdateError.message
+          error: 'Failed to complete delivery',
+          details: functionError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
