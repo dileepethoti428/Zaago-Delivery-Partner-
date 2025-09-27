@@ -22,12 +22,11 @@ serve(async (req) => {
     
     console.log('📦 Notify agents called for order:', order_id, 'Status:', status)
     
-    // Get all active agents
+    // Get all active agents (both online and offline - they should get notifications)
     const { data: agents, error: agentsError } = await supabase
       .from('delivery_agents')
       .select('id, name, email, onesignal_player_id')
       .eq('is_active', true)
-      .eq('is_online', true)
     
     if (agentsError) {
       console.error('Error fetching agents:', agentsError)

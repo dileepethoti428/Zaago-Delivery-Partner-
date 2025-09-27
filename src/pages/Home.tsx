@@ -951,6 +951,19 @@ const Home = () => {
             // Handle immediate packed status notification for ANY order changing to packed (primary notification)
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
               console.log('🚨 Order packed - triggering immediate high-volume notification');
+              
+              // Play ringtone immediately for packed orders
+              if (ringtoneSettings.enabled) {
+                console.log('🔊 Playing packed order notification ringtone');
+                playNotificationSound();
+                
+                toast({
+                  title: "🚨 ORDER PACKED!",
+                  description: `Order ${payload.new.id} has been packed and is ready for pickup`,
+                  duration: 8000,
+                });
+              }
+              
               handlePackedStatusNotification(payload.new);
             }
             
@@ -982,42 +995,6 @@ const Home = () => {
             fetchOrdersForRefresh();
           }
          }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'agent_notifications'
-        },
-        (payload) => {
-          console.log('🔔 New agent notification received:', payload);
-          
-          // Handle new agent notifications for immediate alerts
-          if (payload.new) {
-            const notification = payload.new;
-            console.log('🚨 Processing agent notification:', notification.type, notification.title);
-            
-            // Play immediate high-volume notification for packed orders
-            if (notification.type === 'order_packed' && ringtoneSettings.enabled && !isRingtoneDisabled) {
-              console.log('🔊 Playing backend notification sound at high volume');
-              playNotificationSound();
-              setIsRingtoneDisabled(true);
-              
-              // Auto-hide stop button after 10 seconds
-              setTimeout(() => {
-                setIsRingtoneDisabled(false);
-              }, 10000);
-              
-              // Show urgent toast
-              toast({
-                title: notification.title,
-                description: notification.message,
-                duration: 8000,
-              });
-            }
-          }
-        }
       )
       .on(
         'postgres_changes',
@@ -1116,16 +1093,10 @@ const Home = () => {
             const notification = payload.new;
             console.log('🚨 Processing agent notification:', notification.type, notification.title);
             
-            // Play immediate high-volume notification for packed orders
-            if (notification.type === 'order_packed' && ringtoneSettings.enabled && !isRingtoneDisabled) {
+            // Play immediate high-volume notification for packed orders (don't disable ringtone)
+            if (notification.type === 'order_packed' && ringtoneSettings.enabled) {
               console.log('🔊 Playing backend notification sound at high volume');
               playNotificationSound();
-              setIsRingtoneDisabled(true);
-              
-              // Auto-hide stop button after 10 seconds
-              setTimeout(() => {
-                setIsRingtoneDisabled(false);
-              }, 10000);
               
               // Show urgent toast
               toast({
@@ -1147,16 +1118,10 @@ const Home = () => {
           if (payload.payload && payload.payload.notification_type === 'order_packed') {
             console.log('🔊 Playing urgent packed order notification from broadcast');
             
-            // Play immediate high-volume notification
-            if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+            // Play immediate high-volume notification (don't disable ringtone)
+            if (ringtoneSettings.enabled) {
               console.log('🔊 Playing broadcast notification sound at maximum volume');
               playNotificationSound();
-              setIsRingtoneDisabled(true);
-              
-              // Auto-hide stop button after 10 seconds
-              setTimeout(() => {
-                setIsRingtoneDisabled(false);
-              }, 10000);
               
               // Show urgent toast
               toast({
@@ -1244,14 +1209,34 @@ const Home = () => {
     return () => clearInterval(interval);
   }, [location.latitude, location.longitude]); // Recalculate when agent location changes
 
+  // Auto-refresh orders every 5 seconds when page is active
   useEffect(() => {
     fetchAgentName();
     fetchOrders();
     
-    // Backup refresh interval - every 5 minutes
-    const interval = setInterval(fetchOrders, 300000);
-    return () => clearInterval(interval);
-  }, []);
+    // 5-second auto-refresh interval for active orders monitoring
+    const autoRefreshInterval = setInterval(() => {
+      if (!document.hidden && isOnline) {
+        console.log('📊 Auto-refreshing orders (5-second interval)...');
+        fetchOrders();
+        
+        // Show toast notification for auto-refresh
+        toast({
+          title: "Orders Updated",
+          description: "Your order list has been refreshed.",
+          duration: 2000,
+        });
+      }
+    }, 5000); // 5-second refresh
+    
+    // Backup refresh interval - every 5 minutes for offline scenarios
+    const backupInterval = setInterval(fetchOrders, 300000);
+    
+    return () => {
+      clearInterval(autoRefreshInterval);
+      clearInterval(backupInterval);
+    };
+  }, [isOnline]);
 
   // Trigger location picker when showLocationPicker changes
   useEffect(() => {
