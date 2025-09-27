@@ -175,7 +175,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
     }
 
     // Use proper ringtones instead of notification sounds
-    let ringtoneFile = '/classic-phone-ring.mp3'; // Default to actual phone ringtone
+    let ringtoneFile = '/iphone-6-ringtone.mp3'; // Default to high-volume iPhone 6 ringtone for delivery alerts
     
     switch (settings?.type) {
       case 'rapido-ringtone':
@@ -232,7 +232,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         ringtoneFile = '/chimes-notification.mp3';
         break;
       default:
-        ringtoneFile = '/classic-phone-ring.mp3'; // Always default to proper ringtone
+        ringtoneFile = '/iphone-6-ringtone.mp3'; // Always default to high-volume iPhone 6 ringtone
         break;
     }
 
@@ -248,11 +248,11 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       
       console.log(`Initializing audio with file: ${ringtoneFile}`);
       
-      // Set reasonable volume for ringtones
-      const baseVolume = settings?.volume || 0.3;
-      audioRef.current.volume = Math.min(baseVolume, 0.5); // Reasonable volume, not max
+      // Set high volume for delivery alert ringtones
+      const baseVolume = settings?.volume || 0.9;
+      audioRef.current.volume = baseVolume; // Allow full volume for critical delivery alerts
       
-      audioRef.current.playbackRate = 1.2; // Faster playback for urgency
+      audioRef.current.playbackRate = 1.0; // Normal speed for clarity at high volume
       audioRef.current.preload = 'auto';
       currentRingtoneType.current = settings?.type || 'phone-ringtone';
       
@@ -295,8 +295,8 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
             sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
             gainNodeRef.current = audioContextRef.current.createGain();
             
-            // Use Web Audio API for reasonable amplification 
-            const amplification = Math.min((settings?.volume || 0.3) * 1.5, 2.0); // Max 2x amplification
+            // Use Web Audio API for high amplification for delivery alerts
+            const amplification = Math.min((settings?.volume || 0.9) * 3.0, 3.0); // Max 3x amplification for critical alerts
             gainNodeRef.current.gain.value = amplification;
             
             sourceNodeRef.current.connect(gainNodeRef.current);
@@ -318,10 +318,10 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       });
     } else if (audioRef.current && gainNodeRef.current) {
       // Just update volume if audio exists
-      audioRef.current.volume = Math.min(settings?.volume || 0.3, 0.5); // Reasonable volume
+      audioRef.current.volume = settings?.volume || 0.9; // Allow high volume for delivery alerts
       
-      // Update Web Audio API gain for reasonable amplification
-      const amplification = Math.min((settings?.volume || 0.3) * 1.5, 2.0);
+      // Update Web Audio API gain for high amplification
+      const amplification = Math.min((settings?.volume || 0.9) * 3.0, 3.0);
       gainNodeRef.current.gain.value = amplification;
     }
 

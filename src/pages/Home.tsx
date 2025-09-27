@@ -109,12 +109,12 @@ const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Ringtone settings state
+  // High-volume ringtone settings for immediate order alerts
   const [ringtoneSettings, setRingtoneSettings] = useState<RingtoneSettings>({
     enabled: true,
-    volume: 0.8,
-    type: 'phone-ringtone',
-    frequency: 'double'
+    volume: 0.9,
+    type: 'iphone-6-ringtone',
+    frequency: 'continuous'
   });
   
   const { playNotificationSound, stopRingtone } = useAudioNotification(ringtoneSettings);
