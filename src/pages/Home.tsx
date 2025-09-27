@@ -1486,15 +1486,6 @@ const Home = () => {
         </p>
       </div>
 
-      {/* Test New Order Button */}
-      <div className="px-4 py-3">
-        <Button
-          onClick={handleTestNewOrder}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg text-sm"
-        >
-          🚨 Test Backend Sound System
-        </Button>
-      </div>
 
       {/* Action Buttons */}
       <div className="px-4 py-4 bg-gray-50">
