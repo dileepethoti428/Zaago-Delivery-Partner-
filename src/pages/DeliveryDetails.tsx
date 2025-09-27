@@ -32,6 +32,8 @@ interface Order {
   subscription_id?: string;
   calculated_delivery_type?: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
   delivery_time?: string;
+  agent_id?: string; // Add agent_id property
+  delivered_at?: string; // Add delivered_at property
   delivery_slots?: {
     id: string;
     slot_name: string;
@@ -328,6 +330,24 @@ const DeliveryDetails = () => {
         throw new Error('Invalid order ID');
       }
 
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
+
+      // Check agent assignment and update order
+      const { data: agentCheck } = await supabase
+        .from('delivery_agents')
+        .select('id, email')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .single();
+
+      if (!agentCheck || agentCheck.id !== order.agent_id) {
+        throw new Error('Order is not assigned to you or you are not an active agent');
+      }
+
       // Direct database update to complete delivery
       const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       
@@ -340,6 +360,7 @@ const DeliveryDetails = () => {
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id)
+        .eq('agent_id', agentCheck.id) // More specific constraint
         .eq('status', 'assigned') // Only update if still assigned
         .select()
         .single();

@@ -253,8 +253,22 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     try {
       console.log('🚚 Completing delivery with payment method:', paymentMethod);
       
-      if (!scannedOrder?.order_id) {
-        throw new Error('No order found from QR scan');
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
+
+      // Check agent assignment
+      const { data: agentCheck } = await supabase
+        .from('delivery_agents')
+        .select('id, email')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .single();
+
+      if (!agentCheck || !scannedOrder?.order_id) {
+        throw new Error('Invalid agent or order data');
       }
       
       // Direct database update to complete delivery
@@ -269,6 +283,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
           updated_at: new Date().toISOString()
         })
         .eq('id', scannedOrder.order_id)
+        .eq('agent_id', agentCheck.id) // Ensure order is assigned to this agent
         .eq('status', 'assigned') // Only update if still assigned
         .select()
         .single();
