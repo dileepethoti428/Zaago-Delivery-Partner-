@@ -1,20 +1,15 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
 import { 
   Home, 
   Package, 
   DollarSign, 
   Settings,
-  Wallet,
   Truck
 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import WalletDisplay from "./WalletDisplay";
 
 const BottomNavigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [showWalletMenu, setShowWalletMenu] = useState(false);
 
   const tabs = [
     {
@@ -36,12 +31,6 @@ const BottomNavigation = () => {
       path: "/earnings"
     },
     {
-      id: "wallet",
-      label: "Wallet",
-      icon: Wallet,
-      path: null // Special handling for wallet
-    },
-    {
       id: "settings",
       label: "Settings",
       icon: Settings,
@@ -50,9 +39,7 @@ const BottomNavigation = () => {
   ];
 
   const handleTabClick = (tab: any) => {
-    if (tab.id === "wallet") {
-      setShowWalletMenu(true);
-    } else if (tab.path) {
+    if (tab.path) {
       navigate(tab.path);
     }
   };
@@ -95,24 +82,6 @@ const BottomNavigation = () => {
           })}
         </div>
       </div>
-
-      {/* Wallet Dialog */}
-      <Dialog open={showWalletMenu} onOpenChange={setShowWalletMenu}>
-        <DialogContent className="w-[90vw] max-w-sm mx-auto max-h-[75vh] overflow-y-auto p-0">
-          <DialogHeader className="p-4 pb-0">
-            <DialogTitle className="flex items-center space-x-2 text-lg">
-              <Wallet className="w-5 h-5" />
-              <span>My Wallet</span>
-            </DialogTitle>
-            <DialogDescription className="text-sm">
-              Manage your wallet balance and transactions
-            </DialogDescription>
-          </DialogHeader>
-          <div className="p-4 pt-2">
-            <WalletDisplay />
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };
