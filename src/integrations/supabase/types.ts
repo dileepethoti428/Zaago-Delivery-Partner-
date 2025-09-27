@@ -4561,7 +4561,7 @@ export type Database = {
       }
       complete_delivery_minimal_update: {
         Args: { p_order_id: string; p_payment_method?: string }
-        Returns: Json
+        Returns: boolean
       }
       complete_delivery_safe: {
         Args: {
