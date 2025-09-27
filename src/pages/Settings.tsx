@@ -10,7 +10,6 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
-import { AudioDebugPanel } from "@/components/AudioDebugPanel";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { 
@@ -505,12 +504,6 @@ const Settings = () => {
       customRender: true
     },
     {
-      title: "Audio Debug Panel",
-      items: [],
-      customRender: true,
-      renderComponent: "AudioDebugPanel"
-    },
-    {
       title: "Delivery Settings",
       items: [
         {
@@ -706,8 +699,6 @@ const Settings = () => {
                     )}
                   </div>
                 </div>
-              ) : group.renderComponent === "AudioDebugPanel" ? (
-                <AudioDebugPanel settings={settings} />
               ) : (
                 group.items.map((item, itemIndex) => {
                   const IconComponent = item.icon;
