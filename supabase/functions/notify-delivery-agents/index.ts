@@ -42,10 +42,10 @@ serve(async (req) => {
       )
     }
     
-    // Create agent notifications for immediate response
+    // Create agent notifications for immediate response - use 'system' type to avoid constraint violation
     const notifications = agents.map(agent => ({
       agent_id: agent.id,
-      type: status === 'packed' ? 'order_packed' : 'order_available',
+      type: 'system', // Use system instead of order_packed to avoid constraint violation
       title: status === 'packed' ? '🚨 Order Packed & Ready!' : '📦 New Order Available',
       message: status === 'packed' 
         ? `Order from ${customer_name || 'customer'} has been packed and is ready for pickup`
@@ -53,6 +53,7 @@ serve(async (req) => {
       source_type: 'system',
       source_id: order_id,
       metadata: {
+        notification_subtype: status === 'packed' ? 'order_packed' : 'order_available', // Keep the actual type in metadata
         order_id,
         status,
         customer_name,
@@ -73,25 +74,30 @@ serve(async (req) => {
       throw notificationError
     }
     
-    // Send real-time broadcast for immediate frontend response
+    // Send single real-time broadcast to all agents at once (more efficient)
     const channel = supabase.channel('orders-realtime-updates')
     
-    for (const agent of agents) {
-      await channel.send({
-        type: 'broadcast',
-        event: 'urgent_notification',
-        payload: {
-          agent_id: agent.id,
-          order_id,
-          status,
-          customer_name,
-          total_amount,
-          notification_type: status === 'packed' ? 'order_packed' : 'order_available',
-          priority: status === 'packed' ? 'high' : 'normal',
-          timestamp: new Date().toISOString()
-        }
-      })
-    }
+    await channel.send({
+      type: 'broadcast',
+      event: 'urgent_notification',
+      payload: {
+        type: 'urgent_notification',
+        notification_type: status === 'packed' ? 'order_packed' : 'order_available',
+        order_id,
+        status,
+        customer_name,
+        total_amount,
+        priority: status === 'packed' ? 'high' : 'normal',
+        timestamp: new Date().toISOString(),
+        agents_count: agents.length,
+        title: status === 'packed' ? '🚨 Order Packed & Ready!' : '📦 New Order Available',
+        message: status === 'packed' 
+          ? `Order from ${customer_name || 'customer'} has been packed and is ready for pickup`
+          : `New order from ${customer_name || 'customer'} for ₹${total_amount || 0}`
+      }
+    })
+    
+    console.log(`📡 Real-time broadcast sent for ${status} order ${order_id}`)
     
     // Update order notification sent flag
     await supabase
