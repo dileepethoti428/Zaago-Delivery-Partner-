@@ -265,19 +265,66 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       if (error) {
         console.error('❌ Delivery completion error:', error);
         console.error('❌ Full error details:', JSON.stringify(error, null, 2));
-        throw new Error(error.message || 'Failed to complete delivery');
+        
+        // Handle specific error messages
+        const errorMsg = error.message || 'Failed to complete delivery';
+        if (errorMsg.includes('not assigned to you')) {
+          toast({
+            title: "🚫 Not Your Order",
+            description: "This order is not assigned to you. Only the assigned delivery agent can complete this order.",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Delivery Failed",
+            description: errorMsg,
+            variant: "destructive"
+          });
+        }
+        return;
       }
 
       if (!data || !data.success) {
         console.error('❌ Delivery completion failed - no data or not successful:', data);
-        throw new Error(data?.error || 'Failed to complete delivery - no success response');
+        
+        const errorMessage = data?.error || 'Failed to complete delivery - no success response';
+        
+        // Handle specific error cases
+        if (errorMessage.includes('not assigned to you')) {
+          toast({
+            title: "🚫 Not Your Order", 
+            description: "This order is not assigned to you. Only the assigned delivery agent can complete this order.",
+            variant: "destructive"
+          });
+        } else if (errorMessage.includes('already')) {
+          toast({
+            title: "Already Delivered ✅",
+            description: "This product has already been delivered successfully!",
+            variant: "default"
+          });
+        } else {
+          toast({
+            title: "Delivery Failed",
+            description: errorMessage,
+            variant: "destructive"
+          });
+        }
+        return;
       }
 
       if (data && data.success) {
-        toast({
-          title: "Product Delivered! ✅",
-          description: `Successfully delivered to ${data.order.customer_name}. Earned: ₹${data.order.payout_amount}`,
-        });
+        // Check if it's an already delivered order
+        if (data.already_delivered) {
+          toast({
+            title: "Already Delivered ✅",
+            description: "🎉 This product has already been delivered successfully!",
+          });
+        } else {
+          toast({
+            title: "Product Delivered! ✅",
+            description: data.message || `Successfully delivered to ${data.order?.customer_name}`,
+          });
+        }
         
         // Reset states
         setScannedOrder(null);
@@ -286,7 +333,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         
         // Refresh the orders list by dispatching a custom event
         window.dispatchEvent(new CustomEvent('orderCompleted', { 
-          detail: { orderId: data.order.id } 
+          detail: { orderId: data.order?.id } 
         }));
       } else {
         throw new Error(data?.error || 'Failed to complete delivery');

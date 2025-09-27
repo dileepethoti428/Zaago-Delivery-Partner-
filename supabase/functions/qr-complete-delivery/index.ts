@@ -141,7 +141,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Order already delivered',
+          message: '🎉 Product already delivered successfully!',
+          already_delivered: true,
           order: {
             id: order.id,
             customer_name: order.customer_name,
@@ -170,19 +171,50 @@ serve(async (req) => {
       console.log('🔄 QR scanned but order not delivered, proceeding with completion...');
     }
 
-    if (!order || order.status !== 'assigned') {
+    if (!order) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Order not ready for delivery' }),
+        JSON.stringify({ success: false, error: 'Order not found for this QR code' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    if (order.status !== 'assigned') {
+      if (order.status === 'delivered') {
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: '🎉 Product already delivered successfully!',
+            already_delivered: true,
+            order: {
+              id: order.id,
+              customer_name: order.customer_name,
+              total: order.total,
+              payment_status: order.payment_status,
+              delivered_at: order.delivered_at
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `Order is not ready for delivery. Current status: ${order.status}` 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
     // Check if order is assigned to this agent
     if (order.agent_id !== agent.id) {
+      console.log(`❌ Order assignment mismatch. Order agent: ${order.agent_id}, Current agent: ${agent.id}`);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Order is not assigned to you. Only the assigned delivery agent can complete this order.'
+          error: '🚫 This order is not assigned to you. Only the assigned delivery agent can complete this delivery.',
+          order_agent_id: order.agent_id,
+          your_agent_id: agent.id
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
@@ -246,6 +278,44 @@ serve(async (req) => {
           details: updateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (result === false) {
+      console.error('❌ Minimal update returned false - order may already be completed or invalid');
+      
+      // Check if order is already delivered
+      const { data: currentOrder } = await supabaseClient
+        .from('orders')
+        .select('status, delivered_at, payment_status, customer_name, total')
+        .eq('id', order.id)
+        .single();
+        
+      if (currentOrder?.status === 'delivered') {
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: '🎉 Product already delivered successfully!',
+            already_delivered: true,
+            order: {
+              id: order.id,
+              customer_name: currentOrder.customer_name,
+              total: currentOrder.total,
+              payment_status: currentOrder.payment_status,
+              delivered_at: currentOrder.delivered_at
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Unable to complete delivery. Order may already be processed or invalid.',
+          details: 'Minimal update returned false'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
