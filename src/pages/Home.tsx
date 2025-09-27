@@ -1067,10 +1067,114 @@ const Home = () => {
           fetchOrdersForRefresh();
         }
       )
+      .on(
+        'broadcast',
+        { event: 'urgent_notification' },
+        (payload) => {
+          console.log('🚨 Received urgent broadcast notification:', payload);
+          
+          // Handle urgent notifications from notify-delivery-agents edge function
+          if (payload.payload && payload.payload.notification_type === 'order_packed') {
+            console.log('🔊 Playing urgent packed order notification from broadcast');
+            
+            // Play immediate high-volume notification
+            if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+              console.log('🔊 Playing broadcast notification sound at maximum volume');
+              playNotificationSound();
+              setIsRingtoneDisabled(true);
+              
+              // Auto-hide stop button after 10 seconds
+              setTimeout(() => {
+                setIsRingtoneDisabled(false);
+              }, 10000);
+              
+              // Show urgent toast
+              toast({
+                title: "🚨 ORDER PACKED & READY!",
+                description: `Order from ${payload.payload.customer_name || 'customer'} is packed and ready for pickup`,
+                duration: 8000,
+              });
+            }
+            
+            // Refresh orders immediately
+            fetchOrdersForRefresh();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'agent_notifications'
+        },
+        (payload) => {
+          console.log('🔔 New agent notification received:', payload);
+          
+          // Handle new agent notifications for immediate alerts
+          if (payload.new) {
+            const notification = payload.new;
+            console.log('🚨 Processing agent notification:', notification.type, notification.title);
+            
+            // Play immediate high-volume notification for packed orders
+            if (notification.type === 'order_packed' && ringtoneSettings.enabled && !isRingtoneDisabled) {
+              console.log('🔊 Playing backend notification sound at high volume');
+              playNotificationSound();
+              setIsRingtoneDisabled(true);
+              
+              // Auto-hide stop button after 10 seconds
+              setTimeout(() => {
+                setIsRingtoneDisabled(false);
+              }, 10000);
+              
+              // Show urgent toast
+              toast({
+                title: notification.title,
+                description: notification.message,
+                duration: 8000,
+              });
+            }
+          }
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'urgent_notification' },
+        (payload) => {
+          console.log('🚨 Received urgent broadcast notification:', payload);
+          
+          // Handle urgent notifications from notify-delivery-agents edge function
+          if (payload.payload && payload.payload.notification_type === 'order_packed') {
+            console.log('🔊 Playing urgent packed order notification from broadcast');
+            
+            // Play immediate high-volume notification
+            if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+              console.log('🔊 Playing broadcast notification sound at maximum volume');
+              playNotificationSound();
+              setIsRingtoneDisabled(true);
+              
+              // Auto-hide stop button after 10 seconds
+              setTimeout(() => {
+                setIsRingtoneDisabled(false);
+              }, 10000);
+              
+              // Show urgent toast
+              toast({
+                title: "🚨 ORDER PACKED & READY!",
+                description: `Order from ${payload.payload.customer_name || 'customer'} is packed and ready for pickup`,
+                duration: 8000,
+              });
+            }
+            
+            // Refresh orders immediately
+            fetchOrdersForRefresh();
+          }
+        }
+      )
       .subscribe((status) => {
         console.log('📡 Real-time subscription status:', status);
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to orders, earnings, and payout config real-time updates');
+          console.log('✅ Successfully subscribed to orders, earnings, payout config, and urgent notifications');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Real-time subscription error');
         }

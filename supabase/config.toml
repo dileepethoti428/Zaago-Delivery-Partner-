@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.notify-delivery-agents]
 verify_jwt = false
 
+[functions.mark-order-as-packed]
+verify_jwt = false
+
 [functions.qr-scan-order]
 verify_jwt = true
 
