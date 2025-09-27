@@ -499,11 +499,6 @@ const Settings = () => {
       ]
     },
     {
-      title: "High-Volume Custom Ringtones",
-      items: [],
-      customRender: true
-    },
-    {
       title: "Delivery Settings",
       items: [
         {
@@ -582,127 +577,9 @@ const Settings = () => {
               <CardTitle className="text-lg">{group.title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
-              {group.customRender && group.title === "High-Volume Custom Ringtones" ? (
-                <div className="space-y-6 p-4">
-                  {/* Master Enable/Disable Toggle */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <Volume2 className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">Enable High-Volume Ringtones</p>
-                        <p className="text-sm text-muted-foreground">Master switch for loud, attention-grabbing notification sounds</p>
-                      </div>
-                    </div>
-                    <Switch 
-                      checked={settings.ringtone_enabled}
-                      onCheckedChange={(checked) => {
-                        if (isEditMode) {
-                          setSettings(prev => ({ ...prev, ringtone_enabled: checked }));
-                        } else {
-                          updateSetting('ringtone_enabled', checked);
-                        }
-                      }}
-                      disabled={loading}
-                      className="data-[state=checked]:bg-primary"
-                    />
-                  </div>
-
-                  {/* Volume Control */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-primary/10 rounded-lg">
-                          <Volume2 className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">Volume: {Math.round(settings.ringtone_volume * 100)}%</p>
-                          <p className="text-sm text-muted-foreground">Adjust ringtone volume level</p>
-                        </div>
-                      </div>
-                    </div>
-                    <Slider
-                      value={[settings.ringtone_volume * 100]}
-                      onValueChange={(values) => {
-                        const volume = values[0] / 100;
-                        if (isEditMode) {
-                          setSettings(prev => ({ ...prev, ringtone_volume: volume }));
-                        } else {
-                          updateSetting('ringtone_volume', volume);
-                        }
-                      }}
-                      max={100}
-                      step={5}
-                      className="w-full"
-                      disabled={!settings.ringtone_enabled}
-                    />
-                  </div>
-
-                  {/* Test Rapido Ringtone */}
-                  <div className="space-y-3">
-                    <div>
-                      <p className="font-medium text-foreground">New Order Ringtone: High-Volume Alert</p>
-                      <p className="text-sm text-muted-foreground">Ultra-loud custom ringtone designed to grab immediate attention</p>
-                    </div>
-                    <Button
-                      onClick={() => testRingtone()}
-                      disabled={!settings.ringtone_enabled}
-                      className="w-full bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200"
-                      variant="outline"
-                    >
-                      🚨 Test High-Volume Ringtone
-                    </Button>
-                  </div>
-
-                  {/* Continuous Ringing Settings */}
-                  <div className="space-y-4 border-t pt-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-foreground">Continuous Ringing (High-Volume)</p>
-                        <p className="text-sm text-muted-foreground">Ring continuously until you respond to new orders (ultra-loud alerts)</p>
-                      </div>
-                      <Switch 
-                        checked={continuousRingingEnabled}
-                        onCheckedChange={setContinuousRingingEnabled}
-                        disabled={!settings.ringtone_enabled}
-                        className="data-[state=checked]:bg-primary"
-                      />
-                    </div>
-
-                    {continuousRingingEnabled && (
-                      <>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="font-medium text-foreground">Max Repetitions: {maxRepetitions} ({Math.round(maxRepetitions * 5 / 60)} minutes)</p>
-                            <p className="text-sm text-muted-foreground">Maximum number of times to repeat before auto-stopping</p>
-                          </div>
-                          <Slider
-                            value={[maxRepetitions]}
-                            onValueChange={(values) => setMaxRepetitions(values[0])}
-                            min={6}
-                            max={48}
-                            step={1}
-                            className="w-full"
-                          />
-                        </div>
-
-                        <Button
-                          onClick={testContinuousRinging}
-                          disabled={!settings.ringtone_enabled}
-                          variant="outline"
-                          className="w-full"
-                        >
-                          🧪 Test Continuous Ringing (15s)
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                group.items.map((item, itemIndex) => {
-                  const IconComponent = item.icon;
-                  return (
+              {group.items.map((item, itemIndex) => {
+                const IconComponent = item.icon;
+                return (
                   <div
                     key={itemIndex}
                     className={`flex items-center justify-between p-3 rounded-lg transition-smooth ${
@@ -739,7 +616,7 @@ const Settings = () => {
                               className="h-8"
                             />
                           </div>
-        ) : item.title === "Vehicle Information" && isEditMode ? (
+                        ) : item.title === "Vehicle Information" && isEditMode ? (
                           <Input
                             value={settings.personal_info.vehicle}
                             onChange={(e) => setSettings(prev => ({
@@ -867,7 +744,7 @@ const Settings = () => {
                   </div>
                  );
                 })
-              )}
+              }
             </CardContent>
           </Card>
         ))}
