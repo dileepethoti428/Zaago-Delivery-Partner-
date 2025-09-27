@@ -17,7 +17,7 @@ serve(async (req) => {
     const body = await req.json();
     const { order_id, payment_method = 'Online' } = body;
     
-    console.log('📋 Processing order:', { order_id, payment_method });
+    console.log('📋 Processing order bypass:', { order_id, payment_method });
     
     if (!order_id) {
       return new Response(
@@ -70,8 +70,9 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Use the bypass function that avoids all JSON validation issues
-    console.log('🚀 Calling bypass complete order function...');
+    // Use the bypass function to complete the delivery
+    console.log('🔄 Calling bypass completion function...');
+    
     const { data: result, error: bypassError } = await supabaseClient.rpc('bypass_complete_order', {
       p_order_id: order_id,
       p_payment_method: payment_method,
@@ -83,34 +84,36 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to complete delivery: ' + bypassError.message
+          error: 'Failed to complete delivery',
+          details: bypassError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
+    console.log('✅ Bypass function result:', result);
+
     if (!result || !result.success) {
-      console.error('❌ Bypass function returned failure:', result);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: result?.error || 'Failed to complete delivery'
+          error: result?.error || 'Unknown error during delivery completion'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('🎉 Delivery completed successfully via bypass function');
+    console.log('🎉 Product delivered successfully!');
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Product delivered successfully!',
+        message: 'Product delivered successfully! 🎉',
         order: {
           id: order_id,
           status: 'delivered',
-          payment_method: payment_method,
-          payout_amount: result.payout || 25,
+          payment_method: result.payment_method,
+          payout_amount: result.payout,
           agent_name: agent.name,
           completed_at: new Date().toISOString()
         }
