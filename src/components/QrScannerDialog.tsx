@@ -264,7 +264,13 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
 
       if (error) {
         console.error('❌ Delivery completion error:', error);
+        console.error('❌ Full error details:', JSON.stringify(error, null, 2));
         throw new Error(error.message || 'Failed to complete delivery');
+      }
+
+      if (!data || !data.success) {
+        console.error('❌ Delivery completion failed - no data or not successful:', data);
+        throw new Error(data?.error || 'Failed to complete delivery - no success response');
       }
 
       if (data && data.success) {
