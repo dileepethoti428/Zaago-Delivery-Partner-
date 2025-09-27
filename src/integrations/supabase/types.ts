@@ -1803,7 +1803,9 @@ export type Database = {
           is_read: boolean
           link: string | null
           message: string
+          metadata: Json | null
           order_id: string | null
+          reference_id: string | null
           role: string
           title: string
           type: string
@@ -1815,7 +1817,9 @@ export type Database = {
           is_read?: boolean
           link?: string | null
           message: string
+          metadata?: Json | null
           order_id?: string | null
+          reference_id?: string | null
           role?: string
           title: string
           type: string
@@ -1827,28 +1831,15 @@ export type Database = {
           is_read?: boolean
           link?: string | null
           message?: string
+          metadata?: Json | null
           order_id?: string | null
+          reference_id?: string | null
           role?: string
           title?: string
           type?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders_with_agents"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       order_exclusions: {
         Row: {
@@ -4532,6 +4523,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      check_user_vacation_status: {
+        Args: { p_check_date?: string; p_user_id: string }
+        Returns: Json
+      }
+      cleanup_abandoned_payment_orders: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       cleanup_expired_otps: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -4870,7 +4869,9 @@ export type Database = {
         }[]
       }
       get_seller_orders: {
-        Args: { seller_user_id: string; status_filter?: string[] }
+        Args:
+          | { seller_user_id: string; status_filter?: string[] }
+          | { seller_user_id: string; status_filter?: string[] }
         Returns: {
           address: Json
           created_at: string
@@ -4879,8 +4880,7 @@ export type Database = {
           delivery_time_slot: string
           id: string
           items: Json
-          product_statuses: Json
-          special_instructions: string
+          payment_status: string
           status: string
           total: number
         }[]
@@ -4894,7 +4894,7 @@ export type Database = {
         Returns: Json
       }
       get_seller_specific_orders: {
-        Args: { p_seller_user_id: string }
+        Args: { p_seller_user_id: string } | { p_seller_user_id: string }
         Returns: {
           address: Json
           agent_id: string
@@ -4903,12 +4903,6 @@ export type Database = {
           customer_phone: string
           delivery_date: string
           order_id: string
-          order_status: string
-          payment_status: string
-          seller_items: Json
-          seller_total: number
-          total_amount: number
-          updated_at: string
         }[]
       }
       get_seller_stats: {
@@ -5062,15 +5056,15 @@ export type Database = {
         }
         Returns: undefined
       }
-      manual_subscription_recovery: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
       manual_trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
       mark_order_as_packed: {
+        Args: { order_id: string }
+        Returns: undefined
+      }
+      mark_order_as_packed_v2: {
         Args: { order_id: string }
         Returns: undefined
       }
@@ -5161,6 +5155,10 @@ export type Database = {
         Args: { agent_id: string; order_id: string; qr_code_id: string }
         Returns: boolean
       }
+      seller_order_action: {
+        Args: { p_action: string; p_order_id: string; p_seller_user_id: string }
+        Returns: Json
+      }
       send_birthday_messages: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -5180,14 +5178,6 @@ export type Database = {
       settle_cod_to_admin: {
         Args: { p_agent_id: string; p_amount: number }
         Returns: Json
-      }
-      should_skip_delivery_for_vacation: {
-        Args: { p_delivery_date: string; p_subscription_id: string }
-        Returns: boolean
-      }
-      should_skip_delivery_for_vacation_v2: {
-        Args: { p_delivery_date: string; p_subscription_id: string }
-        Returns: boolean
       }
       should_skip_delivery_for_vacation_v3: {
         Args: { p_delivery_date: string; p_subscription_id: string }

@@ -109,12 +109,12 @@ const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // High-volume ringtone settings for immediate order alerts
+  // High-volume ringtone settings for immediate order alerts - MAXIMUM VOLUME
   const [ringtoneSettings, setRingtoneSettings] = useState<RingtoneSettings>({
     enabled: true,
-    volume: 0.9,
+    volume: 1.0, // Maximum volume
     type: 'iphone-6-ringtone',
-    frequency: 'continuous'
+    frequency: 'continuous' // Continuous for urgent alerts
   });
   
   const { playNotificationSound, stopRingtone } = useAudioNotification(ringtoneSettings);
@@ -145,7 +145,6 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
-  const [isRingtoneDisabled, setIsRingtoneDisabled] = useState(false);
 
   // Load agent settings on component mount - deferred for faster initial load
   useEffect(() => {
@@ -180,9 +179,9 @@ const Home = () => {
         if (agentSettings) {
           setRingtoneSettings({
             enabled: agentSettings.ringtone_enabled ?? true,
-            volume: agentSettings.ringtone_volume ?? 0.3,
+            volume: Math.max(agentSettings.ringtone_volume ?? 1.0, 0.8), // Ensure at least 80% volume
             type: agentSettings.ringtone_type ?? 'iphone-6-ringtone',
-            frequency: agentSettings.notification_frequency ?? 'double'
+            frequency: 'continuous' // Override to continuous for urgent alerts
           });
         }
       }
@@ -290,16 +289,10 @@ const Home = () => {
       });
     }, 15000);
 
-    // Play the ringtone immediately for new orders
-    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+    // Play the ringtone immediately for new orders - NO BLOCKING
+    if (ringtoneSettings.enabled) {
       console.log('🔊 Playing immediate notification sound');
       playNotificationSound();
-      setIsRingtoneDisabled(true); // Show stop button after playing
-      
-      // Auto-hide stop button after 10 seconds
-      setTimeout(() => {
-        setIsRingtoneDisabled(false);
-      }, 10000);
     }
     
     // Show immediate toast notification with different styling
@@ -330,16 +323,10 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play different notification sound for ready orders (could be different sound)
-    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+    // Play different notification sound for ready orders - NO BLOCKING
+    if (ringtoneSettings.enabled) {
       console.log('🔊 Playing availability notification sound');
       playNotificationSound();
-      setIsRingtoneDisabled(true); // Show stop button after playing
-      
-      // Auto-hide stop button after 10 seconds
-      setTimeout(() => {
-        setIsRingtoneDisabled(false);
-      }, 10000);
     }
     
     // Show availability toast notification
@@ -369,15 +356,9 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone only if enabled and not disabled
-    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+    // Play the ringtone - NO BLOCKING
+    if (ringtoneSettings.enabled) {
       playNotificationSound();
-      setIsRingtoneDisabled(true); // Show stop button after playing
-      
-      // Auto-hide stop button after 10 seconds  
-      setTimeout(() => {
-        setIsRingtoneDisabled(false);
-      }, 10000);
     }
     
     // Show toast notification
@@ -408,16 +389,10 @@ const Home = () => {
       });
     }, 5000);
 
-    // Play high-volume ringtone immediately for packed status
-    if (ringtoneSettings.enabled && !isRingtoneDisabled) {
+    // Play high-volume ringtone immediately for packed status - NO BLOCKING
+    if (ringtoneSettings.enabled) {
       console.log('🔊 Playing packed status notification sound at high volume');
       playNotificationSound();
-      setIsRingtoneDisabled(true); // Show stop button after playing
-      
-      // Auto-hide stop button after 10 seconds
-      setTimeout(() => {
-        setIsRingtoneDisabled(false);
-      }, 10000);
     }
     
     // Show packed status toast notification
@@ -952,14 +927,14 @@ const Home = () => {
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
               console.log('🚨 Order packed - triggering immediate high-volume notification');
               
-              // Play ringtone immediately for packed orders
+              // Play ringtone immediately for packed orders - NO BLOCKING
               if (ringtoneSettings.enabled) {
-                console.log('🔊 Playing packed order notification ringtone');
+                console.log('🔊 Playing packed order notification ringtone at MAX VOLUME');
                 playNotificationSound();
                 
                 toast({
                   title: "🚨 ORDER PACKED!",
-                  description: `Order ${payload.new.id} has been packed and is ready for pickup`,
+                  description: `Order from ${payload.new.customer_name || 'customer'} has been packed and is ready for pickup`,
                   duration: 8000,
                 });
               }
@@ -1054,16 +1029,10 @@ const Home = () => {
           if (payload.payload && payload.payload.notification_type === 'order_packed') {
             console.log('🔊 Playing urgent packed order notification from broadcast');
             
-            // Play immediate high-volume notification
-            if (ringtoneSettings.enabled && !isRingtoneDisabled) {
-              console.log('🔊 Playing broadcast notification sound at maximum volume');
+            // Play immediate high-volume notification - NO BLOCKING
+            if (ringtoneSettings.enabled) {
+              console.log('🔊 Playing broadcast notification sound at MAXIMUM VOLUME');
               playNotificationSound();
-              setIsRingtoneDisabled(true);
-              
-              // Auto-hide stop button after 10 seconds
-              setTimeout(() => {
-                setIsRingtoneDisabled(false);
-              }, 10000);
               
               // Show urgent toast
               toast({
@@ -1093,9 +1062,9 @@ const Home = () => {
             const notification = payload.new;
             console.log('🚨 Processing agent notification:', notification.type, notification.title);
             
-            // Play immediate high-volume notification for packed orders (don't disable ringtone)
+            // Play immediate high-volume notification for packed orders - NO BLOCKING
             if (notification.type === 'order_packed' && ringtoneSettings.enabled) {
-              console.log('🔊 Playing backend notification sound at high volume');
+              console.log('🔊 Playing backend notification sound at MAX VOLUME');
               playNotificationSound();
               
               // Show urgent toast
@@ -1105,34 +1074,6 @@ const Home = () => {
                 duration: 8000,
               });
             }
-          }
-        }
-      )
-      .on(
-        'broadcast',
-        { event: 'urgent_notification' },
-        (payload) => {
-          console.log('🚨 Received urgent broadcast notification:', payload);
-          
-          // Handle urgent notifications from notify-delivery-agents edge function
-          if (payload.payload && payload.payload.notification_type === 'order_packed') {
-            console.log('🔊 Playing urgent packed order notification from broadcast');
-            
-            // Play immediate high-volume notification (don't disable ringtone)
-            if (ringtoneSettings.enabled) {
-              console.log('🔊 Playing broadcast notification sound at maximum volume');
-              playNotificationSound();
-              
-              // Show urgent toast
-              toast({
-                title: "🚨 ORDER PACKED & READY!",
-                description: `Order from ${payload.payload.customer_name || 'customer'} is packed and ready for pickup`,
-                duration: 8000,
-              });
-            }
-            
-            // Refresh orders immediately
-            fetchOrdersForRefresh();
           }
         }
       )
@@ -1439,21 +1380,6 @@ const Home = () => {
             </div>
           </Button>
         </div>
-
-        {/* Stop Ringtone Button - shows when ringtone is disabled by user */}
-        {isRingtoneDisabled && (
-          <Button
-            onClick={() => {
-              stopRingtone();
-              setIsRingtoneDisabled(false);
-            }}
-            variant="destructive"
-            className="w-full h-12 rounded-lg mt-3 bg-red-500 hover:bg-red-600 text-white font-medium"
-          >
-            <X className="w-4 h-4 mr-2" />
-            Stop Ringtone
-          </Button>
-        )}
       </div>
 
       <div className="flex-1 bg-gray-50">
