@@ -164,49 +164,32 @@ export const PaymentMethodDialog = ({
           ) : (
             /* Normal State - Show Payment Options */
             <div className="space-y-3">
-              {/* Show only Online option if prepaid */}
-              {order.payment_status === 'paid' || order.payment_status === 'paid_online' ? (
-                <Button
-                  onClick={() => handlePaymentMethod('Online')}
-                  disabled={isProcessing}
-                  className="w-full h-12 bg-gradient-neon hover:shadow-neon"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                  )}
-                  {isProcessing ? 'Processing...' : 'Online Payment (Already Paid)'}
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    onClick={() => handlePaymentMethod('COD')}
-                    disabled={isProcessing}
-                    className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    ) : (
-                      <Banknote className="w-5 h-5 mr-2" />
-                    )}
-                    {isProcessing ? 'Processing...' : 'Cash on Delivery (COD)'}
-                  </Button>
-                  
-                  <Button
-                    onClick={() => handlePaymentMethod('Online')}
-                    disabled={isProcessing}
-                    className="w-full h-12 bg-gradient-neon hover:shadow-neon"
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    ) : (
-                      <CreditCard className="w-5 h-5 mr-2" />
-                    )}
-                    {isProcessing ? 'Processing...' : 'Online Payment (Razorpay)'}
-                  </Button>
-                </>
-              )}
+              {/* Always show both COD and Online options */}
+              <Button
+                onClick={() => handlePaymentMethod('COD')}
+                disabled={isProcessing}
+                className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                ) : (
+                  <Banknote className="w-5 h-5 mr-2" />
+                )}
+                {isProcessing ? 'Processing...' : 'Cash on Delivery (COD)'}
+              </Button>
+              
+              <Button
+                onClick={() => handlePaymentMethod('Online')}
+                disabled={isProcessing}
+                className="w-full h-12 bg-gradient-neon hover:shadow-neon"
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                ) : (
+                  <CreditCard className="w-5 h-5 mr-2" />
+                )}
+                {isProcessing ? 'Processing...' : 'Online Payment'}
+              </Button>
             </div>
           )}
 

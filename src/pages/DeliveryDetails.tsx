@@ -253,13 +253,8 @@ const DeliveryDetails = () => {
   const handleMarkAsDelivery = async () => {
     if (!order) return;
 
-    // If prepaid, complete directly
-    if (order.payment_status === 'paid' || order.payment_status === 'paid_online') {
-      await completeDeliveryDirect('Online');
-    } else {
-      // Show payment options for non-prepaid orders
-      setShowPaymentDialog(true);
-    }
+    // Always show payment options (COD and Online) regardless of payment status
+    setShowPaymentDialog(true);
   };
 
   const handleCancelDelivery = async () => {
