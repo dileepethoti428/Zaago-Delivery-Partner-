@@ -3,6 +3,9 @@ project_id = "amhpjsmubciahslghobw"
 [functions.agent-autopay-monitor]
 verify_jwt = false
 
+[functions.notify-delivery-agents]
+verify_jwt = false
+
 [functions.qr-scan-order]
 verify_jwt = true
 

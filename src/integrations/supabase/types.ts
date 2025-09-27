@@ -4999,6 +4999,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      handle_expired_subscriptions: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       has_agent_rejected_order: {
         Args: { p_agent_id: string; p_order_id: string }
         Returns: boolean
@@ -5144,6 +5148,10 @@ export type Database = {
       resolve_agent_email: {
         Args: { identifier: string }
         Returns: string
+      }
+      resume_expired_vacations: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       sanitize_input: {
         Args: { input_text: string }
