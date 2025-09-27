@@ -977,6 +977,42 @@ const Home = () => {
             console.log('💰 Order payout data changed, refreshing...');
             fetchOrdersForRefresh();
           }
+         }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'agent_notifications'
+        },
+        (payload) => {
+          console.log('🔔 New agent notification received:', payload);
+          
+          // Handle new agent notifications for immediate alerts
+          if (payload.new) {
+            const notification = payload.new;
+            console.log('🚨 Processing agent notification:', notification.type, notification.title);
+            
+            // Play immediate high-volume notification for packed orders
+            if (notification.type === 'order_packed' && ringtoneSettings.enabled && !isRingtoneDisabled) {
+              console.log('🔊 Playing backend notification sound at high volume');
+              playNotificationSound();
+              setIsRingtoneDisabled(true);
+              
+              // Auto-hide stop button after 10 seconds
+              setTimeout(() => {
+                setIsRingtoneDisabled(false);
+              }, 10000);
+              
+              // Show urgent toast
+              toast({
+                title: notification.title,
+                description: notification.message,
+                duration: 8000,
+              });
+            }
+          }
         }
       )
       .on(
