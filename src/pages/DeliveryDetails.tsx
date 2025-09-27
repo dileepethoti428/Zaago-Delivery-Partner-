@@ -336,7 +336,7 @@ const DeliveryDetails = () => {
         throw new Error('User not authenticated');
       }
 
-      // Check agent assignment and update order
+      // Get agent info
       const { data: agentCheck } = await supabase
         .from('delivery_agents')
         .select('id, email')
@@ -344,75 +344,29 @@ const DeliveryDetails = () => {
         .eq('is_active', true)
         .single();
 
-      if (!agentCheck || agentCheck.id !== order.agent_id) {
-        throw new Error('Order is not assigned to you or you are not an active agent');
+      if (!agentCheck) {
+        throw new Error('You are not an active delivery agent');
       }
 
-      // Direct database update to complete delivery
-      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
-      
-      const { data: updatedOrder, error } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          payment_status: payment_status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', order.id)
-        .eq('agent_id', agentCheck.id) // More specific constraint
-        .eq('status', 'assigned') // Only update if still assigned
-        .select()
-        .single();
-
-      if (error) {
-        // Check if order is already delivered
-        if (error.code === 'PGRST116') {
-          console.log('⚠️ No rows updated - checking if already delivered');
-          const { data: currentOrder } = await supabase
-            .from('orders')
-            .select('status, delivered_at')
-            .eq('id', order.id)
-            .single();
-          
-          if (currentOrder?.status === 'delivered') {
-            toast({
-              title: "Already Delivered",
-              description: "This order was already marked as delivered.",
-              variant: "default",
-            });
-            setOrder(prev => prev ? { 
-              ...prev, 
-              status: 'delivered',
-              delivered_at: currentOrder.delivered_at
-            } : null);
-            navigate('/home');
-            return;
-          }
+      // Call the edge function to complete delivery
+      const { data: result, error: functionError } = await supabase.functions.invoke('complete-delivery-simple', {
+        body: {
+          order_id: order.id,
+          payment_method: paymentMethod,
+          agent_id: agentCheck.id
         }
-        
-        console.error('❌ Delivery completion failed:', error);
-        setDeliveryError(`Database Error: ${error.message}`);
-        toast({
-          title: "Delivery Failed",
-          description: "Failed to complete delivery. Please try again.",
-          variant: "destructive",
-        });
-        return;
+      });
+
+      if (functionError) {
+        console.error('Edge function error:', functionError);
+        throw new Error(`Delivery completion failed: ${functionError.message}`);
       }
 
-      if (!updatedOrder) {
-        console.log('⚠️ No rows updated - order may not be assigned to you');
-        setDeliveryError('Order not updated - may not be assigned to you');
-        toast({
-          title: "Update Failed",
-          description: "Order could not be updated. Check if it's assigned to you.",
-          variant: "destructive",
-        });
-        return;
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to complete delivery');
       }
 
-      console.log('✅ Delivery completed successfully:', updatedOrder);
+      console.log('✅ Delivery completed successfully via edge function');
       
       toast({
         title: "Delivery Completed!",
@@ -421,11 +375,12 @@ const DeliveryDetails = () => {
       });
 
       // Update local order state
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       setOrder(prev => prev ? { 
         ...prev, 
         status: 'delivered', 
         payment_status: payment_status,
-        delivered_at: updatedOrder.delivered_at
+        delivered_at: new Date().toISOString()
       } : null);
 
       window.dispatchEvent(new CustomEvent('orderCompleted'));

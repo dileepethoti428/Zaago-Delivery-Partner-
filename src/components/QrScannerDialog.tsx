@@ -259,7 +259,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         throw new Error('User not authenticated');
       }
 
-      // Check agent assignment
+      // Get agent info
       const { data: agentCheck } = await supabase
         .from('delivery_agents')
         .select('id, email')
@@ -271,75 +271,26 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         throw new Error('Invalid agent or order data');
       }
       
-      // Direct database update to complete delivery
-      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
-      
-      const { data: updatedOrder, error } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          payment_status: payment_status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', scannedOrder.order_id)
-        .eq('agent_id', agentCheck.id) // Ensure order is assigned to this agent
-        .eq('status', 'assigned') // Only update if still assigned
-        .select()
-        .single();
-
-      console.log('📦 Delivery completion response:', { updatedOrder, error });
-
-      if (error) {
-        console.error('❌ Delivery completion error:', error);
-        console.error('❌ Full error details:', JSON.stringify(error, null, 2));
-        
-        // Handle specific error messages
-        const errorMsg = error.message || 'Failed to complete delivery';
-        if (errorMsg.includes('not assigned to you')) {
-          toast({
-            title: "🚫 Not Your Order",
-            description: "This order is not assigned to you. Only the assigned delivery agent can complete this order.",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "Delivery Failed",
-            description: errorMsg,
-            variant: "destructive"
-          });
+      // Call the edge function to complete delivery
+      const { data: result, error: functionError } = await supabase.functions.invoke('complete-delivery-simple', {
+        body: {
+          order_id: scannedOrder.order_id,
+          payment_method: paymentMethod,
+          agent_id: agentCheck.id
         }
-        return;
+      });
+
+      if (functionError) {
+        console.error('Edge function error:', functionError);
+        throw new Error(`Delivery completion failed: ${functionError.message}`);
       }
 
-      if (!updatedOrder) {
-        console.log('⚠️ No rows updated - order may already be delivered');
-        const { data: currentOrder } = await supabase
-          .from('orders')
-          .select('status, delivered_at')
-          .eq('id', scannedOrder.order_id)
-          .single();
-        
-        if (currentOrder?.status === 'delivered') {
-          toast({
-            title: "Already Delivered ✅",
-            description: "This product has already been delivered successfully!",
-            variant: "default"
-          });
-        } else {
-          toast({
-            title: "Delivery Failed",
-            description: "Unable to update order - may not be assigned to you",
-            variant: "destructive"
-          });
-        }
-        setScannedOrder(null);
-        setShowPaymentDialog(false);
-        setCurrentQrCode('');
-        return;
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to complete delivery');
       }
 
       // Success case
+      console.log('✅ QR Delivery completed successfully via edge function');
       toast({
         title: "Product Delivered! ✅",
         description: `Order completed via QR scan. Earnings: ₹${scannedOrder?.estimated_payout || 25}`,
@@ -353,7 +304,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       
       // Refresh the orders list
       window.dispatchEvent(new CustomEvent('orderCompleted', { 
-        detail: { orderId: updatedOrder.id } 
+        detail: { orderId: scannedOrder.order_id } 
       }));
       
     } catch (error) {
