@@ -854,7 +854,7 @@ const Home = () => {
   };
 
   // Test function to trigger emergency modal with sample data
-  const handleTestNewOrder = () => {
+  const handleTestNewOrder = async () => {
     const testOrderData = {
       id: "779469",
       customer_name: "Test Customer",
@@ -872,11 +872,33 @@ const Home = () => {
       payment_status: "pending"
     };
     
+    console.log('🔊 Test button clicked - attempting to play sound');
+    
     setEmergencyOrderData(testOrderData);
     setShowEmergencyModal(true);
     
-    // Play emergency sound
-    playNotificationSound();
+    // Play emergency sound with explicit settings
+    try {
+      console.log('🔊 Attempting to play notification sound with settings:', ringtoneSettings);
+      await playNotificationSound();
+      console.log('🔊 Successfully triggered notification sound');
+    } catch (error) {
+      console.error('🔊 Failed to play notification sound:', error);
+      // Try manual audio as backup
+      try {
+        const testAudio = new Audio('/emergency-alarm.mp3');
+        testAudio.volume = 0.8;
+        await testAudio.play();
+        console.log('🔊 Manual audio backup successful');
+      } catch (backupError) {
+        console.error('🔊 Manual audio backup also failed:', backupError);
+        toast({
+          title: "Audio Test Failed",
+          description: "Please enable audio permissions in your browser",
+          variant: "destructive"
+        });
+      }
+    }
   };
 
   // Reject order
