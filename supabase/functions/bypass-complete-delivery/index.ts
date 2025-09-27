@@ -70,19 +70,16 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Simple order update - ONLY update essential fields without JSON processing
-    console.log('🔄 Updating order to delivered...');
-    const newPaymentStatus = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+    // SUPER SIMPLE - Just mark as delivered, no other processing
+    console.log('🔄 Marking order as delivered...');
     
     const { error: orderUpdateError } = await supabaseClient
       .from('orders')
       .update({
         status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: newPaymentStatus
+        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
       })
-      .eq('id', order_id)
-      .eq('agent_id', agent.id);
+      .eq('id', order_id);
 
     if (orderUpdateError) {
       console.error('❌ Order update failed:', orderUpdateError);
