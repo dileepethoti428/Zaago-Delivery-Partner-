@@ -37,7 +37,8 @@ export const PaymentMethodDialog = ({
     setLastSelectedMethod(method);
     
     try {
-      console.log('PaymentMethodDialog: Processing payment method:', method);
+      console.log('🎯 PaymentMethodDialog: Processing payment method:', method);
+      console.log('🎯 onSuccess callback exists:', !!onSuccess);
       
       // Close dialog first if no error state
       if (!error) {
@@ -46,11 +47,12 @@ export const PaymentMethodDialog = ({
       
       // Add small delay to ensure dialog closes smoothly before processing
       setTimeout(() => {
+        console.log('🚀 PaymentMethodDialog: Calling onSuccess with method:', method);
         onSuccess?.(method);
       }, 100);
       
     } catch (processingError) {
-      console.error('Payment method selection error:', processingError);
+      console.error('❌ Payment method selection error:', processingError);
       toast({
         title: "Payment Selection Failed",
         description: "Unable to process payment method. Please try again.",

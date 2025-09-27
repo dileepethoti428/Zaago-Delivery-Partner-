@@ -252,6 +252,8 @@ const DeliveryDetails = () => {
   };
   const handleMarkAsDelivery = async () => {
     if (!order) return;
+    console.log('🎯 Mark as delivery clicked - showing payment dialog');
+    console.log('🎯 Order ID:', order.id);
 
     // Always show payment options (COD and Online) regardless of payment status
     setShowPaymentDialog(true);
