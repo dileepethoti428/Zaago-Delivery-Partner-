@@ -119,11 +119,11 @@ const Home = () => {
   
   const { playNotificationSound, stopRingtone } = useAudioNotification(ringtoneSettings);
   
-  // Get current location with backend saving 
+  // Get current location with backend saving - optimized for faster loading
   const location = useGeolocation({
-    enableHighAccuracy: true, // Use GPS for exact location
-    timeout: 15000, // Longer timeout for GPS accuracy
-    maximumAge: 60000, // Cache location for 1 minute
+    enableHighAccuracy: false, // Use network location first for speed
+    timeout: 8000, // Reduced timeout for faster loading
+    maximumAge: 300000, // Cache location for 5 minutes
     saveToBackend: true,
     // Removed auto-refresh - only update location when manually triggered
   });
@@ -147,9 +147,13 @@ const Home = () => {
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
   const [isRingtoneDisabled, setIsRingtoneDisabled] = useState(false);
 
-  // Load agent settings on component mount
+  // Load agent settings on component mount - deferred for faster initial load
   useEffect(() => {
-    loadAgentSettings();
+    const timeout = setTimeout(() => {
+      loadAgentSettings();
+    }, 100); // Defer non-critical loading
+    
+    return () => clearTimeout(timeout);
   }, []);
 
   const loadAgentSettings = async () => {

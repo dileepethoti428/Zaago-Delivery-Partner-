@@ -49,7 +49,13 @@ export default function RequireAuth({ children }: PropsWithChildren) {
     return () => subscription.unsubscribe();
   }, [loading]);
 
-  if (loading || isAuthed === null) return null; // or a small spinner placeholder
+  if (loading || isAuthed === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
   if (!isAuthed) return <Navigate to="/login" replace state={{ from: location }} />;
   
   return children;
