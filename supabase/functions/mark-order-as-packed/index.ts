@@ -32,47 +32,70 @@ serve(async (req) => {
       )
     }
 
-    // First, get the order details
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, customer_name, total, status, agent_id')
-      .eq('id', order_id)
-      .single()
+    // Check if this is a test order (for audio testing)
+    const isTestOrder = order_id === '550e8400-e29b-41d4-a716-446655440000'
+    
+    let order
+    
+    if (isTestOrder) {
+      console.log('🧪 Test order detected - using mock data for audio testing')
+      // Create mock order data for testing
+      order = {
+        id: order_id,
+        customer_name: 'Test Customer',
+        total: 150.00,
+        status: 'confirmed',
+        agent_id: null
+      }
+    } else {
+      // First, get the order details from database
+      const { data: dbOrder, error: orderError } = await supabase
+        .from('orders')
+        .select('id, customer_name, total, status, agent_id')
+        .eq('id', order_id)
+        .single()
 
-    if (orderError || !order) {
-      console.error('Error fetching order:', orderError)
-      return new Response(
-        JSON.stringify({ error: 'Order not found' }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      if (orderError || !dbOrder) {
+        console.error('Error fetching order:', orderError)
+        return new Response(
+          JSON.stringify({ error: 'Order not found' }),
+          { 
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      order = dbOrder
     }
 
     console.log('📋 Order details:', order)
 
-    // Update order status to packed
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({ 
-        status: 'packed',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order_id)
+    // Update order status to packed (skip for test orders)
+    if (!isTestOrder) {
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'packed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order_id)
 
-    if (updateError) {
-      console.error('Error updating order status:', updateError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to update order status' }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      if (updateError) {
+        console.error('Error updating order status:', updateError)
+        return new Response(
+          JSON.stringify({ error: 'Failed to update order status' }),
+          { 
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      console.log('✅ Order status updated to packed')
+    } else {
+      console.log('🧪 Skipping database update for test order')
     }
-
-    console.log('✅ Order status updated to packed')
 
     // Immediately notify all delivery agents about the packed order
     try {
@@ -122,9 +145,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: 'Order marked as packed and agents notified',
+        message: isTestOrder ? 'Test notification sent successfully!' : 'Order marked as packed and agents notified',
         order_id: order.id,
-        notifications_sent: true
+        notifications_sent: true,
+        test_mode: isTestOrder
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
