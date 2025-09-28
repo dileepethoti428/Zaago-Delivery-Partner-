@@ -393,7 +393,7 @@ const DeliveryDetails = () => {
       console.log('📡 Trigger-free function response:', { result, rpcError });
 
       if (rpcError) {
-        console.error('❌ Bypass function error:', rpcError);
+        console.error('❌ Trigger-free function error:', rpcError);
         throw new Error(`Delivery completion failed: ${rpcError.message}`);
       }
 
