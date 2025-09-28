@@ -694,7 +694,7 @@ const Home = () => {
           .from('orders')
           .select('*')
           .eq('agent_id', agent.id)
-          .in('status', ['assigned', 'picked_up', 'in_transit'])
+          .in('status', ['packed', 'assigned', 'picked_up', 'in_transit'])
           .order('created_at', { ascending: false })
       ]);
 
