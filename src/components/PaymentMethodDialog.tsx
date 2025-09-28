@@ -32,7 +32,11 @@ export const PaymentMethodDialog = ({
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handlePaymentMethod = async (method: 'COD' | 'Online') => {
-    if (!onSuccess) return;
+    console.log('🎯 Payment method selected:', method);
+    if (!onSuccess) {
+      console.error('❌ No onSuccess function provided');
+      return;
+    }
     
     setIsProcessing(true);
     
@@ -54,9 +58,11 @@ export const PaymentMethodDialog = ({
       
     } catch (error) {
       console.error('❌ Delivery completion failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Error details:', errorMessage);
       toast({
         title: "Delivery Failed",
-        description: "Unable to complete delivery. Please try again.",
+        description: `Error: ${errorMessage}`,
         variant: "destructive"
       });
     } finally {
