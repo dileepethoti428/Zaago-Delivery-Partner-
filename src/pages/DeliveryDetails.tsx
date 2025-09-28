@@ -355,40 +355,31 @@ const DeliveryDetails = () => {
       }
       console.log('✅ Agent found:', agentCheck.id);
 
-      console.log('💾 Updating order directly in database...');
+      console.log('🚀 Calling minimal update function...');
       
-      // Direct database update - bypass problematic edge function
-      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
-      const updateData = {
-        status: 'delivered' as const,
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_status,
-        updated_at: new Date().toISOString()
-      };
+      // Use the new minimal update function to bypass JSON validation issues
+      const { data: result, error: rpcError } = await supabase
+        .rpc('complete_delivery_minimal_update', {
+          p_order_id: order.id,
+          p_payment_method: paymentMethod
+        });
 
-      console.log('🚀 Database update payload:', updateData);
+      console.log('📡 RPC response:', { result, rpcError });
 
-      const { data: updateResult, error: updateError } = await supabase
-        .from('orders')
-        .update(updateData)
-        .eq('id', order.id)
-        .in('status', ['assigned', 'packed', 'out_for_delivery'])
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('❌ Database update error:', updateError);
-        throw new Error(`Failed to update order: ${updateError.message}`);
+      if (rpcError) {
+        console.error('❌ RPC function error:', rpcError);
+        throw new Error(`Delivery completion failed: ${rpcError.message}`);
       }
 
-      if (!updateResult) {
-        console.error('❌ No order updated - possibly wrong status or not assigned to you');
-        throw new Error('Order could not be updated. Please check order status.');
+      if (!result) {
+        console.error('❌ No order was updated - check order status');
+        throw new Error('Order could not be updated. Please check if order is still assigned to you.');
       }
 
-      console.log('✅ Order updated successfully:', updateResult);
+      console.log('✅ Order updated successfully via RPC function');
       
       // Update local order state
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       setOrder(prev => prev ? { 
         ...prev, 
         status: 'delivered', 

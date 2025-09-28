@@ -4885,9 +4885,7 @@ export type Database = {
         }[]
       }
       get_seller_orders: {
-        Args:
-          | { seller_user_id: string; status_filter?: string[] }
-          | { seller_user_id: string; status_filter?: string[] }
+        Args: { seller_user_id: string; status_filter?: string[] }
         Returns: {
           address: Json
           created_at: string
@@ -4897,6 +4895,7 @@ export type Database = {
           id: string
           items: Json
           payment_status: string
+          seller_total: number
           status: string
           total: number
         }[]
@@ -4910,7 +4909,7 @@ export type Database = {
         Returns: Json
       }
       get_seller_specific_orders: {
-        Args: { p_seller_user_id: string } | { p_seller_user_id: string }
+        Args: { p_seller_user_id: string }
         Returns: {
           address: Json
           agent_id: string
@@ -4919,6 +4918,11 @@ export type Database = {
           customer_phone: string
           delivery_date: string
           order_id: string
+          order_status: string
+          payment_status: string
+          seller_items: Json
+          seller_total: number
+          updated_at: string
         }[]
       }
       get_seller_stats: {
@@ -5079,6 +5083,10 @@ export type Database = {
       mark_order_as_packed: {
         Args: { order_id: string }
         Returns: undefined
+      }
+      mark_order_as_packed_simple: {
+        Args: { order_id: string }
+        Returns: Json
       }
       mark_order_as_packed_v2: {
         Args: { order_id: string }
