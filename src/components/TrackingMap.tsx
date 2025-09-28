@@ -360,7 +360,7 @@ const TrackingMap: React.FC<TrackingMapProps> = ({
                   onClick={() => window.open(`https://www.google.com/maps?q=${orderData.pickup_location?.lat},${orderData.pickup_location?.lng}&z=15`)}
                   className="text-sm text-orange-600 hover:text-orange-800 underline cursor-pointer block mt-1"
                 >
-                  📍 {debugAddress(orderData.pickup_address, 'tracking-map-pickup')}
+                  📍 {normalizeAddress(orderData.pickup_address) || 'Pickup Location'}
                 </button>
                 <div className="flex space-x-2 mt-2">
                   {orderData.seller_phone && (

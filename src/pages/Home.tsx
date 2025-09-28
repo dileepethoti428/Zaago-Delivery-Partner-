@@ -607,7 +607,7 @@ const Home = () => {
             lat: sellerData.latitude,
             lng: sellerData.longitude
           };
-          pickupAddress = sellerData.address || sellerData.business_name || 'Pickup Location';
+          pickupAddress = normalizeAddress(sellerData.address) || sellerData.business_name || 'Pickup Location';
           sellerName = sellerData.name || sellerData.business_name;
           sellerPhone = sellerData.phone;
         }
@@ -1611,57 +1611,65 @@ const Home = () => {
                               {order.seller_name || 'Restaurant'} • Order #{order.id.substring(0, 8)}...
                             </p>
                           </div>
-                           {/* Pickup Location */}
-                           {order.status === 'assigned' && (
-                              <div 
-                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors border-l-4 border-green-300"
-                               onClick={async () => {
-                                 if (order.pickup_location) {
-                                   const { lat, lng } = order.pickup_location;
-                                   const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-                                   window.open(googleMapsUrl, '_blank');
-                                 } else if (order.pickup_address) {
-                                    const safePickupAddress = typeof order.pickup_address === 'string' ? order.pickup_address : JSON.stringify(order.pickup_address);
-                                    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(safePickupAddress)}&travelmode=driving`;
-                                   window.open(googleMapsUrl, '_blank');
-                                 } else {
-                                   // Try to fetch seller location if missing
-                                   try {
-                                     if (order.items && order.items.length > 0) {
-                                       const sellerId = order.items[0].seller_id;
-                                       
-                                       if (sellerId) {
-                                         const { data: sellerData } = await supabase
-                                           .from('sellers')
-                                           .select('name, phone, latitude, longitude, address, business_name')
-                                           .eq('user_id', sellerId)
-                                           .single();
+                            {/* Pickup Location Display - Enhanced with actual address */}
+                            {order.status === 'assigned' && (
+                              <div className="flex flex-col space-y-1">
+                                {/* Pickup Navigation Button */}
+                                <div 
+                                  className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors border-l-4 border-orange-300"
+                                 onClick={async () => {
+                                   if (order.pickup_location) {
+                                     const { lat, lng } = order.pickup_location;
+                                     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+                                     window.open(googleMapsUrl, '_blank');
+                                   } else if (order.pickup_address) {
+                                      const safePickupAddress = normalizeAddress(order.pickup_address);
+                                      const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(safePickupAddress)}&travelmode=driving`;
+                                     window.open(googleMapsUrl, '_blank');
+                                   } else {
+                                     // Try to fetch seller location if missing
+                                     try {
+                                       if (order.items && order.items.length > 0) {
+                                         const sellerId = order.items[0].seller_id;
                                          
-                                         if (sellerData && sellerData.latitude && sellerData.longitude) {
-                                           const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${sellerData.latitude},${sellerData.longitude}&travelmode=driving`;
-                                           window.open(googleMapsUrl, '_blank');
-                                           return;
+                                         if (sellerId) {
+                                           const { data: sellerData } = await supabase
+                                             .from('sellers')
+                                             .select('name, phone, latitude, longitude, address, business_name')
+                                             .eq('user_id', sellerId)
+                                             .single();
+                                           
+                                           if (sellerData && sellerData.latitude && sellerData.longitude) {
+                                             const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${sellerData.latitude},${sellerData.longitude}&travelmode=driving`;
+                                             window.open(googleMapsUrl, '_blank');
+                                             return;
+                                           }
                                          }
                                        }
+                                     } catch (error) {
+                                       console.error('Error fetching seller location:', error);
                                      }
-                                   } catch (error) {
-                                     console.error('Error fetching seller location:', error);
+                                     
+                                     toast({
+                                       title: "Pickup Location Issue",
+                                       description: "Unable to get pickup location. Please contact support or check seller details.",
+                                       variant: "destructive",
+                                     });
                                    }
-                                   
-                                   toast({
-                                     title: "Pickup Location Issue",
-                                     description: "Unable to get pickup location. Please contact support or check seller details.",
-                                     variant: "destructive",
-                                   });
-                                 }
-                               }}
-                              >
-                                <MapPin className="w-4 h-4 mr-2" />
-                                <div className="flex items-center">
-                                  <span className="text-sm font-medium">Pick Up</span>
-                                </div>
-                             </div>
-                           )}
+                                 }}
+                                >
+                                  <MapPin className="w-4 h-4 mr-2" />
+                                  <div className="flex items-center">
+                                    <span className="text-sm font-medium">Pick Up</span>
+                                  </div>
+                               </div>
+                               
+                               {/* Pickup Address Text - NEW */}
+                               <div className="text-xs text-orange-700 font-medium bg-orange-50 px-2 py-1 rounded border border-orange-200">
+                                 📍 {order.pickup_address ? normalizeAddress(order.pickup_address) : (order.seller_name || 'Store Location')}
+                               </div>
+                              </div>
+                            )}
                         </div>
 
                          {/* Delivery Timer */}

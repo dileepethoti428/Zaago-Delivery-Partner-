@@ -29,6 +29,9 @@ interface Order {
   distance_km?: number;
   backend_calculated?: boolean;
   pickup_location?: any; // Json type from database that contains {lat: number, lng: number}
+  pickup_address?: string; // Add pickup address property
+  seller_name?: string; // Add seller name property
+  seller_phone?: string; // Add seller phone property
   subscription_id?: string;
   calculated_delivery_type?: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
   delivery_time?: string;
@@ -527,6 +530,73 @@ const DeliveryDetails = () => {
             </div>}
         </CardContent>
       </Card>
+
+      {/* Pickup Information - NEW */}
+      {order.pickup_location && (
+        <Card className="bg-card border-border animate-slide-up border-l-4 border-l-orange-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center space-x-2 text-sm">
+              <MapPin className="w-4 h-4 text-orange-500" />
+              <span>Pickup Location</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 p-3">
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <p className="text-xs text-muted-foreground">Store/Seller</p>
+                <p className="text-sm font-medium text-foreground">
+                  {order.seller_name || 'Store Name Not Available'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Pickup Address</p>
+                <div className="flex items-start space-x-1">
+                  <MapPin className="w-3 h-3 text-orange-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm font-medium text-foreground">
+                    {normalizeAddress(order.pickup_address) || 'Pickup Location Not Available'}
+                  </p>
+                </div>
+              </div>
+              {order.seller_phone && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Store Contact</p>
+                  <div className="flex items-center space-x-1">
+                    <Phone className="w-3 h-3 text-orange-500" />
+                    <p className="text-sm font-medium text-foreground">{order.seller_phone}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex space-x-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const { lat, lng } = order.pickup_location as any;
+                  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+                  window.open(googleMapsUrl, '_blank');
+                }}
+                className="flex-1 text-orange-600 border-orange-200 hover:bg-orange-50"
+              >
+                <Navigation className="w-3 h-3 mr-1" />
+                Navigate to Store
+              </Button>
+              {order.seller_phone && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(`tel:${order.seller_phone}`)}
+                  className="flex-1 text-orange-600 border-orange-200 hover:bg-orange-50"
+                >
+                  <Phone className="w-3 h-3 mr-1" />
+                  Call Store
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Delivery Timer */}
       <div className="animate-slide-up">

@@ -70,7 +70,42 @@ serve(async (req) => {
               lat: sellerData.latitude,
               lng: sellerData.longitude
             };
-            pickupAddress = sellerData.address || sellerData.business_name || 'Pickup Location';
+            
+            // Handle address field - it might be jsonb or string
+            let normalizedAddress = 'Pickup Location';
+            if (sellerData.address) {
+              if (typeof sellerData.address === 'string') {
+                normalizedAddress = sellerData.address;
+              } else if (typeof sellerData.address === 'object') {
+                // Handle jsonb address format
+                if (sellerData.address.full_address) {
+                  normalizedAddress = sellerData.address.full_address;
+                } else if (sellerData.address.addressLine1) {
+                  const parts = [
+                    sellerData.address.addressLine1,
+                    sellerData.address.addressLine2,
+                    sellerData.address.city,
+                    sellerData.address.state,
+                    sellerData.address.pincode
+                  ].filter(Boolean);
+                  normalizedAddress = parts.join(', ');
+                } else if (sellerData.address.city || sellerData.address.state) {
+                  const parts = [
+                    sellerData.address.city,
+                    sellerData.address.state,
+                    sellerData.address.pincode
+                  ].filter(Boolean);
+                  normalizedAddress = parts.join(', ');
+                }
+              }
+            }
+            
+            // Fallback to business name if address is still generic
+            if (normalizedAddress === 'Pickup Location' && sellerData.business_name) {
+              normalizedAddress = sellerData.business_name;
+            }
+            
+            pickupAddress = normalizedAddress;
             sellerName = sellerData.name || sellerData.business_name;
             sellerPhone = sellerData.phone;
           }
