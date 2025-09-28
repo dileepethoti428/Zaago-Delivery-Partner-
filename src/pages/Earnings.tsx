@@ -541,8 +541,8 @@ const Earnings = () => {
             <div className="space-y-3 pr-4">
               {recentEarnings.length > 0 ? recentEarnings.map((earning) => (
                 <div key={earning.id} className="p-4 bg-secondary/50 rounded-lg overflow-hidden">
-                  <div className="flex items-start justify-between mb-2 gap-3">
-                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
                         <Truck className="w-5 h-5 text-primary" />
                       </div>
@@ -557,19 +557,19 @@ const Earnings = () => {
                       </div>
                     </div>
                     
-                     <div className="text-right flex-shrink-0">
-                       <p className="font-bold text-foreground whitespace-nowrap">₹{earning.amount.toFixed(2)}</p>
-                        {earning.distance_km > 0 && (
-                          <div className="flex flex-col items-end gap-1 mt-2 min-w-0">
-                            <Badge variant="secondary" className="text-xs px-2 py-1 whitespace-nowrap">
-                              {earning.distance_km.toFixed(1)} km
-                            </Badge>
-                            <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 text-green-700 border-green-200 whitespace-nowrap">
-                              Live
-                            </Badge>
-                          </div>
-                        )}
-                     </div>
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-foreground text-lg">₹{earning.amount.toFixed(2)}</p>
+                      {earning.distance_km > 0 && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs px-2 py-1">
+                            {earning.distance_km.toFixed(1)} km
+                          </Badge>
+                          <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 text-green-700 border-green-200">
+                            Live
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   {/* Payout Breakdown */}
