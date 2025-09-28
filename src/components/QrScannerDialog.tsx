@@ -272,7 +272,7 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       }
       
       // Call the edge function to complete delivery
-      const { data: result, error: functionError } = await supabase.functions.invoke('complete-delivery-simple', {
+      const { data: result, error: functionError } = await supabase.functions.invoke('simple-complete-delivery', {
         body: {
           order_id: scannedOrder.order_id,
           payment_method: paymentMethod,

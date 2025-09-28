@@ -349,7 +349,7 @@ const DeliveryDetails = () => {
       }
 
       // Call the edge function to complete delivery
-      const { data: result, error: functionError } = await supabase.functions.invoke('complete-delivery-simple', {
+      const { data: result, error: functionError } = await supabase.functions.invoke('simple-complete-delivery', {
         body: {
           order_id: order.id,
           payment_method: paymentMethod,
