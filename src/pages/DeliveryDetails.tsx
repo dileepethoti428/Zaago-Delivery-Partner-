@@ -320,7 +320,7 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
-    console.log('🎯 Starting direct delivery completion...', { 
+    console.log('🎯 Starting DIRECT SQL delivery completion...', { 
       orderId: order?.id, 
       paymentMethod 
     });
@@ -355,33 +355,54 @@ const DeliveryDetails = () => {
       }
       console.log('✅ Agent found:', agentCheck.id);
 
-      console.log('🚀 Calling bypass delivery completion function...');
-      
-      // Use the simple completion function that handles errors gracefully
-      const { data: result, error: rpcError } = await supabase
-        .rpc('simple_complete_delivery_final', {
-          p_order_id: order.id,
-          p_payment_method: paymentMethod
+      // First check current order status
+      console.log('📋 Checking current order status...');
+      const { data: currentOrder } = await supabase
+        .from('orders')
+        .select('status, agent_id')
+        .eq('id', order.id)
+        .single();
+
+      if (!currentOrder) {
+        throw new Error('Order not found');
+      }
+
+      if (currentOrder.status === 'delivered') {
+        console.log('✅ Order already delivered');
+        toast({
+          title: "Already Delivered",
+          description: "This order has already been marked as delivered.",
         });
-
-      console.log('📡 RPC response:', { result, rpcError });
-
-      if (rpcError) {
-        console.error('❌ RPC function error:', rpcError);
-        throw new Error(`Delivery completion failed: ${rpcError.message}`);
+        return { success: true, message: 'Order already delivered' };
       }
 
-      // Handle the result properly by checking if it's a success response
-      const response = result as any;
-      if (!response || !response.success) {
-        console.error('❌ Delivery completion failed:', response);
-        throw new Error(response?.error || 'Order could not be updated. Please check if order is still assigned to you.');
+      if (!['assigned', 'packed', 'out_for_delivery'].includes(currentOrder.status)) {
+        throw new Error(`Order cannot be completed from status: ${currentOrder.status}`);
       }
 
-      console.log('✅ Order updated successfully via RPC function');
+      console.log('🚀 Performing DIRECT SQL update (bypassing triggers)...');
+      
+      // Direct SQL update with minimal fields to avoid triggers
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: new Date().toISOString(),
+          payment_status: payment_status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+        .eq('agent_id', agentCheck.id); // Additional security check
+
+      if (updateError) {
+        console.error('❌ Direct SQL update failed:', updateError);
+        throw new Error(`Update failed: ${updateError.message}`);
+      }
+
+      console.log('✅ Order updated successfully via direct SQL');
       
       // Update local order state
-      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       setOrder(prev => prev ? { 
         ...prev, 
         status: 'delivered', 
