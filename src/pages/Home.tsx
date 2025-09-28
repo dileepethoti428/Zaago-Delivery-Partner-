@@ -133,6 +133,7 @@ const Home = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notificationCount] = useState(3);
   const [showQrScanner, setShowQrScanner] = useState(false);
@@ -1309,10 +1310,15 @@ const Home = () => {
     fetchOrders();
     
     // 5-second auto-refresh interval for active orders monitoring
-    const autoRefreshInterval = setInterval(() => {
+    const autoRefreshInterval = setInterval(async () => {
       if (!document.hidden && isOnline) {
         console.log('📊 Auto-refreshing orders (5-second interval)...');
-        fetchOrdersForRefresh(); // Silent refresh without toast
+        setIsAutoRefreshing(true);
+        try {
+          await fetchOrdersForRefresh();
+        } finally {
+          setTimeout(() => setIsAutoRefreshing(false), 500); // Show refresh indicator briefly
+        }
       }
     }, 5000); // 5-second refresh
     
@@ -1501,18 +1507,23 @@ const Home = () => {
           <Button
             onClick={handleRefresh}
             variant="outline"
-            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
+            className={`h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white transition-all duration-200 ${
+              isAutoRefreshing ? 'ring-2 ring-green-200 bg-green-50' : ''
+            }`}
             disabled={isRefreshing}
           >
-            {isRefreshing ? (
+            {isRefreshing || isAutoRefreshing ? (
               <div className="flex items-center">
                 <RefreshCw className="w-4 h-4 animate-spin text-gray-700 mr-1" />
-                <span className="text-xs text-gray-700">Refresh</span>
+                <span className="text-xs text-gray-700">
+                  {isRefreshing ? 'Manual' : 'Auto'} Refresh
+                </span>
               </div>
             ) : (
               <div className="flex items-center">
                 <RefreshCw className="w-4 h-4 text-gray-700 mr-1" />
                 <span className="text-xs text-gray-700">Refresh</span>
+                <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Auto-refreshes every 5 seconds"></div>
               </div>
             )}
           </Button>
