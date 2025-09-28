@@ -271,10 +271,9 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
         description: "No QR code data available",
         variant: "destructive"
       });
-      return;
+      throw new Error("No QR code data available");
     }
 
-    setIsProcessing(true);
     try {
       console.log('🚚 Completing delivery with payment method:', paymentMethod);
       
@@ -316,31 +315,21 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
 
       // Success case
       console.log('✅ QR Delivery completed successfully via edge function');
-      toast({
-        title: "Product Delivered! ✅",
-        description: `Order completed via QR scan. Earnings: ₹${scannedOrder?.estimated_payout || 25}`,
-        variant: "default"
-      });
       
-      // Reset states
-      setScannedOrder(null);
-      setShowPaymentDialog(false);
-      setCurrentQrCode('');
+      // Reset scanner state after successful completion
+      setTimeout(() => {
+        setScannedOrder(null);
+        setShowPaymentDialog(false);
+        setIsScanning(true);
+      }, 100);
       
-      // Refresh the orders list
-      window.dispatchEvent(new CustomEvent('orderCompleted', { 
-        detail: { orderId: scannedOrder.order_id } 
-      }));
-      
+      // Success handled by PaymentMethodDialog - no toast needed here
+      return result;
+
     } catch (error) {
-      console.error('❌ QR delivery completion error:', error);
-      toast({
-        title: "Delivery Failed",
-        description: error instanceof Error ? error.message : "QR delivery completion failed",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
+      console.error('💥 QR delivery completion failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      throw new Error(errorMessage);
     }
   };
 

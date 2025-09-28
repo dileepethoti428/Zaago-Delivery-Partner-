@@ -320,19 +320,16 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
+    console.log('🎯 Starting direct delivery completion...', { 
+      orderId: order?.id, 
+      paymentMethod 
+    });
+
+    if (!order?.id) {
+      throw new Error('Invalid order ID');
+    }
+
     try {
-      console.log('🎯 Starting direct delivery completion...', { 
-        orderId: order?.id, 
-        paymentMethod 
-      });
-
-      setIsProcessing(true);
-      setDeliveryError(null);
-
-      if (!order?.id) {
-        throw new Error('Invalid order ID');
-      }
-
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) {
@@ -371,12 +368,6 @@ const DeliveryDetails = () => {
 
       console.log('✅ Delivery completed successfully via edge function');
       
-      toast({
-        title: "Delivery Completed!",
-        description: `Order delivered successfully. Earnings: ₹${payout}`,
-        variant: "default",
-      });
-
       // Update local order state
       const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       setOrder(prev => prev ? { 
@@ -386,21 +377,18 @@ const DeliveryDetails = () => {
         delivered_at: new Date().toISOString()
       } : null);
 
-      window.dispatchEvent(new CustomEvent('orderCompleted'));
-      navigate('/home');
+      // Navigate after a short delay (handled by PaymentMethodDialog)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('orderCompleted'));
+        navigate('/home');
+      }, 100);
+
+      return result;
 
     } catch (error) {
       console.error('❌ Delivery completion error:', error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      setDeliveryError(`System Error: ${errorMessage}`);
-      toast({
-        title: "Delivery Failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-      setShowPaymentDialog(false);
+      throw new Error(errorMessage);
     }
   };
 
@@ -799,11 +787,7 @@ const DeliveryDetails = () => {
           total_amount: order.total,
           payment_status: order.payment_status
         }} 
-        onSuccess={async (paymentMethod) => {
-          console.log('DeliveryDetails: Payment method selected:', paymentMethod);
-          setShowPaymentDialog(false);
-          await completeDeliveryDirect(paymentMethod);
-        }} 
+        onSuccess={completeDeliveryDirect}
       />}
 
       {/* Navigation Map */}

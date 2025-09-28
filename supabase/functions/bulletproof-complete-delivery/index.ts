@@ -94,14 +94,13 @@ serve(async (req) => {
     } catch (rpcError) {
       console.log('🔄 RPC failed, trying direct SQL update...');
       
-      // Strategy 2: Direct SQL update with service role
+    // Strategy 2: Direct SQL update with minimal fields only
       const { error: directError } = await supabaseClient
         .from('orders')
         .update({
           status: 'delivered',
           delivered_at: now,
-          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-          updated_at: now
+          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
         })
         .eq('id', order_id);
 
