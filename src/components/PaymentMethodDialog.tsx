@@ -41,19 +41,12 @@ export const PaymentMethodDialog = ({
     setIsProcessing(true);
     
     try {
-      console.log('🎯 Processing delivery completion for payment method:', method);
+      console.log('🚀 Calling onSuccess with payment method:', method);
+      const result = await onSuccess(method);
+      console.log('✅ onSuccess completed:', result);
       
-      // Wait for the actual delivery completion
-      await Promise.resolve(onSuccess(method));
-      
-      // Show success toast only after successful completion
-      toast({
-        title: "✅ Product Delivered Successfully!",
-        description: `Payment method: ${method === 'COD' ? 'Cash on Delivery' : 'Online Payment'}`,
-        variant: "default"
-      });
-      
-      // Close dialog after success
+      // Don't show toast here - let the main component handle it
+      // Close dialog after successful completion
       onOpenChange(false);
       
     } catch (error) {

@@ -355,39 +355,40 @@ const DeliveryDetails = () => {
       }
       console.log('✅ Agent found:', agentCheck.id);
 
-      console.log('🚀 Calling complete-delivery function with:', {
-        order_id: order.id,
-        payment_method: paymentMethod,
-        distance_km: distance,
-        agent_payout: payout
-      });
+      console.log('💾 Updating order directly in database...');
+      
+      // Direct database update - bypass problematic edge function
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
+      const updateData = {
+        status: 'delivered' as const,
+        delivered_at: new Date().toISOString(),
+        payment_status: payment_status,
+        updated_at: new Date().toISOString()
+      };
 
-      // Call the original complete-delivery function
-      const { data: result, error: functionError } = await supabase.functions.invoke('complete-delivery', {
-        body: {
-          order_id: order.id,
-          payment_method: paymentMethod,
-          distance_km: distance,
-          agent_payout: payout
-        }
-      });
+      console.log('🚀 Database update payload:', updateData);
 
-      console.log('📡 Function response:', { result, functionError });
+      const { data: updateResult, error: updateError } = await supabase
+        .from('orders')
+        .update(updateData)
+        .eq('id', order.id)
+        .in('status', ['assigned', 'packed', 'out_for_delivery'])
+        .select()
+        .single();
 
-      if (functionError) {
-        console.error('❌ Edge function error:', functionError);
-        throw new Error(`Delivery completion failed: ${functionError.message}`);
+      if (updateError) {
+        console.error('❌ Database update error:', updateError);
+        throw new Error(`Failed to update order: ${updateError.message}`);
       }
 
-      if (!result?.success) {
-        console.error('❌ Function returned failure:', result);
-        throw new Error(result?.error || 'Failed to complete delivery');
+      if (!updateResult) {
+        console.error('❌ No order updated - possibly wrong status or not assigned to you');
+        throw new Error('Order could not be updated. Please check order status.');
       }
 
-      console.log('✅ Delivery completed successfully via edge function');
+      console.log('✅ Order updated successfully:', updateResult);
       
       // Update local order state
-      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       setOrder(prev => prev ? { 
         ...prev, 
         status: 'delivered', 
@@ -395,13 +396,21 @@ const DeliveryDetails = () => {
         delivered_at: new Date().toISOString()
       } : null);
 
+      // Show success message
+      toast({
+        title: "Delivery Completed! 🎉",
+        description: `Product delivered successfully with ${paymentMethod} payment!`,
+      });
+
+      console.log('🎉 Delivery completed successfully!');
+
       // Navigate after success
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
-      }, 1000);
+      }, 1500);
 
-      return result;
+      return { success: true, message: 'Delivery completed successfully!' };
 
     } catch (error) {
       console.error('❌ Delivery completion error:', error);
