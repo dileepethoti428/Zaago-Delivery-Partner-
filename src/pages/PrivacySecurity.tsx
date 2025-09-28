@@ -398,9 +398,6 @@ const PrivacySecurity = () => {
                   <div>
                     <h3 className="font-semibold text-base mb-2">Contact Information</h3>
                     <div className="space-y-1 text-muted-foreground">
-                      <p><strong>Privacy Concerns:</strong> privacy@zaago.com</p>
-                      <p><strong>Data Protection Officer:</strong> dpo@zaago.com</p>
-                      <p><strong>General Support:</strong> support@zaago.com</p>
                       <p><strong>Address:</strong> Zaago Technologies Pvt Ltd Galiveedu, Annamayya district Andhra Pradesh 516267, India</p>
                     </div>
                   </div>
