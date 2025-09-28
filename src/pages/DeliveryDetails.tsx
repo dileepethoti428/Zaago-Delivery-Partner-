@@ -326,16 +326,21 @@ const DeliveryDetails = () => {
     });
 
     if (!order?.id) {
+      console.error('❌ No order ID available');
       throw new Error('Invalid order ID');
     }
 
     try {
+      console.log('🔐 Getting current user...');
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) {
+        console.error('❌ User not authenticated');
         throw new Error('User not authenticated');
       }
+      console.log('✅ User authenticated:', user.email);
 
+      console.log('🔍 Looking up agent...');
       // Get agent info
       const { data: agentCheck } = await supabase
         .from('delivery_agents')
@@ -345,8 +350,17 @@ const DeliveryDetails = () => {
         .single();
 
       if (!agentCheck) {
+        console.error('❌ Agent not found or not active');
         throw new Error('You are not an active delivery agent');
       }
+      console.log('✅ Agent found:', agentCheck.id);
+
+      console.log('🚀 Calling complete-delivery function with:', {
+        order_id: order.id,
+        payment_method: paymentMethod,
+        distance_km: distance,
+        agent_payout: payout
+      });
 
       // Call the original complete-delivery function
       const { data: result, error: functionError } = await supabase.functions.invoke('complete-delivery', {
@@ -358,13 +372,16 @@ const DeliveryDetails = () => {
         }
       });
 
+      console.log('📡 Function response:', { result, functionError });
+
       if (functionError) {
-        console.error('Edge function error:', functionError);
+        console.error('❌ Edge function error:', functionError);
         throw new Error(`Delivery completion failed: ${functionError.message}`);
       }
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to complete delivery');
+      if (!result?.success) {
+        console.error('❌ Function returned failure:', result);
+        throw new Error(result?.error || 'Failed to complete delivery');
       }
 
       console.log('✅ Delivery completed successfully via edge function');
@@ -378,11 +395,11 @@ const DeliveryDetails = () => {
         delivered_at: new Date().toISOString()
       } : null);
 
-      // Navigate after a short delay (handled by PaymentMethodDialog)
+      // Navigate after success
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
-      }, 100);
+      }, 1000);
 
       return result;
 
