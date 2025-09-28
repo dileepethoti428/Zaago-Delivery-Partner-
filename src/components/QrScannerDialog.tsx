@@ -232,11 +232,36 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
 
   const handleError = (error: any) => {
     console.error('QR Scanner error:', error);
+    
+    let title = "Camera Error";
+    let description = "Unable to access camera.";
+    
+    // Handle different types of camera errors
+    if (error?.name === 'NotAllowedError' || error?.message?.includes('Permission denied')) {
+      title = "Camera Permission Denied";
+      description = "Please allow camera access in your browser settings and refresh the page.";
+    } else if (error?.name === 'NotFoundError' || error?.message?.includes('No camera')) {
+      title = "No Camera Found";
+      description = "No camera device found. Please connect a camera and try again.";
+    } else if (error?.name === 'NotReadableError' || error?.message?.includes('in use')) {
+      title = "Camera In Use";
+      description = "Camera is being used by another application. Please close other apps and try again.";
+    } else if (error?.name === 'NotSupportedError') {
+      title = "Camera Not Supported";
+      description = "Your browser doesn't support camera access. Please use a modern browser.";
+    } else if (error?.message?.includes('https')) {
+      title = "HTTPS Required";
+      description = "Camera access requires a secure connection. Please use HTTPS.";
+    }
+    
     toast({
-      title: "Camera Error",
-      description: "Unable to access camera. Please check permissions.",
+      title,
+      description,
       variant: "destructive"
     });
+    
+    // Reset scanner state so user can try again
+    setIsScanning(true);
   };
 
   const completeDelivery = async (paymentMethod: string) => {
@@ -347,10 +372,16 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
           
           <div className="space-y-4">
             <div className="relative aspect-square w-full max-w-xs mx-auto overflow-hidden rounded-lg border-2 border-primary/20">
-              {isScanning && (
+              {isScanning ? (
                 <Scanner
                   onScan={handleScan}
                   onError={handleError}
+                  constraints={{
+                    facingMode: 'environment', // Use back camera by default
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                  }}
+                  formats={['qr_code', 'code_128', 'code_39']}
                   styles={{
                     container: {
                       width: '100%',
@@ -358,6 +389,13 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
                     }
                   }}
                 />
+              ) : (
+                <div className="flex items-center justify-center h-full bg-gray-100">
+                  <div className="text-center">
+                    <div className="text-gray-500 mb-2">📷</div>
+                    <p className="text-sm text-gray-600">Camera stopped</p>
+                  </div>
+                </div>
               )}
             </div>
             
