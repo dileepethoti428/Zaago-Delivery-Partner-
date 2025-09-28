@@ -72,6 +72,62 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
+    // First, fetch the order to validate it exists and is assigned to this agent
+    const { data: order, error: fetchError } = await supabaseClient
+      .from('orders')
+      .select('id, status, agent_id, customer_name, total')
+      .eq('id', order_id)
+      .single();
+
+    if (fetchError || !order) {
+      console.error('❌ Order fetch failed:', fetchError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    // Validate order is assigned to this agent
+    if (order.agent_id !== agent.id) {
+      console.error('❌ Order not assigned to this agent:', { orderAgentId: order.agent_id, currentAgentId: agent.id });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order not assigned to this agent' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
+
+    // Check if order is already delivered
+    if (order.status === 'delivered') {
+      console.log('ℹ️ Order already delivered');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          already_delivered: true,
+          message: 'Order was already delivered',
+          order: {
+            id: order_id,
+            status: 'delivered',
+            agent_name: agent.name
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate order status is valid for completion
+    if (!['assigned', 'packed'].includes(order.status)) {
+      console.error('❌ Invalid order status for completion:', order.status);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `Cannot complete order with status: ${order.status}` 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    console.log('✅ Order validation passed:', { id: order.id, status: order.status });
+
     // Validate distance and payout with safe defaults
     const safeDistance = Math.max(Number(distance_km) || 2.5, 0.1);
     const safePayout = Math.max(Number(agent_payout) || (safeDistance <= 1 ? 12 : 12 + (safeDistance - 1) * 8), 12);
