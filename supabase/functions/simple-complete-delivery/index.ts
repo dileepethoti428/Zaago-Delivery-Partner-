@@ -138,8 +138,8 @@ serve(async (req) => {
     const now = new Date().toISOString();
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    // Use more specific update to avoid JSON parsing issues
-    const { data: updateResult, error: orderUpdateError } = await supabaseClient
+    // Update order status without selecting to avoid JSON parsing issues
+    const { error: orderUpdateError } = await supabaseClient
       .from('orders')
       .update({
         status: 'delivered',
@@ -148,8 +148,7 @@ serve(async (req) => {
         updated_at: now
       })
       .eq('id', order_id)
-      .in('status', ['assigned', 'packed']) // Allow packed or assigned orders
-      .select('id, status, customer_name, total');
+      .eq('agent_id', agent.id); // Use agent_id instead of status filter since we already validated
 
     if (orderUpdateError) {
       console.error('❌ Order update failed:', orderUpdateError);
@@ -163,41 +162,7 @@ serve(async (req) => {
       );
     }
 
-    if (!updateResult || updateResult.length === 0) {
-      console.log('⚠️ No rows updated - order may already be delivered or not exist');
-      
-      // Check current order status
-      const { data: currentOrder } = await supabaseClient
-        .from('orders')
-        .select('status')
-        .eq('id', order_id)
-        .single();
-      
-      if (currentOrder?.status === 'delivered') {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            already_delivered: true,
-            message: 'Order was already delivered',
-            order: {
-              id: order_id,
-              status: 'delivered',
-              agent_name: agent.name
-            }
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Unable to update order. Order may not exist or already be processed.',
-          details: `Current order status: ${currentOrder?.status || 'unknown'}`
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      );
-    }
+    console.log('✅ Order status updated to delivered');
 
     console.log('✅ Order marked as delivered');
 
