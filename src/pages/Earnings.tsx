@@ -560,11 +560,11 @@ const Earnings = () => {
                      <div className="text-right flex-shrink-0">
                        <p className="font-bold text-foreground whitespace-nowrap">₹{earning.amount.toFixed(2)}</p>
                         {earning.distance_km > 0 && (
-                          <div className="flex flex-col items-end space-y-1 mt-1">
-                            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+                          <div className="flex flex-col items-end gap-1 mt-2 min-w-0">
+                            <Badge variant="secondary" className="text-xs px-2 py-1 whitespace-nowrap">
                               {earning.distance_km.toFixed(1)} km
                             </Badge>
-                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 whitespace-nowrap">
+                            <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 text-green-700 border-green-200 whitespace-nowrap">
                               Live
                             </Badge>
                           </div>
