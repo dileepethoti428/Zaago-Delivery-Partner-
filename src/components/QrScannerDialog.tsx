@@ -398,8 +398,8 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
           onOpenChange={setShowPaymentDialog}
           order={scannedOrder}
           selectionOnly={true}
-          onSuccess={(paymentMethod) => {
-            completeDelivery(paymentMethod);
+          onSuccess={async (paymentMethod) => {
+            await completeDelivery(paymentMethod);
           }}
         />
       )}

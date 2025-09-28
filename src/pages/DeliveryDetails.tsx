@@ -788,7 +788,9 @@ const DeliveryDetails = () => {
           total_amount: order.total,
           payment_status: order.payment_status
         }} 
-        onSuccess={completeDeliveryDirect}
+        onSuccess={async (paymentMethod) => {
+          await completeDeliveryDirect(paymentMethod);
+        }}
       />}
 
       {/* Navigation Map */}
