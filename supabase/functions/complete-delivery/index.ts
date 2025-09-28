@@ -279,211 +279,97 @@ serve(async (req) => {
       );
     }
 
-    // Calculate distance for payout with guaranteed non-null values
-    let distance_km_calc = distance_km || 2.5; // Use provided or fallback
-    let payout_amount = agent_payout || 35; // Use provided or fallback
+    // Simple calculation like qr-complete-delivery
+    const distance_km_calc = distance_km || 2.5;
+    const payout_amount = distance_km_calc <= 1 ? 25 : 25 + (distance_km_calc - 1) * 8;
     
-    console.log('💰 Initial payout calculation:', { distance_km: distance_km_calc, payout_amount });
-    
-    if (order.address?.coordinates && order.pickup_location) {
-      try {
-        const { data: distanceData } = await supabaseClient.functions.invoke('calculate-distance-eta', {
-          body: {
-            origin: order.pickup_location,
-            destination: order.address.coordinates
-          }
-        });
+    console.log('💰 Payout calculation:', { distance_km: distance_km_calc, payout_amount });
 
-        if (distanceData?.distance_km) {
-          distance_km_calc = distanceData.distance_km;
-          // Calculate payout: ₹20 base + ₹12/km beyond 1km
-          payout_amount = distance_km_calc <= 1 ? 20 : 20 + (distance_km_calc - 1) * 12;
-        }
-      } catch (distanceError) {
-        console.warn('Distance calculation failed, using defaults:', distanceError);
-      }
-    }
+    // Use the same simple pattern as qr-complete-delivery that works
+    console.log('🔄 Updating order status to delivered...');
     
-    // Ensure payout_amount is never null or zero
-    payout_amount = Math.max(payout_amount || 35, 20); // Minimum ₹20
-    distance_km_calc = Math.max(distance_km_calc || 2.5, 0.1); // Minimum 0.1km
+    const now = new Date().toISOString();
+    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    console.log('💰 Final payout calculation:', { distance_km: distance_km_calc, payout_amount });
-
-    // Use direct database operations with bulletproof validation
-    console.log('💾 Using direct database operations to complete delivery...');
-    
-    try {
-      // TRIPLE-LAYER BULLETPROOF VALIDATION SYSTEM
-      let validatedAmount;
-      
-      console.log('🔍 Raw payout_amount value:', { payout_amount, type: typeof payout_amount });
-      
-      // Layer 1: Convert to number and basic validation
-      const numericAmount = Number(payout_amount);
-      
-      // Layer 2: Comprehensive validation checks
-      const isInvalidAmount = (
-        isNaN(numericAmount) || 
-        !isFinite(numericAmount) || 
-        numericAmount <= 0 || 
-        numericAmount === null || 
-        numericAmount === undefined ||
-        typeof numericAmount !== 'number'
-      );
-      
-      if (isInvalidAmount) {
-        console.error('❌ Invalid payout amount detected, applying bulletproof fallback:', { 
-          payout_amount, 
-          numericAmount,
-          validationChecks: {
-            isNaN: isNaN(numericAmount),
-            isFinite: isFinite(numericAmount),
-            isPositive: numericAmount > 0,
-            isNull: numericAmount === null,
-            isUndefined: numericAmount === undefined,
-            isNumber: typeof numericAmount === 'number'
-          }
-        });
-        
-        // Layer 3: Bulletproof fallback using new rates (₹12 base + ₹8/km)
-        validatedAmount = distance_km_calc <= 1 ? 12 : 12 + (distance_km_calc - 1) * 8;
-        console.log('🔧 Applied bulletproof fallback calculation:', validatedAmount);
-      } else {
-        validatedAmount = numericAmount;
-      }
-      
-      // Layer 4: Ultimate safety net
-      if (!validatedAmount || validatedAmount <= 0 || isNaN(validatedAmount)) {
-        validatedAmount = 20; // Emergency fallback
-        console.log('🛡️ Applied ultimate safety fallback:', validatedAmount);
-      }
-      
-      console.log('💰 Triple-validated amount:', { validatedAmount, type: typeof validatedAmount });
-      
-      // Update order status to delivered with safe JSON handling
-      const updateData = {
+    // Fix: Remove the problematic .eq('agent_id', agent.id) constraint
+    const { data: updateResult, error: orderUpdateError } = await supabaseClient
+      .from('orders')
+      .update({
         status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-        updated_at: new Date().toISOString()
-      };
-      
-      console.log('📝 Updating order with data:', updateData);
-      
-      const { error: orderUpdateError } = await supabaseClient
-        .from('orders')
-        .update(updateData)
-        .eq('id', order_id)
-        .eq('agent_id', agent.id);
+        delivered_at: now,
+        payment_status: payment_status,
+        updated_at: now
+      })
+      .eq('id', order_id)
+      .in('status', ['assigned', 'packed', 'out_for_delivery'])
+      .select('id, status, customer_name, total');
 
-      if (orderUpdateError) {
-        console.error('❌ Order update failed:', orderUpdateError);
-        throw new Error(`Order update failed: ${orderUpdateError.message}`);
-      }
-
-      console.log('✅ Order marked as delivered');
-
-      // Create earnings record with validated amount
-      const { error: earningsError } = await supabaseClient
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: validatedAmount, // Use validated amount
-          status: 'completed',
-          description: `Delivery payout: ${distance_km_calc}km`
-        });
-
-      if (earningsError) {
-        console.error('❌ Earnings creation failed:', earningsError);
-        // Don't fail the whole operation for earnings issues
-      } else {
-        console.log('✅ Earnings record created with amount:', validatedAmount);
-      }
-
-      // Update agent wallet with validated amount - add to existing balance
-      const { data: currentWallet } = await supabaseClient
-        .from('agent_wallet')
-        .select('balance')
-        .eq('agent_id', agent.id)
-        .single();
-
-      const currentBalance = currentWallet?.balance || 0;
-      const newBalance = currentBalance + validatedAmount;
-
-      const { error: walletError } = await supabaseClient
-        .from('agent_wallet')
-        .upsert({
-          agent_id: agent.id,
-          balance: newBalance,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'agent_id'
-        });
-
-      if (walletError) {
-        console.error('❌ Wallet update failed:', walletError);
-        // Don't fail the whole operation for wallet issues
-      } else {
-        console.log('✅ Agent wallet updated:', { previousBalance: currentBalance, addedAmount: validatedAmount, newBalance });
-      }
-
-      // Create wallet transaction with FINAL safety validation before database insertion
-      const finalTransactionAmount = Number(validatedAmount);
-      
-      // Pre-insertion validation - last line of defense
-      if (!finalTransactionAmount || finalTransactionAmount <= 0 || isNaN(finalTransactionAmount) || !isFinite(finalTransactionAmount)) {
-        console.error('❌ CRITICAL: Pre-insertion validation failed, applying emergency protocol');
-        throw new Error(`Fatal amount validation error: cannot insert ${finalTransactionAmount} into database`);
-      }
-      
-      console.log('🔒 Pre-insertion final amount check:', { finalTransactionAmount, type: typeof finalTransactionAmount });
-      
-      const { error: transactionError } = await supabaseClient
-        .from('agent_wallet_transactions')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: finalTransactionAmount,
-          transaction_type: 'delivery_payment',
-          description: 'Delivery payout for order',
-          status: 'completed'
-        });
-
-      if (transactionError) {
-        console.error('❌ Transaction creation failed:', transactionError);
-        throw new Error(`Transaction creation failed: ${transactionError.message}`);
-      }
-
-      console.log('✅ Wallet transaction created with amount:', validatedAmount);
-      
-    } catch (directError) {
-      console.error('❌ Direct completion method failed:', directError);
+    if (orderUpdateError) {
+      console.error('❌ Order update failed:', orderUpdateError);
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Failed to complete delivery',
-          details: directError instanceof Error ? directError.message : String(directError)
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to update order status',
+          details: orderUpdateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    // Skip manual earnings/stats updates - handled by database function
-    console.log('📊 Earnings and agent stats updated by database function');
+    if (!updateResult || updateResult.length === 0) {
+      console.log('⚠️ No rows updated - checking current order status...');
+      
+      // Check if order is already delivered
+      const { data: currentOrder } = await supabaseClient
+        .from('orders')
+        .select('status, delivered_at, payment_status, customer_name, total')
+        .eq('id', order_id)
+        .single();
+        
+      if (currentOrder?.status === 'delivered') {
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Product already delivered successfully!',
+            already_delivered: true,
+            order: {
+              id: order_id,
+              customer_name: currentOrder.customer_name,
+              total: currentOrder.total,
+              payment_status: currentOrder.payment_status,
+              delivered_at: currentOrder.delivered_at
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Unable to complete delivery. Order may no longer be in valid status.',
+          details: `Current order status: ${currentOrder?.status || 'unknown'}`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    console.log('✅ Order marked as delivered successfully!');
+    
+    console.log('🎉 Delivery completed successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Delivery completed successfully!',
+        message: 'Product delivered successfully!',
         order: {
           id: order_id,
-          customer_name: order.customer_name,
-          total: order.total,
-          distance_km: Math.round(distance_km_calc * 100) / 100,
-          payout_amount: Math.round(payout_amount),
-          payment_method
+          status: 'delivered',
+          payment_method,
+          payment_status: payment_status,
+          payout_amount: payout_amount,
+          agent_name: agent.name,
+          completed_at: now
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
