@@ -1098,7 +1098,13 @@ const Home = () => {
             
             // Handle availability notification when order becomes packed (for unassigned orders only)
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
-              console.log('📦 Order became available for pickup');
+              console.log('📦 Order became available for pickup - INSTANT REFRESH');
+              
+              // Immediate refresh for packed orders - NO DELAY
+              fetchOrdersForRefresh().then(() => {
+                console.log('✅ Orders refreshed instantly after packing');
+              });
+              
               handleAvailabilityOrderNotification(payload.new);
             }
             
@@ -1107,7 +1113,9 @@ const Home = () => {
               handlePickupReadyNotification(payload.new, payload.old);
             }
             
-            fetchOrdersForRefresh();
+            fetchOrdersForRefresh().then(() => {
+              console.log('✅ Orders refreshed after status change');
+            });
           }
           
           // Also refresh if agent assignment changes
@@ -1141,10 +1149,10 @@ const Home = () => {
             handleImmediateOrderNotification(payload.new);
           }
           
-          // Fetch orders with minimal delay for immediate visibility
-          setTimeout(() => {
-            fetchOrdersForRefresh();
-          }, 100); // 100ms delay for immediate response
+          // Fetch orders with NO delay for immediate visibility  
+          fetchOrdersForRefresh().then(() => {
+            console.log('✅ New order added to list instantly');
+          });
         }
       )
       .on(
@@ -1197,7 +1205,10 @@ const Home = () => {
             }
             
             // Refresh orders immediately
-            fetchOrdersForRefresh();
+            // Refresh orders immediately - NO DELAY
+            fetchOrdersForRefresh().then(() => {
+              console.log('✅ Orders refreshed after agent assignment change');
+            });
           }
         }
       )
@@ -1304,23 +1315,23 @@ const Home = () => {
     return () => clearInterval(interval);
   }, [location.latitude, location.longitude]); // Recalculate when agent location changes
 
-  // Auto-refresh orders every 5 seconds when page is active
+  // Auto-refresh orders every 2 seconds when page is active (reduced from 5 seconds)
   useEffect(() => {
     fetchAgentName();
     fetchOrders();
     
-    // 5-second auto-refresh interval for active orders monitoring
+    // Faster auto-refresh interval - 2 seconds for near real-time updates
     const autoRefreshInterval = setInterval(async () => {
       if (!document.hidden && isOnline) {
-        console.log('📊 Auto-refreshing orders (5-second interval)...');
+        console.log('📊 Auto-refreshing orders (2-second interval)...');
         setIsAutoRefreshing(true);
         try {
           await fetchOrdersForRefresh();
         } finally {
-          setTimeout(() => setIsAutoRefreshing(false), 500); // Show refresh indicator briefly
+          setTimeout(() => setIsAutoRefreshing(false), 300); // Shorter indicator time
         }
       }
-    }, 5000); // 5-second refresh
+    }, 2000); // 2-second refresh for faster updates
     
     // Backup refresh interval - every 5 minutes for offline scenarios
     const backupInterval = setInterval(() => {
@@ -1523,7 +1534,7 @@ const Home = () => {
               <div className="flex items-center">
                 <RefreshCw className="w-4 h-4 text-gray-700 mr-1" />
                 <span className="text-xs text-gray-700">Refresh</span>
-                <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Auto-refreshes every 5 seconds"></div>
+                <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Auto-refreshes every 2 seconds + Real-time updates"></div>
               </div>
             )}
           </Button>
