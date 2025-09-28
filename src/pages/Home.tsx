@@ -1272,15 +1272,6 @@ const Home = () => {
     }
   }, [orders.length, location.latitude, location.longitude]); // Trigger when new orders are loaded or location is available
 
-  // Auto-refresh page every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      window.location.reload();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   // Real-time distance and payout updates - recalculate every 30 seconds for active orders
   useEffect(() => {
     if (orders.length === 0 || !location.latitude || !location.longitude) return;
@@ -1321,19 +1312,14 @@ const Home = () => {
     const autoRefreshInterval = setInterval(() => {
       if (!document.hidden && isOnline) {
         console.log('📊 Auto-refreshing orders (5-second interval)...');
-        fetchOrders();
-        
-        // Show toast notification for auto-refresh
-        toast({
-          title: "Orders Updated",
-          description: "Your order list has been refreshed.",
-          duration: 2000,
-        });
+        fetchOrdersForRefresh(); // Silent refresh without toast
       }
     }, 5000); // 5-second refresh
     
     // Backup refresh interval - every 5 minutes for offline scenarios
-    const backupInterval = setInterval(fetchOrders, 300000);
+    const backupInterval = setInterval(() => {
+      fetchOrdersForRefresh(); // Silent backup refresh
+    }, 300000);
     
     return () => {
       clearInterval(autoRefreshInterval);
