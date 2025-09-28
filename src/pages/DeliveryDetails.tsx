@@ -357,9 +357,9 @@ const DeliveryDetails = () => {
 
       console.log('🚀 Calling bypass delivery completion function...');
       
-      // Use the new bypass function that disables triggers to avoid JSON validation issues
+      // Use the simple completion function that handles errors gracefully
       const { data: result, error: rpcError } = await supabase
-        .rpc('bypass_complete_delivery_direct', {
+        .rpc('simple_complete_delivery_final', {
           p_order_id: order.id,
           p_payment_method: paymentMethod
         });
