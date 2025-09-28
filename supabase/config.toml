@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.complete-delivery]
 verify_jwt = true
+
+[functions.complete-delivery-final]
+verify_jwt = true
