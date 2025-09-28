@@ -275,55 +275,32 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
     }
 
     try {
-      console.log('🚚 Completing delivery with payment method:', paymentMethod);
+      console.log('🚚 Completing QR delivery with payment method:', paymentMethod);
       
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error('User not authenticated');
-      }
-
-      // Get agent info
-      const { data: agentCheck } = await supabase
-        .from('delivery_agents')
-        .select('id, email')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .single();
-
-      if (!agentCheck || !scannedOrder?.order_id) {
-        throw new Error('Invalid agent or order data');
-      }
-      
-      // Call the edge function to complete delivery
-      const { data: result, error: functionError } = await supabase.functions.invoke('bulletproof-complete-delivery', {
+      // Use the original qr-complete-delivery function
+      const { data: result, error: functionError } = await supabase.functions.invoke('qr-complete-delivery', {
         body: {
-          order_id: scannedOrder.order_id,
-          payment_method: paymentMethod,
-          agent_id: agentCheck.id
+          qr_code_data: currentQrCode,
+          payment_method: paymentMethod
         }
       });
 
       if (functionError) {
-        console.error('Edge function error:', functionError);
+        console.error('QR delivery completion error:', functionError);
         throw new Error(`Delivery completion failed: ${functionError.message}`);
       }
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to complete delivery');
+      if (!result?.success) {
+        throw new Error(result?.error || 'Failed to complete delivery');
       }
 
-      // Success case
-      console.log('✅ QR Delivery completed successfully via edge function');
+      console.log('✅ QR Delivery completed successfully');
       
-      // Reset scanner state after successful completion
-      setTimeout(() => {
-        setScannedOrder(null);
-        setShowPaymentDialog(false);
-        setIsScanning(true);
-      }, 100);
+      // Reset scanner state
+      setScannedOrder(null);
+      setShowPaymentDialog(false);
+      setIsScanning(true);
       
-      // Success handled by PaymentMethodDialog - no toast needed here
       return result;
 
     } catch (error) {
@@ -421,8 +398,8 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
           onOpenChange={setShowPaymentDialog}
           order={scannedOrder}
           selectionOnly={true}
-          onSuccess={async (paymentMethod) => {
-            await completeDelivery(paymentMethod);
+          onSuccess={(paymentMethod) => {
+            completeDelivery(paymentMethod);
           }}
         />
       )}

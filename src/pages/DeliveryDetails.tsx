@@ -348,12 +348,13 @@ const DeliveryDetails = () => {
         throw new Error('You are not an active delivery agent');
       }
 
-      // Call the edge function to complete delivery
-      const { data: result, error: functionError } = await supabase.functions.invoke('bulletproof-complete-delivery', {
+      // Call the original complete-delivery function
+      const { data: result, error: functionError } = await supabase.functions.invoke('complete-delivery', {
         body: {
           order_id: order.id,
           payment_method: paymentMethod,
-          agent_id: agentCheck.id
+          distance_km: distance,
+          agent_payout: payout
         }
       });
 

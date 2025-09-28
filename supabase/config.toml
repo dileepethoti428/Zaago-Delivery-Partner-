@@ -15,11 +15,5 @@ verify_jwt = true
 [functions.qr-complete-delivery]
 verify_jwt = true
 
-[functions.bypass-complete-delivery]
-verify_jwt = true
-
-[functions.simple-complete-delivery]
-verify_jwt = true
-
-[functions.bulletproof-complete-delivery]
+[functions.complete-delivery]
 verify_jwt = true
