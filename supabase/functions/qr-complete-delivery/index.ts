@@ -264,6 +264,7 @@ serve(async (req) => {
     const now = new Date().toISOString();
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
+    // Use more specific update to avoid JSON parsing issues
     const { data: updateResult, error: updateError } = await supabaseClient
       .from('orders')
       .update({
@@ -273,8 +274,8 @@ serve(async (req) => {
         updated_at: now
       })
       .eq('id', order.id)
-      .eq('status', 'assigned') // Only update if still assigned (prevents race conditions)
-      .select();
+      .in('status', ['assigned', 'packed']) // Allow packed or assigned orders
+      .select('id, status, customer_name, total');
 
     if (updateError) {
       console.error('❌ Order update failed:', updateError);
