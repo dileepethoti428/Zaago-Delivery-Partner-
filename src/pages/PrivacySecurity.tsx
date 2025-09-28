@@ -300,9 +300,122 @@ const PrivacySecurity = () => {
               We respect your privacy and only collect data necessary to provide our delivery services. 
               Your location is only used for navigation and order tracking.
             </p>
-            <Button variant="outline" className="mt-4">
-              Read Privacy Policy
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="mt-4">
+                  Read Privacy Policy
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold">Privacy Policy - Zaago Delivery Partners</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6 text-sm">
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Information We Collect</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                      <p><strong>Personal Information:</strong> Name, phone number, email address, profile photo, government ID details, bank account information for payouts.</p>
+                      <p><strong>Location Data:</strong> Real-time GPS location during delivery hours to optimize order assignments and provide navigation assistance.</p>
+                      <p><strong>Device Information:</strong> Device type, operating system, app version, unique device identifiers for security and optimization.</p>
+                      <p><strong>Financial Data:</strong> Earnings, transaction history, payment methods, and payout preferences.</p>
+                      <p><strong>Performance Data:</strong> Delivery ratings, completion times, acceptance rates, and service quality metrics.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">How We Use Your Information</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                      <p><strong>Service Delivery:</strong> Match you with nearby delivery opportunities, provide turn-by-turn navigation, and facilitate order completion.</p>
+                      <p><strong>Payment Processing:</strong> Calculate earnings, process payouts, maintain transaction records, and provide financial summaries.</p>
+                      <p><strong>Safety & Security:</strong> Verify your identity, prevent fraud, ensure platform safety, and maintain service quality.</p>
+                      <p><strong>Communication:</strong> Send order notifications, service updates, promotional offers, and support communications.</p>
+                      <p><strong>Analytics & Improvement:</strong> Analyze performance metrics, optimize delivery routes, and enhance app functionality.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Information Sharing</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                      <p><strong>With Customers:</strong> Your name, photo, real-time location (during active deliveries), and contact information for delivery coordination.</p>
+                      <p><strong>With Merchants:</strong> Basic profile information and delivery status updates for order fulfillment.</p>
+                      <p><strong>Service Providers:</strong> Payment processors, mapping services, background check providers, and cloud infrastructure partners.</p>
+                      <p><strong>Legal Requirements:</strong> When required by law, regulatory compliance, or to protect safety and security.</p>
+                      <p>We never sell your personal information to third parties for marketing purposes.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Location Data Usage</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                      <p><strong>During Active Hours:</strong> Continuous location tracking for order assignments, navigation, and delivery confirmation.</p>
+                      <p><strong>Background Location:</strong> Limited tracking when app is backgrounded during active deliveries only.</p>
+                      <p><strong>Location History:</strong> Stored for 90 days for dispute resolution, performance analysis, and service improvement.</p>
+                      <p><strong>Opt-out Impact:</strong> Disabling location services will prevent you from receiving delivery opportunities.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Data Security</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                      <p><strong>Encryption:</strong> All data transmission uses industry-standard TLS encryption.</p>
+                      <p><strong>Storage Security:</strong> Personal data stored in secure, encrypted databases with limited access controls.</p>
+                      <p><strong>Payment Security:</strong> Financial information processed through PCI-DSS compliant payment partners.</p>
+                      <p><strong>Account Protection:</strong> Multi-factor authentication, secure password requirements, and suspicious activity monitoring.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Your Rights & Controls</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                      <p><strong>Access & Update:</strong> View and modify your profile information, payment details, and communication preferences anytime.</p>
+                      <p><strong>Data Download:</strong> Request a copy of your personal data in a portable format.</p>
+                      <p><strong>Account Deletion:</strong> Permanently delete your account and associated data (subject to legal retention requirements).</p>
+                      <p><strong>Marketing Opt-out:</strong> Unsubscribe from promotional communications while maintaining essential service notifications.</p>
+                      <p><strong>Location Control:</strong> Manage location sharing preferences, though some features require location access.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Data Retention</h3>
+                    <div className="space-y-2 text-muted-foreground">
+                      <p><strong>Active Account:</strong> Data retained while your account is active and for service delivery.</p>
+                      <p><strong>Financial Records:</strong> Earnings and payment data retained for 7 years for tax and legal compliance.</p>
+                      <p><strong>Location History:</strong> GPS data automatically deleted after 90 days unless required for disputes.</p>
+                      <p><strong>After Account Deletion:</strong> Personal data deleted within 30 days, except where legal retention is required.</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Children's Privacy</h3>
+                    <p className="text-muted-foreground">Our services are not intended for users under 18 years of age. We do not knowingly collect personal information from children under 18.</p>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Changes to Privacy Policy</h3>
+                    <p className="text-muted-foreground">We may update this policy periodically. Significant changes will be communicated through the app with 30 days advance notice. Continued use constitutes acceptance of updated terms.</p>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-base mb-2">Contact Information</h3>
+                    <div className="space-y-1 text-muted-foreground">
+                      <p><strong>Privacy Concerns:</strong> privacy@zaago.com</p>
+                      <p><strong>Data Protection Officer:</strong> dpo@zaago.com</p>
+                      <p><strong>General Support:</strong> support@zaago.com</p>
+                      <p><strong>Address:</strong> Zaago Technologies, Business District, India</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-primary/10 rounded-lg">
+                    <p className="text-sm text-foreground">
+                      <strong>Last Updated:</strong> September 2024
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      This privacy policy is designed to be transparent about our data practices while ensuring we can provide you with the best delivery experience possible.
+                    </p>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardContent>
       </Card>
