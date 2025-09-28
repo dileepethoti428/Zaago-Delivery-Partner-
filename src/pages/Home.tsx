@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -147,6 +147,10 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
+  
+  // Refresh debouncing state
+  const [isRealTimeRefreshing, setIsRealTimeRefreshing] = useState(false);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Emergency modal state
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -763,6 +767,46 @@ const Home = () => {
     }
   };
 
+  // Debounced refresh function to prevent race conditions
+  const debouncedRefresh = async (reason: string = 'unknown', immediate: boolean = false) => {
+    console.log(`🔄 Refresh requested: ${reason} (immediate: ${immediate})`);
+    
+    // Clear any existing timeout
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+    
+    // If already refreshing, skip
+    if (isRealTimeRefreshing && !immediate) {
+      console.log('⏳ Refresh already in progress, skipping...');
+      return;
+    }
+    
+    const performRefresh = async () => {
+      if (isRealTimeRefreshing) return;
+      
+      setIsRealTimeRefreshing(true);
+      try {
+        console.log(`✅ Executing refresh: ${reason}`);
+        await fetchOrdersForRefresh();
+        console.log(`✅ Refresh completed: ${reason}`);
+      } catch (error) {
+        console.error(`❌ Refresh failed: ${reason}`, error);
+      } finally {
+        setTimeout(() => setIsRealTimeRefreshing(false), 100);
+      }
+    };
+    
+    if (immediate) {
+      // For critical updates like packed orders, refresh immediately
+      await performRefresh();
+    } else {
+      // For other updates, debounce to prevent rapid fire calls
+      refreshTimeoutRef.current = setTimeout(performRefresh, 100);
+    }
+  };
+
   // Pull to refresh functionality
   const handleRefresh = async () => {
     if (isRefreshing) return; // Prevent multiple clicks
@@ -1099,13 +1143,10 @@ const Home = () => {
             // Handle availability notification when order becomes packed (for unassigned orders only)
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
               console.log('📦 Order became available for pickup - INSTANT REFRESH');
-              
-              // Immediate refresh for packed orders - NO DELAY
-              fetchOrdersForRefresh().then(() => {
-                console.log('✅ Orders refreshed instantly after packing');
-              });
-              
               handleAvailabilityOrderNotification(payload.new);
+              
+              // Immediate refresh for packed orders - CRITICAL
+              debouncedRefresh('order-packed', true);
             }
             
             // Keep existing pickup ready notification for backward compatibility
@@ -1113,15 +1154,16 @@ const Home = () => {
               handlePickupReadyNotification(payload.new, payload.old);
             }
             
-            fetchOrdersForRefresh().then(() => {
-              console.log('✅ Orders refreshed after status change');
-            });
+            // For other status changes, use debounced refresh
+            if (payload.new.status !== 'packed') {
+              debouncedRefresh(`status-change-to-${payload.new.status}`);
+            }
           }
           
           // Also refresh if agent assignment changes
           if (payload.new && payload.old && payload.new.agent_id !== payload.old.agent_id) {
             console.log('👤 Agent assignment changed, refreshing...');
-            fetchOrdersForRefresh();
+            debouncedRefresh('agent-assignment-change');
           }
 
           // Refresh payout when order distance or other payout-affecting fields change
@@ -1129,7 +1171,7 @@ const Home = () => {
               (payload.new.distance_km !== payload.old.distance_km || 
                payload.new.agent_payout !== payload.old.agent_payout)) {
             console.log('💰 Order payout data changed, refreshing...');
-            fetchOrdersForRefresh();
+            debouncedRefresh('payout-change');
           }
          }
       )
@@ -1149,10 +1191,8 @@ const Home = () => {
             handleImmediateOrderNotification(payload.new);
           }
           
-          // Fetch orders with NO delay for immediate visibility  
-          fetchOrdersForRefresh().then(() => {
-            console.log('✅ New order added to list instantly');
-          });
+          // Immediate refresh for new orders
+          debouncedRefresh('new-order-insert', true);
         }
       )
       .on(
@@ -1164,8 +1204,8 @@ const Home = () => {
         },
         (payload) => {
           console.log('💰 Earnings updated:', payload);
-          // Refresh orders to show updated payout information
-          fetchOrdersForRefresh();
+          // Debounced refresh for earnings updates
+          debouncedRefresh('earnings-update');
         }
       )
       .on(
@@ -1177,8 +1217,8 @@ const Home = () => {
         },
         (payload) => {
           console.log('⚙️ Payout configuration updated:', payload);
-          // Refresh orders to recalculate payouts with new rates
-          fetchOrdersForRefresh();
+          // Debounced refresh to recalculate payouts with new rates
+          debouncedRefresh('payout-config-update');
         }
       )
       .on(
@@ -1204,11 +1244,8 @@ const Home = () => {
               });
             }
             
-            // Refresh orders immediately
-            // Refresh orders immediately - NO DELAY
-            fetchOrdersForRefresh().then(() => {
-              console.log('✅ Orders refreshed after agent assignment change');
-            });
+            // Immediate refresh for agent assignment notifications
+            debouncedRefresh('urgent-notification-agent-assignment', true);
           }
         }
       )
@@ -1326,7 +1363,7 @@ const Home = () => {
         console.log('📊 Auto-refreshing orders (2-second interval)...');
         setIsAutoRefreshing(true);
         try {
-          await fetchOrdersForRefresh();
+          await debouncedRefresh('auto-refresh-interval');
         } finally {
           setTimeout(() => setIsAutoRefreshing(false), 300); // Shorter indicator time
         }
@@ -1335,7 +1372,7 @@ const Home = () => {
     
     // Backup refresh interval - every 5 minutes for offline scenarios
     const backupInterval = setInterval(() => {
-      fetchOrdersForRefresh(); // Silent backup refresh
+      debouncedRefresh('backup-refresh-interval'); // Silent backup refresh
     }, 300000);
     
     return () => {
