@@ -380,17 +380,17 @@ const DeliveryDetails = () => {
         throw new Error(`Order cannot be completed from status: ${currentOrder.status}`);
       }
 
-      console.log('🚀 Calling bypass validation function...');
+      console.log('🚀 Calling TRIGGER-FREE completion function...');
       
-      // Use the new bypass function that completely avoids JSON validation triggers
+      // Use the new trigger-free function that completely disables all triggers
       const { data: result, error: rpcError } = await supabase
-        .rpc('complete_delivery_bypass_validation', {
+        .rpc('complete_delivery_trigger_free', {
           p_order_id: order.id,
           p_agent_id: agentCheck.id,
           p_payment_method: paymentMethod
         });
 
-      console.log('📡 Bypass function response:', { result, rpcError });
+      console.log('📡 Trigger-free function response:', { result, rpcError });
 
       if (rpcError) {
         console.error('❌ Bypass function error:', rpcError);
@@ -404,7 +404,7 @@ const DeliveryDetails = () => {
         throw new Error(response?.error || 'Order could not be updated. Please check if order is still assigned to you.');
       }
 
-      console.log('✅ Order updated successfully via bypass function');
+      console.log('✅ Order updated successfully via trigger-free function');
       
       // Set payment status for local state update
       const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';

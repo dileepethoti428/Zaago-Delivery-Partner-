@@ -4591,6 +4591,14 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_delivery_trigger_free: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
       create_admin_notification_for_agent: {
         Args: {
           admin_id?: string
