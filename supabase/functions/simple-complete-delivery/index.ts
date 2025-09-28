@@ -72,41 +72,54 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // First, fetch the order to validate it exists and is assigned to this agent
-    const { data: order, error: fetchError } = await supabaseClient
+    console.log('🔍 Step 1: Fetching order details');
+    // Simplify order fetch - only get essential fields to avoid JSON parsing issues
+    const { data: order, error: orderError } = await supabaseClient
       .from('orders')
-      .select('id, status, agent_id, customer_name, total')
+      .select('id, status, agent_id')
       .eq('id', order_id)
       .single();
 
-    if (fetchError || !order) {
-      console.error('❌ Order fetch failed:', fetchError);
+    if (orderError || !order) {
+      console.error('❌ Step 1 Failed - Order fetch error:', orderError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Order not found' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Order not found',
+          details: orderError?.message 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
     }
 
-    // Validate order is assigned to this agent
+    console.log(`✅ Step 1 Complete - Order found: { id: "${order.id}", status: "${order.status}" }`);
+
+    console.log('🔍 Step 2: Validating order assignment');
+    // Validate order belongs to this agent
     if (order.agent_id !== agent.id) {
-      console.error('❌ Order not assigned to this agent:', { orderAgentId: order.agent_id, currentAgentId: agent.id });
+      console.error('❌ Step 2 Failed - Order not assigned to this agent');
       return new Response(
-        JSON.stringify({ success: false, error: 'Order not assigned to this agent' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Order not assigned to this agent' 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
       );
     }
 
-    // Check if order is already delivered
+    console.log('✅ Step 2 Complete - Order is assigned to agent');
+
+    console.log('🔍 Step 3: Checking order status');
     if (order.status === 'delivered') {
-      console.log('ℹ️ Order already delivered');
+      console.log('⚠️ Step 3 - Order already delivered');
       return new Response(
         JSON.stringify({
           success: true,
           already_delivered: true,
           message: 'Order was already delivered',
           order: {
-            id: order_id,
-            status: 'delivered',
+            id: order.id,
+            status: order.status,
             agent_name: agent.name
           }
         }),
@@ -114,120 +127,221 @@ serve(async (req) => {
       );
     }
 
-    // Validate order status is valid for completion
     if (!['assigned', 'packed'].includes(order.status)) {
-      console.error('❌ Invalid order status for completion:', order.status);
+      console.error(`❌ Step 3 Failed - Invalid order status: ${order.status}`);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Cannot complete order with status: ${order.status}` 
+          error: `Cannot complete delivery. Order status is: ${order.status}` 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    console.log('✅ Order validation passed:', { id: order.id, status: order.status });
+    console.log('✅ Step 3 Complete - Order status is valid for completion');
 
-    // Validate distance and payout with safe defaults
-    const safeDistance = Math.max(Number(distance_km) || 2.5, 0.1);
-    const safePayout = Math.max(Number(agent_payout) || (safeDistance <= 1 ? 12 : 12 + (safeDistance - 1) * 8), 12);
+    // Calculate safe values with defaults
+    const safeDistance = Math.max(0, Number(distance_km) || 0) || 2.5;
+    const safePayout = Math.max(0, Number(agent_payout) || 0) || 20;
     
-    console.log('💰 Using safe values:', { safeDistance, safePayout });
+    console.log(`💰 Using safe values: { safeDistance: ${safeDistance}, safePayout: ${safePayout} }`);
+    
+    console.log('🔍 Step 4: Checking existing earnings to prevent duplicates');
+    try {
+      // Check if earning already exists for this order (prevents duplicate earnings)
+      const { data: existingEarning } = await supabaseClient
+        .from('earnings')
+        .select('id')
+        .eq('agent_id', agent.id)
+        .eq('order_id', order_id)
+        .single();
 
-    // Direct database update using service role to bypass RPC issues
+      if (existingEarning) {
+        console.log('⚠️ Step 4 - Earning already exists, skipping wallet/earning updates');
+        return new Response(
+          JSON.stringify({
+            success: true,
+            already_processed: true,
+            message: 'Order delivery already processed',
+            order: {
+              id: order_id,
+              status: 'delivered',
+              agent_name: agent.name
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('✅ Step 4 Complete - No duplicate earning found');
+    } catch (error) {
+      // Single not found is expected, continue processing
+      console.log('✅ Step 4 Complete - No existing earning (expected)');
+    }
+    
+    console.log('🔍 Step 5: Updating order status to delivered');
     const now = new Date().toISOString();
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    // Update order status without selecting to avoid JSON parsing issues
-    const { error: orderUpdateError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: now,
-        payment_status: payment_status,
-        updated_at: now
-      })
-      .eq('id', order_id)
-      .eq('agent_id', agent.id); // Use agent_id instead of status filter since we already validated
+    try {
+      const { error: orderUpdateError } = await supabaseClient
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: now,
+          payment_status: payment_status,
+          updated_at: now
+        })
+        .eq('id', order_id)
+        .eq('agent_id', agent.id);
 
-    if (orderUpdateError) {
-      console.error('❌ Order update failed:', orderUpdateError);
+      if (orderUpdateError) {
+        console.error('❌ Step 5 Failed - Order update error:', orderUpdateError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to update order status',
+            details: orderUpdateError.message 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      console.log('✅ Step 5 Complete - Order status updated to delivered');
+    } catch (error) {
+      console.error('❌ Step 5 Exception:', error);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to update order status',
-          details: orderUpdateError.message
+          error: 'Exception during order update',
+          details: error instanceof Error ? error.message : String(error)
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('✅ Order status updated to delivered');
+    console.log('🔍 Step 6: Updating agent wallet balance');
+    try {
+      // Get current wallet balance first
+      const { data: currentWallet } = await supabaseClient
+        .from('agent_wallet')
+        .select('balance')
+        .eq('agent_id', agent.id)
+        .single();
 
-    console.log('✅ Order marked as delivered');
+      const currentBalance = currentWallet?.balance || 0;
+      const newBalance = Number(currentBalance) + Number(safePayout);
 
-    // Update agent wallet
-    const { data: currentWallet } = await supabaseClient
-      .from('agent_wallet')
-      .select('balance')
-      .eq('agent_id', agent.id)
-      .single();
+      const { error: walletError } = await supabaseClient
+        .from('agent_wallet')
+        .upsert({
+          agent_id: agent.id,
+          balance: newBalance,
+          updated_at: now
+        }, { 
+          onConflict: 'agent_id' 
+        });
 
-    const currentBalance = Number(currentWallet?.balance || 0);
-    const newBalance = currentBalance + safePayout;
+      if (walletError) {
+        console.error('❌ Step 6 Failed - Wallet update error:', walletError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to update agent wallet',
+            details: walletError.message 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
 
-    const { error: walletError } = await supabaseClient
-      .from('agent_wallet')
-      .upsert({
-        agent_id: agent.id,
-        balance: newBalance,
-        updated_at: now
-      }, {
-        onConflict: 'agent_id'
-      });
-
-    if (walletError) {
-      console.log('⚠️ Wallet update warning:', walletError);
-    } else {
-      console.log('✅ Agent wallet updated');
+      console.log(`✅ Step 6 Complete - Agent wallet updated (${currentBalance} + ${safePayout} = ${newBalance})`);
+    } catch (error) {
+      console.error('❌ Step 6 Exception:', error);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Exception during wallet update',
+          details: error instanceof Error ? error.message : String(error)
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    // Create earnings record
-    const { error: earningsError } = await supabaseClient
-      .from('earnings')
-      .insert({
-        agent_id: agent.id,
-        order_id: order_id,
-        amount: safePayout,
-        status: 'completed',
-        description: `Delivery payout: ${safeDistance}km`
-      });
+    console.log('🔍 Step 7: Creating earning record');
+    try {
+      const { error: earningError } = await supabaseClient
+        .from('earnings')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: safePayout,
+          status: 'completed',
+          description: `Delivery completion: ${safeDistance}km`
+        });
 
-    if (earningsError) {
-      console.log('⚠️ Earnings record warning:', earningsError);
-    } else {
-      console.log('✅ Earnings record created');
+      if (earningError) {
+        console.error('❌ Step 7 Failed - Earning creation error:', earningError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to create earning record',
+            details: earningError.message 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      console.log('✅ Step 7 Complete - Earning record created');
+    } catch (error) {
+      console.error('❌ Step 7 Exception:', error);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Exception during earning creation',
+          details: error instanceof Error ? error.message : String(error)
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    // Create wallet transaction
-    const { error: transactionError } = await supabaseClient
-      .from('agent_wallet_transactions')
-      .insert({
-        agent_id: agent.id,
-        order_id: order_id,
-        amount: safePayout,
-        transaction_type: 'delivery_payment',
-        description: 'Delivery completion payout',
-        status: 'completed'
-      });
+    console.log('🔍 Step 8: Creating wallet transaction record');
+    try {
+      const { error: transactionError } = await supabaseClient
+        .from('agent_wallet_transactions')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: safePayout,
+          transaction_type: 'delivery_payment',
+          description: 'Delivery completion payment'
+        });
 
-    if (transactionError) {
-      console.log('⚠️ Transaction record warning:', transactionError);
-    } else {
-      console.log('✅ Wallet transaction recorded');
+      if (transactionError) {
+        console.error('❌ Step 8 Failed - Transaction creation error:', transactionError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to create transaction record',
+            details: transactionError.message 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      console.log('✅ Step 8 Complete - Transaction record created');
+    } catch (error) {
+      console.error('❌ Step 8 Exception:', error);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Exception during transaction creation',
+          details: error instanceof Error ? error.message : String(error)
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    console.log('✅ Delivery completed successfully');
+    console.log('🎉 All steps completed successfully!');
 
     return new Response(
       JSON.stringify({
