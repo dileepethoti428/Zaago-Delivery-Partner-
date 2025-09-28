@@ -320,7 +320,7 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
-    console.log('🎯 Starting DIRECT SQL delivery completion...', { 
+    console.log('🎯 Starting BYPASS delivery completion...', { 
       orderId: order?.id, 
       paymentMethod 
     });
@@ -380,27 +380,34 @@ const DeliveryDetails = () => {
         throw new Error(`Order cannot be completed from status: ${currentOrder.status}`);
       }
 
-      console.log('🚀 Performing DIRECT SQL update (bypassing triggers)...');
+      console.log('🚀 Calling bypass validation function...');
       
-      // Direct SQL update with minimal fields to avoid triggers
-      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          payment_status: payment_status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', order.id)
-        .eq('agent_id', agentCheck.id); // Additional security check
+      // Use the new bypass function that completely avoids JSON validation triggers
+      const { data: result, error: rpcError } = await supabase
+        .rpc('complete_delivery_bypass_validation', {
+          p_order_id: order.id,
+          p_agent_id: agentCheck.id,
+          p_payment_method: paymentMethod
+        });
 
-      if (updateError) {
-        console.error('❌ Direct SQL update failed:', updateError);
-        throw new Error(`Update failed: ${updateError.message}`);
+      console.log('📡 Bypass function response:', { result, rpcError });
+
+      if (rpcError) {
+        console.error('❌ Bypass function error:', rpcError);
+        throw new Error(`Delivery completion failed: ${rpcError.message}`);
       }
 
-      console.log('✅ Order updated successfully via direct SQL');
+      // Handle the result properly by checking if it's a success response
+      const response = result as any;
+      if (!response || !response.success) {
+        console.error('❌ Delivery completion failed:', response);
+        throw new Error(response?.error || 'Order could not be updated. Please check if order is still assigned to you.');
+      }
+
+      console.log('✅ Order updated successfully via bypass function');
+      
+      // Set payment status for local state update
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       
       // Update local order state
       setOrder(prev => prev ? { 
