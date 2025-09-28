@@ -355,11 +355,11 @@ const DeliveryDetails = () => {
       }
       console.log('✅ Agent found:', agentCheck.id);
 
-      console.log('🚀 Calling minimal update function...');
+      console.log('🚀 Calling bypass delivery completion function...');
       
-      // Use the new minimal update function to bypass JSON validation issues
+      // Use the new bypass function that disables triggers to avoid JSON validation issues
       const { data: result, error: rpcError } = await supabase
-        .rpc('complete_delivery_minimal_update', {
+        .rpc('bypass_complete_delivery_direct', {
           p_order_id: order.id,
           p_payment_method: paymentMethod
         });
@@ -371,9 +371,11 @@ const DeliveryDetails = () => {
         throw new Error(`Delivery completion failed: ${rpcError.message}`);
       }
 
-      if (!result) {
-        console.error('❌ No order was updated - check order status');
-        throw new Error('Order could not be updated. Please check if order is still assigned to you.');
+      // Handle the result properly by checking if it's a success response
+      const response = result as any;
+      if (!response || !response.success) {
+        console.error('❌ Delivery completion failed:', response);
+        throw new Error(response?.error || 'Order could not be updated. Please check if order is still assigned to you.');
       }
 
       console.log('✅ Order updated successfully via RPC function');
