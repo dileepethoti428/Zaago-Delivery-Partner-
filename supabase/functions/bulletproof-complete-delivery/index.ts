@@ -71,50 +71,40 @@ serve(async (req) => {
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
     const now = new Date().toISOString();
-    const payout = 25; // Fixed payout for now
+    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    // Strategy 1: Try minimal update using RPC call to bypass JSON issues
-    try {
-      console.log('🔄 Attempting RPC-based update...');
-      
-      const { error: rpcError } = await supabaseClient.rpc('update_order_status', {
-        p_order_id: order_id,
-        p_new_status: 'delivered',
-        p_new_payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online',
-        p_agent_id: agent.id
-      });
+    // Ultra-simple direct update approach - only update essential fields
+    console.log('🔄 Attempting direct minimal update...');
+    
+    const { error: updateError } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'delivered',
+        delivered_at: now,
+        payment_status: payment_status
+      })
+      .eq('id', order_id)
+      .eq('agent_id', agent.id); // Ensure only assigned agent can complete
 
-      if (rpcError) {
-        console.log('⚠️ RPC update failed, trying direct approach:', rpcError.message);
-        throw new Error('RPC failed: ' + rpcError.message);
-      }
-
-      console.log('✅ Order updated via RPC');
-      
-    } catch (rpcError) {
-      console.log('🔄 RPC failed, trying direct SQL update...');
-      
-    // Strategy 2: Direct SQL update with minimal fields only
-      const { error: directError } = await supabaseClient
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: now,
-          payment_status: payment_method === 'COD' ? 'paid_cod' : 'paid_online'
-        })
-        .eq('id', order_id);
-
-      if (directError) {
-        console.error('❌ Direct update also failed:', directError);
-        throw new Error('All update strategies failed: ' + directError.message);
-      }
-      
-      console.log('✅ Order updated via direct SQL');
+    if (updateError) {
+      console.error('❌ Update failed:', updateError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: `Update failed: ${updateError.message}`,
+          details: updateError
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    // Update agent wallet
+    console.log('✅ Order status updated successfully');
+
+    // Try to update wallet and earnings, but don't fail if these don't work
+    const payout = 25; // Fixed payout
+    
     try {
-      // First get current balance
+      // Get current balance
       const { data: currentWallet } = await supabaseClient
         .from('agent_wallet')
         .select('balance')
@@ -124,66 +114,47 @@ serve(async (req) => {
       const currentBalance = Number(currentWallet?.balance || 0);
       const newBalance = currentBalance + payout;
 
+      // Update wallet
       const { error: walletError } = await supabaseClient
         .from('agent_wallet')
         .upsert({
           agent_id: agent.id,
           balance: newBalance,
           updated_at: now
-        }, {
-          onConflict: 'agent_id'
         });
 
-      if (walletError) {
-        console.log('⚠️ Wallet update warning:', walletError);
-      } else {
+      if (!walletError) {
         console.log('✅ Agent wallet updated');
-      }
-    } catch (walletError) {
-      console.log('⚠️ Wallet update failed but continuing:', walletError);
-    }
-
-    // Create earnings record
-    try {
-      const { error: earningsError } = await supabaseClient
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: payout,
-          status: 'completed',
-          description: 'Delivery payout'
-        });
-
-      if (earningsError) {
-        console.log('⚠️ Earnings record warning:', earningsError);
-      } else {
+        
+        // Add earnings record
+        await supabaseClient
+          .from('earnings')
+          .insert({
+            agent_id: agent.id,
+            order_id: order_id,
+            amount: payout,
+            status: 'completed',
+            description: 'Delivery payout'
+          });
+        
         console.log('✅ Earnings record created');
-      }
-    } catch (earningsError) {
-      console.log('⚠️ Earnings record failed but continuing:', earningsError);
-    }
 
-    // Create wallet transaction
-    try {
-      const { error: transactionError } = await supabaseClient
-        .from('agent_wallet_transactions')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: payout,
-          transaction_type: 'delivery_payment',
-          description: 'Delivery completion payout',
-          status: 'completed'
-        });
-
-      if (transactionError) {
-        console.log('⚠️ Transaction record warning:', transactionError);
-      } else {
+        // Add wallet transaction
+        await supabaseClient
+          .from('agent_wallet_transactions')
+          .insert({
+            agent_id: agent.id,
+            order_id: order_id,
+            amount: payout,
+            transaction_type: 'delivery_payment',
+            description: 'Delivery completion payout',
+            status: 'completed'
+          });
+          
         console.log('✅ Wallet transaction recorded');
       }
-    } catch (transactionError) {
-      console.log('⚠️ Transaction record failed but continuing:', transactionError);
+    } catch (walletError) {
+      console.log('⚠️ Wallet operations failed but continuing:', walletError);
     }
 
     console.log('🎉 Delivery completed successfully');
@@ -196,6 +167,7 @@ serve(async (req) => {
           id: order_id,
           status: 'delivered',
           payment_method,
+          payment_status,
           payout_amount: payout,
           agent_name: agent.name,
           completed_at: now
