@@ -401,7 +401,7 @@ const PrivacySecurity = () => {
                       <p><strong>Privacy Concerns:</strong> privacy@zaago.com</p>
                       <p><strong>Data Protection Officer:</strong> dpo@zaago.com</p>
                       <p><strong>General Support:</strong> support@zaago.com</p>
-                      <p><strong>Address:</strong> Zaago Technologies, Business District, India</p>
+                      <p><strong>Address:</strong> Zaago Technologies Pvt Ltd Galiveedu, Annamayya district Andhra Pradesh 516267, India</p>
                     </div>
                   </div>
 
