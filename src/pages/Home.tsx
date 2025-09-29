@@ -1035,7 +1035,7 @@ const Home = () => {
         case 'newest':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         case 'highest':
-          return b.total - a.total;
+          return (b.agent_payout || 0) - (a.agent_payout || 0);
         default:
           return 0;
       }
