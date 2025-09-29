@@ -131,8 +131,13 @@ Deno.serve(async (req) => {
         });
 
       if (earningsError) {
-        console.error('Earnings creation error:', earningsError);
-        // Don't throw error for earnings - continue with order completion
+        // Handle duplicate constraint gracefully
+        if (earningsError.code === '23505' && earningsError.message.includes('unique_earnings_per_order_agent')) {
+          console.log('✅ Earnings already exist for this order (duplicate constraint), continuing...');
+        } else {
+          console.error('Earnings creation error:', earningsError);
+          // Don't throw error for earnings - continue with order completion
+        }
       }
     } else {
       console.log('✅ Earnings already exist for this order, skipping creation');
