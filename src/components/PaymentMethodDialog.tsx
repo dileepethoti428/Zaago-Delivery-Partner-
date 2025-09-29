@@ -33,6 +33,18 @@ export const PaymentMethodDialog = ({
 
   const handlePaymentMethod = async (method: 'COD' | 'Online') => {
     console.log('🎯 Payment method selected:', method);
+    
+    // Check if order is already delivered
+    if (order.payment_status === 'paid_cod' || order.payment_status === 'paid_online') {
+      toast({
+        title: "Already Delivered",
+        description: "This order has already been completed and delivered",
+        variant: "destructive"
+      });
+      onOpenChange(false);
+      return;
+    }
+    
     if (!onSuccess) {
       console.error('❌ No onSuccess function provided');
       return;
@@ -45,7 +57,12 @@ export const PaymentMethodDialog = ({
       const result = await onSuccess(method);
       console.log('✅ onSuccess completed:', result);
       
-      // Don't show toast here - let the main component handle it
+      // Show success message
+      toast({
+        title: "✅ Product Successfully Delivered!",
+        description: "Order has been completed and will disappear from your home screen",
+      });
+      
       // Close dialog after successful completion
       onOpenChange(false);
       
@@ -104,13 +121,7 @@ export const PaymentMethodDialog = ({
               
               <div className="space-y-3">
                 <Button
-                  onClick={() => {
-                    toast({
-                      title: "Product Delivered",
-                      description: "Order has been successfully delivered to the customer",
-                    });
-                    onOpenChange(false);
-                  }}
+                  onClick={() => handlePaymentMethod('COD')}
                   disabled={isProcessing}
                   className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
                 >
@@ -119,13 +130,7 @@ export const PaymentMethodDialog = ({
                 </Button>
                 
                 <Button
-                  onClick={() => {
-                    toast({
-                      title: "Product Delivered",
-                      description: "Order has been successfully delivered to the customer",
-                    });
-                    onOpenChange(false);
-                  }}
+                  onClick={() => handlePaymentMethod('Online')}
                   disabled={isProcessing}
                   className="w-full h-12 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
                 >
