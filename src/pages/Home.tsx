@@ -1610,22 +1610,13 @@ const Home = () => {
               </SelectTrigger>
               <SelectContent className="bg-white border border-gray-200 shadow-lg rounded-lg">
                 <SelectItem value="nearest" className="text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  <div className="flex items-center">
-                    <Target className="w-4 h-4 mr-2 text-green-500" />
-                    <span>Nearest First</span>
-                  </div>
+                  Nearest First
                 </SelectItem>
                 <SelectItem value="newest" className="text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  <div className="flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-blue-500" />
-                    <span>Newest First</span>
-                  </div>
+                  Newest First
                 </SelectItem>
                 <SelectItem value="highest" className="text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  <div className="flex items-center">
-                    <IndianRupee className="w-4 h-4 mr-2 text-green-600" />
-                    <span>Highest First</span>
-                  </div>
+                  Highest First
                 </SelectItem>
               </SelectContent>
             </Select>
