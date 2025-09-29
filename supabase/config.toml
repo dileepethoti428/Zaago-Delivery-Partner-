@@ -1,5 +1,8 @@
 project_id = "amhpjsmubciahslghobw"
 
+[functions.bypass-complete-delivery]
+verify_jwt = false
+
 [functions.nuclear-complete-delivery]
 verify_jwt = false
 

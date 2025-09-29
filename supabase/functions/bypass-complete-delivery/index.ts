@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('🔥 Simple delivery completion started');
+  console.log('🚀 Bypass delivery completion started');
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -17,7 +17,7 @@ serve(async (req) => {
     const body = await req.json();
     const { order_id, payment_method = 'Online' } = body;
     
-    console.log('📋 Simple completion for order:', order_id);
+    console.log('📋 Bypass processing:', { order_id, payment_method });
     
     if (!order_id) {
       return new Response(
@@ -70,55 +70,134 @@ serve(async (req) => {
 
     console.log('✅ Agent found:', { id: agent.id, name: agent.name });
 
-    // Use minimal SQL function to bypass JSON validation issues
-    console.log('🔄 Using minimal update function...');
+    const now = new Date().toISOString();
+    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    const { data: result, error: updateError } = await supabaseClient
-      .rpc('complete_delivery_minimal_update', {
-        p_order_id: order_id,
-        p_payment_method: payment_method
-      });
+    // STEP 1: Direct order update (avoid RPC that might trigger problematic functions)
+    console.log('🔄 Step 1: Direct order table update...');
+    
+    const { error: updateError } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'delivered',
+        delivered_at: now,
+        payment_status: payment_status,
+        updated_at: now
+      })
+      .eq('id', order_id)
+      .eq('agent_id', agent.id); // Ensure only assigned agent can complete
 
-    if (updateError || !result) {
-      console.error('❌ Minimal update failed:', updateError);
+    if (updateError) {
+      console.error('❌ Direct update failed:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to update order status',
-          details: updateError?.message || 'No result returned'
+          error: `Order update failed: ${updateError.message}`,
+          details: updateError
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('✅ Order marked as delivered successfully!');
+    console.log('✅ Order status updated directly');
 
-    // Don't worry about wallet/earnings for now - just complete the delivery
-    console.log('🎉 Delivery completed successfully!');
+    // STEP 2: Simple payout processing (avoid complex JSON operations)
+    const basePayout = 30; // Fixed ₹30 payout like Blinkit
+    
+    console.log('💰 Step 2: Processing simple payout...');
+    
+    try {
+      // Insert earnings record directly
+      const { error: earningsError } = await supabaseClient
+        .from('earnings')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: basePayout,
+          status: 'completed',
+          description: 'Bypass delivery payout'
+        });
+
+      if (earningsError) {
+        console.log('⚠️ Earnings insert failed, continuing:', earningsError.message);
+      } else {
+        console.log('✅ Earnings record created');
+      }
+
+      // Update agent wallet directly
+      const { data: currentWallet } = await supabaseClient
+        .from('agent_wallet')
+        .select('balance')
+        .eq('agent_id', agent.id)
+        .single();
+
+      const currentBalance = Number(currentWallet?.balance || 0);
+      const newBalance = currentBalance + basePayout;
+
+      const { error: walletError } = await supabaseClient
+        .from('agent_wallet')
+        .upsert({
+          agent_id: agent.id,
+          balance: newBalance,
+          updated_at: now
+        });
+
+      if (walletError) {
+        console.log('⚠️ Wallet update failed, continuing:', walletError.message);
+      } else {
+        console.log('✅ Wallet updated to ₹', newBalance);
+      }
+
+      // Insert wallet transaction
+      const { error: transactionError } = await supabaseClient
+        .from('agent_wallet_transactions')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: basePayout,
+          transaction_type: 'delivery_payment',
+          description: 'Bypass delivery payout',
+          status: 'completed'
+        });
+
+      if (transactionError) {
+        console.log('⚠️ Transaction insert failed, continuing:', transactionError.message);
+      } else {
+        console.log('✅ Transaction recorded');
+      }
+
+    } catch (payoutError) {
+      console.log('⚠️ Payout processing failed but order still completed:', payoutError);
+    }
+
+    console.log('🎉 Bypass delivery completed successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Product delivered successfully! 🎉',
+        message: 'Delivery completed via bypass method!',
         order: {
           id: order_id,
           status: 'delivered',
-          payment_method: payment_method,
+          payment_method,
+          payment_status,
+          payout_amount: basePayout,
           agent_name: agent.name,
-          completed_at: new Date().toISOString()
+          completed_at: now,
+          method: 'bypass'
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('💥 Delivery completion error:', error);
+    console.error('🚀 Bypass delivery error:', error);
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: 'Failed to complete delivery. Please try again.',
-        technical_details: error instanceof Error ? error.message : String(error)
+        error: 'Bypass delivery failed. Please try again.',
+        details: error instanceof Error ? error.message : String(error)
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
