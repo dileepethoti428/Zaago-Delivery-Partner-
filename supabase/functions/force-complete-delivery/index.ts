@@ -90,88 +90,29 @@ serve(async (req) => {
       );
     }
 
-    console.log('🚨 EXECUTING FORCE UPDATE - BYPASSING ALL VALIDATION');
+    console.log('🚨 EXECUTING NUCLEAR BYPASS - USING SQL FUNCTION');
 
-    // Set payment status
+    // Use the SQL bypass function that completely avoids JSON validation
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
-    const delivery_timestamp = new Date().toISOString();
+    
+    const { data: bypassResult, error: bypassError } = await supabaseAdmin
+      .rpc('force_complete_delivery_bypass', {
+        p_order_id: order_id,
+        p_agent_id: agent.id,
+        p_payment_status: payment_status
+      });
 
-    // FORCE UPDATE using raw SQL - bypass ALL triggers and validation
-    const { error: forceUpdateError } = await supabaseAdmin
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: delivery_timestamp,
-        payment_status: payment_status,
-        updated_at: delivery_timestamp
-      })
-      .eq('id', order_id)
-      .eq('agent_id', agent.id);
-
-    if (forceUpdateError) {
-      console.error('❌ Force update failed:', forceUpdateError);
-      throw new Error(`Force update failed: ${forceUpdateError.message}`);
+    if (bypassError) {
+      console.error('❌ Nuclear bypass failed:', bypassError);
+      throw new Error(`Nuclear bypass failed: ${bypassError.message}`);
     }
 
-    console.log('✅ FORCE UPDATE SUCCESSFUL');
-
-    // Manually handle agent payout since triggers are bypassed
-    const defaultPayout = 40;
-    const defaultDistance = 0.8;
-
-    try {
-      // Update agent wallet
-      const { data: existingWallet } = await supabaseAdmin
-        .from('agent_wallet')
-        .select('balance')
-        .eq('agent_id', agent.id)
-        .single();
-
-      if (existingWallet) {
-        await supabaseAdmin
-          .from('agent_wallet')
-          .update({
-            balance: existingWallet.balance + defaultPayout,
-            updated_at: delivery_timestamp
-          })
-          .eq('agent_id', agent.id);
-      } else {
-        await supabaseAdmin
-          .from('agent_wallet')
-          .insert({
-            agent_id: agent.id,
-            balance: defaultPayout,
-            updated_at: delivery_timestamp
-          });
-      }
-
-      // Create earning record
-      await supabaseAdmin
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: defaultPayout,
-          status: 'completed',
-          description: `Force delivery completion: ${defaultDistance}km`
-        });
-
-      // Create wallet transaction
-      await supabaseAdmin
-        .from('agent_wallet_transactions')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: defaultPayout,
-          transaction_type: 'delivery_payment',
-          description: 'Force delivery payout'
-        });
-
-      console.log('✅ Agent payout processed successfully');
-    } catch (payoutError) {
-      console.error('⚠️ Payout processing failed:', payoutError);
-      // Continue anyway - order is marked delivered
+    if (!bypassResult?.success) {
+      console.error('❌ Nuclear bypass returned failure:', bypassResult);
+      throw new Error(bypassResult?.error || 'Nuclear bypass failed');
     }
+
+    console.log('✅ NUCLEAR BYPASS SUCCESSFUL:', bypassResult);
 
     // Log the force completion for audit
     await supabaseAdmin
@@ -180,14 +121,14 @@ serve(async (req) => {
         email: 'system@zaago.com',
         event_type: 'email_sent',
         metadata: {
-          action: 'FORCE_DELIVERY_COMPLETION',
+          action: 'NUCLEAR_DELIVERY_COMPLETION',
           order_id: order_id,
           agent_id: agent.id,
           agent_email: user.email,
           payment_method: payment_method,
-          completion_time: delivery_timestamp,
-          reason: 'Bypassed validation due to corrupted order data',
-          payout_amount: defaultPayout
+          completion_time: new Date().toISOString(),
+          reason: 'Used nuclear SQL bypass due to corrupted JSON data',
+          method: 'rpc_function_bypass'
         }
       });
 

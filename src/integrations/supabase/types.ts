@@ -4723,6 +4723,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      force_complete_delivery_bypass: {
+        Args: {
+          p_agent_id: string
+          p_delivered_at?: string
+          p_order_id: string
+          p_payment_status: string
+        }
+        Returns: Json
+      }
       generate_order_qr_code: {
         Args: { order_uuid: string }
         Returns: undefined

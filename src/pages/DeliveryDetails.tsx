@@ -510,6 +510,79 @@ const DeliveryDetails = () => {
     setIsProcessing(false);
   };
 
+  // Nuclear option - uses the SQL bypass function
+  const nuclearCompleteDelivery = async (paymentMethod: 'COD' | 'Online') => {
+    if (!order) return;
+
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `🔥 NUCLEAR OPTION WARNING 🔥\n\n` +
+      `This will bypass ALL validation and force complete the delivery using raw SQL.\n\n` +
+      `This action cannot be undone and should only be used as a last resort.\n\n` +
+      `Payment Method: ${paymentMethod}\n` +
+      `Order ID: ${order.id}\n\n` +
+      `Are you absolutely sure you want to proceed?`
+    );
+
+    if (!confirmed) return;
+
+    setIsProcessing(true);
+
+    try {
+      console.log('🔥 Initiating nuclear delivery completion:', {
+        orderId: order.id,
+        paymentMethod,
+        timestamp: new Date().toISOString()
+      });
+
+      const { data, error } = await supabase.functions.invoke('force-complete-delivery', {
+        body: {
+          order_id: order.id,
+          payment_method: paymentMethod
+        }
+      });
+
+      if (error) {
+        console.error('❌ Nuclear completion failed:', error);
+        throw error;
+      }
+
+      if (!data?.success) {
+        console.error('❌ Nuclear completion returned failure:', data);
+        throw new Error(data?.error || 'Nuclear completion failed');
+      }
+
+      console.log('✅ Nuclear completion successful:', data);
+
+      toast({
+        title: "🔥 Nuclear Completion Successful",
+        description: `Delivery has been force completed using nuclear bypass method. Payment: ${paymentMethod}`,
+        variant: "default",
+      });
+
+      // Clear error state and redirect
+      setDeliveryError(null);
+      setIsProcessing(false);
+      
+      // Redirect to home after short delay
+      setTimeout(() => {
+        navigate('/home');
+      }, 2000);
+
+    } catch (error: any) {
+      console.error('❌ Nuclear completion failed:', error);
+      
+      toast({
+        title: "💥 Nuclear Option Failed",
+        description: error.message || 'Even the nuclear option failed. Contact admin immediately.',
+        variant: "destructive",
+      });
+
+      setIsProcessing(false);
+      // Don't clear deliveryError - keep showing all options
+    }
+  };
+
   if (isLoading) {
     return <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
@@ -877,20 +950,22 @@ const DeliveryDetails = () => {
 
               {/* Show error message and force complete option */}
               {deliveryError && showForceComplete && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3 space-y-3">
                   <div className="text-red-800 text-sm mb-2">
                     <strong>⚠️ Normal completion failed:</strong> {deliveryError}
                   </div>
                   <div className="text-red-700 text-xs mb-3">
-                    This order may have corrupted data. Use Force Complete to bypass validation.
+                    This order may have corrupted data. Try Force Complete first.
                   </div>
+                  
+                  {/* Regular Force Complete Buttons */}
                   <div className="grid grid-cols-2 gap-2">
                     <Button 
                       onClick={() => forceCompleteDelivery('COD')} 
                       variant="destructive"
                       size="sm"
                       disabled={isProcessing}
-                      className="text-xs"
+                      className="text-xs bg-orange-600 hover:bg-orange-700"
                     >
                       🚨 Force Complete (COD)
                     </Button>
@@ -899,10 +974,37 @@ const DeliveryDetails = () => {
                       variant="destructive"
                       size="sm"
                       disabled={isProcessing}
-                      className="text-xs"
+                      className="text-xs bg-orange-600 hover:bg-orange-700"
                     >
                       🚨 Force Complete (Online)
                     </Button>
+                  </div>
+                  
+                  {/* Nuclear Option */}
+                  <div className="border-t pt-3">
+                    <div className="text-red-800 text-xs mb-2 text-center font-bold">
+                      🔥 NUCLEAR OPTION - Use only if Force Complete also fails
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button 
+                        onClick={() => nuclearCompleteDelivery('COD')} 
+                        variant="destructive"
+                        size="sm"
+                        disabled={isProcessing}
+                        className="text-xs bg-red-700 hover:bg-red-800 border-2 border-red-800"
+                      >
+                        💥 Nuclear COD
+                      </Button>
+                      <Button 
+                        onClick={() => nuclearCompleteDelivery('Online')} 
+                        variant="destructive"
+                        size="sm"
+                        disabled={isProcessing}
+                        className="text-xs bg-red-700 hover:bg-red-800 border-2 border-red-800"
+                      >
+                        💥 Nuclear Online
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
