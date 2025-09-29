@@ -1715,8 +1715,8 @@ const Home = () => {
                           </div>
                                {/* Pickup Location */}
                              {order.status === 'assigned' && (
-                                <div 
-                                 className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors min-h-[36px] min-w-[100px] justify-center"
+                                 <div 
+                                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors min-h-[36px] w-[140px] justify-center"
                                 onClick={async () => {
                                   if (order.pickup_location) {
                                     const { lat, lng } = order.pickup_location;
@@ -1784,7 +1784,7 @@ const Home = () => {
                           <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
                           <div className="flex-1">
                                <div 
-                                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors min-h-[36px] min-w-[100px] justify-center"
+                                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors min-h-[36px] w-[140px] justify-center"
                                  onClick={() => {
                                    const address = debugAddress(order.address, `order-${order.id}-maps`);
                                    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
