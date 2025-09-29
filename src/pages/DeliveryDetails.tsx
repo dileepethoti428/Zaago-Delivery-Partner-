@@ -360,43 +360,29 @@ const DeliveryDetails = () => {
     }
   };
 
-  // Complete delivery online using ultimate function (bypasses orders table)
+  // Simple delivery completion using the new streamlined function
   const completeDeliveryOnline = async (paymentMethod: 'COD' | 'Online') => {
     if (!order) return { success: false };
     
     setIsProcessing(true);
-    setDeliveryError(null);
     
     try {
-      console.log('🚀 Starting online delivery completion:', { 
+      console.log('🚀 Starting delivery completion:', { 
         orderId: order.id, 
-        paymentMethod,
-        distance,
-        payout
+        paymentMethod
       });
 
-      // Get current location for payout calculation
-      const customerLocation = order?.address?.coordinates || null;
-      const agentLocation = await getCurrentLocation();
-
-      const { data, error } = await supabase.functions.invoke('ultimate-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('simple-complete-delivery', {
         body: {
           order_id: order.id,
-          payment_method: paymentMethod,
-          customer_location: customerLocation,
-          agent_location: agentLocation
+          payment_method: paymentMethod
         }
       });
 
-      if (error) {
-        console.error('Ultimate completion error:', error);
-        throw new Error(error.message || 'Failed to complete delivery');
-      }
-
-      if (data?.success) {
-        console.log('✅ Online completion successful:', data);
+      if (!error && data?.success) {
+        console.log('✅ Delivery completion successful:', data);
         
-        // Update local order state
+        // Update local order state immediately for UI responsiveness
         const updatedOrder = { 
           ...order, 
           status: 'delivered', 
@@ -408,38 +394,31 @@ const DeliveryDetails = () => {
         // Show success message
         toast({
           title: "✅ Order Completed Successfully!",
-          description: `🎉 Delivery completed online! Payout: ₹${data.payout_amount}`,
+          description: `🎉 Delivery completed! Payout: ₹${data.payout_amount}`,
         });
         
-        // Trigger order status sync to update customer app and home page
-        try {
-          await supabase.functions.invoke('sync-order-status');
-          console.log('✅ Order status synced to customer app');
-        } catch (syncError) {
-          console.warn('⚠️ Order sync warning:', syncError);
-        }
+        // Dispatch event to trigger home page refresh
+        window.dispatchEvent(new CustomEvent('orderCompleted', {
+          detail: { orderId: order.id, status: 'delivered' }
+        }));
         
-        // Navigate back to home
+        // Navigate back to home immediately
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('orderCompleted'));
           navigate('/home');
-        }, 2000);
+        }, 1500);
 
         return { success: true };
       } else {
-        throw new Error(data?.error || 'Unknown error occurred');
+        throw new Error(data?.error || 'Delivery completion failed');
       }
     } catch (error) {
-      console.error('❌ Online completion failed:', error);
-      
-      // Fallback to offline completion only if online fails
-      console.log('🔄 Falling back to offline completion...');
+      console.error('❌ Delivery completion failed:', error);
       toast({
-        title: "Online Failed",
-        description: "Switching to offline mode...",
+        title: "Delivery Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
         variant: "destructive"
       });
-      return await completeDeliveryOffline(paymentMethod);
+      return { success: false };
     } finally {
       setIsProcessing(false);
     }

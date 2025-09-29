@@ -170,6 +170,21 @@ const Home = () => {
     return () => clearTimeout(timeout);
   }, []);
 
+  // Listen for order completion events and refresh home page immediately
+  useEffect(() => {
+    const handleOrderCompleted = (event: any) => {
+      console.log('🎉 Order completed event received:', event.detail);
+      // Immediately refresh orders to remove completed order from list
+      debouncedRefresh('order_completed', true);
+    };
+
+    window.addEventListener('orderCompleted', handleOrderCompleted);
+    
+    return () => {
+      window.removeEventListener('orderCompleted', handleOrderCompleted);
+    };
+  }, []);
+
   const loadAgentSettings = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1094,7 +1109,7 @@ const Home = () => {
     });
   };
 
-  const availableOrders = getSortedOrders(orders);
+  const availableOrders = getSortedOrders(orders.filter(order => order.status !== 'delivered'));
   const assignedOrders = availableOrders.filter(order => order.status === 'assigned');
 
   // Track previous location to prevent unnecessary refreshes
