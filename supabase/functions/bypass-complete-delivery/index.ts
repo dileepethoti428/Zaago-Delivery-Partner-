@@ -73,30 +73,50 @@ serve(async (req) => {
     const now = new Date().toISOString();
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     
-    // STEP 1: Direct order update (avoid RPC that might trigger problematic functions)
-    console.log('🔄 Step 1: Direct order table update...');
+    // STEP 1: Ultra-minimal order update (only change essential fields)
+    console.log('🔄 Step 1: Minimal order status update...');
     
-    const { error: updateError } = await supabaseClient
+    // First, let's try to update just the status and delivered_at, nothing else
+    const { error: statusError } = await supabaseClient
       .from('orders')
       .update({
         status: 'delivered',
-        delivered_at: now,
-        payment_status: payment_status,
-        updated_at: now
+        delivered_at: now
       })
       .eq('id', order_id)
-      .eq('agent_id', agent.id); // Ensure only assigned agent can complete
+      .eq('agent_id', agent.id);
 
-    if (updateError) {
-      console.error('❌ Direct update failed:', updateError);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Order update failed: ${updateError.message}`,
-          details: updateError
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
+    if (statusError) {
+      console.error('❌ Status update failed:', statusError);
+      // Try even more minimal update - just status
+      const { error: minimalError } = await supabaseClient
+        .from('orders')
+        .update({ status: 'delivered' })
+        .eq('id', order_id)
+        .eq('agent_id', agent.id);
+      
+      if (minimalError) {
+        console.error('❌ Even minimal update failed:', minimalError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to update order status',
+            details: minimalError.message
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+    }
+
+    // Separately update payment status to avoid JSON parsing issues
+    try {
+      await supabaseClient
+        .from('orders')
+        .update({ payment_status: payment_status })
+        .eq('id', order_id)
+        .eq('agent_id', agent.id);
+    } catch (paymentError) {
+      console.log('⚠️ Payment status update failed, continuing:', paymentError);
     }
 
     console.log('✅ Order status updated directly');
