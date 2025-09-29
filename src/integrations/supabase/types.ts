@@ -4523,7 +4523,9 @@ export type Database = {
         Returns: boolean
       }
       cancel_vacation_and_resume_subscription: {
-        Args: { p_vacation_id: string }
+        Args:
+          | { p_user_id?: string; p_vacation_id: string }
+          | { p_vacation_id: string }
         Returns: Json
       }
       check_rate_limit: {
@@ -4534,6 +4536,17 @@ export type Database = {
           user_identifier: string
         }
         Returns: boolean
+      }
+      check_subscription_delivery_anomalies: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          days_in_future: number
+          has_active_vacation: boolean
+          next_delivery_date: string
+          subscription_id: string
+          user_id: string
+          vacation_details: Json
+        }[]
       }
       check_user_vacation_status: {
         Args: { p_check_date?: string; p_user_id: string }
@@ -4654,6 +4667,10 @@ export type Database = {
         }
         Returns: string
       }
+      create_subscription_monitoring_alerts: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       create_vacation_period: {
         Args:
           | {
@@ -4690,9 +4707,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      extend_subscription_by_vacation: {
+        Args: { p_subscription_id: string; p_vacation_days: number }
+        Returns: Json
+      }
       extract_seller_ids_from_order: {
         Args: { order_items: Json }
         Returns: string[]
+      }
+      fix_subscription_delivery_dates: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       fix_uncategorized_products: {
         Args: Record<PropertyKey, never>
@@ -5094,6 +5119,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      log_vacation_cancellation: {
+        Args: {
+          p_cancelled_by?: string
+          p_metadata?: Json
+          p_reason?: string
+          p_subscription_id: string
+          p_user_id: string
+          p_vacation_id: string
+        }
+        Returns: undefined
+      }
       manual_trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -5236,6 +5272,10 @@ export type Database = {
       sync_user_player_id: {
         Args: { device_info?: Json; player_id: string; target_user_id: string }
         Returns: boolean
+      }
+      trigger_immediate_processing_after_vacation_cancel: {
+        Args: { p_metadata?: Json; p_reason?: string; p_user_id: string }
+        Returns: Json
       }
       trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
