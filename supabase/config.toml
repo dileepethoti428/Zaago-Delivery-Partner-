@@ -1,5 +1,8 @@
 project_id = "amhpjsmubciahslghobw"
 
+[functions.simple-delivery-complete]
+verify_jwt = true
+
 [functions.agent-autopay-monitor]
 verify_jwt = false
 

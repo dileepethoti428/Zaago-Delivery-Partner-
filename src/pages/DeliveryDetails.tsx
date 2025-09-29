@@ -384,15 +384,13 @@ const DeliveryDetails = () => {
         throw new Error(`Order cannot be completed from status: ${currentOrder.status}`);
       }
 
-      console.log('🚀 Calling RELIABLE EDGE FUNCTION for completion...');
+      console.log('🚀 Calling ULTRA-SIMPLE delivery completion...');
       
-      // Use the reliable simple-complete-delivery function instead
-      const { data: result, error: edgeError } = await supabase.functions.invoke('simple-complete-delivery', {
+      // Use the new ultra-simple function (Blinkit-style)
+      const { data: result, error: edgeError } = await supabase.functions.invoke('simple-delivery-complete', {
         body: {
           order_id: order.id,
-          payment_method: paymentMethod,
-          distance_km: 0.8, // Default fallback distance
-          agent_payout: 40 // Default fallback payout
+          payment_method: paymentMethod
         }
       });
 
