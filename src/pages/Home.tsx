@@ -1599,26 +1599,32 @@ const Home = () => {
               <p className="text-sm text-gray-500">Available orders and your assignments</p>
             </div>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'nearest' | 'newest' | 'highest')}>
-              <SelectTrigger className="w-36 h-9 border-gray-300 bg-white">
-                <SelectValue className="text-gray-700" />
+              <SelectTrigger className="w-auto min-w-[120px] h-10 px-3 py-2 bg-green-50 border-2 border-green-200 rounded-full text-green-700 hover:bg-green-100 hover:border-green-300 transition-colors">
+                <div className="flex items-center space-x-1">
+                  {sortBy === 'highest' && <IndianRupee className="w-4 h-4" />}
+                  {sortBy === 'nearest' && <Target className="w-4 h-4" />}
+                  {sortBy === 'newest' && <Clock className="w-4 h-4" />}
+                  <SelectValue className="text-green-700 font-medium" />
+                </div>
+                <ChevronDown className="w-4 h-4 ml-1 text-green-600" />
               </SelectTrigger>
-              <SelectContent className="bg-white">
-                <SelectItem value="nearest" className="text-gray-700">
+              <SelectContent className="bg-white border border-gray-200 shadow-lg rounded-lg">
+                <SelectItem value="nearest" className="text-gray-700 hover:bg-gray-50 cursor-pointer">
                   <div className="flex items-center">
                     <Target className="w-4 h-4 mr-2 text-green-500" />
-                    <span className="text-gray-700">Nearest First</span>
+                    <span>Nearest First</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="newest" className="text-gray-700">
+                <SelectItem value="newest" className="text-gray-700 hover:bg-gray-50 cursor-pointer">
                   <div className="flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-gray-700" />
-                    <span className="text-gray-700">Newest First</span>
+                    <Clock className="w-4 h-4 mr-2 text-blue-500" />
+                    <span>Newest First</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="highest" className="text-gray-700">
+                <SelectItem value="highest" className="text-gray-700 hover:bg-gray-50 cursor-pointer">
                   <div className="flex items-center">
-                    <IndianRupee className="w-4 h-4 mr-2 text-gray-700" />
-                    <span className="text-gray-700">Highest First</span>
+                    <IndianRupee className="w-4 h-4 mr-2 text-green-600" />
+                    <span>Highest First</span>
                   </div>
                 </SelectItem>
               </SelectContent>
