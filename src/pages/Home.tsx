@@ -1642,10 +1642,6 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Offline Completions Queue */}
-      <div className="px-4">
-        <OfflineCompletionsQueue />
-      </div>
 
       <div className="flex-1 bg-gray-50">
         {/* Orders Header */}
