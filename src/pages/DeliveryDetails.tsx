@@ -12,6 +12,7 @@ import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from "@/lib/distanceService";
 import { ArrowLeft, MapPin, Phone, Clock, Calendar, Navigation, CheckCircle2, Package, User, CreditCard, AlertCircle, X } from "lucide-react";
 import DeliveryTimer from "@/components/DeliveryTimer";
+import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
 interface Order {
   id: string;
   customer_name: string;
@@ -320,49 +321,72 @@ const DeliveryDetails = () => {
       setIsCancelling(false);
     }
   };
-  const completeDeliveryDirect = async (paymentMethod: string) => {
+  const completeDeliveryOffline = async (paymentMethod: 'COD' | 'Online') => {
+    if (!order) return { success: false };
+    
     setIsProcessing(true);
     setDeliveryError(null);
     
     try {
-      console.log('🚀 Safe delivery completion:', { 
-        orderId: order?.id, 
+      // Get current user email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('User authentication required');
+      }
+
+      console.log('📱 Completing delivery offline:', { 
+        orderId: order.id, 
         paymentMethod,
-        agent_id: order?.agent_id 
+        distance,
+        payout
       });
 
-      const { data, error } = await supabase.functions.invoke('safe-complete-delivery', {
-        body: {
-          order_id: order?.id,
-          payment_method: paymentMethod
-        }
-      });
-
-      if (error) {
-        console.error('❌ Safe function error:', error);
-        throw new Error(`Safe delivery failed: ${error.message}`);
-      }
-
-      if (!data || !data.success) {
-        console.error('❌ Safe delivery failed:', data);
-        throw new Error(data?.error || 'Safe delivery failed');
-      }
-
-      console.log('🚀 Safe delivery completed successfully!');
-      
-      // Update local order state
+      // Update local order state immediately
       const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
-      setOrder(prev => prev ? { 
-        ...prev, 
+      const updatedOrder = { 
+        ...order, 
         status: 'delivered', 
         payment_status: payment_status,
         delivered_at: new Date().toISOString()
-      } : null);
+      };
+      setOrder(updatedOrder);
 
-      // Show success message
+      // Store completion in localStorage for later sync
+      const completion = {
+        id: `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        orderId: order.id,
+        customerName: order.customer_name,
+        totalAmount: order.total,
+        paymentMethod,
+        completedAt: new Date().toISOString(),
+        agentEmail: user.email,
+        distance,
+        payout,
+        customerPhone: order.customer_phone,
+        address: order.address,
+        items: order.items,
+        status: 'completed' as const
+      };
+
+      // Save to localStorage
+      const existingCompletions = JSON.parse(localStorage.getItem('zaago_offline_completions') || '[]');
+      existingCompletions.push(completion);
+      localStorage.setItem('zaago_offline_completions', JSON.stringify(existingCompletions));
+
+      // Update agent payouts
+      const currentPayouts = JSON.parse(localStorage.getItem('zaago_agent_payouts') || '{"totalEarnings":0,"pendingEarnings":0}');
+      currentPayouts.totalEarnings += payout;
+      currentPayouts.pendingEarnings += payout;
+      currentPayouts.lastUpdated = new Date().toISOString();
+      localStorage.setItem('zaago_agent_payouts', JSON.stringify(currentPayouts));
+
+      console.log('✅ Delivery completed offline successfully!');
+      
+      // Show success message  
       toast({
-        title: "🚀 Bypass Delivery Success! 🎉",
-        description: `Product delivered via bypass method! Payment: ${paymentMethod}`,
+        title: "✅ Delivery Completed!",
+        description: `Order completed offline. Payout: ₹${payout}. Will sync automatically when connection is stable.`,
+        variant: "default"
       });
 
       // Navigate after success
@@ -371,21 +395,21 @@ const DeliveryDetails = () => {
         navigate('/home');
       }, 1500);
 
-      return { success: true, message: 'Bypass delivery completed!' };
+      return { success: true, message: 'Delivery completed offline!' };
 
     } catch (error) {
-      console.error('🚀 Bypass delivery error:', error);
+      console.error('📱 Offline completion error:', error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       
       setDeliveryError(errorMessage);
       
       toast({
-        title: "Bypass Delivery Failed",
+        title: "Completion Failed",
         description: errorMessage,
         variant: "destructive",
       });
       
-      throw new Error(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setIsProcessing(false);
     }
@@ -748,20 +772,23 @@ const DeliveryDetails = () => {
           });
           
           return (
-            <DeliveryTimer
-              deliveryType={determinedType}
-              scheduledTime={order.delivery_date}
-              orderPlacedAt={new Date(order.created_at)}
-              subscriptionId={order.subscription_id}
-              deliveryTime={order.delivery_time}
-              deliverySlots={order.delivery_slots}
-              paymentStatus={order.payment_status}
-              deliveryTimeSlot={order.delivery_time_slot}
-              immediateTimingConfig={order.immediate_timing_config}
-              acceptedAt={new Date()} // Use current time as acceptance time since agent is viewing details
-              scheduledTimingConfig={{ max_duration_minutes: 20 }} // 20 minutes for scheduled orders after acceptance
-              className="w-full"
-            />
+             <>
+               <OfflineCompletionsQueue />
+               <DeliveryTimer
+                 deliveryType={determinedType}
+                 scheduledTime={order.delivery_date}
+                 orderPlacedAt={new Date(order.created_at)}
+                 subscriptionId={order.subscription_id}
+                 deliveryTime={order.delivery_time}
+                 deliverySlots={order.delivery_slots}
+                 paymentStatus={order.payment_status}
+                 deliveryTimeSlot={order.delivery_time_slot}
+                 immediateTimingConfig={order.immediate_timing_config}
+                 acceptedAt={new Date()}
+                 scheduledTimingConfig={{ max_duration_minutes: 20 }}
+                 className="w-full"
+               />
+             </>
           );
         })()}
       </div>
@@ -986,8 +1013,8 @@ const DeliveryDetails = () => {
           total_amount: order.total,
           payment_status: order.payment_status
         }} 
-        onSuccess={async (paymentMethod) => {
-          await completeDeliveryDirect(paymentMethod);
+        onSuccess={async (paymentMethod: 'COD' | 'Online') => {
+          await completeDeliveryOffline(paymentMethod);
         }}
       />}
 
