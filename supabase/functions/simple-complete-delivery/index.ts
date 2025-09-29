@@ -110,27 +110,50 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to update order: ${updateOrderError.message}`);
     }
 
-    // Create earnings record
-    const { error: earningsError } = await supabase
+    // Check if earnings already exist for this order (idempotency check)
+    const { data: existingEarnings } = await supabase
       .from('earnings')
-      .insert({
-        agent_id: agent.id,
-        order_id: order_id,
-        amount: totalPayout,
-        status: 'completed',
-        description: `Delivery payout - ${payment_method}`
-      });
+      .select('id')
+      .eq('agent_id', agent.id)
+      .eq('order_id', order_id)
+      .maybeSingle();
 
-    if (earningsError && !earningsError.message.includes('duplicate')) {
-      console.error('Earnings creation error:', earningsError);
+    // Only create earnings if they don't exist
+    if (!existingEarnings) {
+      const { error: earningsError } = await supabase
+        .from('earnings')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: totalPayout,
+          status: 'completed',
+          description: `Delivery payout - ${payment_method}`
+        });
+
+      if (earningsError) {
+        console.error('Earnings creation error:', earningsError);
+        // Don't throw error for earnings - continue with order completion
+      }
+    } else {
+      console.log('✅ Earnings already exist for this order, skipping creation');
     }
 
-    // Update agent wallet
+    // Check if agent wallet exists, if not create it
+    const { data: existingWallet } = await supabase
+      .from('agent_wallet')
+      .select('balance')
+      .eq('agent_id', agent.id)
+      .maybeSingle();
+
+    const currentBalance = existingWallet?.balance || 0;
+    const newBalance = currentBalance + totalPayout;
+
+    // Update or create agent wallet
     const { error: walletError } = await supabase
       .from('agent_wallet')
       .upsert({
         agent_id: agent.id,
-        balance: (agent.wallet_balance || 0) + totalPayout,
+        balance: newBalance,
         updated_at: now
       }, {
         onConflict: 'agent_id'
@@ -140,19 +163,33 @@ Deno.serve(async (req) => {
       console.error('Wallet update error:', walletError);
     }
 
-    // Create wallet transaction
-    const { error: transactionError } = await supabase
+    // Check if wallet transaction already exists
+    const { data: existingTransaction } = await supabase
       .from('agent_wallet_transactions')
-      .insert({
-        agent_id: agent.id,
-        order_id: order_id,
-        amount: totalPayout,
-        transaction_type: 'delivery_payment',
-        description: `Delivery completed - ${payment_method}`
-      });
+      .select('id')
+      .eq('agent_id', agent.id)
+      .eq('order_id', order_id)
+      .eq('transaction_type', 'delivery_payment')
+      .maybeSingle();
 
-    if (transactionError) {
-      console.error('Transaction creation error:', transactionError);
+    // Only create transaction if it doesn't exist
+    if (!existingTransaction) {
+      const { error: transactionError } = await supabase
+        .from('agent_wallet_transactions')
+        .insert({
+          agent_id: agent.id,
+          order_id: order_id,
+          amount: totalPayout,
+          transaction_type: 'delivery_payment',
+          description: `Delivery completed - ${payment_method}`
+        });
+
+      if (transactionError) {
+        console.error('Transaction creation error:', transactionError);
+        // Don't throw error for transaction - continue with completion
+      }
+    } else {
+      console.log('✅ Wallet transaction already exists for this order, skipping creation');
     }
 
     // Log completion for audit
