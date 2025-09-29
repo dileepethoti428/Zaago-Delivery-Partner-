@@ -22,6 +22,9 @@ export const OfflineCompletionsQueue = () => {
     return null;
   }
 
+  // Component is disabled - return null to hide it
+  return null;
+
   return (
     <Card className="mb-4">
       <CardHeader>
