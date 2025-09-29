@@ -94,26 +94,47 @@ serve(async (req) => {
       throw new Error(`Order cannot be completed from status: ${currentOrder.status}`);
     }
 
-    console.log('🔄 Updating order status directly...');
+    console.log('🔄 Updating order status with bypassed validation...');
 
     // Set payment status
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+    const delivery_timestamp = new Date().toISOString();
 
-    // Direct update using service role - this bypasses all triggers and RLS
-    const { error: updateError } = await supabaseAdmin
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: payment_status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order_id)
-      .eq('agent_id', agent.id);
+    // Use RPC function to bypass problematic triggers
+    const { error: rpcError } = await supabaseAdmin
+      .rpc('update_order_status', {
+        p_order_id: order_id,
+        p_new_status: 'delivered',
+        p_new_payment_status: payment_status,
+        p_agent_id: agent.id
+      });
 
-    if (updateError) {
-      console.error('❌ Update failed:', updateError);
-      throw new Error(`Failed to update order: ${updateError.message}`);
+    if (rpcError) {
+      console.error('❌ RPC update failed:', rpcError);
+      
+      // Fallback to direct SQL execution if RPC fails
+      console.log('🔄 Trying fallback direct update...');
+      
+      try {
+        const { error: directUpdateError } = await supabaseAdmin
+          .from('orders')
+          .update({
+            status: 'delivered',
+            delivered_at: delivery_timestamp,
+            payment_status: payment_status,
+            updated_at: delivery_timestamp
+          })
+          .eq('id', order_id)
+          .eq('agent_id', agent.id);
+
+        if (directUpdateError) {
+          throw new Error(`Direct update failed: ${directUpdateError.message}`);
+        }
+      } catch (fallbackError) {
+        console.error('❌ All update methods failed:', fallbackError);
+        const errorMessage = fallbackError instanceof Error ? fallbackError.message : 'Unknown fallback error';
+        throw new Error(`Failed to update order: ${errorMessage}`);
+      }
     }
 
     console.log('✅ Order updated successfully');
