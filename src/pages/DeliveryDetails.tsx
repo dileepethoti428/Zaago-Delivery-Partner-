@@ -82,23 +82,6 @@ const DeliveryDetails = () => {
     }
   }, [order]);
 
-  // Check completion status on load
-  useEffect(() => {
-    const checkCompletion = async () => {
-      if (orderId) {
-        const completion = await checkCompletionStatus();
-        if (completion) {
-          console.log('Order already completed via new system:', completion);
-          toast({
-            title: "Order Already Completed",
-            description: `Order completed on ${new Date(completion.completed_at).toLocaleString()}`,
-          });
-        }
-      }
-    };
-    
-    checkCompletion();
-  }, [orderId]);
 
   // Real-time distance updates - recalculate every 10 seconds for faster updates
   useEffect(() => {
@@ -337,26 +320,6 @@ const DeliveryDetails = () => {
       });
     } finally {
       setIsCancelling(false);
-    }
-  };
-  // Check if order is already completed using the new completion system
-  const checkCompletionStatus = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('delivery_completions')
-        .select('id, status, completed_at, payout_amount')
-        .eq('order_id', orderId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error checking completion status:', error);
-        return null;
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Error checking completion status:', error);
-      return null;
     }
   };
 
