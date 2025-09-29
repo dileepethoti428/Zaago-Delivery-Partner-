@@ -13,7 +13,7 @@ interface PaymentMethodDialogProps {
     total_amount: number;
     payment_status?: string;
   };
-  onSuccess?: (paymentMethod: string) => Promise<void> | void;
+  onSuccess?: (paymentMethod: string) => Promise<{payout_amount?: number} | void> | void;
   selectionOnly?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -57,9 +57,9 @@ export const PaymentMethodDialog = ({
       const result = await onSuccess(method);
       console.log('✅ onSuccess completed:', result);
       
-      // Show success message with payment method and delivery amount
+      // Show success message with payment method and actual delivery amount from backend
       const paymentMethodText = method === 'COD' ? 'Cash on Delivery (COD)' : 'Online Payment';
-      const deliveryAmount = '₹25'; // Standard delivery amount
+      const deliveryAmount = (result && typeof result === 'object' && result.payout_amount) ? `₹${result.payout_amount}` : '₹25'; // Fallback to ₹25 if backend doesn't return amount
       toast({
         title: "✅ Product Delivered Successfully!",
         description: `Delivery Type: ${paymentMethodText} • Agent Earned: ${deliveryAmount}`,

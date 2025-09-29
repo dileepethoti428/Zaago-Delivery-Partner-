@@ -444,7 +444,7 @@ const DeliveryDetails = () => {
           navigate('/home');
         }, 1500);
 
-        return { success: true };
+        return { success: true, payout_amount: data.payout_amount };
       } else {
         throw new Error(data?.error || 'Delivery completion failed');
       }
@@ -1170,7 +1170,7 @@ const DeliveryDetails = () => {
           payment_status: order.payment_status
         }} 
         onSuccess={async (paymentMethod: 'COD' | 'Online') => {
-          await completeDeliveryOnline(paymentMethod);
+          return await completeDeliveryOnline(paymentMethod);
         }}
       />}
 
