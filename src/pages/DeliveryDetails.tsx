@@ -321,98 +321,37 @@ const DeliveryDetails = () => {
     }
   };
   const completeDeliveryDirect = async (paymentMethod: string) => {
-    console.log('🎯 Starting BYPASS delivery completion...', { 
-      orderId: order?.id, 
-      paymentMethod 
-    });
-
-    if (!order?.id) {
-      console.error('❌ No order ID available');
-      throw new Error('Invalid order ID');
-    }
-
     setIsProcessing(true);
     setDeliveryError(null);
-
+    
     try {
-      console.log('🔐 Getting current user...');
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        console.error('❌ User not authenticated');
-        throw new Error('User not authenticated');
-      }
-      console.log('✅ User authenticated:', user.email);
+      console.log('🔥 Bulletproof delivery completion:', { 
+        orderId: order?.id, 
+        paymentMethod,
+        agent_id: order?.agent_id 
+      });
 
-      console.log('🔍 Looking up agent...');
-      // Get agent info
-      const { data: agentCheck } = await supabase
-        .from('delivery_agents')
-        .select('id, email')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .single();
-
-      if (!agentCheck) {
-        console.error('❌ Agent not found or not active');
-        throw new Error('You are not an active delivery agent');
-      }
-      console.log('✅ Agent found:', agentCheck.id);
-
-      // First check current order status
-      console.log('📋 Checking current order status...');
-      const { data: currentOrder } = await supabase
-        .from('orders')
-        .select('status, agent_id')
-        .eq('id', order.id)
-        .single();
-
-      if (!currentOrder) {
-        throw new Error('Order not found');
-      }
-
-      if (currentOrder.status === 'delivered') {
-        console.log('✅ Order already delivered');
-        toast({
-          title: "Already Delivered",
-          description: "This order has already been marked as delivered.",
-        });
-        return { success: true, message: 'Order already delivered' };
-      }
-
-      if (!['assigned', 'packed', 'out_for_delivery'].includes(currentOrder.status)) {
-        throw new Error(`Order cannot be completed from status: ${currentOrder.status}`);
-      }
-
-      console.log('🚀 Calling ULTRA-SIMPLE delivery completion...');
-      
-      // Use the new ultra-simple function (Blinkit-style)
-      const { data: result, error: edgeError } = await supabase.functions.invoke('simple-delivery-complete', {
+      const { data, error } = await supabase.functions.invoke('bulletproof-complete-delivery', {
         body: {
-          order_id: order.id,
+          order_id: order?.id,
           payment_method: paymentMethod
         }
       });
 
-      console.log('📡 Edge function response:', { result, edgeError });
-
-      if (edgeError) {
-        console.error('❌ Edge function error:', edgeError);
-        throw new Error(`Delivery completion failed: ${edgeError.message}`);
+      if (error) {
+        console.error('❌ Edge function error:', error);
+        throw new Error(`Delivery completion failed: ${error.message}`);
       }
 
-      // Handle the result properly by checking if it's a success response
-      if (!result || !result.success) {
-        console.error('❌ Delivery completion failed:', result);
-        throw new Error(result?.error || 'Order could not be updated. Please check if order is still assigned to you.');
+      if (!data || !data.success) {
+        console.error('❌ Delivery completion failed:', data);
+        throw new Error(data?.error || 'Failed to complete delivery');
       }
 
-      console.log('✅ Order updated successfully via edge function!');
-      
-      // Set payment status for local state update
-      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
+      console.log('✅ Delivery completed successfully!');
       
       // Update local order state
+      const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
       setOrder(prev => prev ? { 
         ...prev, 
         status: 'delivered', 
@@ -426,8 +365,6 @@ const DeliveryDetails = () => {
         description: `Product delivered successfully with ${paymentMethod} payment!`,
       });
 
-      console.log('🎉 Delivery completed successfully!');
-
       // Navigate after success
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('orderCompleted'));
@@ -440,13 +377,11 @@ const DeliveryDetails = () => {
       console.error('❌ Delivery completion error:', error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       
-      // Show the error and enable force complete option
       setDeliveryError(errorMessage);
-      setShowForceComplete(true);
       
       toast({
         title: "Delivery Failed",
-        description: "Normal completion failed. Force Complete option is now available below.",
+        description: errorMessage,
         variant: "destructive",
       });
       
