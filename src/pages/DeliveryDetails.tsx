@@ -376,11 +376,6 @@ const DeliveryDetails = () => {
       }
     } catch (error) {
       console.error('❌ Delivery completion failed:', error);
-      toast({
-        title: "Delivery Failed",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
-        variant: "destructive"
-      });
       return { success: false };
     } finally {
       setIsProcessing(false);
