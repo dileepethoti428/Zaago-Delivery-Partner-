@@ -108,12 +108,12 @@ serve(async (req) => {
 
       console.log('✅ Earnings record created:', totalPayout);
 
-      // 6. UPDATE AGENT WALLET
+      // 6. UPDATE AGENT WALLET (UPSERT WITH EXPLICIT CONSTRAINT)
       await client.queryArray(`
         INSERT INTO agent_wallet (agent_id, balance, updated_at)
         VALUES ($1, $2, NOW())
-        ON CONFLICT (agent_id) DO UPDATE SET
-          balance = agent_wallet.balance + $2,
+        ON CONFLICT ON CONSTRAINT agent_wallet_agent_id_key DO UPDATE SET
+          balance = agent_wallet.balance + EXCLUDED.balance,
           updated_at = NOW()
       `, [agentId, totalPayout]);
 
@@ -128,31 +128,16 @@ serve(async (req) => {
 
       console.log('✅ Wallet transaction created');
 
-      // 8. CREATE DELIVERY HISTORY RECORD (MANUALLY WITHOUT TRIGGERS)
+      // 8. CREATE SIMPLE DELIVERY HISTORY (AVOID JSON PARSING)
       await client.queryArray(`
         INSERT INTO delivery_history 
         (order_id, agent_id, customer_name, delivery_date, completed_at, 
-         total_amount, payment_method, payment_status, delivery_payout,
-         customer_phone, delivery_address, items)
-        SELECT 
-          o.id,
-          o.agent_id,
-          COALESCE(o.customer_name, 'Nuclear Emergency'),
-          CURRENT_DATE,
-          NOW(),
-          o.total,
-          CASE WHEN $1 = 'COD' THEN 'COD' ELSE 'Online' END,
-          $1,
-          $2,
-          COALESCE(o.customer_phone, ''),
-          COALESCE(o.address, '{}'),
-          COALESCE(o.items, '[]')
-        FROM orders o
-        WHERE o.id = $3
+         total_amount, payment_method, payment_status, delivery_payout)
+        VALUES ($1, $2, 'Emergency Delivery', CURRENT_DATE, NOW(), $3, $4, $5, $6)
         ON CONFLICT (order_id) DO NOTHING
-      `, [paymentStatus, totalPayout, order_id]);
+      `, [order_id, agentId, orderTotal, payment_method === 'COD' ? 'COD' : 'Online', paymentStatus, totalPayout]);
 
-      console.log('✅ Delivery history created');
+      console.log('✅ Simple delivery history created (no JSON parsing)');
 
       // Commit transaction
       await client.queryArray('COMMIT');
