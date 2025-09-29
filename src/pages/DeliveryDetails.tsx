@@ -82,6 +82,24 @@ const DeliveryDetails = () => {
     }
   }, [order]);
 
+  // Check completion status on load
+  useEffect(() => {
+    const checkCompletion = async () => {
+      if (orderId) {
+        const completion = await checkCompletionStatus();
+        if (completion) {
+          console.log('Order already completed via new system:', completion);
+          toast({
+            title: "Order Already Completed",
+            description: `Order completed on ${new Date(completion.completed_at).toLocaleString()}`,
+          });
+        }
+      }
+    };
+    
+    checkCompletion();
+  }, [orderId]);
+
   // Real-time distance updates - recalculate every 10 seconds for faster updates
   useEffect(() => {
     if (!order) return;
@@ -321,6 +339,28 @@ const DeliveryDetails = () => {
       setIsCancelling(false);
     }
   };
+  // Check if order is already completed using the new completion system
+  const checkCompletionStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('delivery_completions')
+        .select('id, status, completed_at, payout_amount')
+        .eq('order_id', orderId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking completion status:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error checking completion status:', error);
+      return null;
+    }
+  };
+
+  // Complete delivery online using ultimate function (bypasses orders table)
   const completeDeliveryOnline = async (paymentMethod: 'COD' | 'Online') => {
     if (!order) return { success: false };
     
@@ -335,58 +375,90 @@ const DeliveryDetails = () => {
         payout
       });
 
-      // Call bulletproof completion function
-      const { data, error } = await supabase.functions.invoke('bulletproof-complete-delivery', {
-        body: { 
-          order_id: order.id, 
-          payment_method: paymentMethod 
+      // Get current location for payout calculation
+      const customerLocation = order?.address?.coordinates || null;
+      const agentLocation = await getCurrentLocation();
+
+      const { data, error } = await supabase.functions.invoke('ultimate-complete-delivery', {
+        body: {
+          order_id: order.id,
+          payment_method: paymentMethod,
+          customer_location: customerLocation,
+          agent_location: agentLocation
         }
       });
 
       if (error) {
-        console.error('❌ Online completion failed:', error);
-        throw new Error(error.message || 'Online completion failed');
+        console.error('Ultimate completion error:', error);
+        throw new Error(error.message || 'Failed to complete delivery');
       }
 
-      if (!data.success) {
-        console.error('❌ Completion returned error:', data.error);
-        throw new Error(data.error || 'Completion failed on server');
+      if (data?.success) {
+        console.log('✅ Online completion successful:', data);
+        
+        // Update local order state
+        const updatedOrder = { 
+          ...order, 
+          status: 'delivered', 
+          payment_status: paymentMethod === 'COD' ? 'paid_cod' : 'paid_online',
+          delivered_at: new Date().toISOString()
+        };
+        setOrder(updatedOrder);
+        
+        // Show success message
+        toast({
+          title: "✅ Order Completed Successfully!",
+          description: `🎉 Delivery completed online! Payout: ₹${data.payout_amount}`,
+        });
+        
+        // Navigate back to home
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('orderCompleted'));
+          navigate('/home');
+        }, 2000);
+
+        return { success: true };
+      } else {
+        throw new Error(data?.error || 'Unknown error occurred');
       }
-
-      console.log('✅ Online completion successful:', data);
-      
-      // Update local order state
-      const updatedOrder = { 
-        ...order, 
-        status: 'delivered', 
-        payment_status: paymentMethod === 'COD' ? 'paid_cod' : 'paid_online',
-        delivered_at: new Date().toISOString()
-      };
-      setOrder(updatedOrder);
-      
-      // Show success message
-      toast({
-        title: "✅ Order Completed Successfully!",
-        description: `Delivery completed online. Payout: ₹${data.order?.payout_amount || payout}`,
-      });
-      
-      // Navigate back to home
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('orderCompleted'));
-        navigate('/home');
-      }, 1500);
-
-      return { success: true };
-
     } catch (error) {
       console.error('❌ Online completion failed:', error);
       
-      // Fallback to offline completion
+      // Fallback to offline completion only if online fails
       console.log('🔄 Falling back to offline completion...');
+      toast({
+        title: "Online Failed",
+        description: "Switching to offline mode...",
+        variant: "destructive"
+      });
       return await completeDeliveryOffline(paymentMethod);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Helper function to get current location
+  const getCurrentLocation = (): Promise<{latitude: number, longitude: number} | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Location error:', error);
+          resolve(null);
+        },
+        { timeout: 5000 }
+      );
+    });
   };
 
   const completeDeliveryOffline = async (paymentMethod: 'COD' | 'Online') => {

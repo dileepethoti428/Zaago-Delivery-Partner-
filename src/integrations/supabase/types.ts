@@ -1199,6 +1199,54 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_completions: {
+        Row: {
+          agent_id: string
+          agent_location: Json | null
+          completed_at: string
+          created_at: string
+          customer_location: Json | null
+          distance_km: number | null
+          id: string
+          metadata: Json | null
+          order_id: string
+          payment_method: string
+          payout_amount: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          agent_location?: Json | null
+          completed_at?: string
+          created_at?: string
+          customer_location?: Json | null
+          distance_km?: number | null
+          id?: string
+          metadata?: Json | null
+          order_id: string
+          payment_method: string
+          payout_amount?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          agent_location?: Json | null
+          completed_at?: string
+          created_at?: string
+          customer_location?: Json | null
+          distance_km?: number | null
+          id?: string
+          metadata?: Json | null
+          order_id?: string
+          payment_method?: string
+          payout_amount?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       delivery_history: {
         Row: {
           agent_id: string | null
