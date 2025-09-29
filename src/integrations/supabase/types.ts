@@ -5241,6 +5241,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      reconcile_completed_orders: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       refresh_todays_best_deals: {
         Args: Record<PropertyKey, never>
         Returns: undefined

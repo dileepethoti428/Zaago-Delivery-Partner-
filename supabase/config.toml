@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.bulletproof-complete-delivery]
 verify_jwt = false
 
+[functions.sync-order-status]
+verify_jwt = false
+
 [functions.reconcile-order-completions]
 verify_jwt = false
 

@@ -411,6 +411,14 @@ const DeliveryDetails = () => {
           description: `🎉 Delivery completed online! Payout: ₹${data.payout_amount}`,
         });
         
+        // Trigger order status sync to update customer app and home page
+        try {
+          await supabase.functions.invoke('sync-order-status');
+          console.log('✅ Order status synced to customer app');
+        } catch (syncError) {
+          console.warn('⚠️ Order sync warning:', syncError);
+        }
+        
         // Navigate back to home
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('orderCompleted'));
