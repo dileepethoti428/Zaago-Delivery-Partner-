@@ -104,7 +104,13 @@ export const PaymentMethodDialog = ({
               
               <div className="space-y-3">
                 <Button
-                  onClick={() => handlePaymentMethod('COD')}
+                  onClick={() => {
+                    toast({
+                      title: "Product Delivered",
+                      description: "Order has been successfully delivered to the customer",
+                    });
+                    onOpenChange(false);
+                  }}
                   disabled={isProcessing}
                   className="w-full h-12 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
                 >
@@ -113,7 +119,13 @@ export const PaymentMethodDialog = ({
                 </Button>
                 
                 <Button
-                  onClick={() => handlePaymentMethod('Online')}
+                  onClick={() => {
+                    toast({
+                      title: "Product Delivered",
+                      description: "Order has been successfully delivered to the customer",
+                    });
+                    onOpenChange(false);
+                  }}
                   disabled={isProcessing}
                   className="w-full h-12 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
                 >
