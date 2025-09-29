@@ -509,18 +509,26 @@ const Home = () => {
             order.id
           );
 
-          // Calculate real-time distance from agent's current location to pickup shop
+          // Calculate real-time distance from agent's current location to pickup shop using backend
           let agentToShopDistance = 2.0; // Default fallback
           if (location.latitude && location.longitude) {
             try {
-              const agentCoords = { lat: location.latitude, lng: location.longitude };
-              const agentDistanceResult = await calculateRealTimeDistance(
-                agentCoords,
-                pickupCoords,
-                `${order.id}-agent`
-              );
-              if (agentDistanceResult?.distance_km !== undefined) {
-                agentToShopDistance = agentDistanceResult.distance_km;
+              // Use the backend calculate-delivery-pricing function which already calculates agent-to-order distance
+              const { data, error } = await supabase.functions.invoke('calculate-delivery-pricing', {
+                body: {
+                  order_id: order.id,
+                  agent_location: {
+                    lat: location.latitude,
+                    lng: location.longitude
+                  }
+                }
+              });
+
+              if (!error && data?.success && typeof data?.distance_km === 'number') {
+                agentToShopDistance = data.distance_km;
+                console.log(`📏 Backend agent-to-shop distance for ${order.id}: ${agentToShopDistance} km`);
+              } else {
+                console.warn(`⚠️ Backend distance calculation failed for ${order.id}:`, error || data);
               }
             } catch (error) {
               console.warn(`⚠️ Failed to calculate agent-to-shop distance for order ${order.id}:`, error);
