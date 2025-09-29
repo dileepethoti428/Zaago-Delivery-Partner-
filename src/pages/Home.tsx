@@ -1799,8 +1799,9 @@ const Home = () => {
                                   </div>
                                 ) : (
                                     <div className="flex items-center">
-                                      <span>{`${order.agent_to_shop_distance ? order.agent_to_shop_distance.toFixed(1) : '2.0'} km away • ${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
-                                      <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
+                                      <span>{`${order.agent_to_shop_distance ? order.agent_to_shop_distance.toFixed(1) : '2.0'} km away`}</span>
+                                      <div className="w-2 h-2 bg-green-400 rounded-full ml-2 animate-pulse" title="Real-time tracking"></div>
+                                      <span className="text-xs text-gray-500 ml-2">• {order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery</span>
                                     </div>
                                 )}
                               </span>
