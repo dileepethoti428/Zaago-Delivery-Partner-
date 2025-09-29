@@ -242,9 +242,18 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // Enhanced calculation for QR deliveries using new rates
+    // Check if earnings already exist (idempotency check) - BEFORE updating order
+    const { data: existingEarnings } = await supabaseClient
+      .from('earnings')
+      .select('id, amount, status')
+      .eq('agent_id', agent.id)
+      .eq('order_id', order.id)
+      .maybeSingle();
+
     const distance_km = 2.5; // Default distance for QR deliveries
     const payout_amount = distance_km <= 1 ? 12 : 12 + (distance_km - 1) * 8; // New rates: ₹12 base + ₹8/km
+    const now = new Date().toISOString();
+    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
 
     console.log('📊 QR Delivery Context:', {
       qr_code_data: qr_code_data.substring(0, 20) + '...',
@@ -255,14 +264,64 @@ serve(async (req) => {
       order_total: order.total,
       payment_method: payment_method,
       order_status: order.status,
-      payout_amount: payout_amount
+      payout_amount: payout_amount,
+      existing_earnings: existingEarnings ? 'YES' : 'NO'
     });
 
-    // Direct database update using service role to bypass RPC issues
-    console.log('🔄 Updating order status directly...');
-    
-    const now = new Date().toISOString();
-    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+    if (existingEarnings) {
+      console.log('✅ Earnings already exist - updating order status only:', {
+        earning_id: existingEarnings.id,
+        amount: existingEarnings.amount,
+        status: existingEarnings.status
+      });
+      
+      // Only update order status since earnings already processed
+      const { error: updateError } = await supabaseClient
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: now,
+          payment_status: payment_status,
+          updated_at: now
+        })
+        .eq('id', order.id)
+        .eq('agent_id', agent.id);
+
+      if (updateError) {
+        console.error('❌ Failed to update order (earnings exist):', updateError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to update order status',
+            details: updateError.message
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+
+      console.log('✅ Order updated successfully (partial completion recovery)');
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Product delivered successfully! 🎉 (Recovered)',
+          order: {
+            id: order.id,
+            customer_name: order.customer_name,
+            total: order.total,
+            payment_method,
+            agent_name: agent.name,
+            completed_at: now,
+            payout_amount: existingEarnings.amount,
+            recovery_mode: true
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Normal flow: Update order status first
+    console.log('🔄 Updating order status (normal flow)...');
     
     // Use more specific update to avoid JSON parsing issues
     const { data: updateResult, error: updateError } = await supabaseClient
@@ -329,7 +388,65 @@ serve(async (req) => {
 
     console.log('✅ Order marked as delivered successfully!');
 
-    // Don't worry about wallet/earnings for now - just complete the delivery
+    // Create earnings record for this completion
+    const { error: earningsError } = await supabaseClient
+      .from('earnings')
+      .insert({
+        agent_id: agent.id,
+        order_id: order.id,
+        amount: payout_amount,
+        status: 'completed',
+        description: `QR delivery payout - ${payment_method}`
+      });
+
+    if (earningsError) {
+      console.error('❌ Earnings creation error:', earningsError);
+      // Don't fail the delivery for earnings issues
+    } else {
+      console.log('✅ Earnings record created:', { amount: payout_amount });
+    }
+
+    // Update agent wallet
+    const { data: existingWallet } = await supabaseClient
+      .from('agent_wallet')
+      .select('balance')
+      .eq('agent_id', agent.id)
+      .maybeSingle();
+
+    const currentBalance = existingWallet?.balance || 0;
+    const newBalance = currentBalance + payout_amount;
+
+    const { error: walletError } = await supabaseClient
+      .from('agent_wallet')
+      .upsert({
+        agent_id: agent.id,
+        balance: newBalance,
+        updated_at: now
+      }, {
+        onConflict: 'agent_id'
+      });
+
+    if (walletError) {
+      console.error('❌ Wallet update error:', walletError);
+    } else {
+      console.log('✅ Wallet updated:', { newBalance });
+    }
+
+    // Create wallet transaction
+    const { error: transactionError } = await supabaseClient
+      .from('agent_wallet_transactions')
+      .insert({
+        agent_id: agent.id,
+        order_id: order.id,
+        amount: payout_amount,
+        transaction_type: 'delivery_payment',
+        description: `QR delivery completed - ${payment_method}`
+      });
+
+    if (transactionError) {
+      console.error('❌ Transaction creation error:', transactionError);
+    }
+
     console.log('🎉 QR Delivery completed successfully!');
 
     return new Response(
@@ -342,7 +459,8 @@ serve(async (req) => {
           total: order.total,
           payment_method,
           agent_name: agent.name,
-          completed_at: new Date().toISOString()
+          completed_at: now,
+          payout_amount: payout_amount
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

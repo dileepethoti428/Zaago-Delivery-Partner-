@@ -91,11 +91,57 @@ Deno.serve(async (req) => {
     const distanceBonus = 0; // Can be enhanced later
     const totalPayout = basePayout + distanceBonus;
 
-    // Start transaction
+    // Check if earnings already exist (idempotency check) - BEFORE updating order
+    const { data: existingEarnings } = await supabase
+      .from('earnings')
+      .select('id, amount, status')
+      .eq('agent_id', agent.id)
+      .eq('order_id', order_id)
+      .maybeSingle();
+
     const now = new Date().toISOString();
     const paymentStatus = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
 
-    // Update order status to delivered
+    if (existingEarnings) {
+      console.log('✅ Earnings already exist - updating order status only:', {
+        earning_id: existingEarnings.id,
+        amount: existingEarnings.amount,
+        status: existingEarnings.status
+      });
+      
+      // Only update order status since earnings already processed
+      const { error: updateOrderError } = await supabase
+        .from('orders')
+        .update({
+          status: 'delivered',
+          delivered_at: now,
+          payment_status: paymentStatus,
+          updated_at: now
+        })
+        .eq('id', order_id)
+        .eq('agent_id', agent.id);
+
+      if (updateOrderError) {
+        console.error('❌ Failed to update order (earnings exist):', updateOrderError);
+        throw new Error(`Failed to update order: ${updateOrderError.message}`);
+      }
+
+      console.log('✅ Order updated successfully (partial completion recovery)');
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Delivery completed successfully (recovered)',
+          order_id: order_id,
+          payout_amount: existingEarnings.amount,
+          payment_method: payment_method,
+          recovery_mode: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Normal flow: Update order status first, then create earnings
     const { error: updateOrderError } = await supabase
       .from('orders')
       .update({
@@ -104,19 +150,15 @@ Deno.serve(async (req) => {
         payment_status: paymentStatus,
         updated_at: now
       })
-      .eq('id', order_id);
+      .eq('id', order_id)
+      .eq('agent_id', agent.id);
 
     if (updateOrderError) {
+      console.error('❌ Failed to update order:', updateOrderError);
       throw new Error(`Failed to update order: ${updateOrderError.message}`);
     }
 
-    // Check if earnings already exist for this order (idempotency check)
-    const { data: existingEarnings } = await supabase
-      .from('earnings')
-      .select('id')
-      .eq('agent_id', agent.id)
-      .eq('order_id', order_id)
-      .maybeSingle();
+    console.log('✅ Order status updated to delivered');
 
     // Only create earnings if they don't exist
     if (!existingEarnings) {
