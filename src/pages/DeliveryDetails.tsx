@@ -325,13 +325,13 @@ const DeliveryDetails = () => {
     setDeliveryError(null);
     
     try {
-      console.log('🚀 Bypass delivery completion:', { 
+      console.log('🚀 Safe delivery completion:', { 
         orderId: order?.id, 
         paymentMethod,
         agent_id: order?.agent_id 
       });
 
-      const { data, error } = await supabase.functions.invoke('bypass-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('safe-complete-delivery', {
         body: {
           order_id: order?.id,
           payment_method: paymentMethod
@@ -339,16 +339,16 @@ const DeliveryDetails = () => {
       });
 
       if (error) {
-        console.error('❌ Bypass function error:', error);
-        throw new Error(`Bypass delivery failed: ${error.message}`);
+        console.error('❌ Safe function error:', error);
+        throw new Error(`Safe delivery failed: ${error.message}`);
       }
 
       if (!data || !data.success) {
-        console.error('❌ Bypass delivery failed:', data);
-        throw new Error(data?.error || 'Bypass delivery failed');
+        console.error('❌ Safe delivery failed:', data);
+        throw new Error(data?.error || 'Safe delivery failed');
       }
 
-      console.log('🚀 Bypass delivery completed successfully!');
+      console.log('🚀 Safe delivery completed successfully!');
       
       // Update local order state
       const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
