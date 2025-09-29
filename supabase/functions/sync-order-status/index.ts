@@ -20,49 +20,77 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Update the specific order that was completed
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: new Date().toISOString(),
-        payment_status: 'paid_cod', // Assuming COD for now
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', 'd56d4ad7-9fc2-4813-b270-a5732d31af60')
-      .eq('status', 'assigned'); // Only if still assigned
-
-    if (updateError) {
-      console.error('❌ Error updating order:', updateError);
-    } else {
-      console.log('✅ Order status updated to delivered');
-    }
-
-    // Mark completion as reconciled
-    const { error: completionError } = await supabase
+    // Get all completed deliveries that need reconciliation
+    const { data: completions, error: fetchError } = await supabase
       .from('delivery_completions')
-      .update({ 
-        status: 'reconciled',
-        metadata: {
-          reconciled_at: new Date().toISOString(),
-          reconciled_by: 'auto-reconciliation'
-        }
-      })
-      .eq('order_id', 'd56d4ad7-9fc2-4813-b270-a5732d31af60')
+      .select('*')
       .eq('status', 'completed');
 
-    if (completionError) {
-      console.error('❌ Error updating completion:', completionError);
-    } else {
-      console.log('✅ Completion marked as reconciled');
+    if (fetchError) {
+      console.error('❌ Error fetching completions:', fetchError);
+      throw fetchError;
+    }
+
+    console.log(`📋 Found ${completions?.length || 0} completions to reconcile`);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Process each completion
+    for (const completion of completions || []) {
+      try {
+        // Update order status to delivered
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({
+            status: 'delivered',
+            delivered_at: new Date().toISOString(),
+            payment_status: completion.payment_method === 'COD' ? 'paid_cod' : 'paid_online',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', completion.order_id)
+          .in('status', ['assigned', 'out_for_delivery']);
+
+        if (updateError) {
+          console.error(`❌ Error updating order ${completion.order_id}:`, updateError);
+          errorCount++;
+        } else {
+          console.log(`✅ Order ${completion.order_id} status updated to delivered`);
+          successCount++;
+        }
+
+        // Mark completion as reconciled
+        const { error: completionError } = await supabase
+          .from('delivery_completions')
+          .update({ 
+            status: 'reconciled',
+            metadata: {
+              ...completion.metadata,
+              reconciled_at: new Date().toISOString(),
+              reconciled_by: 'auto-reconciliation'
+            }
+          })
+          .eq('id', completion.id);
+
+        if (completionError) {
+          console.error(`❌ Error updating completion ${completion.id}:`, completionError);
+        } else {
+          console.log(`✅ Completion ${completion.id} marked as reconciled`);
+        }
+
+      } catch (error) {
+        console.error(`💥 Error processing completion ${completion.id}:`, error);
+        errorCount++;
+      }
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Order reconciled successfully',
-        order_updated: !updateError,
-        completion_updated: !completionError
+        message: 'Orders reconciled successfully',
+        processed_count: successCount + errorCount,
+        success_count: successCount,
+        error_count: errorCount
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
