@@ -69,6 +69,7 @@ const DeliveryDetails = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const [showForceComplete, setShowForceComplete] = useState(false);
   useEffect(() => {
     if (orderId) {
       fetchOrderDetails();
@@ -330,6 +331,9 @@ const DeliveryDetails = () => {
       throw new Error('Invalid order ID');
     }
 
+    setIsProcessing(true);
+    setDeliveryError(null);
+
     try {
       console.log('🔐 Getting current user...');
       // Get current user
@@ -437,7 +441,67 @@ const DeliveryDetails = () => {
     } catch (error) {
       console.error('❌ Delivery completion error:', error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      // Show the error and enable force complete option
+      setDeliveryError(errorMessage);
+      setShowForceComplete(true);
+      
+      toast({
+        title: "Delivery Failed",
+        description: "Normal completion failed. Force Complete option is now available below.",
+        variant: "destructive",
+      });
+      
       throw new Error(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const forceCompleteDelivery = async (paymentMethod: 'COD' | 'Online') => {
+    if (!order) return;
+
+    setIsProcessing(true);
+    
+    try {
+      console.log('🚨 ATTEMPTING FORCE DELIVERY COMPLETION...');
+      
+      const { data: result, error: edgeError } = await supabase.functions.invoke('force-complete-delivery', {
+        body: {
+          order_id: order.id,
+          payment_method: paymentMethod
+        }
+      });
+
+      if (edgeError) {
+        console.error('❌ Force completion error:', edgeError);
+        throw new Error(edgeError.message || 'Force completion failed');
+      }
+
+      if (!result?.success) {
+        console.error('❌ Force completion failed:', result);
+        throw new Error(result?.error || 'Force completion failed');
+      }
+
+      console.log('✅ FORCE COMPLETION SUCCESSFUL');
+
+      toast({
+        title: "Delivery Force Completed!",
+        description: `Order completed using bypass method. Payment marked as ${paymentMethod}.`,
+        variant: "default",
+      });
+
+      navigate('/home');
+
+    } catch (error) {
+      console.error('❌ Force completion error:', error);
+      toast({
+        title: "Force Completion Failed",
+        description: error instanceof Error ? error.message : "Failed to force complete delivery",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -793,24 +857,56 @@ const DeliveryDetails = () => {
               <span>DELIVERY ACTIONS</span>
             </h3>
             
-             <div className="space-y-2">
-               <div className="grid grid-cols-2 gap-1">
-                 <Button variant="outline" className="flex items-center justify-center space-x-1 h-8 border-border hover:bg-secondary px-2" onClick={handleNavigation}>
-                   <Navigation className="w-3 h-3" />
-                   <span className="text-xs">Navigate to Customer</span>
-                 </Button>
-                 
-                  <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
-                  </Button>
-                </div>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-1">
+                <Button variant="outline" className="flex items-center justify-center space-x-1 h-8 border-border hover:bg-secondary px-2" onClick={handleNavigation}>
+                  <Navigation className="w-3 h-3" />
+                  <span className="text-xs">Navigate to Customer</span>
+                </Button>
+                
+                <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                </Button>
+              </div>
 
-                <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
-                 <X className="w-3 h-3" />
-                 <span className="text-sm">{isCancelling ? 'Cancelling...' : 'Cancel Delivery'}</span>
-               </Button>
-             </div>
+              <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>
+                <X className="w-3 h-3" />
+                <span className="text-sm">{isCancelling ? 'Cancelling...' : 'Cancel Delivery'}</span>
+              </Button>
+
+              {/* Show error message and force complete option */}
+              {deliveryError && showForceComplete && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                  <div className="text-red-800 text-sm mb-2">
+                    <strong>⚠️ Normal completion failed:</strong> {deliveryError}
+                  </div>
+                  <div className="text-red-700 text-xs mb-3">
+                    This order may have corrupted data. Use Force Complete to bypass validation.
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      onClick={() => forceCompleteDelivery('COD')} 
+                      variant="destructive"
+                      size="sm"
+                      disabled={isProcessing}
+                      className="text-xs"
+                    >
+                      🚨 Force Complete (COD)
+                    </Button>
+                    <Button 
+                      onClick={() => forceCompleteDelivery('Online')} 
+                      variant="destructive"
+                      size="sm"
+                      disabled={isProcessing}
+                      className="text-xs"
+                    >
+                      🚨 Force Complete (Online)
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

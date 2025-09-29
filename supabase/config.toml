@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.complete-delivery-final]
 verify_jwt = true
+
+[functions.force-complete-delivery]
+verify_jwt = true
