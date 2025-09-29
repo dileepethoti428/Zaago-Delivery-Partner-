@@ -23,3 +23,6 @@ verify_jwt = true
 
 [functions.force-complete-delivery]
 verify_jwt = true
+
+[functions.nuclear-complete-delivery]
+verify_jwt = true

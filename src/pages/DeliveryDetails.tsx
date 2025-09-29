@@ -510,15 +510,15 @@ const DeliveryDetails = () => {
     setIsProcessing(false);
   };
 
-  // Nuclear option - uses the SQL bypass function
+  // Nuclear option - bypasses ALL API layers with direct PostgreSQL
   const nuclearCompleteDelivery = async (paymentMethod: 'COD' | 'Online') => {
     if (!order) return;
 
     // Show confirmation dialog
     const confirmed = window.confirm(
-      `🔥 NUCLEAR OPTION WARNING 🔥\n\n` +
-      `This will bypass ALL validation and force complete the delivery using raw SQL.\n\n` +
-      `This action cannot be undone and should only be used as a last resort.\n\n` +
+      `🚨 EMERGENCY NUCLEAR BYPASS 🚨\n\n` +
+      `This will bypass ALL Supabase API layers and use direct PostgreSQL connection.\n\n` +
+      `This method bypasses JSON validation that's causing failures.\n\n` +
       `Payment Method: ${paymentMethod}\n` +
       `Order ID: ${order.id}\n\n` +
       `Are you absolutely sure you want to proceed?`
@@ -529,36 +529,51 @@ const DeliveryDetails = () => {
     setIsProcessing(true);
 
     try {
-      console.log('🔥 Initiating nuclear delivery completion:', {
+      console.log('💥 NUCLEAR POSTGRESQL BYPASS INITIATED:', {
         orderId: order.id,
         paymentMethod,
         timestamp: new Date().toISOString()
       });
 
-      const { data, error } = await supabase.functions.invoke('force-complete-delivery', {
+      // Get current user for agent email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('User authentication required for nuclear bypass');
+      }
+
+      const { data, error } = await supabase.functions.invoke('nuclear-complete-delivery', {
         body: {
           order_id: order.id,
-          payment_method: paymentMethod
+          payment_method: paymentMethod,
+          agent_email: user.email
         }
       });
 
       if (error) {
-        console.error('❌ Nuclear completion failed:', error);
+        console.error('💥 Nuclear PostgreSQL bypass failed:', error);
         throw error;
       }
 
       if (!data?.success) {
-        console.error('❌ Nuclear completion returned failure:', data);
-        throw new Error(data?.error || 'Nuclear completion failed');
+        console.error('💥 Nuclear bypass returned failure:', data);
+        throw new Error(data?.error || 'Nuclear PostgreSQL bypass failed');
       }
 
-      console.log('✅ Nuclear completion successful:', data);
+      console.log('🚀 NUCLEAR POSTGRESQL BYPASS SUCCESSFUL:', data);
 
       toast({
-        title: "🔥 Nuclear Completion Successful",
-        description: `Delivery has been force completed using nuclear bypass method. Payment: ${paymentMethod}`,
+        title: "💥 Emergency Bypass Successful!",
+        description: `Order completed via direct PostgreSQL bypass. Payment: ${paymentMethod}. Payout: ₹${data.payout_amount}`,
         variant: "default",
       });
+
+      // Update local order state
+      setOrder(prev => prev ? { 
+        ...prev, 
+        status: 'delivered', 
+        payment_status: paymentMethod === 'COD' ? 'paid_cod' : 'paid_online',
+        delivered_at: new Date().toISOString()
+      } : null);
 
       // Clear error state and redirect
       setDeliveryError(null);
@@ -566,15 +581,16 @@ const DeliveryDetails = () => {
       
       // Redirect to home after short delay
       setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('orderCompleted'));
         navigate('/home');
       }, 2000);
 
     } catch (error: any) {
-      console.error('❌ Nuclear completion failed:', error);
+      console.error('💥 Nuclear PostgreSQL bypass failed:', error);
       
       toast({
-        title: "💥 Nuclear Option Failed",
-        description: error.message || 'Even the nuclear option failed. Contact admin immediately.',
+        title: "💥 Nuclear Bypass Failed",
+        description: error.message || 'Even the nuclear PostgreSQL bypass failed. All methods exhausted.',
         variant: "destructive",
       });
 
@@ -980,10 +996,13 @@ const DeliveryDetails = () => {
                     </Button>
                   </div>
                   
-                  {/* Nuclear Option */}
+                  {/* Nuclear Option - Direct PostgreSQL Bypass */}
                   <div className="border-t pt-3">
                     <div className="text-red-800 text-xs mb-2 text-center font-bold">
-                      🔥 NUCLEAR OPTION - Use only if Force Complete also fails
+                      💥 EMERGENCY POSTGRESQL BYPASS - Use only if Force Complete also fails
+                    </div>
+                    <div className="text-red-700 text-xs mb-2 text-center">
+                      Bypasses all API layers and uses direct database connection
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <Button 
@@ -993,7 +1012,7 @@ const DeliveryDetails = () => {
                         disabled={isProcessing}
                         className="text-xs bg-red-700 hover:bg-red-800 border-2 border-red-800"
                       >
-                        💥 Nuclear COD
+                        💥 Emergency COD
                       </Button>
                       <Button 
                         onClick={() => nuclearCompleteDelivery('Online')} 
@@ -1002,7 +1021,7 @@ const DeliveryDetails = () => {
                         disabled={isProcessing}
                         className="text-xs bg-red-700 hover:bg-red-800 border-2 border-red-800"
                       >
-                        💥 Nuclear Online
+                        💥 Emergency Online
                       </Button>
                     </div>
                   </div>
