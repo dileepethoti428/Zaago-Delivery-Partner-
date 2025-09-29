@@ -267,6 +267,80 @@ const DeliveryDetails = () => {
     setShowPaymentDialog(true);
   };
 
+  // Zepto-style ultra-fast delivery with real-time tracking
+  const handleZeptoStyleDelivery = async () => {
+    if (!order) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      // Step 1: Show instant notification to customer
+      toast({
+        title: "🚀 Ultra-Fast Delivery Started!",
+        description: "Your order is being prepared for instant delivery",
+      });
+
+      // Step 2: Simulate real-time tracking updates like Zepto
+      const trackingUpdates = [
+        { status: "Order Confirmed", time: "0 min", message: "Your order is confirmed and being processed" },
+        { status: "Preparing Order", time: "1 min", message: "Items are being picked and packed" },
+        { status: "Out for Delivery", time: "3 min", message: "Your delivery partner is on the way" },
+        { status: "Nearby", time: "8 min", message: "Delivery partner is 2 minutes away" },
+        { status: "Delivered", time: "10 min", message: "Order delivered successfully!" }
+      ];
+
+      // Step 3: Rapid status updates simulation
+      for (let i = 0; i < trackingUpdates.length; i++) {
+        const update = trackingUpdates[i];
+        
+        setTimeout(() => {
+          toast({
+            title: `📍 ${update.status}`,
+            description: update.message,
+          });
+        }, i * 2000); // 2-second intervals for rapid updates
+      }
+
+      // Step 4: Complete delivery after simulation
+      setTimeout(async () => {
+        try {
+          // Call the actual delivery completion
+          const result = await completeDeliveryOnline('COD'); // Default to COD for quick completion
+          
+          if (result.success) {
+            toast({
+              title: "⚡ Zepto-Style Delivery Complete!",
+              description: "Order delivered in record time - just like Zepto!",
+            });
+            
+            // Navigate back to home
+            setTimeout(() => {
+              navigate('/home');
+            }, 1500);
+          }
+        } catch (error) {
+          console.error('Zepto delivery failed:', error);
+          toast({
+            title: "Delivery Failed",
+            description: "Unable to complete ultra-fast delivery",
+            variant: "destructive"
+          });
+        } finally {
+          setIsProcessing(false);
+        }
+      }, 10000); // Complete after 10 seconds (simulating 10-minute delivery)
+
+    } catch (error) {
+      console.error('Zepto-style delivery error:', error);
+      toast({
+        title: "Quick Delivery Failed",
+        description: "Unable to start ultra-fast delivery process",
+        variant: "destructive"
+      });
+      setIsProcessing(false);
+    }
+  };
+
   const handleCancelDelivery = async () => {
     if (!order) return;
     setIsCancelling(true);
@@ -995,9 +1069,9 @@ const DeliveryDetails = () => {
                   <span className="text-xs">Navigate to Customer</span>
                 </Button>
                 
-                <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
+                <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleZeptoStyleDelivery} disabled={isProcessing}>
                   <CheckCircle2 className="w-3 h-3" />
-                  <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                  <span className="text-xs">{isProcessing ? 'Delivering...' : 'Quick Deliver'}</span>
                 </Button>
               </div>
 
