@@ -321,11 +321,76 @@ const DeliveryDetails = () => {
       setIsCancelling(false);
     }
   };
-  const completeDeliveryOffline = async (paymentMethod: 'COD' | 'Online') => {
+  const completeDeliveryOnline = async (paymentMethod: 'COD' | 'Online') => {
     if (!order) return { success: false };
     
     setIsProcessing(true);
     setDeliveryError(null);
+    
+    try {
+      console.log('🚀 Starting online delivery completion:', { 
+        orderId: order.id, 
+        paymentMethod,
+        distance,
+        payout
+      });
+
+      // Call bulletproof completion function
+      const { data, error } = await supabase.functions.invoke('bulletproof-complete-delivery', {
+        body: { 
+          order_id: order.id, 
+          payment_method: paymentMethod 
+        }
+      });
+
+      if (error) {
+        console.error('❌ Online completion failed:', error);
+        throw new Error(error.message || 'Online completion failed');
+      }
+
+      if (!data.success) {
+        console.error('❌ Completion returned error:', data.error);
+        throw new Error(data.error || 'Completion failed on server');
+      }
+
+      console.log('✅ Online completion successful:', data);
+      
+      // Update local order state
+      const updatedOrder = { 
+        ...order, 
+        status: 'delivered', 
+        payment_status: paymentMethod === 'COD' ? 'paid_cod' : 'paid_online',
+        delivered_at: new Date().toISOString()
+      };
+      setOrder(updatedOrder);
+      
+      // Show success message
+      toast({
+        title: "✅ Order Completed Successfully!",
+        description: `Delivery completed online. Payout: ₹${data.order?.payout_amount || payout}`,
+      });
+      
+      // Navigate back to home
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('orderCompleted'));
+        navigate('/home');
+      }, 1500);
+
+      return { success: true };
+
+    } catch (error) {
+      console.error('❌ Online completion failed:', error);
+      
+      // Fallback to offline completion
+      console.log('🔄 Falling back to offline completion...');
+      return await completeDeliveryOffline(paymentMethod);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const completeDeliveryOffline = async (paymentMethod: 'COD' | 'Online') => {
+    if (!order) return { success: false };
     
     try {
       // Get current user email
@@ -1014,7 +1079,7 @@ const DeliveryDetails = () => {
           payment_status: order.payment_status
         }} 
         onSuccess={async (paymentMethod: 'COD' | 'Online') => {
-          await completeDeliveryOffline(paymentMethod);
+          await completeDeliveryOnline(paymentMethod);
         }}
       />}
 
