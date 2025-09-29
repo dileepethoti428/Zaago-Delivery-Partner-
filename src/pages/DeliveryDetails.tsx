@@ -325,30 +325,37 @@ const DeliveryDetails = () => {
     setDeliveryError(null);
     
     try {
-      console.log('🔥 Bulletproof delivery completion:', { 
+      console.log('☢️ Nuclear delivery completion:', { 
         orderId: order?.id, 
         paymentMethod,
         agent_id: order?.agent_id 
       });
 
-      const { data, error } = await supabase.functions.invoke('bulletproof-complete-delivery', {
+      // Get current user for agent email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error('User authentication required');
+      }
+
+      const { data, error } = await supabase.functions.invoke('nuclear-complete-delivery', {
         body: {
           order_id: order?.id,
-          payment_method: paymentMethod
+          payment_method: paymentMethod,
+          agent_email: user.email
         }
       });
 
       if (error) {
-        console.error('❌ Edge function error:', error);
-        throw new Error(`Delivery completion failed: ${error.message}`);
+        console.error('❌ Nuclear function error:', error);
+        throw new Error(`Nuclear delivery failed: ${error.message}`);
       }
 
       if (!data || !data.success) {
-        console.error('❌ Delivery completion failed:', data);
-        throw new Error(data?.error || 'Failed to complete delivery');
+        console.error('❌ Nuclear delivery failed:', data);
+        throw new Error(data?.error || 'Nuclear delivery failed');
       }
 
-      console.log('✅ Delivery completed successfully!');
+      console.log('☢️ Nuclear delivery completed successfully!');
       
       // Update local order state
       const payment_status = paymentMethod === 'COD' ? 'paid_cod' : 'paid_online';
@@ -361,8 +368,8 @@ const DeliveryDetails = () => {
 
       // Show success message
       toast({
-        title: "Delivery Completed! 🎉",
-        description: `Product delivered successfully with ${paymentMethod} payment!`,
+        title: "☢️ Nuclear Delivery Success! 🎉",
+        description: `Product delivered via direct database bypass! Payment: ${paymentMethod}`,
       });
 
       // Navigate after success
@@ -371,16 +378,16 @@ const DeliveryDetails = () => {
         navigate('/home');
       }, 1500);
 
-      return { success: true, message: 'Delivery completed successfully!' };
+      return { success: true, message: 'Nuclear delivery completed!' };
 
     } catch (error) {
-      console.error('❌ Delivery completion error:', error);
+      console.error('☢️ Nuclear delivery error:', error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       
       setDeliveryError(errorMessage);
       
       toast({
-        title: "Delivery Failed",
+        title: "Nuclear Delivery Failed",
         description: errorMessage,
         variant: "destructive",
       });

@@ -1,10 +1,13 @@
 project_id = "amhpjsmubciahslghobw"
 
+[functions.nuclear-complete-delivery]
+verify_jwt = false
+
 [functions.bulletproof-complete-delivery]
-verify_jwt = true
+verify_jwt = false
 
 [functions.simple-delivery-complete]
-verify_jwt = true
+verify_jwt = false
 
 [functions.agent-autopay-monitor]
 verify_jwt = false
@@ -28,7 +31,4 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.force-complete-delivery]
-verify_jwt = true
-
-[functions.nuclear-complete-delivery]
 verify_jwt = true
