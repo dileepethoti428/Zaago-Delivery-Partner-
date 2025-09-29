@@ -57,11 +57,12 @@ export const PaymentMethodDialog = ({
       const result = await onSuccess(method);
       console.log('✅ onSuccess completed:', result);
       
-      // Show success message with payment method
+      // Show success message with payment method and delivery amount
       const paymentMethodText = method === 'COD' ? 'Cash on Delivery (COD)' : 'Online Payment';
+      const deliveryAmount = '₹25'; // Standard delivery amount
       toast({
         title: "✅ Product Delivered Successfully!",
-        description: `Payment Method: ${paymentMethodText}. Order completed and updated in backend.`,
+        description: `Delivery Type: ${paymentMethodText} • Agent Earned: ${deliveryAmount}`,
       });
       
       // Close dialog after successful completion
