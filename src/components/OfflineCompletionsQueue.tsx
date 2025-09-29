@@ -2,36 +2,19 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getOfflineCompletions, getAgentPayouts, OfflineCompletion } from '@/lib/offlineCompletions';
+import { useOfflineCompletions } from '@/hooks/useOfflineCompletions';
 import { formatDistanceToNow } from 'date-fns';
-import { Package, Clock, DollarSign, Wifi, WifiOff } from 'lucide-react';
+import { Package, Clock, DollarSign, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 export const OfflineCompletionsQueue = () => {
-  const [completions, setCompletions] = useState<OfflineCompletion[]>([]);
-  const [payouts, setPayouts] = useState({ totalEarnings: 0, pendingEarnings: 0, lastUpdated: null });
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  useEffect(() => {
-    const loadData = () => {
-      setCompletions(getOfflineCompletions());
-      setPayouts(getAgentPayouts());
-    };
-
-    loadData();
-    const interval = setInterval(loadData, 5000); // Refresh every 5 seconds
-
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+  const { 
+    completions, 
+    payouts, 
+    pendingCount, 
+    isOnline, 
+    isSyncing, 
+    syncOfflineCompletions 
+  } = useOfflineCompletions();
 
   const pendingCompletions = completions.filter(c => c.status === 'completed');
 
@@ -101,9 +84,14 @@ export const OfflineCompletionsQueue = () => {
         {/* Status */}
         <div className="flex items-center justify-between pt-2 border-t">
           <div className="flex items-center gap-2">
-            {isOnline ? (
+            {isSyncing ? (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                Syncing...
+              </Badge>
+            ) : isOnline ? (
               <Badge variant="default" className="bg-green-100 text-green-700">
-                Online - Will sync automatically
+                Online - Auto-sync enabled
               </Badge>
             ) : (
               <Badge variant="secondary" className="bg-orange-100 text-orange-700">
@@ -111,6 +99,17 @@ export const OfflineCompletionsQueue = () => {
               </Badge>
             )}
           </div>
+          {isOnline && pendingCompletions.length > 0 && !isSyncing && (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={syncOfflineCompletions}
+              className="text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Sync Now
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

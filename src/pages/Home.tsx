@@ -44,6 +44,7 @@ import { QrScannerDialog } from "@/components/QrScannerDialog";
 import { LocationPicker } from "@/components/LocationPicker";
 import DeliveryTimer from "@/components/DeliveryTimer";
 import { EmergencyOrderModal } from "@/components/EmergencyOrderModal";
+import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
 
 // Get greeting based on current time
 const getGreeting = () => {
@@ -1639,6 +1640,11 @@ const Home = () => {
             </div>
           </Button>
         </div>
+      </div>
+
+      {/* Offline Completions Queue */}
+      <div className="px-4">
+        <OfflineCompletionsQueue />
       </div>
 
       <div className="flex-1 bg-gray-50">
