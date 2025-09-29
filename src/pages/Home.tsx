@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,9 @@ import { parseDeliverySlots } from "@/lib/deliverySlotParser";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
+import { useOptimizedDistances } from "@/hooks/useOptimizedDistances";
+import { useBackgroundSync } from "@/hooks/useBackgroundSync";
 import { 
   MapPin, 
   Clock, 
