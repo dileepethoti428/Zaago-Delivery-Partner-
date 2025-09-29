@@ -73,6 +73,7 @@ interface Order {
   payment_status: string;
   coordinates?: { lat: number; lng: number };
   distance_km?: number;
+  agent_to_shop_distance?: number; // Real-time distance from agent to pickup shop for "Nearest First" sorting
   products_count?: number;
   restaurant?: string;
   backend_calculated?: boolean;
@@ -454,7 +455,7 @@ const Home = () => {
     }
   };
 
-  // Calculate real-time distances for all orders (shop to customer)
+  // Calculate real-time distances for all orders (shop to customer + agent to shop)
   const calculateOrderDistances = async (ordersList: Order[]) => {
     if (ordersList.length === 0) return ordersList;
     
@@ -477,7 +478,13 @@ const Home = () => {
               pickup_location: order.pickup_location,
               pickup_address: order.pickup_address
             });
-            return { ...order, distance_km: 2.5, eta_mins: 5, distance_source: 'fallback' as const };
+            return { 
+              ...order, 
+              distance_km: 2.5, 
+              eta_mins: 5, 
+              agent_to_shop_distance: 2.0,
+              distance_source: 'fallback' as const 
+            };
           }
           
           if (!customerCoords) {
@@ -486,7 +493,13 @@ const Home = () => {
               customer_address: order.address,
               address_type: typeof order.address
             });
-            return { ...order, distance_km: 2.5, eta_mins: 5, distance_source: 'fallback' as const };
+            return { 
+              ...order, 
+              distance_km: 2.5, 
+              eta_mins: 5, 
+              agent_to_shop_distance: 2.0,
+              distance_source: 'fallback' as const 
+            };
           }
 
           // Calculate distance from shop to customer (actual delivery distance)
@@ -496,11 +509,30 @@ const Home = () => {
             order.id
           );
 
-          console.log('✅ Shop-to-customer distance calculated:', {
+          // Calculate real-time distance from agent's current location to pickup shop
+          let agentToShopDistance = 2.0; // Default fallback
+          if (location.latitude && location.longitude) {
+            try {
+              const agentCoords = { lat: location.latitude, lng: location.longitude };
+              const agentDistanceResult = await calculateRealTimeDistance(
+                agentCoords,
+                pickupCoords,
+                `${order.id}-agent`
+              );
+              if (agentDistanceResult?.distance_km !== undefined) {
+                agentToShopDistance = agentDistanceResult.distance_km;
+              }
+            } catch (error) {
+              console.warn(`⚠️ Failed to calculate agent-to-shop distance for order ${order.id}:`, error);
+            }
+          }
+
+          console.log('✅ Distances calculated:', {
             orderId: order.id,
             pickup: pickupCoords,
             customer: customerCoords,
-            distance: distanceResult.distance_km + 'km',
+            deliveryDistance: distanceResult.distance_km + 'km',
+            agentToShopDistance: agentToShopDistance + 'km',
             eta: distanceResult.eta_mins + 'min',
             source: distanceResult.source
           });
@@ -509,11 +541,18 @@ const Home = () => {
             ...order,
             distance_km: distanceResult.distance_km,
             eta_mins: distanceResult.eta_mins,
+            agent_to_shop_distance: agentToShopDistance,
             distance_source: distanceResult.source as 'realtime' | 'cached' | 'fallback'
           };
         } catch (error) {
           console.error(`❌ Error calculating distance for order ${order.id}:`, error);
-          return { ...order, distance_km: 2.5, eta_mins: 5, distance_source: 'error' as const };
+          return { 
+            ...order, 
+            distance_km: 2.5, 
+            eta_mins: 5, 
+            agent_to_shop_distance: 2.0,
+            distance_source: 'error' as const 
+          };
         }
       })
     );
@@ -1031,7 +1070,8 @@ const Home = () => {
     return [...orders].sort((a, b) => {
       switch (sortBy) {
         case 'nearest':
-          return (a.distance_km || 999) - (b.distance_km || 999);
+          // Use agent-to-shop distance for proximity sorting (how far the agent is from pickup)
+          return (a.agent_to_shop_distance || 999) - (b.agent_to_shop_distance || 999);
         case 'newest':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         case 'highest':
@@ -1346,8 +1386,8 @@ const Home = () => {
     // Initial calculation
     updateDistancesAndPayouts();
     
-    // Set up interval for real-time updates every 30 seconds
-    const interval = setInterval(updateDistancesAndPayouts, 30000);
+    // Set up interval for real-time updates every 15 seconds for more responsive distance tracking
+    const interval = setInterval(updateDistancesAndPayouts, 15000);
     
     return () => clearInterval(interval);
   }, [location.latitude, location.longitude]); // Recalculate when agent location changes
@@ -1758,10 +1798,10 @@ const Home = () => {
                                     <span className="text-xs text-gray-500">Updating...</span>
                                   </div>
                                 ) : (
-                                   <div className="flex items-center">
-                                     <span>{`${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
-                                     <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
-                                   </div>
+                                    <div className="flex items-center">
+                                      <span>{`${order.agent_to_shop_distance ? order.agent_to_shop_distance.toFixed(1) : '2.0'} km away • ${order.distance_km ? order.distance_km.toFixed(1) : '2.5'} km delivery`}</span>
+                                      <div className="w-2 h-2 bg-green-400 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
+                                    </div>
                                 )}
                               </span>
                             </div>
