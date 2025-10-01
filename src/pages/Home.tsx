@@ -281,21 +281,22 @@ const Home = () => {
 
   // Check if order should trigger immediate packed status notification
   const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
-    console.log('📦 Checking packed status notification for order:', orderData.id, 'Status:', orderData.status);
+    console.log('📦 [PACKED-CHECK] Order:', orderData.id, 'Status:', orderData.status);
     
-    // Only play for orders that are packed (regardless of agent assignment)
+    // Only play for orders that are packed
     if (orderData.status !== 'packed') {
-      console.log('⚠️ Skipping packed notification - not packed status');
+      console.log('⚠️ [PACKED-CHECK] Skipping - not packed status');
       return false;
     }
     
-    // Don't play duplicate notifications for the same order (shorter window for immediate alerts)
+    // Check if already notified (but don't block - just log)
     if (recentNotifications.has(`packed-${orderData.id}`)) {
-      console.log('⚠️ Skipping duplicate packed notification for order:', orderData.id);
-      return false;
+      console.log('⚠️ [PACKED-CHECK] Duplicate detected for order:', orderData.id);
+      // Still allow the modal to show - only prevent audio spam
+      return true; // Changed: Always allow packed notification modal
     }
     
-    console.log('✅ Playing packed status notification for order:', orderData.id);
+    console.log('✅ [PACKED-CHECK] Will show notification for order:', orderData.id);
     return true;
   };
 
@@ -401,31 +402,47 @@ const Home = () => {
 
   // Handle immediate packed status notification (for any order changing to packed)
   const handlePackedStatusNotification = (orderData: any) => {
-    console.log('📦 Processing packed status notification for order:', orderData.id);
+    console.log('🚨 [PACKED-NOTIFICATION] Processing for order:', orderData.id);
+    console.log('🚨 [PACKED-NOTIFICATION] Order data:', {
+      id: orderData.id,
+      status: orderData.status,
+      customer_name: orderData.customer_name,
+      agent_id: orderData.agent_id,
+      created_at: orderData.created_at
+    });
     
     if (!shouldPlayPackedStatusNotificationForOrder(orderData)) {
+      console.log('⚠️ [PACKED-NOTIFICATION] Skipped by shouldPlay check');
       return;
     }
 
-    // Add to recent notifications to prevent duplicates (shorter window for immediate alerts)
-    setRecentNotifications(prev => new Set(prev).add(`packed-${orderData.id}`));
+    // Check if this is a duplicate audio notification (but still show modal)
+    const isDuplicateAudio = recentNotifications.has(`packed-${orderData.id}`);
     
-    // Remove from recent notifications after 5 seconds (shorter for packed alerts)
-    setTimeout(() => {
-      setRecentNotifications(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(`packed-${orderData.id}`);
-        return newSet;
-      });
-    }, 5000);
+    if (!isDuplicateAudio) {
+      // Add to recent notifications to prevent audio spam
+      setRecentNotifications(prev => new Set(prev).add(`packed-${orderData.id}`));
+      
+      // Remove from recent notifications after 10 seconds
+      setTimeout(() => {
+        setRecentNotifications(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(`packed-${orderData.id}`);
+          return newSet;
+        });
+      }, 10000);
 
-    // Play high-volume ringtone immediately for packed status - NO BLOCKING
-    if (ringtoneSettings.enabled) {
-      console.log('🔊 Playing packed status notification sound at high volume');
-      playNotificationSound();
+      // Play high-volume ringtone for first notification only
+      if (ringtoneSettings.enabled) {
+        console.log('🔊 [PACKED-NOTIFICATION] Playing sound at high volume');
+        playNotificationSound();
+      }
+    } else {
+      console.log('🔊 [PACKED-NOTIFICATION] Skipping audio - duplicate detected');
     }
     
-    // Show emergency modal popup instead of just toast
+    // ALWAYS show emergency modal for packed orders (even if duplicate audio)
+    console.log('🚨 [PACKED-NOTIFICATION] Setting emergency modal data and showing modal');
     setEmergencyOrderData({
       id: orderData.id,
       customer_name: orderData.customer_name || 'Customer',
@@ -444,12 +461,13 @@ const Home = () => {
       seller_phone: orderData.seller_phone
     });
     setShowEmergencyModal(true);
+    console.log('✅ [PACKED-NOTIFICATION] Modal should now be visible');
     
-    // Also show toast notification as backup
+    // Show toast notification
     toast({
       title: "🚨 Order Packed & Ready!",
       description: `Order from ${orderData.customer_name || 'customer'} has been packed by seller`,
-      duration: 3000,
+      duration: 5000,
     });
   };
 
@@ -1168,9 +1186,10 @@ const Home = () => {
     }
   }, [location.address, location.latitude, location.longitude, orders.length]);
 
-  // Set up real-time subscription for order updates
+  // Set up real-time subscription for order updates with enhanced logging
   useEffect(() => {
-    console.log('🔧 Setting up real-time subscription for orders...');
+    console.log('🔧 [REALTIME-SETUP] Initializing real-time subscription for orders...');
+    console.log('🔧 [REALTIME-SETUP] Ringtone settings:', ringtoneSettings);
     
     const channel = supabase
       .channel('orders-realtime-updates')
@@ -1182,43 +1201,29 @@ const Home = () => {
           table: 'orders'
         },
         (payload) => {
-          console.log('📝 Order updated:', payload);
+          console.log('📝 [REALTIME-UPDATE] Order updated - Full payload:', payload);
+          console.log('📝 [REALTIME-UPDATE] Old status:', payload.old?.status, 'New status:', payload.new?.status);
           
           // Handle status change notifications
           if (payload.new && payload.old && payload.new.status !== payload.old.status) {
-            console.log(`🔄 Order status changed: ${payload.old.status} → ${payload.new.status}`);
+            console.log(`🔄 [REALTIME-UPDATE] Status change detected: ${payload.old.status} → ${payload.new.status}`);
             
-            // Handle immediate packed status notification for ANY order changing to packed (primary notification)
+            // PRIMARY: Handle immediate packed status notification for ANY order changing to packed
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
-              console.log('🚨 Order packed - triggering immediate high-volume notification');
+              console.log('🚨 [REALTIME-UPDATE] PACKED STATUS DETECTED - Triggering emergency notification');
+              console.log('🚨 [REALTIME-UPDATE] Order details:', {
+                id: payload.new.id,
+                customer_name: payload.new.customer_name,
+                total: payload.new.total,
+                agent_id: payload.new.agent_id
+              });
               
-              // Play ringtone immediately for packed orders - NO BLOCKING
-              if (ringtoneSettings.enabled) {
-                console.log('🔊 Playing packed order notification ringtone at MAX VOLUME');
-                playNotificationSound();
-                
-                toast({
-                  title: "🚨 ORDER PACKED!",
-                  description: `Order from ${payload.new.customer_name || 'customer'} has been packed and is ready for pickup`,
-                  duration: 8000,
-                });
-              }
-              
+              // IMMEDIATE: Trigger packed notification handler (this shows the modal)
               handlePackedStatusNotification(payload.new);
-            }
-            
-            // Handle availability notification when order becomes packed (for unassigned orders only)
-            if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
-              console.log('📦 Order became available for pickup - INSTANT REFRESH');
-              handleAvailabilityOrderNotification(payload.new);
               
-              // Immediate refresh for packed orders - CRITICAL
+              // IMMEDIATE: Refresh order list
+              console.log('📦 [REALTIME-UPDATE] Triggering immediate refresh for packed order');
               debouncedRefresh('order-packed', true);
-            }
-            
-            // Keep existing pickup ready notification for backward compatibility
-            if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
-              handlePickupReadyNotification(payload.new, payload.old);
             }
             
             // For other status changes, use debounced refresh
@@ -1229,7 +1234,7 @@ const Home = () => {
           
           // Also refresh if agent assignment changes
           if (payload.new && payload.old && payload.new.agent_id !== payload.old.agent_id) {
-            console.log('👤 Agent assignment changed, refreshing...');
+            console.log('👤 [REALTIME-UPDATE] Agent assignment changed, refreshing...');
             debouncedRefresh('agent-assignment-change');
           }
 
@@ -1237,7 +1242,7 @@ const Home = () => {
           if (payload.new && payload.old && 
               (payload.new.distance_km !== payload.old.distance_km || 
                payload.new.agent_payout !== payload.old.agent_payout)) {
-            console.log('💰 Order payout data changed, refreshing...');
+            console.log('💰 [REALTIME-UPDATE] Order payout data changed, refreshing...');
             debouncedRefresh('payout-change');
           }
          }
