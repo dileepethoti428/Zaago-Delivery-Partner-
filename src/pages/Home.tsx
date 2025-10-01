@@ -306,9 +306,9 @@ const Home = () => {
     return true;
   };
 
-  // Listen for order assignment events to close emergency modal
+  // Listen for order assignment events to close emergency modal AND urgent notifications
   useEffect(() => {
-    console.log('📡 [ORDER-ASSIGNED] Setting up listener for order assignment events');
+    console.log('📡 [REALTIME] Setting up listener for order events');
     
     const channel = supabase
       .channel('orders-realtime-updates')
@@ -339,13 +339,42 @@ const Home = () => {
           return newSet;
         });
       })
+      .on('broadcast', { event: 'urgent_notification' }, (payload) => {
+        console.log('🚨 [URGENT-NOTIFICATION] Received broadcast:', payload);
+        
+        const notificationData = payload.payload;
+        if (!notificationData) {
+          console.warn('⚠️ [URGENT-NOTIFICATION] No notification data in payload');
+          return;
+        }
+
+        console.log('🔊 [URGENT-NOTIFICATION] Playing immediate audio for order:', notificationData.order_id);
+
+        // Show browser notification if permitted and trigger_push is true
+        if (notificationData.trigger_push && Notification.permission === 'granted') {
+          new Notification(notificationData.title || 'New Order', {
+            body: notificationData.message || 'You have a new order',
+            icon: '/zaago-logo-favicon.png',
+            badge: '/zaago-delivery-favicon.png',
+            tag: `order-${notificationData.order_id}`,
+            requireInteraction: true,
+            data: notificationData
+          });
+        }
+
+        // CRITICAL: Play notification sound IMMEDIATELY without cooldown
+        if (notificationData.play_audio !== false) {
+          playNotificationSound();
+          console.log('✅ [URGENT-NOTIFICATION] Audio played for order:', notificationData.order_id);
+        }
+      })
       .subscribe();
     
     return () => {
-      console.log('📡 [ORDER-ASSIGNED] Cleaning up order assignment listener');
+      console.log('📡 [REALTIME] Cleaning up realtime listeners');
       supabase.removeChannel(channel);
     };
-  }, [emergencyOrderData, toast, stopRingtone]);
+  }, [emergencyOrderData, toast, stopRingtone, playNotificationSound]);
 
   // Polling fallback to ensure we never miss packed orders (Rapido-style reliability)
   useEffect(() => {

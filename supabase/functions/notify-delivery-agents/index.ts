@@ -296,29 +296,42 @@ serve(async (req) => {
     // Send single real-time broadcast to all agents at once (more efficient)
     const channel = supabase.channel('orders-realtime-updates')
     
-    await channel.send({
+    // CRITICAL: Must subscribe before sending
+    await channel.subscribe()
+    
+    console.log('📡 Sending real-time broadcast...')
+    
+    const broadcastPayload = {
+      type: 'urgent_notification',
+      notification_type: status === 'packed' ? 'order_packed' : 'order_available',
+      order_id,
+      status,
+      customer_name,
+      total_amount,
+      priority: status === 'packed' ? 'high' : 'normal',
+      timestamp: new Date().toISOString(),
+      agents_count: nearbyAgents.length,
+      title: status === 'packed' ? '🚨 Order Packed & Ready!' : '📦 New Order Available',
+      message: status === 'packed' 
+        ? `Order from ${customer_name || 'customer'} has been packed and is ready for pickup`
+        : `New order from ${customer_name || 'customer'} for ₹${total_amount || 0}`,
+      trigger_push: true,
+      play_audio: true // Explicit flag for immediate audio
+    }
+    
+    console.log('Broadcasting payload:', JSON.stringify(broadcastPayload))
+    
+    const broadcastResult = await channel.send({
       type: 'broadcast',
       event: 'urgent_notification',
-      payload: {
-        type: 'urgent_notification',
-        notification_type: status === 'packed' ? 'order_packed' : 'order_available',
-        order_id,
-        status,
-        customer_name,
-        total_amount,
-        priority: status === 'packed' ? 'high' : 'normal',
-        timestamp: new Date().toISOString(),
-        agents_count: nearbyAgents.length,
-        title: status === 'packed' ? '🚨 Order Packed & Ready!' : '📦 New Order Available',
-        message: status === 'packed' 
-          ? `Order from ${customer_name || 'customer'} has been packed and is ready for pickup`
-          : `New order from ${customer_name || 'customer'} for ₹${total_amount || 0}`,
-        // Add flag to trigger service worker notification
-        trigger_push: true
-      }
+      payload: broadcastPayload
     })
     
+    console.log('Broadcast result:', broadcastResult)
     console.log(`📡 Real-time broadcast sent for ${status} order ${order_id}`)
+    
+    // Unsubscribe after sending
+    await supabase.removeChannel(channel)
     
     // Update order notification sent flag
     await supabase
