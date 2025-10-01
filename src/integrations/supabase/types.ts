@@ -2766,6 +2766,45 @@ export type Database = {
           },
         ]
       }
+      product_suggestions: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          description: string
+          id: string
+          image_url: string | null
+          product_name: string
+          status: string
+          suggested_images: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          image_url?: string | null
+          product_name: string
+          status?: string
+          suggested_images?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          image_url?: string | null
+          product_name?: string
+          status?: string
+          suggested_images?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       product_variants: {
         Row: {
           created_at: string
@@ -3023,6 +3062,45 @@ export type Database = {
           window_start?: string | null
         }
         Relationships: []
+      }
+      recently_viewed_products: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recently_viewed_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recently_viewed_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reviews: {
         Row: {
@@ -4984,6 +5062,21 @@ export type Database = {
           stock_quantity: number
         }[]
       }
+      get_recently_viewed_products: {
+        Args: { p_limit?: number; p_user_id: string }
+        Returns: {
+          average_rating: number
+          category_id: string
+          image_url: string
+          name: string
+          price: number
+          product_id: string
+          seller_id: string
+          stock_quantity: number
+          total_reviews: number
+          viewed_at: string
+        }[]
+      }
       get_seller_orders: {
         Args: { seller_user_id: string; status_filter?: string[] }
         Returns: {
@@ -5187,6 +5280,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      manual_process_subscriptions: {
+        Args: { p_processing_date?: string }
+        Returns: Json
+      }
       manual_trigger_subscription_processing: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -5212,7 +5309,7 @@ export type Database = {
         Returns: number
       }
       process_daily_subscriptions_with_notifications: {
-        Args: Record<PropertyKey, never>
+        Args: { p_scheduled_time?: string }
         Returns: Json
       }
       process_delivery_payout: {
@@ -5284,7 +5381,7 @@ export type Database = {
       }
       resume_expired_vacations: {
         Args: Record<PropertyKey, never>
-        Returns: Json
+        Returns: number
       }
       sanitize_input: {
         Args: { input_text: string }
@@ -5333,6 +5430,10 @@ export type Database = {
       sync_user_player_id: {
         Args: { device_info?: Json; player_id: string; target_user_id: string }
         Returns: boolean
+      }
+      track_product_view: {
+        Args: { p_product_id: string }
+        Returns: undefined
       }
       trigger_immediate_processing_after_vacation_cancel: {
         Args: { p_metadata?: Json; p_reason?: string; p_user_id: string }
