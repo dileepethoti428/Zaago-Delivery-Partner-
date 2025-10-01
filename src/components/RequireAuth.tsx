@@ -11,29 +11,12 @@ export default function RequireAuth({ children }: PropsWithChildren) {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    // Subscribe first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-        setIsAuthed(!!session);
-      } else {
-        setIsAuthed(!!session);
-      }
-      
-      // Store user email
-      if (session?.user?.email) {
-        setCurrentUserEmail(session.user.email);
-      } else {
-        setCurrentUserEmail(null);
-      }
-      
-      // Always set loading to false once we get a session update
-      if (loading) {
-        setLoading(false);
-      }
-    });
+    let mounted = true;
 
-    // Then fetch existing session
+    // Fetch existing session first
     supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!mounted) return;
+      
       if (error) {
         console.warn('Session error:', error);
         setIsAuthed(false);
@@ -46,8 +29,24 @@ export default function RequireAuth({ children }: PropsWithChildren) {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, [loading]);
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
+      setIsAuthed(!!session);
+      
+      if (session?.user?.email) {
+        setCurrentUserEmail(session.user.email);
+      } else {
+        setCurrentUserEmail(null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   if (loading || isAuthed === null) {
     return (
