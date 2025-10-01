@@ -286,11 +286,15 @@ const Home = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user?.email) return;
 
+        // Only fetch orders packed/updated in the last 24 hours to avoid stale data
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
         const { data: packedOrders, error } = await supabase
           .from('orders')
           .select('*')
           .eq('status', 'packed')
           .is('agent_id', null) // CRITICAL: Only get orders without agent
+          .gte('updated_at', twentyFourHoursAgo) // CRITICAL: Only fresh orders
           .order('created_at', { ascending: false })
           .limit(3);
 
@@ -353,7 +357,20 @@ const Home = () => {
       return false;
     }
     
-    console.log('✅ [PACKED-CHECK] Will show notification - packed and no agent assigned');
+    // CRITICAL: Only show fresh orders (packed/updated within last 24 hours)
+    const orderUpdatedAt = new Date(orderData.updated_at || orderData.created_at);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    if (orderUpdatedAt < twentyFourHoursAgo) {
+      console.log('⚠️ [PACKED-CHECK] Skipping - order too old:', {
+        orderId: orderData.id,
+        updatedAt: orderUpdatedAt.toISOString(),
+        age: Math.floor((Date.now() - orderUpdatedAt.getTime()) / (1000 * 60 * 60)) + ' hours'
+      });
+      return false;
+    }
+    
+    console.log('✅ [PACKED-CHECK] Will show notification - packed, no agent, and fresh order');
     return true;
   };
 
