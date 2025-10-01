@@ -1552,23 +1552,23 @@ const Home = () => {
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       {/* Header with Greeting */}
       <div className="bg-white px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
             <div className="flex items-center text-xs text-gray-500 mt-1 cursor-pointer hover:text-gray-700 transition-colors" onClick={() => setShowLocationPicker(true)}>
-              <MapPin className="w-3 h-3 mr-1 text-red-500" />
-              <span className="truncate max-w-[280px]">{currentLocation}</span>
+              <MapPin className="w-3 h-3 mr-1 text-red-500 flex-shrink-0" />
+              <span className="truncate max-w-[150px] sm:max-w-[280px]">{currentLocation}</span>
             </div>
           </div>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-1 flex-shrink-0">
             {/* Notification Bell */}
             <div className="relative">
               <Button 
                 variant="ghost" 
                 size="icon"
                 onClick={() => navigate('/notifications')}
-                className="hover:bg-gray-100"
+                className="hover:bg-gray-100 h-9 w-9"
               >
                 <Bell className="w-5 h-5 text-gray-600" />
                 {notificationCount > 0 && (
@@ -1584,7 +1584,7 @@ const Home = () => {
               variant="outline" 
               size="icon"
               onClick={() => navigate('/profile')}
-              className="hover:bg-gray-100 border-gray-300 bg-white"
+              className="hover:bg-gray-100 border-2 border-gray-400 bg-white h-9 w-9"
             >
               <User className="w-5 h-5 text-gray-700" />
             </Button>
