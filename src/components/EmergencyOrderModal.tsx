@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +54,7 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
   onReject,
   onStopAlarm
 }) => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -127,7 +129,7 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
 
   const handleViewDetails = () => {
     if (orderData) {
-      window.location.href = `/order-details/${orderData.id}`;
+      navigate(`/delivery-details/${orderData.id}`);
     }
   };
 
