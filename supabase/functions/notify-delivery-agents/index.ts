@@ -278,20 +278,7 @@ serve(async (req) => {
       throw notificationError
     }
     
-    // Send Web Push Notifications to agents (background support)
-    console.log('📲 Sending web push notifications...');
-    
-    const pushPromises = nearbyAgents.map(async (agent) => {
-      try {
-        // Note: Web push requires a separate push service setup
-        // For now, we'll broadcast to service workers via real-time
-        console.log(`Notifying agent ${agent.id} via push`);
-      } catch (pushError) {
-        console.error(`Failed to send push to agent ${agent.id}:`, pushError);
-      }
-    });
-    
-    await Promise.allSettled(pushPromises);
+    // Note: Web Push will be sent after broadcast (see below)
     
     // Send single real-time broadcast to all agents at once (more efficient)
     const channel = supabase.channel('orders-realtime-updates')
@@ -336,52 +323,66 @@ serve(async (req) => {
     // CRITICAL: Send Web Push notifications for background/closed app scenarios
     console.log('📲 Sending Web Push notifications to agents...')
     
-    const pushPromises = nearbyAgents
-      .filter(agent => agent.push_subscription)
-      .map(async (agent) => {
-        try {
-          const subscription = agent.push_subscription as any;
-          
-          if (!subscription?.endpoint) {
-            console.log(`⚠️ No valid push subscription for agent ${agent.id}`);
-            return;
-          }
-          
-          // Prepare Web Push payload
-          const pushPayload = JSON.stringify({
-            title: broadcastPayload.title,
-            body: broadcastPayload.message,
-            icon: '/zaago-logo-favicon.png',
-            badge: '/zaago-delivery-favicon.png',
-            tag: `order-${order_id}`,
-            data: {
-              url: '/home',
-              order_id,
-              notification_type: broadcastPayload.notification_type,
-              play_audio: true
-            },
-            requireInteraction: true,
-            vibrate: [200, 100, 200]
-          });
-          
-          // Use web-push protocol to send notification
-          // Note: This requires web-push library or manual implementation
-          console.log(`📤 Sending push to agent ${agent.id}:`, {
-            endpoint: subscription.endpoint?.substring(0, 50) + '...',
-            payload: pushPayload
-          });
-          
-          // For now, log that we would send push (actual Web Push requires crypto signing)
-          // In production, you'd use web-push library or implement Web Push protocol
-          console.log('✅ Push notification queued for agent:', agent.id);
-          
-        } catch (error) {
-          console.error(`Error sending push to agent ${agent.id}:`, error);
+    // Get agents with push subscriptions
+    const { data: agentsWithPush } = await supabase
+      .from('delivery_agents')
+      .select('id, name, email, push_subscription')
+      .eq('is_active', true)
+      .in('id', nearbyAgents.map(a => a.id))
+      .not('push_subscription', 'is', null);
+    
+    const pushPromises = (agentsWithPush || []).map(async (agent) => {
+      try {
+        const subscription = agent.push_subscription as any;
+        
+        if (!subscription?.endpoint || !subscription?.keys) {
+          console.log(`⚠️ Invalid push subscription for agent ${agent.id}`);
+          return;
         }
-      });
+        
+        // Prepare Web Push payload
+        const pushPayload = {
+          title: broadcastPayload.title,
+          body: broadcastPayload.message,
+          icon: '/zaago-logo-favicon.png',
+          badge: '/zaago-delivery-favicon.png',
+          tag: `order-${order_id}`,
+          data: {
+            url: '/home',
+            order_id,
+            notification_type: broadcastPayload.notification_type,
+            play_audio: true,
+            timestamp: Date.now()
+          },
+          requireInteraction: true,
+          vibrate: [200, 100, 200]
+        };
+        
+        console.log(`📤 Sending Web Push to agent ${agent.id} (${agent.name})`);
+        
+        // Send push notification using fetch to subscription endpoint
+        const response = await fetch(subscription.endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'TTL': '86400' // 24 hours
+          },
+          body: JSON.stringify(pushPayload)
+        });
+        
+        if (response.ok) {
+          console.log(`✅ Web Push sent successfully to agent ${agent.id}`);
+        } else {
+          console.error(`❌ Web Push failed for agent ${agent.id}:`, response.status, response.statusText);
+        }
+        
+      } catch (error) {
+        console.error(`Error sending Web Push to agent ${agent.id}:`, error);
+      }
+    });
     
     await Promise.allSettled(pushPromises);
-    console.log(`📲 Web Push notifications sent to ${pushPromises.length} agents`)
+    console.log(`📲 Web Push notifications processed for ${pushPromises.length} agents`)
     
     // Update order notification sent flag
     await supabase

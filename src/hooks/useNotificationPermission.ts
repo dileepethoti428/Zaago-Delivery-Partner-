@@ -62,11 +62,14 @@ export const useNotificationPermission = () => {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user?.email) {
+        // Convert PushSubscription to JSON format for database storage
+        const subscriptionJson = subscription.toJSON();
+        
         // Update delivery agent with push subscription
         const { error } = await supabase
           .from('delivery_agents')
           .update({ 
-            push_subscription: subscription,
+            push_subscription: subscriptionJson as any,
             updated_at: new Date().toISOString()
           })
           .eq('email', user.email);

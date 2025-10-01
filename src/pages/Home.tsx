@@ -1652,21 +1652,34 @@ const Home = () => {
         'broadcast',
         { event: 'urgent_notification' },
         (payload) => {
-          console.log('🚨 Received urgent broadcast notification:', payload);
+          console.log('🚨 [BROADCAST-AUDIO] Received urgent notification:', payload);
+          
+          const notificationData = payload.payload;
+          const orderId = notificationData?.order_id;
+          
+          if (!orderId) {
+            console.log('⚠️ [BROADCAST-AUDIO] No order ID in notification');
+            return;
+          }
+          
+          // Use existing deduplication system with Map
+          if (!shouldPlayNotification(orderId, 'urgent_broadcast')) {
+            return; // Already logged by shouldPlayNotification
+          }
           
           // Handle urgent notifications from notify-delivery-agents edge function
-          if (payload.payload && payload.payload.notification_type === 'order_packed') {
-            console.log('🔊 Playing urgent packed order notification from broadcast');
+          if (notificationData && notificationData.notification_type === 'order_packed') {
+            console.log('🔊 [BROADCAST-AUDIO] Processing packed order notification');
             
             // If trigger_push flag is set, show browser notification
-            if (payload.payload.trigger_push && 'Notification' in window && Notification.permission === 'granted') {
+            if (notificationData.trigger_push && 'Notification' in window && Notification.permission === 'granted') {
               console.log('📱 Showing browser notification');
               try {
-                new Notification(payload.payload.title || '🚨 Order Packed & Ready!', {
-                  body: payload.payload.message || 'A new order is ready for pickup',
+                new Notification(notificationData.title || '🚨 Order Packed & Ready!', {
+                  body: notificationData.message || 'A new order is ready for pickup',
                   icon: '/zaago-logo-favicon.png',
                   badge: '/zaago-logo-favicon.png',
-                  tag: `order-${payload.payload.order_id}`,
+                  tag: `order-${notificationData.order_id}`,
                   requireInteraction: true,
                 });
               } catch (notifError) {
@@ -1674,15 +1687,15 @@ const Home = () => {
               }
             }
             
-            // Play immediate high-volume notification - NO BLOCKING
+            // ⚠️ CRITICAL: This is the ONLY place where audio plays for urgent notifications
             if (ringtoneSettings.enabled) {
-              console.log('🔊 Playing broadcast notification sound at MAXIMUM VOLUME');
+              console.log('🔊 [BROADCAST-AUDIO] Playing notification sound - SINGLE SOURCE');
               playNotificationSound();
               
               // Show urgent toast
               toast({
                 title: "🚨 ORDER PACKED & READY!",
-                description: `Order from ${payload.payload.customer_name || 'customer'} is packed and ready for pickup`,
+                description: `Order from ${notificationData.customer_name || 'customer'} is packed and ready for pickup`,
                 duration: 8000,
               });
             }
@@ -1705,18 +1718,15 @@ const Home = () => {
           // Handle new agent notifications for immediate alerts
           if (payload.new) {
             const notification = payload.new;
-            console.log('🚨 Processing agent notification:', notification.type, notification.title);
+            console.log('📝 Processing agent notification:', notification.type, notification.title);
             
-            // Play immediate high-volume notification for packed orders - NO BLOCKING
-            if (notification.type === 'order_packed' && ringtoneSettings.enabled) {
-              console.log('🔊 Playing backend notification sound at MAX VOLUME');
-              playNotificationSound();
-              
-              // Show urgent toast
+            // NO AUDIO HERE - audio is handled ONLY by urgent_notification broadcast
+            // Just show toast for non-urgent notifications
+            if (notification.type !== 'order_packed') {
               toast({
                 title: notification.title,
                 description: notification.message,
-                duration: 8000,
+                duration: 5000,
               });
             }
           }
