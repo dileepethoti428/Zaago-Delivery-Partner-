@@ -35,6 +35,9 @@ interface OrderData {
   pickup_address?: string;
   seller_name?: string;
   seller_phone?: string;
+  distance_km?: number;
+  agent_payout?: number;
+  estimated_time_minutes?: number;
 }
 
 interface EmergencyOrderModalProps {
@@ -224,16 +227,18 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
                 <p className="text-xs text-white/80 font-medium">You'll Earn</p>
                 <p className="text-2xl font-bold text-white flex items-center gap-1">
                   <IndianRupee className="h-5 w-5" />
-                  {orderData.total}
+                  {orderData.agent_payout || orderData.total}
                 </p>
               </div>
             </div>
-            <div className="bg-white/20 px-3 py-1 rounded-full">
-              <p className="text-xs text-white font-semibold flex items-center gap-1">
-                <Zap className="h-3 w-3" />
-                FAST PAY
-              </p>
-            </div>
+            {orderData.distance_km && (
+              <div className="bg-white/20 px-3 py-1 rounded-full">
+                <p className="text-xs text-white font-semibold flex items-center gap-1">
+                  <Navigation className="h-3 w-3" />
+                  {orderData.distance_km.toFixed(1)} KM
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -251,6 +256,31 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
                 <p className="text-sm font-semibold text-gray-900">{formatTime(orderData.created_at)}</p>
               </div>
             </div>
+
+            {/* Distance & Time Info */}
+            {(orderData.distance_km || orderData.estimated_time_minutes) && (
+              <div className="flex items-start gap-3 bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-lg">
+                <div className="bg-blue-100 p-2 rounded-lg flex-shrink-0">
+                  <Navigation className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500 font-medium mb-1">Delivery Info</p>
+                  <div className="flex items-center gap-3">
+                    {orderData.distance_km && (
+                      <p className="text-sm font-bold text-gray-900">
+                        {orderData.distance_km.toFixed(1)} km
+                      </p>
+                    )}
+                    {orderData.estimated_time_minutes && (
+                      <p className="text-xs text-gray-600 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        ~{orderData.estimated_time_minutes} min
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Customer Info */}
             <div className="flex items-start gap-3">

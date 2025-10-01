@@ -595,7 +595,10 @@ const Home = () => {
         payment_status: orderData.payment_status || 'pending',
         pickup_address: orderData.pickup_address,
         seller_name: orderData.seller_name,
-        seller_phone: orderData.seller_phone
+        seller_phone: orderData.seller_phone,
+        distance_km: orderData.distance_km,
+        agent_payout: orderData.agent_payout,
+        estimated_time_minutes: orderData.estimated_time_minutes
       });
       setShowEmergencyModal(true);
       console.log('✅ [PACKED-NOTIFICATION] Modal should now be visible');
