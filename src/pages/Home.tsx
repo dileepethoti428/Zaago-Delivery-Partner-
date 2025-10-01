@@ -1581,12 +1581,12 @@ const Home = () => {
             
             {/* Profile Button */}
             <Button 
-              variant="ghost" 
+              variant="outline" 
               size="icon"
               onClick={() => navigate('/profile')}
-              className="hover:bg-gray-100"
+              className="hover:bg-gray-100 border-gray-300 bg-white"
             >
-              <User className="w-5 h-5 text-gray-600" />
+              <User className="w-5 h-5 text-gray-700" />
             </Button>
           </div>
         </div>
