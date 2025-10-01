@@ -290,19 +290,33 @@ const Home = () => {
           .from('orders')
           .select('*')
           .eq('status', 'packed')
-          .is('agent_id', null)
+          .is('agent_id', null) // CRITICAL: Only get orders without agent
           .order('created_at', { ascending: false })
           .limit(3);
 
         if (error) throw error;
 
         if (packedOrders && packedOrders.length > 0) {
-          console.log('🔍 [POLLING] Found', packedOrders.length, 'packed orders');
+          console.log('🔍 [POLLING] Found', packedOrders.length, 'unassigned packed orders');
           
           // Check if we have a new packed order we haven't shown modal for
           for (const order of packedOrders) {
+            // Double check agent_id is null (safety check)
+            if (order.agent_id) {
+              console.log('⚠️ [POLLING] Skipping order with agent:', order.id);
+              continue;
+            }
+            
             const modalKey = `modal-${order.id}`;
-            if (!recentNotifications.has(modalKey) && !emergencyOrderData) {
+            const acceptedKey = `accepted-${order.id}`;
+            
+            // Skip if already shown or accepted
+            if (recentNotifications.has(modalKey) || recentNotifications.has(acceptedKey)) {
+              continue;
+            }
+            
+            // Only show if no emergency modal is currently displayed
+            if (!emergencyOrderData) {
               console.log('🆕 [POLLING] Found new packed order:', order.id);
               handlePackedStatusNotification(order);
               break; // Show one at a time
@@ -325,22 +339,21 @@ const Home = () => {
 
   // Check if order should trigger immediate packed status notification
   const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
-    console.log('📦 [PACKED-CHECK] Order:', orderData.id, 'Status:', orderData.status);
+    console.log('📦 [PACKED-CHECK] Order:', orderData.id, 'Status:', orderData.status, 'Agent:', orderData.agent_id);
     
-    // Only play for orders that are packed
+    // CRITICAL: Only show for orders that are packed AND have no agent assigned
     if (orderData.status !== 'packed') {
       console.log('⚠️ [PACKED-CHECK] Skipping - not packed status');
       return false;
     }
     
-    // Check if already notified (but don't block - just log)
-    if (recentNotifications.has(`packed-${orderData.id}`)) {
-      console.log('⚠️ [PACKED-CHECK] Duplicate detected for order:', orderData.id);
-      // Still allow the modal to show - only prevent audio spam
-      return true; // Changed: Always allow packed notification modal
+    // CRITICAL: Don't show for orders that already have an agent assigned
+    if (orderData.agent_id) {
+      console.log('⚠️ [PACKED-CHECK] Skipping - order already has agent:', orderData.agent_id);
+      return false;
     }
     
-    console.log('✅ [PACKED-CHECK] Will show notification for order:', orderData.id);
+    console.log('✅ [PACKED-CHECK] Will show notification - packed and no agent assigned');
     return true;
   };
 
@@ -455,6 +468,12 @@ const Home = () => {
       created_at: orderData.created_at
     });
     
+    // CRITICAL: Double-check agent_id is null before showing
+    if (orderData.agent_id) {
+      console.log('⚠️ [PACKED-NOTIFICATION] Skipping - order already has agent:', orderData.agent_id);
+      return;
+    }
+    
     if (!shouldPlayPackedStatusNotificationForOrder(orderData)) {
       console.log('⚠️ [PACKED-NOTIFICATION] Skipped by shouldPlay check');
       return;
@@ -462,7 +481,8 @@ const Home = () => {
 
     // Track modal showing to prevent showing same modal multiple times
     const modalKey = `modal-${orderData.id}`;
-    const isDuplicateModal = recentNotifications.has(modalKey);
+    const acceptedKey = `accepted-${orderData.id}`;
+    const isDuplicateModal = recentNotifications.has(modalKey) || recentNotifications.has(acceptedKey);
     
     // Track audio to prevent spam
     const audioKey = `audio-${orderData.id}`;
@@ -1025,20 +1045,77 @@ const Home = () => {
 
   // Emergency modal handlers
   const handleEmergencyAcceptOrder = async (orderId: string) => {
-    await handleAcceptOrder(orderId);
+    console.log('🎯 [EMERGENCY-ACCEPT] Accepting order:', orderId);
+    
+    // Immediately close modal and clear data to prevent re-showing
     setShowEmergencyModal(false);
     setEmergencyOrderData(null);
+    stopRingtone();
+    
+    // Mark as accepted to prevent any future notifications
+    setRecentNotifications(prev => {
+      const newSet = new Set(prev);
+      newSet.add(`modal-${orderId}`);
+      newSet.add(`audio-${orderId}`);
+      newSet.add(`accepted-${orderId}`);
+      return newSet;
+    });
+    
+    // Accept the order
+    await handleAcceptOrder(orderId);
+    
+    console.log('✅ [EMERGENCY-ACCEPT] Order accepted and modal closed');
   };
 
   const handleStopAlarm = () => {
+    console.log('🔇 [EMERGENCY-STOP] Stopping alarm for order');
     stopRingtone();
     setShowEmergencyModal(false);
+    
+    // Mark as dismissed to prevent immediate re-showing
+    if (emergencyOrderData) {
+      setRecentNotifications(prev => {
+        const newSet = new Set(prev);
+        newSet.add(`modal-${emergencyOrderData.id}`);
+        return newSet;
+      });
+      
+      // Clear after 2 minutes to allow re-showing if still not accepted
+      setTimeout(() => {
+        setRecentNotifications(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(`modal-${emergencyOrderData.id}`);
+          return newSet;
+        });
+      }, 120000);
+    }
+    
     setEmergencyOrderData(null);
   };
 
   const handleCloseEmergencyModal = () => {
+    console.log('❌ [EMERGENCY-CLOSE] Closing modal for order');
     stopRingtone();
     setShowEmergencyModal(false);
+    
+    // Mark as dismissed to prevent immediate re-showing
+    if (emergencyOrderData) {
+      setRecentNotifications(prev => {
+        const newSet = new Set(prev);
+        newSet.add(`modal-${emergencyOrderData.id}`);
+        return newSet;
+      });
+      
+      // Clear after 2 minutes to allow re-showing if still not accepted
+      setTimeout(() => {
+        setRecentNotifications(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(`modal-${emergencyOrderData.id}`);
+          return newSet;
+        });
+      }, 120000);
+    }
+    
     setEmergencyOrderData(null);
   };
 
@@ -1270,7 +1347,7 @@ const Home = () => {
             
             // PRIMARY: Handle immediate packed status notification for ANY order changing to packed
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
-              console.log('🚨🚨🚨 [REALTIME-UPDATE] PACKED STATUS DETECTED - Triggering emergency notification');
+              console.log('🚨🚨🚨 [REALTIME-UPDATE] PACKED STATUS DETECTED');
               console.log('🚨 [REALTIME-UPDATE] Order details:', {
                 id: payload.new.id,
                 customer_name: payload.new.customer_name,
@@ -1278,17 +1355,19 @@ const Home = () => {
                 agent_id: payload.new.agent_id
               });
               
-              // IMMEDIATE: Trigger packed notification handler (this shows the modal)
-              handlePackedStatusNotification(payload.new);
-              
-              // IMMEDIATE: Refresh order list
-              console.log('📦 [REALTIME-UPDATE] Triggering immediate refresh for packed order');
-              debouncedRefresh('order-packed', true);
+              // CRITICAL: Only trigger if agent_id is null (unassigned order)
+              if (!payload.new.agent_id) {
+                console.log('✅ [REALTIME-UPDATE] Order is unassigned - showing emergency modal');
+                handlePackedStatusNotification(payload.new);
+                debouncedRefresh('order-packed', true);
+              } else {
+                console.log('⏭️ [REALTIME-UPDATE] Order already has agent - skipping notification');
+              }
             }
             
             // Also check for INSERT events with packed status
-            if (!payload.old && payload.new.status === 'packed') {
-              console.log('🆕🚨 [REALTIME-INSERT] New order inserted with PACKED status');
+            if (!payload.old && payload.new.status === 'packed' && !payload.new.agent_id) {
+              console.log('🆕🚨 [REALTIME-INSERT] New unassigned order with PACKED status');
               handlePackedStatusNotification(payload.new);
               debouncedRefresh('order-packed-insert', true);
             }
