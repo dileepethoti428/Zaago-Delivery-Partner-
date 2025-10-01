@@ -359,24 +359,19 @@ const Home = () => {
         });
       })
       .on('broadcast', { event: 'urgent_notification' }, (payload) => {
-        console.log('🚨 [URGENT-NOTIFICATION] Received broadcast:', payload);
+        console.log('🚨 [URGENT-NOTIFICATION-EARLY] Received broadcast:', payload);
         
         const notificationData = payload.payload;
         if (!notificationData) {
-          console.warn('⚠️ [URGENT-NOTIFICATION] No notification data in payload');
+          console.warn('⚠️ [URGENT-NOTIFICATION-EARLY] No notification data in payload');
           return;
         }
 
         const orderId = notificationData.order_id;
         const notifType = notificationData.notification_type || 'urgent';
 
-        // CRITICAL: Centralized deduplication prevents audio collision
-        if (!shouldPlayNotification(orderId, notifType)) {
-          console.log('⚠️ [URGENT-NOTIFICATION] Skipped due to deduplication');
-          return;
-        }
-
-        console.log('🔊 [URGENT-NOTIFICATION] Playing audio for order:', orderId);
+        // CRITICAL: NO AUDIO HERE - audio handled by main broadcast listener only
+        console.log('📝 [URGENT-NOTIFICATION-EARLY] Notification received, audio will be played by main listener');
 
         // Show browser notification if permitted
         if (notificationData.trigger_push && Notification.permission === 'granted') {
@@ -390,9 +385,7 @@ const Home = () => {
           });
         }
 
-        // Play notification sound ONCE per order
-        playNotificationSound();
-        console.log('✅ [URGENT-NOTIFICATION] Audio played for order:', orderId);
+        console.log('✅ [URGENT-NOTIFICATION-EARLY] Notification processed (audio delegated to main listener)');
       })
       .subscribe();
     
@@ -628,24 +621,8 @@ const Home = () => {
     const audioKey = `audio-${orderData.id}`;
     const isDuplicateAudio = recentNotifications.has(audioKey);
     
-    if (!isDuplicateAudio) {
-      // Add to recent audio notifications
-      setRecentNotifications(prev => new Set(prev).add(audioKey));
-      
-      setTimeout(() => {
-        setRecentNotifications(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(audioKey);
-          return newSet;
-        });
-      }, 30000); // 30 seconds
-
-      // Play ringtone
-      if (ringtoneSettings.enabled) {
-        console.log('🔊 [PACKED-NOTIFICATION] Playing sound');
-        playNotificationSound();
-      }
-    }
+    // NO AUDIO HERE - audio is handled by urgent_notification broadcast from backend
+    console.log('📝 [PACKED-NOTIFICATION] Order packed, audio delegated to broadcast listener');
     
     // ALWAYS show emergency modal for packed orders (Rapido-style)
     if (!isDuplicateModal) {
