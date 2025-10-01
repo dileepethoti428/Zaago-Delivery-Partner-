@@ -279,6 +279,47 @@ const Home = () => {
     return true;
   };
 
+  // Listen for order assignment events to close emergency modal
+  useEffect(() => {
+    console.log('📡 [ORDER-ASSIGNED] Setting up listener for order assignment events');
+    
+    const channel = supabase
+      .channel('orders-realtime-updates')
+      .on('broadcast', { event: 'order_assigned' }, (payload) => {
+        console.log('📡 [ORDER-ASSIGNED] Received order_assigned event:', payload);
+        
+        const assignedOrderId = payload.payload?.order_id;
+        
+        // If the emergency modal is showing this order, close it immediately
+        if (emergencyOrderData && emergencyOrderData.id === assignedOrderId) {
+          console.log('🚫 [ORDER-ASSIGNED] Closing emergency modal - order was accepted by another agent');
+          setEmergencyOrderData(null);
+          stopRingtone();
+          
+          toast({
+            title: "Order Accepted",
+            description: "This order was accepted by another agent",
+            duration: 3000,
+          });
+        }
+        
+        // Remove from recent notifications
+        setRecentNotifications(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(`packed-${assignedOrderId}`);
+          newSet.delete(`availability-${assignedOrderId}`);
+          newSet.delete(`immediate-${assignedOrderId}`);
+          return newSet;
+        });
+      })
+      .subscribe();
+    
+    return () => {
+      console.log('📡 [ORDER-ASSIGNED] Cleaning up order assignment listener');
+      supabase.removeChannel(channel);
+    };
+  }, [emergencyOrderData, toast, stopRingtone]);
+
   // Polling fallback to ensure we never miss packed orders (Rapido-style reliability)
   useEffect(() => {
     const pollForPackedOrders = async () => {

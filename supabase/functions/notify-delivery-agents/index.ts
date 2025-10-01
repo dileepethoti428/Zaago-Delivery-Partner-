@@ -22,6 +22,61 @@ serve(async (req) => {
     
     console.log('📦 Notify agents called for order:', order_id, 'Status:', status)
     
+    // CRITICAL VALIDATION: Check order state before sending notifications
+    const { data: orderCheck, error: orderCheckError } = await supabase
+      .from('orders')
+      .select('id, status, agent_id, delivered_at, updated_at')
+      .eq('id', order_id)
+      .single()
+    
+    if (orderCheckError) {
+      console.error('Error checking order state:', orderCheckError)
+      return new Response(
+        JSON.stringify({ error: 'Order not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      )
+    }
+    
+    // Don't notify if order already has an agent assigned
+    if (orderCheck.agent_id) {
+      console.log('⚠️ Order already assigned to agent:', orderCheck.agent_id)
+      return new Response(
+        JSON.stringify({ message: 'Order already assigned', skipped: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    // Don't notify if order is already delivered
+    if (orderCheck.status === 'delivered' || orderCheck.delivered_at) {
+      console.log('⚠️ Order already delivered')
+      return new Response(
+        JSON.stringify({ message: 'Order already delivered', skipped: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    // Don't notify if order is not in packed status (for packed notifications)
+    if (status === 'packed' && orderCheck.status !== 'packed') {
+      console.log('⚠️ Order status mismatch. Expected packed, got:', orderCheck.status)
+      return new Response(
+        JSON.stringify({ message: 'Order status mismatch', skipped: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    // Don't notify for stale orders (older than 24 hours)
+    const orderAge = Date.now() - new Date(orderCheck.updated_at).getTime()
+    const twentyFourHours = 24 * 60 * 60 * 1000
+    if (orderAge > twentyFourHours) {
+      console.log('⚠️ Order too old:', Math.floor(orderAge / (60 * 60 * 1000)), 'hours')
+      return new Response(
+        JSON.stringify({ message: 'Order too old', skipped: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    console.log('✅ Order validation passed - proceeding with notifications')
+    
     // Get all active agents (both online and offline - they should get notifications)
     const { data: agents, error: agentsError } = await supabase
       .from('delivery_agents')

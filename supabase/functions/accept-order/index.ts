@@ -30,7 +30,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // First, get the order details with seller information
+    // ATOMIC CHECK: Verify order is still available before accepting
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
       .select(`
@@ -38,15 +38,22 @@ serve(async (req) => {
         items
       `)
       .eq('id', order_id)
+      .is('agent_id', null) // CRITICAL: Only get orders without an agent
+      .neq('status', 'delivered') // Don't accept delivered orders
       .single();
 
     if (orderError || !orderData) {
       console.error('Error fetching order:', orderError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Order not found' }),
+        JSON.stringify({ 
+          success: false, 
+          error: orderData ? 'Order already assigned or delivered' : 'Order not found' 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
     }
+    
+    console.log(`✅ Order ${order_id} is available for acceptance by agent ${agent_id}`);
 
     // Get seller information for pickup location
     let pickupLocation = null;
@@ -136,6 +143,24 @@ serve(async (req) => {
     }
 
     console.log(`Order ${order_id} successfully accepted by agent ${agent_id}`);
+    
+    // BROADCAST ORDER ASSIGNMENT to all agents via real-time
+    // This immediately notifies other agents to stop showing this order
+    const channel = supabase.channel('orders-realtime-updates')
+    
+    await channel.send({
+      type: 'broadcast',
+      event: 'order_assigned',
+      payload: {
+        type: 'order_assigned',
+        order_id: order_id,
+        agent_id: agent_id,
+        timestamp: new Date().toISOString(),
+        message: 'Order has been accepted by another agent'
+      }
+    })
+    
+    console.log(`📡 Broadcast sent - order_assigned event for order ${order_id}`)
 
     return new Response(
       JSON.stringify({ 
