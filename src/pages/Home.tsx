@@ -1674,7 +1674,6 @@ const Home = () => {
                   {sortBy === 'newest' && <Clock className="w-4 h-4" />}
                   <SelectValue className="text-green-700 font-medium" />
                 </div>
-                <ChevronDown className="w-4 h-4 ml-1 text-green-600" />
               </SelectTrigger>
               <SelectContent className="bg-white border border-gray-200 shadow-lg rounded-lg">
                 <SelectItem value="nearest" className="text-gray-700 hover:bg-gray-50 cursor-pointer">
