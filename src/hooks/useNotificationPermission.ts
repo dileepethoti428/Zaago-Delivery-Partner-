@@ -54,8 +54,29 @@ export const useNotificationPermission = () => {
       setIsSubscribed(true);
       console.log('✅ Push subscription registered:', subscription);
 
-      // Store subscription in localStorage for backend use
+      // Store subscription in localStorage AND database for backend use
       localStorage.setItem('pushSubscription', JSON.stringify(subscription));
+      
+      // Store in Supabase for backend edge functions to use
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user?.email) {
+        // Update delivery agent with push subscription
+        const { error } = await supabase
+          .from('delivery_agents')
+          .update({ 
+            push_subscription: subscription,
+            updated_at: new Date().toISOString()
+          })
+          .eq('email', user.email);
+        
+        if (error) {
+          console.error('Error storing push subscription in DB:', error);
+        } else {
+          console.log('✅ Push subscription stored in database');
+        }
+      }
     } catch (error) {
       console.error('Error registering push subscription:', error);
     }

@@ -287,6 +287,25 @@ const Home = () => {
     return true;
   };
 
+  // Centralized notification deduplication - prevents audio collision
+  const lastNotificationRef = useRef<Map<string, number>>(new Map());
+  
+  const shouldPlayNotification = (orderId: string, notificationType: string): boolean => {
+    const notifKey = `${notificationType}-${orderId}`;
+    const now = Date.now();
+    const lastPlayed = lastNotificationRef.current.get(notifKey) || 0;
+    
+    // 3-second deduplication window to prevent collision
+    if (now - lastPlayed < 3000) {
+      console.log(`⚠️ [DEDUP] Skipping duplicate ${notificationType} notification for order ${orderId} (played ${now - lastPlayed}ms ago)`);
+      return false;
+    }
+    
+    lastNotificationRef.current.set(notifKey, now);
+    console.log(`✅ [DEDUP] Allowing ${notificationType} notification for order ${orderId}`);
+    return true;
+  };
+
   // Check if order should trigger pickup notification for all agents
   const shouldPlayPickupNotificationForOrder = async (orderData: any): Promise<boolean> => {
     // Only play for orders that just changed to 'packed' status
@@ -348,25 +367,32 @@ const Home = () => {
           return;
         }
 
-        console.log('🔊 [URGENT-NOTIFICATION] Playing immediate audio for order:', notificationData.order_id);
+        const orderId = notificationData.order_id;
+        const notifType = notificationData.notification_type || 'urgent';
 
-        // Show browser notification if permitted and trigger_push is true
+        // CRITICAL: Centralized deduplication prevents audio collision
+        if (!shouldPlayNotification(orderId, notifType)) {
+          console.log('⚠️ [URGENT-NOTIFICATION] Skipped due to deduplication');
+          return;
+        }
+
+        console.log('🔊 [URGENT-NOTIFICATION] Playing audio for order:', orderId);
+
+        // Show browser notification if permitted
         if (notificationData.trigger_push && Notification.permission === 'granted') {
           new Notification(notificationData.title || 'New Order', {
             body: notificationData.message || 'You have a new order',
             icon: '/zaago-logo-favicon.png',
             badge: '/zaago-delivery-favicon.png',
-            tag: `order-${notificationData.order_id}`,
+            tag: `order-${orderId}`,
             requireInteraction: true,
             data: notificationData
           });
         }
 
-        // CRITICAL: Play notification sound IMMEDIATELY without cooldown
-        if (notificationData.play_audio !== false) {
-          playNotificationSound();
-          console.log('✅ [URGENT-NOTIFICATION] Audio played for order:', notificationData.order_id);
-        }
+        // Play notification sound ONCE per order
+        playNotificationSound();
+        console.log('✅ [URGENT-NOTIFICATION] Audio played for order:', orderId);
       })
       .subscribe();
     

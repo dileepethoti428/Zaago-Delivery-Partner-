@@ -304,56 +304,79 @@ async function clearAllCaches() {
   await Promise.all(cacheNames.map(name => caches.delete(name)));
 }
 
-// Push notification handler
+// Push notification handler - CRITICAL for background notifications
 self.addEventListener('push', (event) => {
-  console.log('🔔 Push notification received:', event);
+  console.log('🔔 [SW-PUSH] Push notification received:', event);
   
   let notificationData = {
-    title: 'New Order Available',
+    title: '🚨 New Order Available',
     body: 'A new delivery order is ready to be picked up',
     icon: '/zaago-logo-favicon.png',
-    badge: '/zaago-logo-favicon.png',
+    badge: '/zaago-delivery-favicon.png',
     tag: 'order-notification',
     requireInteraction: true,
     vibrate: [200, 100, 200, 100, 200],
     data: {
       url: '/home',
+      play_audio: true,
+      order_id: null,
+      notification_type: 'order_available'
     },
   };
 
   if (event.data) {
     try {
       const payload = event.data.json();
-      console.log('📦 Push payload:', payload);
+      console.log('📦 [SW-PUSH] Push payload:', payload);
       
       notificationData = {
         ...notificationData,
         title: payload.title || notificationData.title,
         body: payload.body || notificationData.body,
-        data: payload.data || notificationData.data,
+        icon: payload.icon || notificationData.icon,
+        badge: payload.badge || notificationData.badge,
+        tag: payload.tag || notificationData.tag,
+        requireInteraction: payload.requireInteraction !== false,
+        vibrate: payload.vibrate || notificationData.vibrate,
+        data: {
+          ...notificationData.data,
+          ...payload.data
+        }
       };
     } catch (error) {
-      console.error('Error parsing push payload:', error);
+      console.error('[SW-PUSH] Error parsing push payload:', error);
     }
   }
 
-  // Show notification
+  console.log('🔔 [SW-PUSH] Showing notification:', notificationData.title);
+
+  // Show notification and play audio
   event.waitUntil(
     self.registration.showNotification(notificationData.title, notificationData)
       .then(() => {
-        // Play audio in background
-        return playBackgroundAudio();
+        console.log('✅ [SW-PUSH] Notification displayed');
+        // CRITICAL: Play audio immediately when push arrives (even if app is closed)
+        if (notificationData.data?.play_audio !== false) {
+          console.log('🔊 [SW-PUSH] Triggering background audio playback');
+          return playBackgroundAudio();
+        }
+      })
+      .catch(error => {
+        console.error('[SW-PUSH] Error showing notification:', error);
       })
   );
 });
 
-// Notification click handler
+// Notification click handler - Opens app when notification is clicked
 self.addEventListener('notificationclick', (event) => {
-  console.log('🔔 Notification clicked:', event);
+  console.log('🔔 [SW-CLICK] Notification clicked:', event);
   
   event.notification.close();
 
   const urlToOpen = event.notification.data?.url || '/home';
+  const orderId = event.notification.data?.order_id;
+
+  console.log(`📱 [SW-CLICK] Opening app to: ${urlToOpen}`, orderId ? `for order ${orderId}` : '');
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
@@ -361,33 +384,57 @@ self.addEventListener('notificationclick', (event) => {
         // Check if there's already a window open
         for (const client of clientList) {
           if (client.url.includes(urlToOpen) && 'focus' in client) {
+            console.log('✅ [SW-CLICK] Focusing existing window');
             return client.focus();
           }
         }
         // If no window is open, open a new one
         if (clients.openWindow) {
+          console.log('🆕 [SW-CLICK] Opening new window');
           return clients.openWindow(urlToOpen);
         }
+      })
+      .catch(error => {
+        console.error('[SW-CLICK] Error handling notification click:', error);
       })
   );
 });
 
-// Play audio in background when notification arrives
+// Play audio in background when notification arrives - CRITICAL for closed app audio
 async function playBackgroundAudio() {
   try {
-    // Send message to all clients to play audio
-    const allClients = await clients.matchAll({ includeUncontrolled: true });
+    console.log('🔊 [SW-AUDIO] Attempting to play background audio');
     
+    // Send message to all clients to play audio
+    const allClients = await clients.matchAll({ 
+      includeUncontrolled: true,
+      type: 'window' 
+    });
+    
+    console.log(`📢 [SW-AUDIO] Found ${allClients.length} client(s)`);
+    
+    let messagesSent = 0;
     for (const client of allClients) {
-      client.postMessage({
-        type: 'PLAY_NOTIFICATION_AUDIO',
-        timestamp: Date.now(),
-      });
+      try {
+        client.postMessage({
+          type: 'PLAY_NOTIFICATION_AUDIO',
+          timestamp: Date.now(),
+          source: 'service-worker-push'
+        });
+        messagesSent++;
+      } catch (error) {
+        console.error('[SW-AUDIO] Error sending message to client:', error);
+      }
     }
     
-    console.log('🔊 Sent audio play message to', allClients.length, 'clients');
+    console.log(`✅ [SW-AUDIO] Sent audio play message to ${messagesSent} client(s)`);
+    
+    // If no clients are open, the audio will play when app opens
+    if (messagesSent === 0) {
+      console.log('⚠️ [SW-AUDIO] No active clients - audio will play when app opens');
+    }
   } catch (error) {
-    console.error('Error playing background audio:', error);
+    console.error('[SW-AUDIO] Error playing background audio:', error);
   }
 }
 
