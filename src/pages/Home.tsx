@@ -1125,6 +1125,29 @@ const Home = () => {
     console.log('✅ [EMERGENCY-ACCEPT] Order accepted and modal closed');
   };
 
+  const handleEmergencyRejectOrder = async (orderId: string) => {
+    console.log('🚫 [EMERGENCY-REJECT] Rejecting order:', orderId);
+    
+    // Immediately close modal and clear data
+    setShowEmergencyModal(false);
+    setEmergencyOrderData(null);
+    stopRingtone();
+    
+    // Mark as rejected to prevent any future notifications
+    setRecentNotifications(prev => {
+      const newSet = new Set(prev);
+      newSet.add(`modal-${orderId}`);
+      newSet.add(`audio-${orderId}`);
+      newSet.add(`rejected-${orderId}`);
+      return newSet;
+    });
+    
+    // Reject the order using existing reject handler
+    await handleRejectOrder(orderId);
+    
+    console.log('✅ [EMERGENCY-REJECT] Order rejected and modal closed');
+  };
+
   const handleStopAlarm = () => {
     console.log('🔇 [EMERGENCY-STOP] Stopping alarm for order');
     stopRingtone();
@@ -2176,6 +2199,7 @@ const Home = () => {
         orderData={emergencyOrderData}
         onClose={handleCloseEmergencyModal}
         onAccept={handleEmergencyAcceptOrder}
+        onReject={handleEmergencyRejectOrder}
         onStopAlarm={handleStopAlarm}
       />
     </div>

@@ -41,6 +41,7 @@ interface EmergencyOrderModalProps {
   orderData: OrderData | null;
   onClose: () => void;
   onAccept: (orderId: string) => void;
+  onReject: (orderId: string) => void;
   onStopAlarm: () => void;
 }
 
@@ -49,10 +50,12 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
   orderData,
   onClose,
   onAccept,
+  onReject,
   onStopAlarm
 }) => {
   const { toast } = useToast();
   const [isAccepting, setIsAccepting] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const [showAudioControls, setShowAudioControls] = useState(false);
 
@@ -95,6 +98,30 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
       });
     } finally {
       setIsAccepting(false);
+    }
+  };
+
+  const handleRejectOrder = async () => {
+    if (!orderData) return;
+
+    setIsRejecting(true);
+    try {
+      await onReject(orderData.id);
+      onClose();
+      toast({
+        title: "Order Rejected",
+        description: "You won't see this order again",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Error rejecting order:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reject order. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -259,21 +286,12 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
           </div>
         </div>
 
-        {/* Audio Alert Banner */}
-        <div className="mx-4 mb-3 bg-gradient-to-r from-yellow-400 to-amber-500 rounded-xl p-3 shadow-md animate-pulse">
-          <div className="flex items-center justify-center gap-2">
-            <Volume2 className="h-5 w-5 text-white animate-bounce" />
-            <span className="font-bold text-white text-sm">LOUD ALERT PLAYING</span>
-            <Volume2 className="h-5 w-5 text-white animate-bounce" />
-          </div>
-        </div>
-
         {/* Quick Actions */}
         <div className="px-4 pb-4 space-y-2">
-          {/* Primary Action - Accept */}
+          {/* Primary Action - Accept Order */}
           <Button
             onClick={handleAcceptOrder}
-            disabled={isAccepting}
+            disabled={isAccepting || isRejecting}
             className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
           >
             {isAccepting ? (
@@ -292,12 +310,22 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
           {/* Secondary Actions */}
           <div className="grid grid-cols-2 gap-2">
             <Button
-              onClick={onStopAlarm}
+              onClick={handleRejectOrder}
+              disabled={isAccepting || isRejecting}
               variant="outline"
-              className="border-2 border-orange-500 text-orange-600 hover:bg-orange-50 font-semibold py-3 rounded-xl"
+              className="border-2 border-red-500 text-red-600 hover:bg-red-50 font-semibold py-3 rounded-xl"
             >
-              <VolumeX className="h-4 w-4 mr-2" />
-              STOP ALARM
+              {isRejecting ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">Rejecting...</span>
+                </div>
+              ) : (
+                <>
+                  <X className="h-4 w-4 mr-2" />
+                  REJECT ORDER
+                </>
+              )}
             </Button>
             
             <Button
