@@ -166,7 +166,7 @@ export const LocationPicker = ({ children, onLocationSelected }: LocationPickerP
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-[95vw] sm:max-w-md mx-4">
         <DialogHeader>
           <DialogTitle>Select Location</DialogTitle>
           <DialogDescription>
@@ -178,16 +178,16 @@ export const LocationPicker = ({ children, onLocationSelected }: LocationPickerP
           <Button
             onClick={handleUseCurrentLocation}
             disabled={isGettingLocation}
-            className="w-full justify-start h-auto p-4"
+            className="w-full justify-start h-auto p-3 sm:p-4"
             variant="outline"
           >
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Navigation className="w-5 h-5 text-primary" />
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+              <div className="p-2 bg-primary/10 rounded-lg flex-shrink-0">
+                <Navigation className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
               </div>
-              <div className="text-left">
-                <div className="font-medium">Use Current Location</div>
-                <div className="text-sm text-muted-foreground">
+              <div className="text-left min-w-0 flex-1">
+                <div className="font-medium text-sm sm:text-base">Use Current Location</div>
+                <div className="text-xs sm:text-sm text-muted-foreground truncate">
                   {location.loading 
                     ? "Getting location..." 
                     : location.address 
@@ -201,13 +201,13 @@ export const LocationPicker = ({ children, onLocationSelected }: LocationPickerP
 
           <div className="relative">
             <div className="flex items-center space-x-2">
-              <Search className="w-4 h-4 text-muted-foreground" />
+              <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <Input
                 placeholder="Search for places..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 disabled={isSearching}
-                className="flex-1"
+                className="flex-1 text-sm"
               />
             </div>
             
@@ -218,9 +218,9 @@ export const LocationPicker = ({ children, onLocationSelected }: LocationPickerP
                     key={prediction.place_id}
                     onClick={() => selectPlace(prediction)}
                     disabled={isGettingLocation}
-                    className="w-full px-4 py-3 text-left hover:bg-muted transition-colors border-b last:border-b-0"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 text-left hover:bg-muted transition-colors border-b last:border-b-0"
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
                       <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm truncate">
