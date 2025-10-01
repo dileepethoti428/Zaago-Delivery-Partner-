@@ -279,6 +279,50 @@ const Home = () => {
     return true;
   };
 
+  // Polling fallback to ensure we never miss packed orders (Rapido-style reliability)
+  useEffect(() => {
+    const pollForPackedOrders = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) return;
+
+        const { data: packedOrders, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('status', 'packed')
+          .is('agent_id', null)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        if (error) throw error;
+
+        if (packedOrders && packedOrders.length > 0) {
+          console.log('🔍 [POLLING] Found', packedOrders.length, 'packed orders');
+          
+          // Check if we have a new packed order we haven't shown modal for
+          for (const order of packedOrders) {
+            const modalKey = `modal-${order.id}`;
+            if (!recentNotifications.has(modalKey) && !emergencyOrderData) {
+              console.log('🆕 [POLLING] Found new packed order:', order.id);
+              handlePackedStatusNotification(order);
+              break; // Show one at a time
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[POLLING] Error:', error);
+      }
+    };
+
+    // Poll every 10 seconds as fallback
+    const pollInterval = setInterval(pollForPackedOrders, 10000);
+    
+    // Initial poll
+    pollForPackedOrders();
+
+    return () => clearInterval(pollInterval);
+  }, [emergencyOrderData, recentNotifications]);
+
   // Check if order should trigger immediate packed status notification
   const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
     console.log('📦 [PACKED-CHECK] Order:', orderData.id, 'Status:', orderData.status);
@@ -416,59 +460,75 @@ const Home = () => {
       return;
     }
 
-    // Check if this is a duplicate audio notification (but still show modal)
-    const isDuplicateAudio = recentNotifications.has(`packed-${orderData.id}`);
+    // Track modal showing to prevent showing same modal multiple times
+    const modalKey = `modal-${orderData.id}`;
+    const isDuplicateModal = recentNotifications.has(modalKey);
+    
+    // Track audio to prevent spam
+    const audioKey = `audio-${orderData.id}`;
+    const isDuplicateAudio = recentNotifications.has(audioKey);
     
     if (!isDuplicateAudio) {
-      // Add to recent notifications to prevent audio spam
-      setRecentNotifications(prev => new Set(prev).add(`packed-${orderData.id}`));
+      // Add to recent audio notifications
+      setRecentNotifications(prev => new Set(prev).add(audioKey));
       
-      // Remove from recent notifications after 10 seconds
       setTimeout(() => {
         setRecentNotifications(prev => {
           const newSet = new Set(prev);
-          newSet.delete(`packed-${orderData.id}`);
+          newSet.delete(audioKey);
           return newSet;
         });
-      }, 10000);
+      }, 30000); // 30 seconds
 
-      // Play high-volume ringtone for first notification only
+      // Play ringtone
       if (ringtoneSettings.enabled) {
-        console.log('🔊 [PACKED-NOTIFICATION] Playing sound at high volume');
+        console.log('🔊 [PACKED-NOTIFICATION] Playing sound');
         playNotificationSound();
       }
-    } else {
-      console.log('🔊 [PACKED-NOTIFICATION] Skipping audio - duplicate detected');
     }
     
-    // ALWAYS show emergency modal for packed orders (even if duplicate audio)
-    console.log('🚨 [PACKED-NOTIFICATION] Setting emergency modal data and showing modal');
-    setEmergencyOrderData({
-      id: orderData.id,
-      customer_name: orderData.customer_name || 'Customer',
-      customer_phone: orderData.customer_phone || 'N/A',
-      address: normalizeAddress(orderData.address),
-      original_address: orderData.address,
-      items: orderData.items || [],
-      total: orderData.total || 0,
-      status: orderData.status,
-      delivery_date: orderData.delivery_date || new Date().toISOString(),
-      delivery_time_slot: orderData.delivery_time_slot,
-      created_at: orderData.created_at || new Date().toISOString(),
-      payment_status: orderData.payment_status || 'pending',
-      pickup_address: orderData.pickup_address,
-      seller_name: orderData.seller_name,
-      seller_phone: orderData.seller_phone
-    });
-    setShowEmergencyModal(true);
-    console.log('✅ [PACKED-NOTIFICATION] Modal should now be visible');
-    
-    // Show toast notification
-    toast({
-      title: "🚨 Order Packed & Ready!",
-      description: `Order from ${orderData.customer_name || 'customer'} has been packed by seller`,
-      duration: 5000,
-    });
+    // ALWAYS show emergency modal for packed orders (Rapido-style)
+    if (!isDuplicateModal) {
+      console.log('🚨 [PACKED-NOTIFICATION] SHOWING EMERGENCY MODAL');
+      
+      // Track modal shown
+      setRecentNotifications(prev => new Set(prev).add(modalKey));
+      
+      setTimeout(() => {
+        setRecentNotifications(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(modalKey);
+          return newSet;
+        });
+      }, 60000); // 60 seconds
+      
+      setEmergencyOrderData({
+        id: orderData.id,
+        customer_name: orderData.customer_name || 'Customer',
+        customer_phone: orderData.customer_phone || 'N/A',
+        address: normalizeAddress(orderData.address),
+        original_address: orderData.address,
+        items: orderData.items || [],
+        total: orderData.total || 0,
+        status: orderData.status,
+        delivery_date: orderData.delivery_date || new Date().toISOString(),
+        delivery_time_slot: orderData.delivery_time_slot,
+        created_at: orderData.created_at || new Date().toISOString(),
+        payment_status: orderData.payment_status || 'pending',
+        pickup_address: orderData.pickup_address,
+        seller_name: orderData.seller_name,
+        seller_phone: orderData.seller_phone
+      });
+      setShowEmergencyModal(true);
+      console.log('✅ [PACKED-NOTIFICATION] Modal should now be visible');
+      
+      // Show toast notification
+      toast({
+        title: "🚨 Order Packed & Ready!",
+        description: `Order from ${orderData.customer_name || 'customer'} has been packed by seller`,
+        duration: 5000,
+      });
+    }
   };
 
   // Fetch agent name
@@ -1210,7 +1270,7 @@ const Home = () => {
             
             // PRIMARY: Handle immediate packed status notification for ANY order changing to packed
             if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
-              console.log('🚨 [REALTIME-UPDATE] PACKED STATUS DETECTED - Triggering emergency notification');
+              console.log('🚨🚨🚨 [REALTIME-UPDATE] PACKED STATUS DETECTED - Triggering emergency notification');
               console.log('🚨 [REALTIME-UPDATE] Order details:', {
                 id: payload.new.id,
                 customer_name: payload.new.customer_name,
@@ -1224,6 +1284,13 @@ const Home = () => {
               // IMMEDIATE: Refresh order list
               console.log('📦 [REALTIME-UPDATE] Triggering immediate refresh for packed order');
               debouncedRefresh('order-packed', true);
+            }
+            
+            // Also check for INSERT events with packed status
+            if (!payload.old && payload.new.status === 'packed') {
+              console.log('🆕🚨 [REALTIME-INSERT] New order inserted with PACKED status');
+              handlePackedStatusNotification(payload.new);
+              debouncedRefresh('order-packed-insert', true);
             }
             
             // For other status changes, use debounced refresh

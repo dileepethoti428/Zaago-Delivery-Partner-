@@ -555,6 +555,50 @@ const SellerDashboard = () => {
                       </div>
 
                       {/* Special highlight for packed orders */}
+                      {/* Mark as Packed Button */}
+                      {(order.status === 'confirmed' || order.status === 'preparing') && (
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              addDebugLog(`📦 Marking order as packed: ${order.id}`);
+                              const { data, error } = await supabase.functions.invoke('mark-order-as-packed', {
+                                body: {
+                                  order_id: order.id,
+                                  marked_by: sellerInfo?.email || 'seller'
+                                }
+                              });
+
+                              if (error) {
+                                console.error('Error marking as packed:', error);
+                                toast({
+                                  title: "Error",
+                                  description: "Failed to mark order as packed",
+                                  variant: "destructive"
+                                });
+                              } else {
+                                addDebugLog(`✅ Order marked as packed successfully: ${order.id}`);
+                                toast({
+                                  title: "Success",
+                                  description: "Order marked as packed! Delivery agents notified.",
+                                });
+                              }
+                            } catch (error) {
+                              console.error('Exception:', error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to mark order as packed",
+                                variant: "destructive"
+                              });
+                            }
+                          }}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <PackageOpen className="h-4 w-4 mr-1" />
+                          Mark as Packed
+                        </Button>
+                      )}
+                      
                       {order.status === 'packed' && (
                         <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
                           <div className="flex items-center space-x-2">
