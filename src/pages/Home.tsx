@@ -1314,15 +1314,58 @@ const Home = () => {
     setRejectingOrders(prev => ({ ...prev, [orderId]: true }));
     
     try {
-      // Add order to rejected list or handle rejection logic
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+
+      const { data: agent } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!agent) {
+        console.error('Agent not found');
+        toast({
+          title: "Error",
+          description: "Unable to find agent profile",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Call backend to persist rejection
+      const { error } = await supabase.functions.invoke('cancel-delivery', {
+        body: { 
+          order_id: orderId,
+          agent_id: agent.id,
+          cancellation_reason: 'Agent rejected order'
+        }
+      });
+
+      if (error) {
+        console.error('Error rejecting order:', error);
+        toast({
+          title: "Error",
+          description: "Failed to reject order. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       toast({
         title: "Order Rejected",
-        description: "Order has been rejected and removed from your list.",
+        description: "You won't see this order again.",
       });
       
       setOrders(prev => prev.filter(order => order.id !== orderId));
     } catch (error) {
       console.error('Error rejecting order:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reject order. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setRejectingOrders(prev => ({ ...prev, [orderId]: false }));
     }
