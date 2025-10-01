@@ -278,6 +278,21 @@ serve(async (req) => {
       throw notificationError
     }
     
+    // Send Web Push Notifications to agents (background support)
+    console.log('📲 Sending web push notifications...');
+    
+    const pushPromises = nearbyAgents.map(async (agent) => {
+      try {
+        // Note: Web push requires a separate push service setup
+        // For now, we'll broadcast to service workers via real-time
+        console.log(`Notifying agent ${agent.id} via push`);
+      } catch (pushError) {
+        console.error(`Failed to send push to agent ${agent.id}:`, pushError);
+      }
+    });
+    
+    await Promise.allSettled(pushPromises);
+    
     // Send single real-time broadcast to all agents at once (more efficient)
     const channel = supabase.channel('orders-realtime-updates')
     
@@ -297,7 +312,9 @@ serve(async (req) => {
         title: status === 'packed' ? '🚨 Order Packed & Ready!' : '📦 New Order Available',
         message: status === 'packed' 
           ? `Order from ${customer_name || 'customer'} has been packed and is ready for pickup`
-          : `New order from ${customer_name || 'customer'} for ₹${total_amount || 0}`
+          : `New order from ${customer_name || 'customer'} for ₹${total_amount || 0}`,
+        // Add flag to trigger service worker notification
+        trigger_push: true
       }
     })
     

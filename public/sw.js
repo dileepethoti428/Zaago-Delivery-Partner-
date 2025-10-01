@@ -304,4 +304,91 @@ async function clearAllCaches() {
   await Promise.all(cacheNames.map(name => caches.delete(name)));
 }
 
+// Push notification handler
+self.addEventListener('push', (event) => {
+  console.log('🔔 Push notification received:', event);
+  
+  let notificationData = {
+    title: 'New Order Available',
+    body: 'A new delivery order is ready to be picked up',
+    icon: '/zaago-logo-favicon.png',
+    badge: '/zaago-logo-favicon.png',
+    tag: 'order-notification',
+    requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 200],
+    data: {
+      url: '/home',
+    },
+  };
+
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      console.log('📦 Push payload:', payload);
+      
+      notificationData = {
+        ...notificationData,
+        title: payload.title || notificationData.title,
+        body: payload.body || notificationData.body,
+        data: payload.data || notificationData.data,
+      };
+    } catch (error) {
+      console.error('Error parsing push payload:', error);
+    }
+  }
+
+  // Show notification
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, notificationData)
+      .then(() => {
+        // Play audio in background
+        return playBackgroundAudio();
+      })
+  );
+});
+
+// Notification click handler
+self.addEventListener('notificationclick', (event) => {
+  console.log('🔔 Notification clicked:', event);
+  
+  event.notification.close();
+
+  const urlToOpen = event.notification.data?.url || '/home';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // Check if there's already a window open
+        for (const client of clientList) {
+          if (client.url.includes(urlToOpen) && 'focus' in client) {
+            return client.focus();
+          }
+        }
+        // If no window is open, open a new one
+        if (clients.openWindow) {
+          return clients.openWindow(urlToOpen);
+        }
+      })
+  );
+});
+
+// Play audio in background when notification arrives
+async function playBackgroundAudio() {
+  try {
+    // Send message to all clients to play audio
+    const allClients = await clients.matchAll({ includeUncontrolled: true });
+    
+    for (const client of allClients) {
+      client.postMessage({
+        type: 'PLAY_NOTIFICATION_AUDIO',
+        timestamp: Date.now(),
+      });
+    }
+    
+    console.log('🔊 Sent audio play message to', allClients.length, 'clients');
+  } catch (error) {
+    console.error('Error playing background audio:', error);
+  }
+}
+
 console.log('🚀 Service Worker loaded successfully');

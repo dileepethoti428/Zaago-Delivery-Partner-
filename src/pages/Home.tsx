@@ -152,6 +152,7 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
+  const notificationCooldownRef = useRef<Map<string, number>>(new Map());
   
   // Refresh debouncing state
   const [isRealTimeRefreshing, setIsRealTimeRefreshing] = useState(false);
@@ -230,11 +231,24 @@ const Home = () => {
       return false;
     }
     
+    // Check cooldown to prevent duplicate audio (2 second cooldown)
+    const notifKey = `immediate-${orderData.id}`;
+    const lastPlayed = notificationCooldownRef.current.get(notifKey);
+    const now = Date.now();
+    
+    if (lastPlayed && (now - lastPlayed) < 2000) {
+      console.log('⚠️ Skipping - within 2s cooldown for order:', orderData.id);
+      return false;
+    }
+    
     // Don't play duplicate notifications for the same order
-    if (recentNotifications.has(`immediate-${orderData.id}`)) {
+    if (recentNotifications.has(notifKey)) {
       console.log('⚠️ Skipping duplicate immediate notification for order:', orderData.id);
       return false;
     }
+    
+    // Update cooldown
+    notificationCooldownRef.current.set(notifKey, now);
     
     console.log('✅ Playing immediate notification for new order:', orderData.id);
     return true;
@@ -250,11 +264,24 @@ const Home = () => {
       return false;
     }
     
+    // Check cooldown to prevent duplicate audio (2 second cooldown)
+    const notifKey = `availability-${orderData.id}`;
+    const lastPlayed = notificationCooldownRef.current.get(notifKey);
+    const now = Date.now();
+    
+    if (lastPlayed && (now - lastPlayed) < 2000) {
+      console.log('⚠️ Skipping - within 2s cooldown for order:', orderData.id);
+      return false;
+    }
+    
     // Don't play duplicate notifications for the same order
-    if (recentNotifications.has(`availability-${orderData.id}`)) {
+    if (recentNotifications.has(notifKey)) {
       console.log('⚠️ Skipping duplicate availability notification for order:', orderData.id);
       return false;
     }
+    
+    // Update cooldown
+    notificationCooldownRef.current.set(notifKey, now);
     
     console.log('✅ Playing availability notification for order:', orderData.id);
     return true;
@@ -1575,6 +1602,22 @@ const Home = () => {
           // Handle urgent notifications from notify-delivery-agents edge function
           if (payload.payload && payload.payload.notification_type === 'order_packed') {
             console.log('🔊 Playing urgent packed order notification from broadcast');
+            
+            // If trigger_push flag is set, show browser notification
+            if (payload.payload.trigger_push && 'Notification' in window && Notification.permission === 'granted') {
+              console.log('📱 Showing browser notification');
+              try {
+                new Notification(payload.payload.title || '🚨 Order Packed & Ready!', {
+                  body: payload.payload.message || 'A new order is ready for pickup',
+                  icon: '/zaago-logo-favicon.png',
+                  badge: '/zaago-logo-favicon.png',
+                  tag: `order-${payload.payload.order_id}`,
+                  requireInteraction: true,
+                });
+              } catch (notifError) {
+                console.error('Error showing notification:', notifError);
+              }
+            }
             
             // Play immediate high-volume notification - NO BLOCKING
             if (ringtoneSettings.enabled) {
