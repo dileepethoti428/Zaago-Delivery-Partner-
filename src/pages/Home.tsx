@@ -123,7 +123,7 @@ const Home = () => {
     frequency: 'continuous' // Continuous for urgent alerts
   });
   
-  const { playNotificationSound, stopRingtone } = useAudioNotification(ringtoneSettings);
+  const { playNotificationSound, testRingtone, stopRingtone } = useAudioNotification(ringtoneSettings);
   
   // Get current location with backend saving - optimized for faster loading
   const location = useGeolocation({
@@ -2018,6 +2018,23 @@ const Home = () => {
             </div>
           </Button>
         </div>
+
+        {/* Audio Test Button */}
+        <Button
+          onClick={() => {
+            console.log('🔊 Manual audio test triggered');
+            testRingtone();
+            toast({
+              title: "Audio Test",
+              description: "Testing ringtone playback...",
+            });
+          }}
+          variant="outline"
+          className="w-full mt-3 border-dashed border-2 border-blue-300 text-blue-600 hover:bg-blue-50"
+        >
+          <Bell className="mr-2 h-4 w-4" />
+          Test Audio Alert
+        </Button>
       </div>
 
 

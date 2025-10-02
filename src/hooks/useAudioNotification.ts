@@ -18,8 +18,20 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
     console.log('🔊 playRingtone called');
     
     if (!audioRef.current) {
-      console.warn('🔊 No audio element available for playback');
-      return;
+      console.warn('🔊 No audio element available, trying direct fallback...');
+      try {
+        const fallbackAudio = new Audio('/iphone-6-original-ringtone.mp3');
+        fallbackAudio.volume = 1.0;
+        await fallbackAudio.play();
+        console.log('✅ Direct fallback audio played successfully');
+        return;
+      } catch (error) {
+        console.error('❌ Direct fallback also failed:', error);
+        if (window.navigator && window.navigator.vibrate) {
+          window.navigator.vibrate([500, 100, 500]);
+        }
+        return;
+      }
     }
 
     try {
@@ -49,9 +61,9 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         // Wait for audio to be ready with timeout
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
-            console.error('🔊 Audio loading timeout');
+            console.error('🔊 Audio loading timeout - trying fallback');
             reject(new Error('Audio loading timeout'));
-          }, 5000);
+          }, 2000); // Reduced timeout for faster fallback
           
           audioRef.current!.addEventListener('canplay', () => {
             clearTimeout(timeout);
@@ -60,6 +72,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
           
           audioRef.current!.addEventListener('error', (e) => {
             clearTimeout(timeout);
+            console.error('🔊 Audio loading error event:', e);
             reject(e);
           }, { once: true });
         });
@@ -72,20 +85,29 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       
       if (playPromise !== undefined) {
         await playPromise;
-        console.log('🔊 Ringtone played successfully');
+        console.log('✅ Ringtone played successfully');
       }
     } catch (error) {
-      console.error('🔊 Error playing ringtone:', error);
+      console.error('❌ Error playing ringtone:', error);
+      console.error('Error details:', {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack
+      });
       
-      // Try fallback notification sound if main ringtone fails
+      // ALWAYS try fallback - this is critical for notifications
       try {
-        console.log('🔊 Trying fallback notification sound...');
+        console.log('🔊 FALLBACK: Trying guaranteed working ringtone...');
         const fallbackAudio = new Audio('/iphone-6-original-ringtone.mp3');
         fallbackAudio.volume = 1.0;
         await fallbackAudio.play();
-        console.log('🔊 Fallback notification played successfully');
+        console.log('✅ Fallback ringtone played successfully');
       } catch (fallbackError) {
-        console.error('🔊 Fallback audio also failed:', fallbackError);
+        console.error('❌ Fallback audio also failed:', fallbackError);
+        console.error('Fallback error details:', {
+          name: (fallbackError as Error).name,
+          message: (fallbackError as Error).message
+        });
         
         // Last resort: vibration only
         if (window.navigator && window.navigator.vibrate) {
