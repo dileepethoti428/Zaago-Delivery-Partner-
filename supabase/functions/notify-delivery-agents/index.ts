@@ -246,10 +246,10 @@ serve(async (req) => {
     
     console.log(`📤 Sending notifications to ${nearbyAgents.length} nearby agents`)
     
-    // Create agent notifications for immediate response - use 'system' type to avoid constraint violation
+    // Create agent notifications for immediate response
     const notifications = nearbyAgents.map(agent => ({
       agent_id: agent.id,
-      type: 'system', // Use system instead of order_packed to avoid constraint violation
+      type: status === 'packed' ? 'order_packed' : 'order_available',
       title: status === 'packed' ? '🚨 Order Packed & Ready!' : '📦 New Order Available',
       message: status === 'packed' 
         ? `Order from ${customer_name || 'customer'} has been packed and is ready for pickup`
@@ -257,7 +257,6 @@ serve(async (req) => {
       source_type: 'system',
       source_id: order_id,
       metadata: {
-        notification_subtype: status === 'packed' ? 'order_packed' : 'order_available', // Keep the actual type in metadata
         order_id,
         status,
         customer_name,
