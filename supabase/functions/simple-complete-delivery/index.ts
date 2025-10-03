@@ -100,7 +100,11 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     const now = new Date().toISOString();
-    const paymentStatus = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+    
+    // Normalize payment method to match database constraint
+    const normalizedPayment = payment_method.toUpperCase() === 'COD' || 
+                              payment_method.toUpperCase() === 'CASH' ? 'COD' : 'ONLINE';
+    const paymentStatus = normalizedPayment === 'COD' ? 'paid_cod' : 'paid_online';
 
     if (existingEarnings) {
       console.log('✅ Earnings already exist - updating order status only:', {
@@ -158,7 +162,36 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to update order: ${updateOrderError.message}`);
     }
 
-    console.log('✅ Order status updated to delivered');
+      console.log('✅ Order status updated to delivered');
+
+    // Insert/Update delivery_history with idempotent ON CONFLICT
+    const { error: historyError } = await supabase
+      .from('delivery_history')
+      .upsert({
+        order_id: order_id,
+        agent_id: agent.id,
+        customer_name: order.customer_name || 'N/A',
+        customer_phone: order.customer_phone || '',
+        delivery_address: order.address,
+        items: order.items,
+        total_amount: order.total,
+        payment_status: paymentStatus,
+        payment_method: normalizedPayment,
+        delivery_date: new Date().toISOString().split('T')[0],
+        completed_at: now,
+        delivery_payout: totalPayout,
+        distance_traveled: 2.5,
+        updated_at: now
+      }, {
+        onConflict: 'order_id,agent_id'
+      });
+
+    if (historyError) {
+      console.log('⚠️ Delivery history upsert warning:', historyError);
+      // Don't throw - continue with completion
+    } else {
+      console.log('✅ Delivery history created/updated');
+    }
 
     // Only create earnings if they don't exist
     if (!existingEarnings) {
@@ -183,22 +216,6 @@ Deno.serve(async (req) => {
         }
       } else {
         console.log('✅ Earnings record created');
-        
-        // Update delivery_history with actual payout data
-        const { error: historyUpdateError } = await supabase
-          .from('delivery_history')
-          .update({
-            delivery_payout: totalPayout,
-            distance_traveled: 2.5,
-            updated_at: now
-          })
-          .eq('order_id', order_id);
-
-        if (historyUpdateError) {
-          console.log('⚠️ Delivery history update failed, continuing:', historyUpdateError);
-        } else {
-          console.log('✅ Delivery history updated with payout');
-        }
       }
     } else {
       console.log('✅ Earnings already exist for this order, skipping creation');
