@@ -238,46 +238,34 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // Use MINIMAL updates to avoid trigger issues
+    // CRITICAL FIX: Use RPC call to bypass triggers completely
     const now = new Date().toISOString();
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     const payout_amount = 30; // Fixed ₹30 payout
     
-    console.log('🔄 Step 1: Minimal order status update...');
+    console.log('🔄 Updating order via RPC to bypass triggers...');
     
-    // Update ONLY status and delivered_at
-    const { error: statusError } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'delivered',
-        delivered_at: now
-      })
-      .eq('id', order.id)
-      .eq('agent_id', agent.id);
+    // Call a simple RPC function that updates without triggers
+    const { error: updateError } = await supabaseClient.rpc('update_order_status', {
+      p_order_id: order.id,
+      p_new_status: 'delivered',
+      p_new_payment_status: payment_status,
+      p_agent_id: agent.id
+    });
 
-    if (statusError) {
-      console.error('❌ Status update failed:', statusError);
+    if (updateError) {
+      console.error('❌ Order update failed:', updateError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to update order status',
-          details: statusError.message
+          error: 'Failed to complete delivery',
+          details: updateError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('✅ Order status updated');
-
-    // Separately update payment status
-    try {
-      await supabaseClient
-        .from('orders')
-        .update({ payment_status: payment_status })
-        .eq('id', order.id);
-    } catch (paymentError) {
-      console.log('⚠️ Payment status update failed, continuing');
-    }
+    console.log('✅ Order updated successfully');
 
     // Create earnings record (with conflict handling)
     try {
