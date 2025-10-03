@@ -5358,6 +5358,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      qr_complete_delivery_atomic: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
       reconcile_completed_orders: {
         Args: Record<PropertyKey, never>
         Returns: Json

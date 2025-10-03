@@ -238,94 +238,46 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // CRITICAL FIX: Use RPC call to bypass triggers completely
-    const now = new Date().toISOString();
-    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
-    const payout_amount = 30; // Fixed ₹30 payout
+    // 🚀 NEW: Use atomic delivery completion function
+    console.log('🔄 Calling atomic delivery completion function...');
     
-    console.log('🔄 Updating order via RPC to bypass triggers...');
-    
-    // Call a simple RPC function that updates without triggers
-    const { error: updateError } = await supabaseClient.rpc('update_order_status', {
-      p_order_id: order.id,
-      p_new_status: 'delivered',
-      p_new_payment_status: payment_status,
-      p_agent_id: agent.id
-    });
+    const { data: completionResult, error: completionError } = await supabaseClient
+      .rpc('qr_complete_delivery_atomic', {
+        p_order_id: order.id,
+        p_agent_id: agent.id,
+        p_payment_method: payment_method
+      });
 
-    if (updateError) {
-      console.error('❌ Order update failed:', updateError);
+    if (completionError) {
+      console.error('❌ Atomic completion call failed:', completionError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Failed to complete delivery',
-          details: updateError.message
+          details: completionError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('✅ Order updated successfully');
-
-    // Create earnings record (with conflict handling)
-    try {
-      const { error: earningsError } = await supabaseClient
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order.id,
-          amount: payout_amount,
-          distance_km: 2.5,
-          status: 'completed',
-          description: 'QR delivery payout'
-        });
-
-      if (earningsError && !earningsError.message.includes('duplicate')) {
-        console.log('⚠️ Earnings insert failed:', earningsError.message);
-      } else {
-        console.log('✅ Earnings record created');
-      }
-    } catch (earningsErr) {
-      console.log('⚠️ Earnings processing failed, continuing');
+    // Check function result
+    if (!completionResult || !completionResult.success) {
+      console.error('❌ Delivery completion returned error:', completionResult);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: completionResult?.error || 'Failed to complete delivery',
+          details: completionResult?.details
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    // Update agent wallet
-    try {
-      const { data: currentWallet } = await supabaseClient
-        .from('agent_wallet')
-        .select('balance')
-        .eq('agent_id', agent.id)
-        .single();
-
-      const currentBalance = Number(currentWallet?.balance || 0);
-      const newBalance = currentBalance + payout_amount;
-
-      await supabaseClient
-        .from('agent_wallet')
-        .upsert({
-          agent_id: agent.id,
-          balance: newBalance,
-          updated_at: now
-        });
-
-      console.log('✅ Wallet updated to ₹', newBalance);
-
-      // Insert wallet transaction
-      await supabaseClient
-        .from('agent_wallet_transactions')
-        .insert({
-          agent_id: agent.id,
-          order_id: order.id,
-          amount: payout_amount,
-          transaction_type: 'delivery_payment',
-          description: 'QR delivery payout',
-          status: 'completed'
-        });
-
-      console.log('✅ Transaction recorded');
-    } catch (walletError) {
-      console.log('⚠️ Wallet processing failed but order completed');
-    }
+    console.log('✅ Delivery completed successfully:', completionResult);
+    
+    const now = new Date().toISOString();
+    const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+    const payout_amount = completionResult.payout_amount || 30;
 
     console.log('🎉 QR Delivery completed successfully!');
 
