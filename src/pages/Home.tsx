@@ -116,12 +116,12 @@ const Home = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // High-volume ringtone settings for immediate order alerts - MAXIMUM VOLUME
+  // Load ringtone settings from database for agent
   const [ringtoneSettings, setRingtoneSettings] = useState<RingtoneSettings>({
     enabled: true,
-    volume: 1.0, // Maximum volume
+    volume: 0.8,
     type: 'iphone-6-ringtone',
-    frequency: 'continuous' // Continuous for urgent alerts
+    frequency: 'double'
   });
   
   const { playNotificationSound, testRingtone, stopRingtone } = useAudioNotification(ringtoneSettings);
@@ -516,11 +516,9 @@ const Home = () => {
       });
     }, 15000);
 
-    // Play the ringtone immediately for new orders - NO BLOCKING
-    if (ringtoneSettings.enabled) {
-      console.log('🔊 Playing immediate notification sound');
-      playNotificationSound();
-    }
+    // Play the ringtone immediately for new orders - ALWAYS PLAY FOR URGENT ORDERS
+    console.log('🔊 Playing immediate notification sound for new order');
+    playNotificationSound();
     
     // Show immediate toast notification with different styling
     toast({
@@ -550,11 +548,9 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play different notification sound for ready orders - NO BLOCKING
-    if (ringtoneSettings.enabled) {
-      console.log('🔊 Playing availability notification sound');
-      playNotificationSound();
-    }
+    // Play different notification sound for ready orders - ALWAYS PLAY
+    console.log('🔊 Playing availability notification sound');
+    playNotificationSound();
     
     // Show availability toast notification
     toast({
@@ -583,10 +579,9 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone - NO BLOCKING
-    if (ringtoneSettings.enabled) {
-      playNotificationSound();
-    }
+    // Play the ringtone - ALWAYS PLAY FOR NEW PACKED ORDERS
+    console.log('🔊 Playing notification sound for packed order');
+    playNotificationSound();
     
     // Show toast notification
     toast({
@@ -1670,18 +1665,16 @@ const Home = () => {
               }
             }
             
-            // ⚠️ CRITICAL: This is the ONLY place where audio plays for urgent notifications
-            if (ringtoneSettings.enabled) {
-              console.log('🔊 [BROADCAST-AUDIO] Playing notification sound - SINGLE SOURCE');
-              playNotificationSound();
+            // ⚠️ CRITICAL: ALWAYS play audio for urgent packed order notifications
+            console.log('🔊 [BROADCAST-AUDIO] Playing notification sound for packed order');
+            playNotificationSound();
               
-              // Show urgent toast
-              toast({
-                title: "🚨 ORDER PACKED & READY!",
-                description: `Order from ${notificationData.customer_name || 'customer'} is packed and ready for pickup`,
-                duration: 8000,
-              });
-            }
+            // Show urgent toast
+            toast({
+              title: "🚨 ORDER PACKED & READY!",
+              description: `Order from ${notificationData.customer_name || 'customer'} is packed and ready for pickup`,
+              duration: 8000,
+            });
             
             // Immediate refresh for agent assignment notifications
             debouncedRefresh('urgent-notification-agent-assignment', true);

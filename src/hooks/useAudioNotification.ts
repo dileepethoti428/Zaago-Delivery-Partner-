@@ -121,15 +121,8 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
   const playNotificationSound = useCallback(async () => {
     console.log('🔊 playNotificationSound called with settings:', settings);
     
-    // Don't play if disabled
-    if (settings?.enabled === false) {
-      console.log('🔊 Audio notifications disabled in settings');
-      // Still vibrate even if audio is disabled
-      if (window.navigator && window.navigator.vibrate) {
-        window.navigator.vibrate([500, 150, 500]);
-      }
-      return;
-    }
+    // ALWAYS play sound for delivery notifications - ignore enabled setting
+    console.log('🔊 Force playing notification sound (delivery agent mode)');
     
     // Always try to play even if no audio element - will use fallback
     if (!audioRef.current) {
@@ -305,11 +298,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       }
     };
 
-    // Only proceed if enabled
-    if (settings?.enabled === false) {
-      cleanup();
-      return cleanup;
-    }
+    // ALWAYS initialize audio for delivery agents - remove enabled check
 
     // Use proper ringtones - only working ringtones available
     let ringtoneFile = '/iphone-6-original-ringtone.mp3'; // Default to iPhone 6 ringtone
