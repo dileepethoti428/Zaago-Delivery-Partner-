@@ -2192,6 +2192,7 @@ export type Database = {
           items: Json
           notification_count: number
           payment_id: string | null
+          payment_method: string | null
           payment_status: string | null
           pickup_address: string | null
           pickup_location: Json | null
@@ -2226,6 +2227,7 @@ export type Database = {
           items: Json
           notification_count?: number
           payment_id?: string | null
+          payment_method?: string | null
           payment_status?: string | null
           pickup_address?: string | null
           pickup_location?: Json | null
@@ -2260,6 +2262,7 @@ export type Database = {
           items?: Json
           notification_count?: number
           payment_id?: string | null
+          payment_method?: string | null
           payment_status?: string | null
           pickup_address?: string | null
           pickup_location?: Json | null
