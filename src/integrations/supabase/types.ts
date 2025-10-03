@@ -4655,7 +4655,7 @@ export type Database = {
         Args:
           | { p_user_id?: string; p_vacation_id: string }
           | { p_vacation_id: string }
-        Returns: boolean
+        Returns: Json
       }
       check_rate_limit: {
         Args: {
@@ -4884,10 +4884,12 @@ export type Database = {
       get_agent_performance: {
         Args: Record<PropertyKey, never> | { limit_count?: number }
         Returns: {
-          avg_rating: number
-          deliveries_today: number
-          online_agents: number
-          total_agents: number
+          agent_id: string
+          agent_name: string
+          average_rating: number
+          success_rate: number
+          total_deliveries: number
+          total_earnings: number
         }[]
       }
       get_agent_profile_with_metrics: {
@@ -5057,7 +5059,10 @@ export type Database = {
           | { customer_lat: number; customer_lon: number; range_km?: number }
           | { customer_lat: number; customer_lon: number; range_km?: number }
         Returns: {
+          discount_percentage: number
+          discounted_price: number
           distance_km: number
+          original_price: number
           product_description: string
           product_id: string
           product_image_url: string
@@ -5144,9 +5149,12 @@ export type Database = {
       get_top_products: {
         Args: Record<PropertyKey, never> | { limit_count?: number }
         Returns: {
-          name: string
-          qty_sold: number
-          revenue: number
+          image_url: string
+          product_id: string
+          product_name: string
+          seller_name: string
+          total_revenue: number
+          total_sold: number
         }[]
       }
       get_top_products_analytics: {
