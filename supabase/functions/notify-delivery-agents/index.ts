@@ -249,7 +249,7 @@ serve(async (req) => {
     // Create agent notifications for immediate response
     const notifications = nearbyAgents.map(agent => ({
       agent_id: agent.id,
-      type: status === 'packed' ? 'order_packed' : 'order_available',
+      type: 'new_order',
       title: status === 'packed' ? '🚨 Order Packed & Ready!' : '📦 New Order Available',
       message: status === 'packed' 
         ? `Order from ${customer_name || 'customer'} has been packed and is ready for pickup`
