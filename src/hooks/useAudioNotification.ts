@@ -124,12 +124,35 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
     // Don't play if disabled
     if (settings?.enabled === false) {
       console.log('🔊 Audio notifications disabled in settings');
+      // Still vibrate even if audio is disabled
+      if (window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate([500, 150, 500]);
+      }
       return;
     }
     
+    // Always try to play even if no audio element - will use fallback
     if (!audioRef.current) {
-      console.error('🔊 No audio element available');
-      return;
+      console.warn('🔊 No audio element available, using fallback...');
+      try {
+        const fallbackAudio = new Audio('/iphone-6-original-ringtone.mp3');
+        fallbackAudio.volume = settings?.volume || 0.8;
+        await fallbackAudio.play();
+        console.log('✅ Fallback audio played successfully');
+        
+        // Vibrate for extra attention
+        if (window.navigator && window.navigator.vibrate) {
+          window.navigator.vibrate([500, 150, 500, 150, 500]);
+        }
+        return;
+      } catch (error) {
+        console.error('❌ Fallback audio failed:', error);
+        // Use vibration as last resort
+        if (window.navigator && window.navigator.vibrate) {
+          window.navigator.vibrate([1000, 200, 1000, 200, 1000]);
+        }
+        return;
+      }
     }
     
     try {

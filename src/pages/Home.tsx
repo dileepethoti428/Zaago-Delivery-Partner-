@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { parseDeliverySlots } from "@/lib/deliverySlotParser";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
+import { useWakeLock } from "@/hooks/useWakeLock";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { useOptimizedDistances } from "@/hooks/useOptimizedDistances";
@@ -136,6 +137,9 @@ const Home = () => {
   
   // State management
   const [isOnline, setIsOnline] = useState(false);
+  
+  // Use wake lock to keep app active in background when online
+  const { isActive: isWakeLockActive } = useWakeLock(isOnline);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
@@ -200,7 +204,7 @@ const Home = () => {
         .maybeSingle();
 
       if (agent) {
-        // Get agent settings
+        // Get agent settings - respect user preferences
         const { data: agentSettings } = await supabase
           .from('agent_settings')
           .select('ringtone_enabled, ringtone_volume, ringtone_type, notification_frequency')
@@ -208,12 +212,14 @@ const Home = () => {
           .maybeSingle();
 
         if (agentSettings) {
+          // Use actual user settings from database - no overrides
           setRingtoneSettings({
             enabled: agentSettings.ringtone_enabled ?? true,
-            volume: Math.max(agentSettings.ringtone_volume ?? 1.0, 0.8), // Ensure at least 80% volume
+            volume: agentSettings.ringtone_volume ?? 0.8,
             type: agentSettings.ringtone_type ?? 'iphone-6-ringtone',
-            frequency: 'continuous' // Override to continuous for urgent alerts
+            frequency: agentSettings.notification_frequency ?? 'double'
           });
+          console.log('✅ Loaded agent audio settings from database:', agentSettings);
         }
       }
     } catch (error) {

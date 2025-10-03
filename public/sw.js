@@ -3,6 +3,14 @@ const CACHE_NAME = 'zaago-cache-v1';
 const API_CACHE = 'zaago-api-cache-v1';
 const BACKGROUND_SYNC_TAG = 'background-sync';
 
+// Ringtone files for notifications
+const RINGTONE_FILES = {
+  'iphone-6-ringtone': '/iphone-6-original-ringtone.mp3',
+  'rapido-ringtone': '/rapido-ringtone.mp3',
+  'phone-ringtone': '/phone-ringtone.mp3',
+  'notification-sound': '/notification-sound.mp3'
+};
+
 // Files to cache for offline use
 const STATIC_CACHE_URLS = [
   '/',
@@ -315,12 +323,14 @@ self.addEventListener('push', (event) => {
     badge: '/zaago-delivery-favicon.png',
     tag: 'order-notification',
     requireInteraction: true,
-    vibrate: [200, 100, 200, 100, 200],
+    vibrate: [500, 150, 500, 150, 500, 150, 500],
+    sound: '/iphone-6-original-ringtone.mp3', // Add sound to notification
     data: {
       url: '/home',
       play_audio: true,
       order_id: null,
-      notification_type: 'order_available'
+      notification_type: 'order_available',
+      auto_open_app: true // Flag to auto-open app for audio
     },
   };
 
@@ -338,6 +348,7 @@ self.addEventListener('push', (event) => {
         tag: payload.tag || notificationData.tag,
         requireInteraction: payload.requireInteraction !== false,
         vibrate: payload.vibrate || notificationData.vibrate,
+        sound: payload.sound || notificationData.sound,
         data: {
           ...notificationData.data,
           ...payload.data
@@ -350,20 +361,18 @@ self.addEventListener('push', (event) => {
 
   console.log('🔔 [SW-PUSH] Showing notification:', notificationData.title);
 
-  // Show notification and play audio
+  // Show notification, auto-open app, and play audio
   event.waitUntil(
-    self.registration.showNotification(notificationData.title, notificationData)
-      .then(() => {
-        console.log('✅ [SW-PUSH] Notification displayed');
-        // CRITICAL: Play audio immediately when push arrives (even if app is closed)
-        if (notificationData.data?.play_audio !== false) {
-          console.log('🔊 [SW-PUSH] Triggering background audio playback');
-          return playBackgroundAudio();
-        }
-      })
-      .catch(error => {
-        console.error('[SW-PUSH] Error showing notification:', error);
-      })
+    Promise.all([
+      self.registration.showNotification(notificationData.title, notificationData),
+      playBackgroundAudio(),
+      // Auto-open app to ensure audio plays
+      autoOpenAppForAudio(notificationData.data)
+    ]).then(() => {
+      console.log('✅ [SW-PUSH] Notification displayed and audio triggered');
+    }).catch(error => {
+      console.error('[SW-PUSH] Error showing notification:', error);
+    })
   );
 });
 
@@ -400,6 +409,42 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+// Auto-open app when notification arrives to ensure audio plays
+async function autoOpenAppForAudio(data) {
+  try {
+    if (!data?.auto_open_app) {
+      return;
+    }
+
+    console.log('🚀 [SW-AUTO-OPEN] Attempting to auto-open app for audio playback');
+
+    const allClients = await clients.matchAll({ 
+      type: 'window',
+      includeUncontrolled: true 
+    });
+
+    // If app is already open, just focus it
+    if (allClients.length > 0) {
+      console.log('✅ [SW-AUTO-OPEN] App already open, focusing...');
+      const client = allClients[0];
+      if ('focus' in client) {
+        await client.focus();
+      }
+      return;
+    }
+
+    // App is closed - open it to play audio
+    if (clients.openWindow) {
+      console.log('🆕 [SW-AUTO-OPEN] Opening app in background for audio...');
+      const urlToOpen = data.url || '/home';
+      await clients.openWindow(urlToOpen);
+      console.log('✅ [SW-AUTO-OPEN] App opened successfully');
+    }
+  } catch (error) {
+    console.error('[SW-AUTO-OPEN] Error auto-opening app:', error);
+  }
+}
+
 // Play audio in background when notification arrives - CRITICAL for closed app audio
 async function playBackgroundAudio() {
   try {
@@ -419,7 +464,8 @@ async function playBackgroundAudio() {
         client.postMessage({
           type: 'PLAY_NOTIFICATION_AUDIO',
           timestamp: Date.now(),
-          source: 'service-worker-push'
+          source: 'service-worker-push',
+          priority: 'high' // High priority for immediate playback
         });
         messagesSent++;
       } catch (error) {
@@ -431,7 +477,7 @@ async function playBackgroundAudio() {
     
     // If no clients are open, the audio will play when app opens
     if (messagesSent === 0) {
-      console.log('⚠️ [SW-AUDIO] No active clients - audio will play when app opens');
+      console.log('⚠️ [SW-AUDIO] No active clients - will auto-open app');
     }
   } catch (error) {
     console.error('[SW-AUDIO] Error playing background audio:', error);

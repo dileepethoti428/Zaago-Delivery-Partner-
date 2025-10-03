@@ -4,11 +4,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
 import RequireAuth from "@/components/RequireAuth";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
-import { useAudioNotification } from "@/hooks/useAudioNotification";
+import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Bell } from "lucide-react";
 
 // Import all pages
 import Splash from "./pages/Splash";
@@ -40,17 +43,68 @@ const queryClient = new QueryClient({
 
 const AppContent = () => {
   const { requestPermission, hasPermission } = useNotificationPermission();
-  const { playNotificationSound } = useAudioNotification({
+  const [agentSettings, setAgentSettings] = useState<RingtoneSettings>({
     enabled: true,
-    volume: 1.0,
+    volume: 0.8,
     type: 'iphone-6-ringtone',
-    frequency: 'continuous',
+    frequency: 'double',
   });
+  const [audioInitialized, setAudioInitialized] = useState(() => {
+    return localStorage.getItem('audio_initialized') === 'true';
+  });
+  const [showAudioPrompt, setShowAudioPrompt] = useState(false);
 
+  const { playNotificationSound } = useAudioNotification(agentSettings);
+
+  // Load agent settings from database
   useEffect(() => {
-    // Request notification permission on first load
+    const loadAgentSettings = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: agent } = await supabase
+          .from('delivery_agents')
+          .select('id')
+          .eq('email', user.email)
+          .eq('is_active', true)
+          .single();
+
+        if (!agent) return;
+
+        const { data: settings } = await supabase
+          .from('agent_settings')
+          .select('*')
+          .eq('agent_id', agent.id)
+          .single();
+
+        if (settings) {
+          setAgentSettings({
+            enabled: settings.ringtone_enabled ?? true,
+            volume: settings.ringtone_volume ?? 0.8,
+            type: settings.ringtone_type ?? 'iphone-6-ringtone',
+            frequency: settings.notification_frequency ?? 'double',
+          });
+          console.log('✅ Loaded agent audio settings:', settings);
+        }
+      } catch (error) {
+        console.error('❌ Error loading agent settings:', error);
+      }
+    };
+
+    loadAgentSettings();
+  }, []);
+
+  // Show audio initialization prompt if not initialized
+  useEffect(() => {
+    if (!audioInitialized && hasPermission) {
+      setShowAudioPrompt(true);
+    }
+  }, [audioInitialized, hasPermission]);
+
+  // Request notification permission on first load
+  useEffect(() => {
     if (!hasPermission) {
-      // Delay request to avoid blocking initial render
       const timer = setTimeout(() => {
         requestPermission();
       }, 3000);
@@ -58,8 +112,8 @@ const AppContent = () => {
     }
   }, [hasPermission, requestPermission]);
 
+  // Listen for service worker messages to play audio
   useEffect(() => {
-    // Listen for service worker messages to play audio
     const handleServiceWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === 'PLAY_NOTIFICATION_AUDIO') {
         console.log('🔊 Received audio play request from service worker');
@@ -74,9 +128,45 @@ const AppContent = () => {
     };
   }, [playNotificationSound]);
 
+  const handleEnableAudio = () => {
+    // User interaction to initialize audio
+    const audio = new Audio('/notification-sound.mp3');
+    audio.volume = 0.1;
+    audio.play().then(() => {
+      console.log('✅ Audio initialized with user interaction');
+      localStorage.setItem('audio_initialized', 'true');
+      setAudioInitialized(true);
+      setShowAudioPrompt(false);
+    }).catch(error => {
+      console.error('❌ Failed to initialize audio:', error);
+    });
+  };
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-background relative">
+        {/* Audio Initialization Prompt */}
+        {showAudioPrompt && (
+          <div className="fixed top-0 left-0 right-0 z-50 bg-primary/95 backdrop-blur-sm p-4 shadow-lg">
+            <div className="max-w-md mx-auto flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Bell className="w-6 h-6 text-primary-foreground" />
+                <div>
+                  <p className="text-sm font-semibold text-primary-foreground">Enable Notification Sounds</p>
+                  <p className="text-xs text-primary-foreground/80">Tap to hear order alerts even when app is closed</p>
+                </div>
+              </div>
+              <Button 
+                onClick={handleEnableAudio}
+                size="sm"
+                variant="secondary"
+                className="shrink-0"
+              >
+                Enable
+              </Button>
+            </div>
+          </div>
+        )}
         <Routes>
           {/* Splash and Authentication */}
           <Route path="/" element={<Splash />} />

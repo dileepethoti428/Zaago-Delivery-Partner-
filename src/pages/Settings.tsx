@@ -730,7 +730,6 @@ const Settings = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => testRingtone()}
-                        disabled={!settings.ringtone_enabled}
                       >
                         <Play className="w-4 h-4 mr-1" />
                         Test
