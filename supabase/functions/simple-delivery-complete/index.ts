@@ -123,6 +123,7 @@ Deno.serve(async (req) => {
         agent_id: agent.id,
         order_id: order_id,
         amount: fixedPayout,
+        distance_km: 2.5,
         status: 'completed',
         description: 'Simple delivery payout'
       });
@@ -132,6 +133,22 @@ Deno.serve(async (req) => {
       // Don't throw - earnings can be processed later
     } else {
       console.log('✅ Earnings record created');
+      
+      // Update delivery_history with actual payout data
+      const { error: historyUpdateError } = await supabase
+        .from('delivery_history')
+        .update({
+          delivery_payout: fixedPayout,
+          distance_traveled: 2.5,
+          updated_at: new Date().toISOString()
+        })
+        .eq('order_id', order_id);
+
+      if (historyUpdateError) {
+        console.log('⚠️ Delivery history update failed, continuing:', historyUpdateError);
+      } else {
+        console.log('✅ Delivery history updated with payout');
+      }
     }
 
     // Step 3: Update agent wallet - SIMPLE UPSERT

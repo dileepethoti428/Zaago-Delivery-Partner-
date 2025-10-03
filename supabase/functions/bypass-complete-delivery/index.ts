@@ -134,6 +134,7 @@ serve(async (req) => {
           agent_id: agent.id,
           order_id: order_id,
           amount: basePayout,
+          distance_km: 2.5,
           status: 'completed',
           description: 'Bypass delivery payout'
         });
@@ -142,6 +143,22 @@ serve(async (req) => {
         console.log('⚠️ Earnings insert failed, continuing:', earningsError.message);
       } else {
         console.log('✅ Earnings record created');
+      }
+
+      // Update delivery_history with actual payout data
+      const { error: historyUpdateError } = await supabaseClient
+        .from('delivery_history')
+        .update({
+          delivery_payout: basePayout,
+          distance_traveled: 2.5,
+          updated_at: now
+        })
+        .eq('order_id', order_id);
+
+      if (historyUpdateError) {
+        console.log('⚠️ Delivery history update failed, continuing:', historyUpdateError.message);
+      } else {
+        console.log('✅ Delivery history updated with payout');
       }
 
       // Update agent wallet directly

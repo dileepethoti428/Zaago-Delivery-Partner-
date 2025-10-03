@@ -512,7 +512,7 @@ const Earnings = () => {
         <CardContent className="p-3">
           <div className="flex items-center space-x-2 mb-3">
             <MapPin className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Distance Traveled</span>
+            <span className="text-sm font-medium">Distance Travelled</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center p-2 bg-secondary/20 rounded-lg">

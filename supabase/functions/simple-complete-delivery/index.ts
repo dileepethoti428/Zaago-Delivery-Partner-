@@ -168,6 +168,7 @@ Deno.serve(async (req) => {
           agent_id: agent.id,
           order_id: order_id,
           amount: totalPayout,
+          distance_km: 2.5,
           status: 'completed',
           description: `Delivery payout - ${payment_method}`
         });
@@ -179,6 +180,24 @@ Deno.serve(async (req) => {
         } else {
           console.error('Earnings creation error:', earningsError);
           // Don't throw error for earnings - continue with order completion
+        }
+      } else {
+        console.log('✅ Earnings record created');
+        
+        // Update delivery_history with actual payout data
+        const { error: historyUpdateError } = await supabase
+          .from('delivery_history')
+          .update({
+            delivery_payout: totalPayout,
+            distance_traveled: 2.5,
+            updated_at: now
+          })
+          .eq('order_id', order_id);
+
+        if (historyUpdateError) {
+          console.log('⚠️ Delivery history update failed, continuing:', historyUpdateError);
+        } else {
+          console.log('✅ Delivery history updated with payout');
         }
       }
     } else {

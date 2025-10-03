@@ -184,6 +184,7 @@ serve(async (req) => {
         agent_id: agent.id,
         order_id,
         amount: payout_amount,
+        distance_km: distance_km,
         status: 'completed',
         description: `Delivery completion: ${distance_km.toFixed(2)}km`
       });
@@ -193,6 +194,22 @@ serve(async (req) => {
       // Don't fail the completion for earning errors
     } else {
       console.log('✅ Earning record created');
+      
+      // Update delivery_history with actual payout data
+      const { error: historyUpdateError } = await supabaseService
+        .from('delivery_history')
+        .update({
+          delivery_payout: payout_amount,
+          distance_traveled: distance_km,
+          updated_at: new Date().toISOString()
+        })
+        .eq('order_id', order_id);
+
+      if (historyUpdateError) {
+        console.log('⚠️ Delivery history update failed, continuing:', historyUpdateError);
+      } else {
+        console.log('✅ Delivery history updated with payout');
+      }
     }
 
     // Create wallet transaction
