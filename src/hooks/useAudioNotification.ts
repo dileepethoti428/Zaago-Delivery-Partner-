@@ -288,57 +288,19 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       return cleanup;
     }
 
-    // Use proper ringtones instead of notification sounds
-    let ringtoneFile = '/iphone-6-original-ringtone.mp3'; // Default to custom iPhone 6 original ringtone
+    // Use proper ringtones - only working ringtones available
+    let ringtoneFile = '/iphone-6-original-ringtone.mp3'; // Default to iPhone 6 ringtone
     
     switch (settings?.type) {
       case 'rapido-ringtone':
         ringtoneFile = '/rapido-ringtone.mp3';
         break;
-      case 'classic-phone-ring':
-        ringtoneFile = '/classic-phone-ring.mp3';
-        break;
       case 'phone-ringtone':
         ringtoneFile = '/phone-ringtone.mp3';
         break;
-      case 'iphone-ringtone':
-        ringtoneFile = '/iphone-ringtone.mp3';
-        break;
-      case 'iphone-marimba':
-        ringtoneFile = '/iphone-marimba.mp3';
-        break;
-      case 'iphone-opening':
-        ringtoneFile = '/iphone-opening.mp3';
-        break;
       case 'iphone-6-ringtone':
+      case 'iphone-6-original-ringtone':
         ringtoneFile = '/iphone-6-original-ringtone.mp3';
-        break;
-      case 'tornado-siren':
-        ringtoneFile = '/tornado-siren.mp3';
-        break;
-      case 'ship-horn':
-        ringtoneFile = '/ship-horn.mp3';
-        break;
-      case 'air-horn':
-        ringtoneFile = '/air-horn.mp3';
-        break;
-      case 'emergency-alarm':
-        ringtoneFile = '/emergency-alarm.mp3';
-        break;
-      case 'chimes-notification':
-        ringtoneFile = '/chimes-notification.mp3';
-        break;
-      case 'classic-bell':
-        ringtoneFile = '/classic-bell.mp3';
-        break;
-      case 'android-notification':
-        ringtoneFile = '/android-notification.mp3';
-        break;
-      case 'iphone-notification':
-        ringtoneFile = '/iphone-notification.mp3';
-        break;
-      case 'samsung-notification':
-        ringtoneFile = '/samsung-notification.mp3';
         break;
       case 'notification-sound':
         ringtoneFile = '/notification-sound.mp3';
