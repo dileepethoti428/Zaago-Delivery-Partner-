@@ -238,7 +238,7 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // 🚀 ATOMIC COMPLETION: Call the new database function (v2 to avoid ambiguity)
+    // 🚀 ATOMIC COMPLETION: Call the new v2 database function
     console.log('🔄 Calling qr_complete_delivery_v2 function...');
     
     const { data: completionResult, error: completionError } = await supabaseClient
