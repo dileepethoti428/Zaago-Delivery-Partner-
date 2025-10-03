@@ -41,15 +41,27 @@ serve(async (req) => {
 
     let { qr_code_data, payment_method = 'Online' } = body;
     
-    // Enhanced payment method validation and sanitization
-    if (!payment_method || typeof payment_method !== 'string') {
-      console.log('⚠️ Invalid payment_method received, defaulting to Online:', payment_method);
-      payment_method = 'Online';
-    } else {
-      payment_method = payment_method.toString().trim();
-    }
+    // Normalize payment method to database standard format
+    const normalizePaymentMethod = (method: string): 'COD' | 'ONLINE' => {
+      if (!method || typeof method !== 'string') {
+        return 'ONLINE';
+      }
+      
+      const upper = method.toUpperCase().trim();
+      
+      // COD variants
+      if (upper.includes('CASH') || upper.includes('COD') || upper === 'CASH ON DELIVERY') {
+        return 'COD';
+      }
+      
+      // Online variants (default)
+      return 'ONLINE';
+    };
     
-    console.log('📋 QR delivery request validated:', { qr_code_data, payment_method });
+    // Apply normalization
+    payment_method = normalizePaymentMethod(payment_method);
+    
+    console.log('📋 QR delivery request validated:', { qr_code_data, payment_method: payment_method });
 
     if (!qr_code_data) {
       return new Response(

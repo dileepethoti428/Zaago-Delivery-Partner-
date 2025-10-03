@@ -101,10 +101,27 @@ Deno.serve(async (req) => {
 
     const now = new Date().toISOString();
     
-    // Normalize payment method to match database constraint
-    const normalizedPayment = payment_method.toUpperCase() === 'COD' || 
-                              payment_method.toUpperCase() === 'CASH' ? 'COD' : 'ONLINE';
+    // Normalize payment method to database standard format
+    const normalizePaymentMethod = (method: string): 'COD' | 'ONLINE' => {
+      if (!method || typeof method !== 'string') {
+        return 'ONLINE';
+      }
+      
+      const upper = method.toUpperCase().trim();
+      
+      // COD variants
+      if (upper.includes('CASH') || upper.includes('COD') || upper === 'CASH ON DELIVERY') {
+        return 'COD';
+      }
+      
+      // Online variants (default)
+      return 'ONLINE';
+    };
+    
+    const normalizedPayment = normalizePaymentMethod(payment_method);
     const paymentStatus = normalizedPayment === 'COD' ? 'paid_cod' : 'paid_online';
+    
+    console.log('✅ Payment method normalized:', { original: payment_method, normalized: normalizedPayment });
 
     if (existingEarnings) {
       console.log('✅ Earnings already exist - updating order status only:', {
