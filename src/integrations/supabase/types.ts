@@ -4741,6 +4741,14 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_qr_delivery_safe: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
       create_admin_notification_for_agent: {
         Args: {
           admin_id?: string
