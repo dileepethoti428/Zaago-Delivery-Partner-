@@ -5527,6 +5527,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      validate_order_for_completion: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       validate_reset_token: {
         Args: { token: string }
         Returns: boolean
