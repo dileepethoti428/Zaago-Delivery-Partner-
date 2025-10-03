@@ -44,7 +44,7 @@ serve(async (req) => {
       await client.queryArray('BEGIN');
       console.log('🔄 Transaction started');
 
-      // Get agent and order info first
+      // Get agent info
       const agentResult = await client.queryArray(
         'SELECT id, email, name FROM delivery_agents WHERE email = $1 AND is_active = true LIMIT 1',
         [agent_email || 'default@agent.com']
@@ -57,8 +57,11 @@ serve(async (req) => {
       const [agent_id, email, agent_name] = agentResult.rows[0];
       console.log('✅ Agent verified:', { agent_id, email, agent_name });
 
+      // Get COMPLETE order data with ALL required fields
       const orderResult = await client.queryArray(
-        'SELECT id, total, agent_id FROM orders WHERE id = $1',
+        `SELECT id, total, agent_id, customer_name, delivery_address, items, 
+                payment_status, delivery_time_slot, special_instructions 
+         FROM orders WHERE id = $1`,
         [order_id]
       );
 
@@ -66,8 +69,25 @@ serve(async (req) => {
         throw new Error('Order not found');
       }
 
-      const [found_order_id, order_total, assigned_agent_id] = orderResult.rows[0];
-      console.log('✅ Order found:', { found_order_id, order_total, assigned_agent_id });
+      const [
+        found_order_id, 
+        order_total, 
+        assigned_agent_id, 
+        customer_name,
+        delivery_address,
+        items,
+        current_payment_status,
+        delivery_time_slot,
+        special_instructions
+      ] = orderResult.rows[0];
+      
+      console.log('✅ Order found with complete data:', { 
+        found_order_id, 
+        order_total, 
+        customer_name,
+        has_address: !!delivery_address,
+        has_items: !!items
+      });
 
       // Temporarily disable triggers to avoid ALL potential function calls
       await client.queryArray('SET session_replication_role = replica');
@@ -92,6 +112,9 @@ serve(async (req) => {
       // Re-enable triggers
       await client.queryArray('SET session_replication_role = DEFAULT');
       console.log('🔊 Triggers re-enabled');
+
+      // Ensure we have customer_name (fallback to email if not provided)
+      const final_customer_name = customer_name || email || 'Unknown Customer';
 
       // Simple payout calculation
       const basePayout = 25;
@@ -120,11 +143,52 @@ serve(async (req) => {
         [agent_id, order_id, totalPayout, 'delivery_payment', 'Nuclear delivery payout', 'completed', now]
       );
 
-      // Insert simplified delivery history
+      // Insert delivery history with ALL required fields
       await client.queryArray(
-        'INSERT INTO delivery_history (order_id, agent_id, delivery_payout, completed_at, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (order_id) DO NOTHING',
-        [order_id, agent_id, totalPayout, now, now]
+        `INSERT INTO delivery_history (
+          order_id, 
+          agent_id, 
+          customer_name,
+          customer_phone,
+          delivery_address,
+          items,
+          total_amount,
+          delivery_date,
+          payment_method,
+          payment_status,
+          delivery_time_slot,
+          special_instructions,
+          delivery_payout, 
+          completed_at, 
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
+        ON CONFLICT (order_id) DO UPDATE SET
+          completed_at = $14,
+          delivery_payout = $13,
+          agent_id = $2,
+          updated_at = $16`,
+        [
+          order_id, 
+          agent_id, 
+          final_customer_name,
+          null, // customer_phone
+          delivery_address,
+          items,
+          order_total,
+          now.split('T')[0], // delivery_date (just the date part)
+          payment_method,
+          payment_status,
+          delivery_time_slot || 'Immediate',
+          special_instructions,
+          totalPayout, 
+          now, 
+          now,
+          now
+        ]
       );
+      
+      console.log('📦 Delivery history created with ALL required fields');
 
       // Commit transaction
       await client.queryArray('COMMIT');
