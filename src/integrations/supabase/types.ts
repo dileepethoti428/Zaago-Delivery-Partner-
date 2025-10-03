@@ -5358,12 +5358,9 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
-      qr_complete_delivery_atomic: {
+      qr_complete_delivery_v2: {
         Args: {
           p_agent_id: string
-          p_agent_location?: Json
-          p_customer_location?: Json
-          p_distance_km?: number
           p_order_id: string
           p_payment_method: string
         }
