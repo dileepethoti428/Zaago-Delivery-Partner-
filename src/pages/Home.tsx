@@ -1968,7 +1968,7 @@ const Home = () => {
 
       {/* Action Buttons */}
       <div className="px-4 py-4 bg-gray-50">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           {/* Go Online/Offline Button */}
           <Button
             onClick={() => setIsOnline(!isOnline)}
@@ -2015,6 +2015,21 @@ const Home = () => {
             <div className="flex items-center">
               <QrCode className="w-4 h-4 text-gray-700 mr-1" />
               <span className="text-xs text-gray-700">Scan QR</span>
+            </div>
+          </Button>
+
+          {/* Test Sound Button */}
+          <Button
+            onClick={() => {
+              console.log('🔊 Test Sound button clicked');
+              testRingtone();
+            }}
+            variant="outline"
+            className="h-12 rounded-lg border-orange-300 text-orange-700 hover:bg-orange-50 bg-white"
+          >
+            <div className="flex items-center">
+              <Bell className="w-4 h-4 text-orange-700 mr-1" />
+              <span className="text-xs text-orange-700">Test</span>
             </div>
           </Button>
         </div>

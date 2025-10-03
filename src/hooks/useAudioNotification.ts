@@ -308,21 +308,35 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
       default:
         ringtoneFile = '/iphone-6-original-ringtone.mp3';
     }
+    
+    // Add cache-busting parameter to force reload of audio file
+    const cacheBuster = Date.now();
+    const ringtoneUrl = `${ringtoneFile}?v=${cacheBuster}`;
+    console.log('🎵 Loading ringtone:', ringtoneUrl);
 
     console.log('🔊 Selected ringtone file:', ringtoneFile);
 
     try {
-      // Create new audio element
-      audioRef.current = new Audio(ringtoneFile);
+      // Create new audio element with cache-busted URL
+      audioRef.current = new Audio(ringtoneUrl);
       audioRef.current.preload = 'auto';
       audioRef.current.volume = Math.min(settings?.volume || 0.9, 1.0);
+      console.log('✅ Audio element created with URL:', ringtoneUrl);
+      console.log('✅ Initial audio volume:', audioRef.current.volume);
       
       // Add event listeners for debugging
       audioRef.current.addEventListener('loadstart', () => console.log('🔊 Audio load started'));
-      audioRef.current.addEventListener('canplay', () => console.log('🔊 Audio can play'));
-      audioRef.current.addEventListener('canplaythrough', () => console.log('🔊 Audio can play through'));
-      audioRef.current.addEventListener('error', (e) => console.error('🔊 Audio error:', e));
+      audioRef.current.addEventListener('canplay', () => console.log('✅ Audio can play'));
+      audioRef.current.addEventListener('canplaythrough', () => console.log('✅✅ Audio can play through - READY!'));
+      audioRef.current.addEventListener('error', (e: any) => {
+        console.error('❌ Audio error event:', e);
+        console.error('❌ Error code:', e.target?.error?.code);
+        console.error('❌ Error message:', e.target?.error?.message);
+        console.error('❌ Audio src that failed:', e.target?.src);
+      });
       audioRef.current.addEventListener('ended', () => console.log('🔊 Audio ended'));
+      audioRef.current.addEventListener('play', () => console.log('▶️ Audio play event triggered'));
+      audioRef.current.addEventListener('pause', () => console.log('⏸️ Audio pause event triggered'));
       
       // Initialize Web Audio API for potential amplification
       if (!audioContextRef.current) {
