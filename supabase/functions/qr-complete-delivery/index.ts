@@ -406,6 +406,23 @@ serve(async (req) => {
       console.log('✅ Earnings record created:', { amount: payout_amount });
     }
 
+    // Update delivery_history with actual payout data
+    const { error: historyUpdateError } = await supabaseClient
+      .from('delivery_history')
+      .update({
+        delivery_payout: payout_amount,
+        distance_traveled: distance_km,
+        updated_at: now
+      })
+      .eq('order_id', order.id);
+
+    if (historyUpdateError) {
+      console.error('❌ Delivery history update error:', historyUpdateError);
+      // Don't fail the delivery for history update issues
+    } else {
+      console.log('✅ Delivery history updated with payout:', { payout_amount, distance_km });
+    }
+
     // Update agent wallet
     const { data: existingWallet } = await supabaseClient
       .from('agent_wallet')
