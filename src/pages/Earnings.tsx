@@ -136,54 +136,55 @@ const Earnings = () => {
       if (!agent) return;
 
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().split('T')[0];
       
       // Fix week start calculation
       const currentWeekStart = new Date(now);
       currentWeekStart.setDate(now.getDate() - now.getDay());
       currentWeekStart.setHours(0, 0, 0, 0);
+      const weekStartStr = currentWeekStart.toISOString().split('T')[0];
       
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
-      // PRIMARY SOURCE: Get earnings data with distance_km from backend pricing calculations
-      const { data: todayEarnings } = await supabase
-        .from('earnings')
-        .select('order_id, distance_km, amount, created_at')
+      // Query delivery_history for actual distance_traveled data
+      const { data: todayHistory } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled, order_id, completed_at')
         .eq('agent_id', agent.id)
-        .gte('created_at', todayStart.toISOString());
+        .gte('delivery_date', todayStart);
 
-      const { data: weekEarnings } = await supabase
-        .from('earnings')
-        .select('order_id, distance_km, amount, created_at')
+      const { data: weekHistory } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled, order_id, completed_at')
         .eq('agent_id', agent.id)
-        .gte('created_at', currentWeekStart.toISOString());
+        .gte('delivery_date', weekStartStr);
 
-      const { data: monthEarnings } = await supabase
-        .from('earnings')
-        .select('order_id, distance_km, amount, created_at')
+      const { data: monthHistory } = await supabase
+        .from('delivery_history')
+        .select('distance_traveled, order_id, completed_at')
         .eq('agent_id', agent.id)
-        .gte('created_at', monthStart.toISOString());
+        .gte('delivery_date', monthStart);
 
-      console.log('🔍 Distance sync from earnings (backend source):', {
-        todayRecords: todayEarnings?.length || 0,
-        weekRecords: weekEarnings?.length || 0,
-        monthRecords: monthEarnings?.length || 0
+      console.log('🔍 Distance from delivery_history:', {
+        todayRecords: todayHistory?.length || 0,
+        weekRecords: weekHistory?.length || 0,
+        monthRecords: monthHistory?.length || 0
       });
 
-      // Calculate accurate distances directly from earnings table (backend source)
-      const calculateDistance = (earningsRecords: any[]) => {
-        return (earningsRecords || []).reduce((total, earning) => {
-          // Use distance_km from earnings - this comes directly from backend pricing calculation
-          const distance = earning.distance_km || 0;
-          console.log(`📏 Backend distance for order ${earning.order_id}: ${distance}km`);
+      // Calculate distances from delivery_history
+      const calculateDistance = (historyRecords: any[]) => {
+        return (historyRecords || []).reduce((total, record) => {
+          const distance = record.distance_traveled || 0;
+          if (distance > 0) {
+            console.log(`📏 Distance for order ${record.order_id}: ${distance}km`);
+          }
           return total + distance;
         }, 0);
       };
 
-      // Calculate distances directly from backend earnings data
-      const distance_today = calculateDistance(todayEarnings);
-      const distance_week = calculateDistance(weekEarnings);
-      const distance_month = calculateDistance(monthEarnings);
+      const distance_today = calculateDistance(todayHistory);
+      const distance_week = calculateDistance(weekHistory);
+      const distance_month = calculateDistance(monthHistory);
 
       const finalStats = {
         distance_today: Math.round(distance_today * 10) / 10,
@@ -193,7 +194,7 @@ const Earnings = () => {
 
       setDistanceStats(finalStats);
 
-      console.log('✅ Distance stats synced from backend:', finalStats);
+      console.log('✅ Distance stats from delivery_history:', finalStats);
       
     } catch (error) {
       console.error('Error fetching distance stats:', error);
