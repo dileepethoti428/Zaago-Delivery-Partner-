@@ -10,6 +10,7 @@ import { PaymentMethodDialog } from "./PaymentMethodDialog";
 interface QrScannerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDeliveryComplete?: () => void;
 }
 
 interface ScannedOrder {
@@ -31,7 +32,7 @@ interface PaymentOption {
   description: string;
 }
 
-export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) => {
+export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrScannerDialogProps) => {
   const { toast } = useToast();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedOrder, setScannedOrder] = useState<ScannedOrder | null>(null);
@@ -300,6 +301,12 @@ export const QrScannerDialog = ({ open, onOpenChange }: QrScannerDialogProps) =>
       setScannedOrder(null);
       setShowPaymentDialog(false);
       setIsScanning(true);
+      
+      // Trigger refresh callback to update MyDeliveries list
+      if (onDeliveryComplete) {
+        console.log('📱 Calling onDeliveryComplete callback to refresh orders');
+        onDeliveryComplete();
+      }
       
       return result;
 

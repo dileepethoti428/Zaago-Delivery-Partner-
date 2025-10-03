@@ -2304,7 +2304,16 @@ const Home = () => {
       {/* QR Scanner Dialog */}
       <QrScannerDialog 
         open={showQrScanner} 
-        onOpenChange={setShowQrScanner} 
+        onOpenChange={setShowQrScanner}
+        onDeliveryComplete={() => {
+          console.log('🔄 QR delivery completed, refreshing orders');
+          // Refresh orders to remove completed delivery
+          debouncedRefresh('qr-delivery-complete', true);
+          toast({
+            title: "Order Removed",
+            description: "Completed order has been removed from available orders",
+          });
+        }}
       />
 
       {/* Location Picker - Hidden trigger */}

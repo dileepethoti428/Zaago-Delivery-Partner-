@@ -188,6 +188,22 @@ const MyDeliveries = () => {
     }
   }, [location.latitude, location.longitude]);
 
+  // Set up visibility change listener to refresh when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('📱 Page visible again, refreshing orders');
+        fetchAssignedOrders();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   const getSortLabel = (option: SortOption) => {
     switch (option) {
       case 'nearest': return 'Nearest First';
