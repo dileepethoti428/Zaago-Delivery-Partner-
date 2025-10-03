@@ -238,11 +238,11 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // 🚀 ATOMIC COMPLETION: Call the new v2 database function
-    console.log('🔄 Calling qr_complete_delivery_v2 function...');
+    // 🚀 BULLETPROOF ATOMIC COMPLETION: Call v3 with early duplicate detection
+    console.log('🔄 Calling qr_complete_delivery_v3 function with bulletproof idempotency...');
     
     const { data: completionResult, error: completionError } = await supabaseClient
-      .rpc('qr_complete_delivery_v2', {
+      .rpc('qr_complete_delivery_v3', {
         p_order_id: order.id,
         p_agent_id: agent.id,
         p_payment_method: payment_method
