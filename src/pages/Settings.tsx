@@ -356,6 +356,10 @@ const Settings = () => {
           sound_alerts: settings.sound_alerts,
           vibration: settings.vibration,
           location_services: settings.location_services,
+          ringtone_enabled: settings.ringtone_enabled,
+          ringtone_volume: settings.ringtone_volume,
+          ringtone_type: settings.ringtone_type,
+          notification_frequency: settings.notification_frequency,
           personal_info: settings.personal_info,
           vehicle_info: { model: settings.personal_info.vehicle }
         }, {
@@ -463,12 +467,19 @@ const Settings = () => {
         },
         {
           icon: Volume2,
-          title: "Sound Alerts",
-          description: "Play sounds for new orders",
+          title: "Notification Sound",
+          description: settings.ringtone_enabled ? "Sound alerts enabled" : "Sound alerts disabled",
           action: "toggle",
           color: "text-primary",
-          enabled: settings.sound_alerts,
-          key: "sound_alerts"
+          enabled: settings.ringtone_enabled,
+          key: "ringtone_enabled"
+        },
+        {
+          icon: Play,
+          title: "Test Notification Sound",
+          description: "Test your notification sound",
+          action: "test_ringtone",
+          color: "text-primary"
         },
         {
           icon: Vibrate,
