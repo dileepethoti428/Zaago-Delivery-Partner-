@@ -5331,6 +5331,14 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: number
       }
+      nuclear_complete_delivery_bypass: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
       process_daily_subscriptions_with_notifications: {
         Args: { p_scheduled_time?: string }
         Returns: Json

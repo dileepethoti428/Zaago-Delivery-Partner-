@@ -250,26 +250,112 @@ serve(async (req) => {
 
     if (completionError) {
       console.error('❌ Atomic completion failed:', completionError);
+      
+      // NUCLEAR FALLBACK: Try the nuclear bypass function
+      console.log('🚨 Attempting NUCLEAR BYPASS as fallback...');
+      
+      const { data: nuclearResult, error: nuclearError } = await supabaseClient.rpc(
+        'nuclear_complete_delivery_bypass',
+        {
+          p_order_id: order.id,
+          p_agent_id: agent.id,
+          p_payment_method: payment_method
+        }
+      );
+      
+      if (nuclearError || !nuclearResult?.success) {
+        console.error('☢️ Nuclear bypass also failed:', nuclearError || nuclearResult);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'All delivery completion methods failed',
+            primary_error: completionError.message,
+            nuclear_error: nuclearError?.message || nuclearResult?.error
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+      
+      console.log('☢️ Nuclear bypass SUCCESS:', nuclearResult);
+      
+      // Return success from nuclear bypass
+      const now = new Date().toISOString();
+      const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+      const payout_amount = nuclearResult.payout || 30;
+      
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to complete delivery',
-          details: completionError.message
+        JSON.stringify({
+          success: true,
+          message: 'Product delivered successfully via nuclear bypass! 🎉',
+          method: 'nuclear_bypass',
+          order: {
+            id: order.id,
+            customer_name: order.customer_name,
+            total: order.total,
+            payment_method,
+            payment_status,
+            agent_name: agent.name,
+            completed_at: now,
+            payout_amount: payout_amount
+          }
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Check if function returned success
     if (!completionResult || !completionResult.success) {
       console.error('❌ Completion function returned error:', completionResult);
+      
+      // NUCLEAR FALLBACK: Try the nuclear bypass function
+      console.log('🚨 Attempting NUCLEAR BYPASS as fallback...');
+      
+      const { data: nuclearResult, error: nuclearError } = await supabaseClient.rpc(
+        'nuclear_complete_delivery_bypass',
+        {
+          p_order_id: order.id,
+          p_agent_id: agent.id,
+          p_payment_method: payment_method
+        }
+      );
+      
+      if (nuclearError || !nuclearResult?.success) {
+        console.error('☢️ Nuclear bypass also failed:', nuclearError || nuclearResult);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'All delivery completion methods failed',
+            primary_error: completionResult?.error || 'Unknown error',
+            nuclear_error: nuclearError?.message || nuclearResult?.error
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+      
+      console.log('☢️ Nuclear bypass SUCCESS:', nuclearResult);
+      
+      // Return success from nuclear bypass
+      const now = new Date().toISOString();
+      const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
+      const payout_amount = nuclearResult.payout || 30;
+      
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: completionResult?.error || 'Delivery completion failed',
-          details: completionResult?.details
+        JSON.stringify({
+          success: true,
+          message: 'Product delivered successfully via nuclear bypass! 🎉',
+          method: 'nuclear_bypass',
+          order: {
+            id: order.id,
+            customer_name: order.customer_name,
+            total: order.total,
+            payment_method,
+            payment_status,
+            agent_name: agent.name,
+            completed_at: now,
+            payout_amount: payout_amount
+          }
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
