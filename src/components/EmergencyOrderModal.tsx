@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { calculateRealTimeDistance, extractCoordinatesFromAddress } from '@/lib/distanceService';
 import { 
   Package, 
   MapPin, 
@@ -63,6 +65,51 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
   const [isRejecting, setIsRejecting] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const [showAudioControls, setShowAudioControls] = useState(false);
+  const [realTimeDistance, setRealTimeDistance] = useState<{ distance_km: number; eta_mins: number; source: string } | null>(null);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+
+  // Calculate real-time distance when modal opens
+  useEffect(() => {
+    if (!isOpen || !orderData) {
+      setRealTimeDistance(null);
+      return;
+    }
+
+    const calculateDistance = async () => {
+      try {
+        setIsCalculatingDistance(true);
+        
+        // Get agent location from localStorage
+        const agentLocationStr = localStorage.getItem('agent_location');
+        if (!agentLocationStr) {
+          console.log('No agent location available for distance calculation');
+          return;
+        }
+        
+        const agentLocation = JSON.parse(agentLocationStr);
+        
+        // Extract customer coordinates from order
+        const customerCoords = extractCoordinatesFromAddress(orderData.address);
+        
+        if (!customerCoords) {
+          console.log('Could not extract customer coordinates from address');
+          return;
+        }
+        
+        // Calculate real-time distance using Mapbox routing
+        const result = await calculateRealTimeDistance(agentLocation, customerCoords, orderData.id);
+        setRealTimeDistance(result);
+        
+        console.log('✅ Real-time distance calculated:', result);
+      } catch (error) {
+        console.error('❌ Failed to calculate real-time distance:', error);
+      } finally {
+        setIsCalculatingDistance(false);
+      }
+    };
+
+    calculateDistance();
+  }, [isOpen, orderData]);
 
   // Auto-dismiss countdown
   useEffect(() => {
@@ -231,14 +278,30 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
                 </p>
               </div>
             </div>
-            {orderData.distance_km && (
-              <div className="bg-white/20 px-3 py-1 rounded-full">
-                <p className="text-xs text-white font-semibold flex items-center gap-1">
-                  <Navigation className="h-3 w-3" />
-                  {orderData.distance_km.toFixed(1)} KM
-                </p>
-              </div>
-            )}
+            <div className="text-right">
+              {isCalculatingDistance ? (
+                <Skeleton className="h-8 w-20 bg-white/30 rounded-full" />
+              ) : realTimeDistance ? (
+                <div className="space-y-1">
+                  <div className="bg-white/20 px-3 py-1 rounded-full">
+                    <p className="text-xs text-white font-semibold flex items-center gap-1">
+                      <Navigation className="h-3 w-3" />
+                      {realTimeDistance.distance_km.toFixed(1)} KM
+                    </p>
+                  </div>
+                  <Badge className="bg-white/30 text-white text-[10px] px-2 py-0 border-0">
+                    Live {realTimeDistance.source === 'mapbox' ? '🗺️' : '📍'}
+                  </Badge>
+                </div>
+              ) : orderData.distance_km ? (
+                <div className="bg-white/20 px-3 py-1 rounded-full">
+                  <p className="text-xs text-white font-semibold flex items-center gap-1">
+                    <Navigation className="h-3 w-3" />
+                    {orderData.distance_km.toFixed(1)} KM
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -258,24 +321,50 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
             </div>
 
             {/* Distance & Time Info */}
-            {(orderData.distance_km || orderData.estimated_time_minutes) && (
+            {(realTimeDistance || orderData.distance_km || orderData.estimated_time_minutes || isCalculatingDistance) && (
               <div className="flex items-start gap-3 bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-lg">
                 <div className="bg-blue-100 p-2 rounded-lg flex-shrink-0">
                   <Navigation className="h-4 w-4 text-blue-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-500 font-medium mb-1">Delivery Info</p>
-                  <div className="flex items-center gap-3">
-                    {orderData.distance_km && (
-                      <p className="text-sm font-bold text-gray-900">
-                        {orderData.distance_km.toFixed(1)} km
-                      </p>
+                  <p className="text-xs text-gray-500 font-medium mb-1 flex items-center gap-2">
+                    Delivery Info
+                    {realTimeDistance && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        Live Route
+                      </Badge>
                     )}
-                    {orderData.estimated_time_minutes && (
-                      <p className="text-xs text-gray-600 flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        ~{orderData.estimated_time_minutes} min
-                      </p>
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {isCalculatingDistance ? (
+                      <>
+                        <Skeleton className="h-5 w-16" />
+                        <Skeleton className="h-4 w-20" />
+                      </>
+                    ) : realTimeDistance ? (
+                      <>
+                        <p className="text-sm font-bold text-gray-900">
+                          {realTimeDistance.distance_km.toFixed(1)} km
+                        </p>
+                        <p className="text-xs text-gray-600 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          ~{realTimeDistance.eta_mins} min
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        {orderData.distance_km && (
+                          <p className="text-sm font-bold text-gray-900">
+                            {orderData.distance_km.toFixed(1)} km
+                          </p>
+                        )}
+                        {orderData.estimated_time_minutes && (
+                          <p className="text-xs text-gray-600 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            ~{orderData.estimated_time_minutes} min
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
