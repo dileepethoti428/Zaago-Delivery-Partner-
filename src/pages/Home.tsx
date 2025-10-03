@@ -183,10 +183,18 @@ const Home = () => {
       debouncedRefresh('order_completed', true);
     };
 
+    const handleRefreshOrders = () => {
+      console.log('🔄 Manual refresh orders event received');
+      // Force refresh orders when event is triggered
+      debouncedRefresh('manual_refresh', true);
+    };
+
     window.addEventListener('orderCompleted', handleOrderCompleted);
+    window.addEventListener('refreshOrders', handleRefreshOrders);
     
     return () => {
       window.removeEventListener('orderCompleted', handleOrderCompleted);
+      window.removeEventListener('refreshOrders', handleRefreshOrders);
     };
   }, []);
 

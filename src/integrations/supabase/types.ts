@@ -5370,11 +5370,16 @@ export type Database = {
         Returns: number
       }
       qr_complete_delivery_v3: {
-        Args: {
-          p_agent_id: string
-          p_order_id: string
-          p_payment_method: string
-        }
+        Args:
+          | {
+              p_agent_id: string
+              p_agent_location?: Json
+              p_customer_location?: Json
+              p_distance_km?: number
+              p_order_id: string
+              p_payment_method: string
+            }
+          | { p_agent_id: string; p_order_id: string; p_payment_method: string }
         Returns: Json
       }
       reconcile_completed_orders: {

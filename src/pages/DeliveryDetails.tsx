@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +59,7 @@ const DeliveryDetails = () => {
     orderId: string;
   }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const {
     toast
   } = useToast();
@@ -428,21 +430,27 @@ const DeliveryDetails = () => {
         };
         setOrder(updatedOrder);
         
+        // Invalidate all relevant queries for immediate UI refresh
+        await queryClient.invalidateQueries({ queryKey: ['orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['deliveryHistory'] });
+        await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+        
         // Show success message
         toast({
           title: "✅ Order Completed Successfully!",
           description: `🎉 Delivery completed! Payout: ₹${data.payout_amount}`,
         });
         
-        // Dispatch event to trigger home page refresh
+        // Dispatch multiple events for different listeners
         window.dispatchEvent(new CustomEvent('orderCompleted', {
           detail: { orderId: order.id, status: 'delivered' }
         }));
+        window.dispatchEvent(new CustomEvent('refreshOrders'));
         
-        // Navigate back to home immediately
+        // Small delay before navigation to ensure cache updates
         setTimeout(() => {
           navigate('/home');
-        }, 1500);
+        }, 500);
 
         return { success: true, payout_amount: data.payout_amount };
       } else {
