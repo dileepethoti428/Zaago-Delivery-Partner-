@@ -238,8 +238,8 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // 🚀 NEW: Use atomic delivery completion function
-    console.log('🔄 Calling atomic delivery completion function...');
+    // 🚀 ATOMIC COMPLETION: Call the new database function
+    console.log('🔄 Calling qr_complete_delivery_atomic function...');
     
     const { data: completionResult, error: completionError } = await supabaseClient
       .rpc('qr_complete_delivery_atomic', {
@@ -249,7 +249,7 @@ serve(async (req) => {
       });
 
     if (completionError) {
-      console.error('❌ Atomic completion call failed:', completionError);
+      console.error('❌ Atomic completion failed:', completionError);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -260,21 +260,21 @@ serve(async (req) => {
       );
     }
 
-    // Check function result
+    // Check if function returned success
     if (!completionResult || !completionResult.success) {
-      console.error('❌ Delivery completion returned error:', completionResult);
+      console.error('❌ Completion function returned error:', completionResult);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: completionResult?.error || 'Failed to complete delivery',
+          error: completionResult?.error || 'Delivery completion failed',
           details: completionResult?.details
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log('✅ Delivery completed successfully:', completionResult);
-    
+    console.log('✅ Atomic completion successful:', completionResult);
+
     const now = new Date().toISOString();
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
     const payout_amount = completionResult.payout_amount || 30;
