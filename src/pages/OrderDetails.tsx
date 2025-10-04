@@ -273,6 +273,59 @@ const OrderDetails = () => {
     navigate(`/tracking?id=${orderData.order_id}`);
   };
 
+  // Handle manual delivery completion (Zepto-style backup method)
+  const handleManualComplete = async (paymentMethod: 'COD' | 'Online') => {
+    if (!orderData?.id) return;
+    
+    setIsAccepting(true);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to complete delivery",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('manual-complete-delivery', {
+        body: {
+          order_id: orderData.id,
+          payment_method: paymentMethod
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: "✅ Delivery Completed!",
+          description: `Order delivered successfully via ${paymentMethod}. Payout: ₹${data.payout_amount}`,
+        });
+        
+        // Navigate to home after short delay
+        setTimeout(() => {
+          navigate('/home');
+        }, 1500);
+      } else {
+        throw new Error(data?.error || 'Completion failed');
+      }
+      
+    } catch (error) {
+      console.error('Manual completion error:', error);
+      toast({
+        title: "Completion Failed",
+        description: error instanceof Error ? error.message : "Failed to complete delivery. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAccepting(false);
+    }
+  };
+
   // Calculate total with delivery fee
   const finalTotal = orderData ? (orderData.total_amount || 0) + (orderData.delivery_fee || 0) : 0;
 

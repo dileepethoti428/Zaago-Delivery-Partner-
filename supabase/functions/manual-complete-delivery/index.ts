@@ -7,38 +7,39 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('📋 Manual Complete Delivery - Request started');
+    console.log('🎯 Manual delivery completion request started');
     
     const body = await req.json();
-    const { order_id, payment_method = 'ONLINE' } = body;
+    const { order_id, payment_method } = body;
 
-    console.log('📦 Request data:', { order_id, payment_method });
+    console.log('📋 Manual completion request:', { order_id, payment_method });
 
-    // Validate inputs
     if (!order_id) {
-      console.error('❌ Missing order_id');
       return new Response(
         JSON.stringify({ success: false, error: 'Order ID is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    // Initialize Supabase client
+    if (!payment_method) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Payment method is required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Authenticate user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('❌ No auth header');
       return new Response(
         JSON.stringify({ success: false, error: 'Authentication required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
@@ -49,7 +50,7 @@ serve(async (req) => {
     const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
     
     if (authError || !userData.user) {
-      console.error('❌ Auth failed:', authError);
+      console.error('❌ Authentication failed:', authError);
       return new Response(
         JSON.stringify({ success: false, error: 'Authentication failed' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
@@ -58,7 +59,6 @@ serve(async (req) => {
 
     console.log('✅ User authenticated:', userData.user.email);
 
-    // Get agent details
     const { data: agent, error: agentError } = await supabaseClient
       .from('delivery_agents')
       .select('id, email, name')
@@ -76,26 +76,22 @@ serve(async (req) => {
 
     console.log('✅ Active agent found:', { id: agent.id, name: agent.name });
 
-    // Normalize payment method
-    const normalizedPaymentMethod = payment_method.toUpperCase().trim();
-    const validPaymentMethod = ['COD', 'ONLINE'].includes(normalizedPaymentMethod) 
-      ? normalizedPaymentMethod 
-      : 'ONLINE';
+    const normalizedPaymentMethod = payment_method.toUpperCase().includes('COD') || 
+                                   payment_method.toUpperCase().includes('CASH') 
+                                   ? 'COD' 
+                                   : 'ONLINE';
 
-    console.log('💳 Payment method:', validPaymentMethod);
+    console.log('📝 Calling manual_complete_delivery function...');
 
-    // Call the manual completion database function
-    console.log('🔄 Calling manual_complete_delivery function...');
-    
     const { data: completionResult, error: completionError } = await supabaseClient
       .rpc('manual_complete_delivery', {
         p_order_id: order_id,
         p_agent_id: agent.id,
-        p_payment_method: validPaymentMethod
+        p_payment_method: normalizedPaymentMethod
       });
 
     if (completionError) {
-      console.error('❌ Manual completion RPC failed:', completionError);
+      console.error('❌ Manual completion function error:', completionError);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -106,32 +102,27 @@ serve(async (req) => {
       );
     }
 
-    // Check if function returned success
     if (!completionResult || !completionResult.success) {
       console.error('❌ Completion function returned error:', completionResult);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: completionResult?.error || 'Manual completion failed',
-          details: completionResult
+          error: completionResult?.error || 'Delivery completion failed'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    console.log('✅ Manual delivery completed successfully:', completionResult);
+    console.log('✅ Manual delivery completion successful:', completionResult);
 
-    // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        message: '✅ Delivery completed successfully!',
+        message: 'Delivery completed successfully! 🎉',
         completion_method: 'manual',
-        order_id: order_id,
-        agent_name: agent.name,
-        payment_method: validPaymentMethod,
-        payout_amount: completionResult.payout_amount || 30,
-        completion_id: completionResult.completion_id
+        payout_amount: completionResult.payout_amount,
+        payment_method: completionResult.payment_method,
+        payment_status: completionResult.payment_status
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -142,7 +133,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: 'Failed to complete delivery manually. Please try again.',
+        error: 'Failed to complete delivery. Please try again.',
         details: error instanceof Error ? error.message : String(error)
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
