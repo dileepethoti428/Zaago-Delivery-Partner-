@@ -5482,6 +5482,10 @@ export type Database = {
         Args: { p_order_id: string; p_payment_method?: string }
         Returns: Json
       }
+      simple_mark_delivered: {
+        Args: { p_agent_id: string; p_order_id: string }
+        Returns: Json
+      }
       sync_special_offers_from_products: {
         Args: Record<PropertyKey, never>
         Returns: undefined

@@ -111,11 +111,38 @@ serve(async (req) => {
         hint: completionError.hint,
         code: completionError.code
       });
+      
+      // FALLBACK: Try ultra-simple completion
+      console.log('🚨 Attempting ultra-simple completion as fallback...');
+      const { data: simpleResult, error: simpleError } = await supabaseClient
+        .rpc('simple_mark_delivered', {
+          p_order_id: order_id,
+          p_agent_id: agent.id
+        });
+
+      if (!simpleError && simpleResult?.success) {
+        console.log('✅ Simple completion SUCCESS');
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Delivery completed successfully! 🎉',
+            method: 'simple_fallback',
+            completion_method: 'simple',
+            order_id: order_id,
+            payment_method: 'COD',
+            payment_status: 'cod_collected'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.error('❌ All completion methods failed');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to complete delivery',
-          details: completionError.message
+          error: 'All completion methods failed',
+          manual_error: completionError.message,
+          simple_error: simpleError?.message || simpleResult?.error
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
@@ -127,11 +154,38 @@ serve(async (req) => {
         success: completionResult?.success,
         error: completionResult?.error
       });
+      
+      // FALLBACK: Try ultra-simple completion
+      console.log('🚨 Attempting ultra-simple completion as fallback...');
+      const { data: simpleResult, error: simpleError } = await supabaseClient
+        .rpc('simple_mark_delivered', {
+          p_order_id: order_id,
+          p_agent_id: agent.id
+        });
+
+      if (!simpleError && simpleResult?.success) {
+        console.log('✅ Simple completion SUCCESS');
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Delivery completed successfully! 🎉',
+            method: 'simple_fallback',
+            completion_method: 'simple',
+            order_id: order_id,
+            payment_method: 'COD',
+            payment_status: 'cod_collected'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.error('❌ All completion methods failed');
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: completionResult?.error || 'Delivery completion failed',
-          details: completionResult
+          details: completionResult,
+          simple_error: simpleError?.message || simpleResult?.error
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );

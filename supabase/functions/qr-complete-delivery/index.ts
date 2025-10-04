@@ -250,24 +250,23 @@ serve(async (req) => {
 
     console.log('✅ QR code marked as scanned');
 
-    // 🚀 BULLETPROOF ATOMIC COMPLETION: Call v3 with early duplicate detection
-    console.log('🔄 Calling qr_complete_delivery_v3 function with bulletproof idempotency...');
+    // 🚀 BULLETPROOF ATOMIC COMPLETION: Call v3 with correct QR code parameter
+    console.log('🔄 Calling qr_complete_delivery_v3 function with QR code data...');
     
     const { data: completionResult, error: completionError } = await supabaseClient
       .rpc('qr_complete_delivery_v3', {
-        p_order_id: order.id,
+        p_qr_code_data: qr_code_data,
         p_agent_id: agent.id,
         p_payment_method: payment_method
       });
 
     if (completionError) {
-      console.error('❌ Atomic completion failed:', completionError);
+      console.error('❌ QR completion failed:', completionError);
       
-      // NUCLEAR FALLBACK: Try the nuclear bypass function
-      console.log('🚨 Attempting NUCLEAR BYPASS as fallback...');
-      
-      const { data: nuclearResult, error: nuclearError } = await supabaseClient.rpc(
-        'nuclear_complete_delivery_bypass',
+      // FALLBACK 1: Try manual completion
+      console.log('🔄 Attempting manual completion as fallback...');
+      const { data: manualResult, error: manualError } = await supabaseClient.rpc(
+        'manual_complete_delivery',
         {
           p_order_id: order.id,
           p_agent_id: agent.id,
@@ -275,55 +274,80 @@ serve(async (req) => {
         }
       );
       
-      if (nuclearError || !nuclearResult?.success) {
-        console.error('☢️ Nuclear bypass also failed:', nuclearError || nuclearResult);
+      if (!manualError && manualResult?.success) {
+        console.log('✅ Manual completion SUCCESS:', manualResult);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'All delivery completion methods failed',
-            primary_error: completionError.message,
-            nuclear_error: nuclearError?.message || nuclearResult?.error
+          JSON.stringify({
+            success: true,
+            message: 'Product delivered successfully! 🎉',
+            method: 'manual_fallback',
+            order: {
+              id: order.id,
+              customer_name: order.customer_name,
+              total: order.total,
+              payment_method: manualResult.payment_method || payment_method,
+              payment_status: manualResult.payment_status,
+              agent_name: agent.name,
+              payout_amount: manualResult.payout_amount || 0
+            }
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      console.log('☢️ Nuclear bypass SUCCESS:', nuclearResult);
+      console.error('❌ Manual fallback failed:', manualError || manualResult);
       
-      // Return success from nuclear bypass
-      const now = new Date().toISOString();
-      const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
-      const payout_amount = nuclearResult.payout || 30;
+      // FALLBACK 2: Ultra-simple completion
+      console.log('🚨 Attempting ultra-simple completion as final fallback...');
+      const { data: simpleResult, error: simpleError } = await supabaseClient.rpc(
+        'simple_mark_delivered',
+        {
+          p_order_id: order.id,
+          p_agent_id: agent.id
+        }
+      );
       
+      if (!simpleError && simpleResult?.success) {
+        console.log('✅ Simple completion SUCCESS:', simpleResult);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Product delivered successfully! 🎉',
+            method: 'simple_fallback',
+            order: {
+              id: order.id,
+              customer_name: order.customer_name,
+              total: order.total,
+              payment_method: 'COD',
+              payment_status: 'cod_collected',
+              agent_name: agent.name
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.error('❌ All completion methods failed');
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Product delivered successfully via nuclear bypass! 🎉',
-          method: 'nuclear_bypass',
-          order: {
-            id: order.id,
-            customer_name: order.customer_name,
-            total: order.total,
-            payment_method,
-            payment_status,
-            agent_name: agent.name,
-            completed_at: now,
-            payout_amount: payout_amount
-          }
+        JSON.stringify({ 
+          success: false, 
+          error: 'All delivery completion methods failed',
+          qr_error: completionError.message,
+          manual_error: manualError?.message || manualResult?.error,
+          simple_error: simpleError?.message || simpleResult?.error
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
     // Check if function returned success
     if (!completionResult || !completionResult.success) {
-      console.error('❌ Completion function returned error:', completionResult);
+      console.error('❌ QR completion returned error:', completionResult);
       
-      // NUCLEAR FALLBACK: Try the nuclear bypass function
-      console.log('🚨 Attempting NUCLEAR BYPASS as fallback...');
-      
-      const { data: nuclearResult, error: nuclearError } = await supabaseClient.rpc(
-        'nuclear_complete_delivery_bypass',
+      // FALLBACK 1: Try manual completion
+      console.log('🔄 Attempting manual completion as fallback...');
+      const { data: manualResult, error: manualError } = await supabaseClient.rpc(
+        'manual_complete_delivery',
         {
           p_order_id: order.id,
           p_agent_id: agent.id,
@@ -331,43 +355,69 @@ serve(async (req) => {
         }
       );
       
-      if (nuclearError || !nuclearResult?.success) {
-        console.error('☢️ Nuclear bypass also failed:', nuclearError || nuclearResult);
+      if (!manualError && manualResult?.success) {
+        console.log('✅ Manual completion SUCCESS:', manualResult);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'All delivery completion methods failed',
-            primary_error: completionResult?.error || 'Unknown error',
-            nuclear_error: nuclearError?.message || nuclearResult?.error
+          JSON.stringify({
+            success: true,
+            message: 'Product delivered successfully! 🎉',
+            method: 'manual_fallback',
+            order: {
+              id: order.id,
+              customer_name: order.customer_name,
+              total: order.total,
+              payment_method: manualResult.payment_method || payment_method,
+              payment_status: manualResult.payment_status,
+              agent_name: agent.name,
+              payout_amount: manualResult.payout_amount || 0
+            }
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      console.log('☢️ Nuclear bypass SUCCESS:', nuclearResult);
+      console.error('❌ Manual fallback failed:', manualError || manualResult);
       
-      // Return success from nuclear bypass
-      const now = new Date().toISOString();
-      const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
-      const payout_amount = nuclearResult.payout || 30;
+      // FALLBACK 2: Ultra-simple completion
+      console.log('🚨 Attempting ultra-simple completion as final fallback...');
+      const { data: simpleResult, error: simpleError } = await supabaseClient.rpc(
+        'simple_mark_delivered',
+        {
+          p_order_id: order.id,
+          p_agent_id: agent.id
+        }
+      );
       
+      if (!simpleError && simpleResult?.success) {
+        console.log('✅ Simple completion SUCCESS:', simpleResult);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Product delivered successfully! 🎉',
+            method: 'simple_fallback',
+            order: {
+              id: order.id,
+              customer_name: order.customer_name,
+              total: order.total,
+              payment_method: 'COD',
+              payment_status: 'cod_collected',
+              agent_name: agent.name
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.error('❌ All completion methods failed');
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Product delivered successfully via nuclear bypass! 🎉',
-          method: 'nuclear_bypass',
-          order: {
-            id: order.id,
-            customer_name: order.customer_name,
-            total: order.total,
-            payment_method,
-            payment_status,
-            agent_name: agent.name,
-            completed_at: now,
-            payout_amount: payout_amount
-          }
+        JSON.stringify({ 
+          success: false, 
+          error: 'All delivery completion methods failed',
+          qr_error: completionResult?.error,
+          manual_error: manualError?.message || manualResult?.error,
+          simple_error: simpleError?.message || simpleResult?.error
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
