@@ -5306,6 +5306,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      manual_complete_delivery: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
       manual_process_subscriptions: {
         Args: { p_processing_date?: string }
         Returns: Json

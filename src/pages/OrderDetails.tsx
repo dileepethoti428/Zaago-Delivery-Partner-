@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import MapPreview from "@/components/MapPreview";
 import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, extractCoordinatesFromAddress } from "@/lib/distanceService";
+import { QrScannerDialog } from "@/components/QrScannerDialog";
+import { ManualCompleteDialog } from "@/components/ManualCompleteDialog";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -27,7 +29,8 @@ import {
   Timer,
   ShoppingBag,
   Route,
-  Zap
+  Zap,
+  QrCode
 } from "lucide-react";
 
 interface OrderData {
@@ -67,6 +70,8 @@ const OrderDetails = () => {
   const [customerRating, setCustomerRating] = useState<number | null>(null);
   const [realTimeDistance, setRealTimeDistance] = useState<string>('Calculating...');
   const [realTimeEta, setRealTimeEta] = useState<string>('Calculating...');
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showManualComplete, setShowManualComplete] = useState(false);
 
   // Fetch order data from backend
   useEffect(() => {
@@ -471,33 +476,71 @@ const OrderDetails = () => {
             </CardContent>
           </Card>
 
-          {/* Action Buttons */}
+          {/* Action Buttons - Dual Completion System */}
           <div className="space-y-3 animate-slide-up pb-6">
-            {/* Accept Order Button */}
-            <Button 
-              onClick={handleAcceptOrder}
-              disabled={isAccepting || isRejecting}
-              className="w-full bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300 h-12 text-lg font-semibold"
-            >
-              {isAccepting ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                  <span>Accepting Order...</span>
+            {orderData.status === 'assigned' && (
+              <>
+                {/* Primary Completion Methods */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* QR Scan Button */}
+                  <Button 
+                    onClick={() => setShowQrScanner(true)}
+                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white h-14 shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    <QrCode className="w-5 h-5 mr-2" />
+                    <div className="text-left">
+                      <div className="font-semibold">Scan QR</div>
+                      <div className="text-xs opacity-90">Camera scan</div>
+                    </div>
+                  </Button>
+
+                  {/* Manual Complete Button */}
+                  <Button 
+                    onClick={() => setShowManualComplete(true)}
+                    className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white h-14 shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    <div className="text-left">
+                      <div className="font-semibold">Mark Delivered</div>
+                      <div className="text-xs opacity-90">Quick complete</div>
+                    </div>
+                  </Button>
                 </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-5 h-5" />
-                  <span>Accept Order</span>
-                </div>
-              )}
-            </Button>
+
+                {/* Helper Text */}
+                <p className="text-xs text-center text-muted-foreground">
+                  Use QR scan for verification or mark as delivered manually
+                </p>
+              </>
+            )}
+
+            {/* Accept Order Button (for new orders) */}
+            {orderData.status !== 'assigned' && orderData.status !== 'delivered' && (
+              <Button 
+                onClick={handleAcceptOrder}
+                disabled={isAccepting || isRejecting}
+                className="w-full bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300 h-12 text-lg font-semibold"
+              >
+                {isAccepting ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                    <span>Accepting Order...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Accept Order</span>
+                  </div>
+                )}
+              </Button>
+            )}
 
             {/* Secondary Actions */}
             <div className="grid grid-cols-3 gap-2">
               <Button 
                 variant="outline"
                 onClick={handleRejectOrder}
-                disabled={isAccepting || isRejecting}
+                disabled={isAccepting || isRejecting || orderData.status === 'delivered'}
                 className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:border-destructive transition-all duration-300"
               >
                 {isRejecting ? (
@@ -530,6 +573,32 @@ const OrderDetails = () => {
           </div>
         </div>
       </ScrollArea>
+
+      {/* QR Scanner Dialog */}
+      <QrScannerDialog
+        open={showQrScanner}
+        onOpenChange={setShowQrScanner}
+        onDeliveryComplete={() => {
+          setShowQrScanner(false);
+          toast({
+            title: "✅ Delivery Completed!",
+            description: "Order marked as delivered via QR scan",
+          });
+          setTimeout(() => navigate('/home'), 1500);
+        }}
+      />
+
+      {/* Manual Complete Dialog */}
+      <ManualCompleteDialog
+        open={showManualComplete}
+        onOpenChange={setShowManualComplete}
+        orderId={orderData?.id || orderId || ''}
+        orderTotal={orderData?.total || 0}
+        customerName={orderData?.customer_name || 'Customer'}
+        onSuccess={() => {
+          setTimeout(() => navigate('/home'), 1500);
+        }}
+      />
     </div>
   );
 };
