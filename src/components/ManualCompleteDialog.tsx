@@ -37,6 +37,8 @@ export const ManualCompleteDialog = ({
         throw new Error('Not authenticated');
       }
 
+      console.log('📤 Invoking manual-complete-delivery function...');
+
       const { data, error } = await supabase.functions.invoke('manual-complete-delivery', {
         body: {
           order_id: orderId,
@@ -44,14 +46,22 @@ export const ManualCompleteDialog = ({
         }
       });
 
+      console.log('📥 Edge function response:', { data, error });
+
       if (error) {
         console.error('❌ Manual completion edge function error:', error);
-        throw error;
+        throw new Error(`Edge function error: ${error.message}`);
       }
 
-      if (!data.success) {
+      // Check the data response structure
+      if (!data) {
+        console.error('❌ No data returned from edge function');
+        throw new Error('No response from server');
+      }
+
+      if (data.success === false) {
         console.error('❌ Manual completion failed:', data);
-        throw new Error(data.error || 'Failed to complete delivery');
+        throw new Error(data.error || data.details?.error || 'Failed to complete delivery');
       }
 
       console.log('✅ Manual completion successful:', data);

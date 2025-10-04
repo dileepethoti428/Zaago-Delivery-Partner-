@@ -17,7 +17,11 @@ serve(async (req) => {
     const body = await req.json();
     const { order_id, payment_method } = body;
 
-    console.log('📋 Manual completion request:', { order_id, payment_method });
+    console.log('📋 Manual completion request:', { 
+      order_id, 
+      payment_method,
+      timestamp: new Date().toISOString()
+    });
 
     if (!order_id) {
       return new Response(
@@ -81,7 +85,11 @@ serve(async (req) => {
                                    ? 'COD' 
                                    : 'ONLINE';
 
-    console.log('📝 Calling manual_complete_delivery function...');
+    console.log('📝 Calling manual_complete_delivery function with params:', {
+      p_order_id: order_id,
+      p_agent_id: agent.id,
+      p_payment_method: normalizedPaymentMethod
+    });
 
     const { data: completionResult, error: completionError } = await supabaseClient
       .rpc('manual_complete_delivery', {
@@ -90,8 +98,19 @@ serve(async (req) => {
         p_payment_method: normalizedPaymentMethod
       });
 
+    console.log('📦 RPC Response:', { 
+      hasError: !!completionError, 
+      hasData: !!completionResult,
+      data: completionResult 
+    });
+
     if (completionError) {
-      console.error('❌ Manual completion function error:', completionError);
+      console.error('❌ Manual completion RPC error:', {
+        message: completionError.message,
+        details: completionError.details,
+        hint: completionError.hint,
+        code: completionError.code
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -103,17 +122,26 @@ serve(async (req) => {
     }
 
     if (!completionResult || !completionResult.success) {
-      console.error('❌ Completion function returned error:', completionResult);
+      console.error('❌ Completion function returned error:', {
+        result: completionResult,
+        success: completionResult?.success,
+        error: completionResult?.error
+      });
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: completionResult?.error || 'Delivery completion failed'
+          error: completionResult?.error || 'Delivery completion failed',
+          details: completionResult
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    console.log('✅ Manual delivery completion successful:', completionResult);
+    console.log('✅ Manual delivery completion successful:', {
+      order_id: completionResult.order_id,
+      payment_method: completionResult.payment_method,
+      payout_amount: completionResult.payout_amount
+    });
 
     return new Response(
       JSON.stringify({
