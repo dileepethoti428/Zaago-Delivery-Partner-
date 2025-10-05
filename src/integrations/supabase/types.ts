@@ -5310,7 +5310,7 @@ export type Database = {
         Args: {
           p_agent_id: string
           p_order_id: string
-          p_payment_method: string
+          p_payment_method?: string
         }
         Returns: Json
       }
@@ -5483,7 +5483,13 @@ export type Database = {
         Returns: Json
       }
       simple_mark_delivered: {
-        Args: { p_agent_id: string; p_order_id: string }
+        Args:
+          | { p_agent_id: string; p_order_id: string }
+          | {
+              p_agent_id: string
+              p_order_id: string
+              p_payment_method?: string
+            }
         Returns: Json
       }
       sync_special_offers_from_products: {

@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,173 +12,179 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🎯 Unified delivery completion request started');
-    
-    const body = await req.json();
-    const { order_id, payment_method = 'COD', qr_code_data } = body;
+    const { order_id, payment_method, qr_code_data } = await req.json();
 
-    console.log('📋 Unified completion request:', { 
+    console.log('🚀 Unified delivery completion request:', { 
       order_id, 
-      payment_method,
-      has_qr_code: !!qr_code_data,
-      timestamp: new Date().toISOString()
+      payment_method, 
+      has_qr: !!qr_code_data 
     });
 
     if (!order_id) {
       return new Response(
         JSON.stringify({ success: false, error: 'Order ID is required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Get authenticated user
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Authentication required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        JSON.stringify({ success: false, error: 'Authorization header required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
-    
-    if (authError || !userData.user) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
       console.error('❌ Authentication failed:', authError);
       return new Response(
         JSON.stringify({ success: false, error: 'Authentication failed' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('✅ User authenticated:', userData.user.email);
-
-    const { data: agent, error: agentError } = await supabaseClient
+    // Get agent details
+    const { data: agent, error: agentError } = await supabase
       .from('delivery_agents')
-      .select('id, email, name')
-      .eq('email', userData.user.email)
+      .select('id, name, email')
+      .eq('email', user.email)
       .eq('is_active', true)
       .single();
 
     if (agentError || !agent) {
-      console.error('❌ Agent lookup failed:', agentError);
+      console.error('❌ Agent not found:', agentError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Agent not found or inactive' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+        JSON.stringify({ success: false, error: 'Active delivery agent not found' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('✅ Active agent found:', { id: agent.id, name: agent.name });
+    console.log('✅ Agent authenticated:', agent.name);
 
-    const normalizedPaymentMethod = payment_method.toUpperCase().includes('COD') || 
-                                   payment_method.toUpperCase().includes('CASH') 
-                                   ? 'COD' 
-                                   : 'ONLINE';
+    // Normalize payment method
+    const normalizedPayment = payment_method?.toUpperCase() === 'ONLINE' ? 'ONLINE' : 'COD';
 
-    // METHOD 1: Try QR completion if QR code provided
+    let result: any = null;
+
+    // Method 1: Try QR completion if QR code data provided
     if (qr_code_data) {
-      console.log('🎯 METHOD 1: Attempting QR completion with code:', qr_code_data);
-      
-      const { data: qrResult, error: qrError } = await supabaseClient
-        .rpc('qr_complete_delivery_v3', {
-          p_qr_code_data: qr_code_data,
-          p_agent_id: agent.id,
-          p_payment_method: normalizedPaymentMethod
-        });
+      console.log('📱 Attempting QR completion...');
+      try {
+        const { data: qrResult, error: qrError } = await supabase.rpc(
+          'qr_complete_delivery_v3',
+          {
+            p_qr_code_data: qr_code_data,
+            p_agent_id: agent.id,
+            p_payment_method: normalizedPayment
+          }
+        );
 
-      if (!qrError && qrResult?.success) {
-        console.log('✅ QR completion SUCCESS');
+        if (!qrError && qrResult?.success) {
+          console.log('✅ QR completion successful');
+          result = qrResult;
+        } else {
+          console.log('⚠️ QR completion failed, trying manual method:', qrError);
+        }
+      } catch (qrErr) {
+        console.log('⚠️ QR completion exception, trying manual method:', qrErr);
+      }
+    }
+
+    // Method 2: Try manual completion if QR failed or not provided
+    if (!result) {
+      console.log('📝 Attempting manual completion...');
+      try {
+        const { data: manualResult, error: manualError } = await supabase.rpc(
+          'manual_complete_delivery',
+          {
+            p_order_id: order_id,
+            p_agent_id: agent.id,
+            p_payment_method: normalizedPayment
+          }
+        );
+
+        if (!manualError && manualResult?.success) {
+          console.log('✅ Manual completion successful');
+          result = manualResult;
+        } else {
+          console.log('⚠️ Manual completion failed, trying simple method:', manualError);
+        }
+      } catch (manualErr) {
+        console.log('⚠️ Manual completion exception, trying simple method:', manualErr);
+      }
+    }
+
+    // Method 3: Simple fallback as last resort
+    if (!result) {
+      console.log('🆘 Attempting simple fallback completion...');
+      try {
+        const { data: simpleResult, error: simpleError } = await supabase.rpc(
+          'simple_mark_delivered',
+          {
+            p_order_id: order_id,
+            p_agent_id: agent.id,
+            p_payment_method: normalizedPayment
+          }
+        );
+
+        if (!simpleError && simpleResult?.success) {
+          console.log('✅ Simple completion successful');
+          result = simpleResult;
+        } else {
+          console.error('❌ All completion methods failed');
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'All delivery completion methods failed',
+              details: simpleError
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (simpleErr) {
+        console.error('❌ Simple completion exception:', simpleErr);
         return new Response(
-          JSON.stringify({
-            success: true,
-            message: 'Delivery completed via QR scan! 🎉',
-            method: 'qr_scan',
-            ...qrResult
+          JSON.stringify({ 
+            success: false, 
+            error: 'All delivery completion methods failed',
+            details: simpleErr
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      
-      console.error('❌ QR completion failed:', qrError || qrResult);
     }
 
-    // METHOD 2: Try manual completion
-    console.log('🎯 METHOD 2: Attempting manual completion...');
-    
-    const { data: manualResult, error: manualError } = await supabaseClient
-      .rpc('manual_complete_delivery', {
-        p_order_id: order_id,
-        p_agent_id: agent.id,
-        p_payment_method: normalizedPaymentMethod
-      });
-
-    if (!manualError && manualResult?.success) {
-      console.log('✅ Manual completion SUCCESS');
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Delivery completed manually! 🎉',
-          method: 'manual',
-          ...manualResult
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.error('❌ Manual completion failed:', manualError || manualResult);
-
-    // METHOD 3: Ultra-simple fallback (nuclear option)
-    console.log('🚨 METHOD 3: Attempting ultra-simple fallback...');
-    
-    const { data: simpleResult, error: simpleError } = await supabaseClient
-      .rpc('simple_mark_delivered', {
-        p_order_id: order_id,
-        p_agent_id: agent.id
-      });
-
-    if (!simpleError && simpleResult?.success) {
-      console.log('✅ Ultra-simple completion SUCCESS');
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Delivery completed! 🎉',
-          method: 'simple_fallback',
-          order_id: order_id,
-          payment_status: 'cod_collected'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.error('❌ All three completion methods failed');
-    
+    // Return success
+    console.log('🎉 Delivery completed successfully via unified flow');
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'All completion methods failed. Please contact support.',
-        details: {
-          qr_error: qr_code_data ? (qrError?.message || qrResult?.error) : 'not attempted',
-          manual_error: manualError?.message || manualResult?.error,
-          simple_error: simpleError?.message || simpleResult?.error
-        }
+      JSON.stringify({
+        success: true,
+        message: 'Delivery completed successfully',
+        order_id,
+        method_used: qr_code_data ? 'qr_scan' : 'manual',
+        payout_amount: result.payout_amount || 30,
+        ...result
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('❌ Unified Complete Delivery Error:', error);
-    
+    console.error('💥 Unexpected error:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: 'Failed to complete delivery. Please try again.',
-        details: error instanceof Error ? error.message : String(error)
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle, Loader2 } from "lucide-react";
+import { CheckCircle, Loader2, Package, MapPin, Clock } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/react-query-config";
 
 interface ManualCompleteDialogProps {
   open: boolean;
@@ -23,10 +25,13 @@ export const ManualCompleteDialog = ({
   onSuccess,
 }: ManualCompleteDialogProps) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<'COD' | 'ONLINE' | null>(null);
 
   const handleComplete = async (paymentMethod: 'COD' | 'ONLINE') => {
     setIsProcessing(true);
+    setSelectedMethod(paymentMethod);
 
     try {
       console.log('🚀 Manual completion started:', { orderId, paymentMethod });
@@ -37,9 +42,32 @@ export const ManualCompleteDialog = ({
         throw new Error('Not authenticated');
       }
 
-      console.log('📤 Invoking manual-complete-delivery function...');
+      // Optimistic update - mark as delivered immediately in cache
+      const agentEmail = session.user.email;
+      if (agentEmail) {
+        // Get agent ID from delivery_agents table
+        const { data: agentData } = await supabase
+          .from('delivery_agents')
+          .select('id')
+          .eq('email', agentEmail)
+          .eq('is_active', true)
+          .single();
 
-      const { data, error } = await supabase.functions.invoke('manual-complete-delivery', {
+        if (agentData) {
+          // Optimistically remove from cache
+          queryClient.setQueryData(
+            queryKeys.availableOrders(agentData.id, { lat: 0, lng: 0 }),
+            (oldData: any) => {
+              if (!oldData) return oldData;
+              return oldData.filter((order: any) => order.id !== orderId);
+            }
+          );
+        }
+      }
+
+      console.log('📤 Invoking unified-complete-delivery function...');
+
+      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
         body: {
           order_id: orderId,
           payment_method: paymentMethod
@@ -53,7 +81,6 @@ export const ManualCompleteDialog = ({
         throw new Error(`Edge function error: ${error.message}`);
       }
 
-      // Check the data response structure
       if (!data) {
         console.error('❌ No data returned from edge function');
         throw new Error('No response from server');
@@ -61,21 +88,46 @@ export const ManualCompleteDialog = ({
 
       if (data.success === false) {
         console.error('❌ Manual completion failed:', data);
-        throw new Error(data.error || data.details?.error || 'Failed to complete delivery');
+        throw new Error(data.error || 'Failed to complete delivery');
       }
 
       console.log('✅ Manual completion successful:', data);
 
+      // Show success with payout info
+      const payoutAmount = data.payout_amount || 30;
+      
       toast({
         title: "✅ Delivery Completed!",
-        description: `Order for ${customerName} marked as delivered via ${paymentMethod}`,
+        description: `Order for ${customerName} marked as delivered. Earned: ₹${payoutAmount}`,
+        duration: 5000,
       });
 
       onOpenChange(false);
-      onSuccess();
+      
+      // Refresh order list after a short delay
+      setTimeout(() => {
+        onSuccess();
+      }, 500);
 
     } catch (error) {
       console.error('❌ Manual completion error:', error);
+      
+      // Revert optimistic update
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user.email) {
+        const { data: agentData } = await supabase
+          .from('delivery_agents')
+          .select('id')
+          .eq('email', session.user.email)
+          .eq('is_active', true)
+          .single();
+
+        if (agentData) {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.availableOrders(agentData.id, { lat: 0, lng: 0 })
+          });
+        }
+      }
       
       toast({
         title: "❌ Completion Failed",
@@ -84,6 +136,7 @@ export const ManualCompleteDialog = ({
       });
     } finally {
       setIsProcessing(false);
+      setSelectedMethod(null);
     }
   };
 
@@ -98,39 +151,64 @@ export const ManualCompleteDialog = ({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="p-4 bg-muted/50 rounded-lg">
-            <p className="text-sm text-muted-foreground">Customer</p>
-            <p className="font-semibold text-foreground">{customerName}</p>
-            <p className="text-sm text-muted-foreground mt-2">Order Total</p>
-            <p className="font-semibold text-foreground">₹{orderTotal}</p>
+          {/* Order Summary Card */}
+          <div className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg border border-primary/20">
+            <div className="flex items-start space-x-3">
+              <Package className="w-5 h-5 text-primary mt-1 flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="font-semibold text-foreground">{customerName}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Order Total</p>
+                  <p className="text-lg font-bold text-foreground">₹{orderTotal}</p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Select Payment Method:</p>
+          {/* Payment Method Selection */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-foreground flex items-center">
+              <Clock className="w-4 h-4 mr-2 text-primary" />
+              Select Payment Method
+            </p>
             
             <Button
               onClick={() => handleComplete('COD')}
               disabled={isProcessing}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transition-all"
               size="lg"
             >
-              {isProcessing ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              Cash on Delivery (COD)
+              {isProcessing && selectedMethod === 'COD' ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <span className="text-2xl mr-2">💵</span>
+              )}
+              Cash on Delivery
             </Button>
 
             <Button
               onClick={() => handleComplete('ONLINE')}
               disabled={isProcessing}
-              className="w-full bg-green-500 hover:bg-green-600 text-white"
+              className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all"
               size="lg"
             >
-              {isProcessing ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
+              {isProcessing && selectedMethod === 'ONLINE' ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <span className="text-2xl mr-2">💳</span>
+              )}
               Online Payment
             </Button>
+          </div>
+
+          {/* Info Banner */}
+          <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              <strong>💡 Tip:</strong> Select the payment method customer used for this order
+            </p>
           </div>
 
           <Button

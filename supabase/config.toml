@@ -50,3 +50,6 @@ verify_jwt = true
 
 [functions.force-complete-delivery]
 verify_jwt = true
+
+[functions.unified-complete-delivery]
+verify_jwt = true
