@@ -162,15 +162,16 @@ serve(async (req) => {
       }
     }
 
-    // Return success
+    // Return success (including already completed cases)
     console.log('🎉 Delivery completed successfully via unified flow');
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Delivery completed successfully',
+        message: result.already_completed ? 'Order already completed' : 'Delivery completed successfully',
         order_id,
         method_used: qr_code_data ? 'qr_scan' : 'manual',
         payout_amount: result.payout_amount || 30,
+        already_completed: result.already_completed || false,
         ...result
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -42,29 +42,6 @@ export const ManualCompleteDialog = ({
         throw new Error('Not authenticated');
       }
 
-      // Optimistic update - mark as delivered immediately in cache
-      const agentEmail = session.user.email;
-      if (agentEmail) {
-        // Get agent ID from delivery_agents table
-        const { data: agentData } = await supabase
-          .from('delivery_agents')
-          .select('id')
-          .eq('email', agentEmail)
-          .eq('is_active', true)
-          .single();
-
-        if (agentData) {
-          // Optimistically remove from cache
-          queryClient.setQueryData(
-            queryKeys.availableOrders(agentData.id, { lat: 0, lng: 0 }),
-            (oldData: any) => {
-              if (!oldData) return oldData;
-              return oldData.filter((order: any) => order.id !== orderId);
-            }
-          );
-        }
-      }
-
       console.log('📤 Invoking unified-complete-delivery function...');
 
       const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
@@ -95,39 +72,23 @@ export const ManualCompleteDialog = ({
 
       // Show success with payout info
       const payoutAmount = data.payout_amount || 30;
+      const isAlreadyCompleted = data.already_completed || false;
       
       toast({
-        title: "✅ Delivery Completed!",
-        description: `Order for ${customerName} marked as delivered. Earned: ₹${payoutAmount}`,
+        title: isAlreadyCompleted ? "✅ Already Completed" : "✅ Delivery Completed!",
+        description: `Order for ${customerName} ${isAlreadyCompleted ? 'was already marked' : 'marked'} as delivered. Payout: ₹${payoutAmount}`,
         duration: 5000,
       });
 
+      // Invalidate queries to refresh from server
+      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['delivery-history'] });
+
       onOpenChange(false);
-      
-      // Refresh order list after a short delay
-      setTimeout(() => {
-        onSuccess();
-      }, 500);
+      onSuccess();
 
     } catch (error) {
       console.error('❌ Manual completion error:', error);
-      
-      // Revert optimistic update
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user.email) {
-        const { data: agentData } = await supabase
-          .from('delivery_agents')
-          .select('id')
-          .eq('email', session.user.email)
-          .eq('is_active', true)
-          .single();
-
-        if (agentData) {
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.availableOrders(agentData.id, { lat: 0, lng: 0 })
-          });
-        }
-      }
       
       toast({
         title: "❌ Completion Failed",
