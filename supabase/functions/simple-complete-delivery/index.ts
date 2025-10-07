@@ -91,17 +91,7 @@ Deno.serve(async (req) => {
     const distanceBonus = 0; // Can be enhanced later
     const totalPayout = basePayout + distanceBonus;
 
-    // Check if earnings already exist (idempotency check) - BEFORE updating order
-    const { data: existingEarnings } = await supabase
-      .from('earnings')
-      .select('id, amount, status')
-      .eq('agent_id', agent.id)
-      .eq('order_id', order_id)
-      .maybeSingle();
-
-    const now = new Date().toISOString();
-    
-    // Normalize payment method to database standard format
+    // Normalize payment method to database standard format FIRST
     const normalizePaymentMethod = (method: string): 'COD' | 'ONLINE' => {
       if (!method || typeof method !== 'string') {
         return 'ONLINE';
@@ -120,47 +110,62 @@ Deno.serve(async (req) => {
     
     const normalizedPayment = normalizePaymentMethod(payment_method);
     const paymentStatus = normalizedPayment === 'COD' ? 'paid_cod' : 'paid_online';
+    const now = new Date().toISOString();
     
     console.log('✅ Payment method normalized:', { original: payment_method, normalized: normalizedPayment });
 
+    // CRITICAL IDEMPOTENCY CHECK - Check BOTH earnings AND delivery status BEFORE any modifications
+    const { data: existingEarnings } = await supabase
+      .from('earnings')
+      .select('id, amount, status, payment_method')
+      .eq('agent_id', agent.id)
+      .eq('order_id', order_id)
+      .maybeSingle();
+
+    // If earnings exist, this order was already processed
     if (existingEarnings) {
-      console.log('✅ Earnings already exist - updating order status only:', {
+      console.log('⚠️ Order already completed - earnings exist:', {
         earning_id: existingEarnings.id,
         amount: existingEarnings.amount,
-        status: existingEarnings.status
+        status: existingEarnings.status,
+        payment_method: existingEarnings.payment_method
       });
       
-      // Only update order status since earnings already processed
-      const { error: updateOrderError } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          delivered_at: now,
-          payment_status: paymentStatus,
-          updated_at: now
-        })
-        .eq('id', order_id)
-        .eq('agent_id', agent.id);
+      // Update order status if it's not delivered yet (recovery mode)
+      if (order.status !== 'delivered') {
+        console.log('🔄 Updating order status to match existing earnings (recovery mode)');
+        const { error: recoveryError } = await supabase
+          .from('orders')
+          .update({
+            status: 'delivered',
+            delivered_at: now,
+            payment_status: paymentStatus,
+            updated_at: now
+          })
+          .eq('id', order_id)
+          .eq('agent_id', agent.id);
 
-      if (updateOrderError) {
-        console.error('❌ Failed to update order (earnings exist):', updateOrderError);
-        throw new Error(`Failed to update order: ${updateOrderError.message}`);
+        if (recoveryError) {
+          console.error('❌ Recovery update failed:', recoveryError);
+        } else {
+          console.log('✅ Recovery successful - order status synchronized');
+        }
       }
-
-      console.log('✅ Order updated successfully (partial completion recovery)');
       
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Delivery completed successfully (recovered)',
+          message: 'Delivery already completed',
           order_id: order_id,
           payout_amount: existingEarnings.amount,
-          payment_method: payment_method,
-          recovery_mode: true
+          payment_method: existingEarnings.payment_method || normalizedPayment,
+          already_completed: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    console.log('📝 Starting new delivery completion...');
 
     // Normal flow: Update order status first, then create earnings
     const { error: updateOrderError } = await supabase
@@ -210,32 +215,29 @@ Deno.serve(async (req) => {
       console.log('✅ Delivery history created/updated');
     }
 
-    // Only create earnings if they don't exist
-    if (!existingEarnings) {
-      const { error: earningsError } = await supabase
-        .from('earnings')
-        .insert({
-          agent_id: agent.id,
-          order_id: order_id,
-          amount: totalPayout,
-          distance_km: 2.5,
-          status: 'completed',
-          description: `Delivery payout - ${payment_method}`
-        });
+    // Create earnings record with proper error handling
+    const { error: earningsError } = await supabase
+      .from('earnings')
+      .insert({
+        agent_id: agent.id,
+        order_id: order_id,
+        amount: totalPayout,
+        distance_km: 2.5,
+        status: 'completed',
+        payment_method: normalizedPayment,
+        description: `Delivery payout - ${normalizedPayment}`
+      });
 
-      if (earningsError) {
-        // Handle duplicate constraint gracefully
-        if (earningsError.code === '23505' && earningsError.message.includes('unique_earnings_per_order_agent')) {
-          console.log('✅ Earnings already exist for this order (duplicate constraint), continuing...');
-        } else {
-          console.error('Earnings creation error:', earningsError);
-          // Don't throw error for earnings - continue with order completion
-        }
+    if (earningsError) {
+      // Handle duplicate constraint gracefully (race condition)
+      if (earningsError.code === '23505') {
+        console.log('⚠️ Earnings record already exists (race condition), continuing...');
       } else {
-        console.log('✅ Earnings record created');
+        console.error('❌ Earnings creation error:', earningsError);
+        // Don't throw error for earnings - order is already marked delivered
       }
     } else {
-      console.log('✅ Earnings already exist for this order, skipping creation');
+      console.log('✅ Earnings record created');
     }
 
     // Check if agent wallet exists, if not create it
