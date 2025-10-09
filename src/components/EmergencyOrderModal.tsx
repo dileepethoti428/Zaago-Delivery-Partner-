@@ -65,17 +65,19 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
   const [isRejecting, setIsRejecting] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const [showAudioControls, setShowAudioControls] = useState(false);
-  const [realTimeDistance, setRealTimeDistance] = useState<{ distance_km: number; eta_mins: number; source: string } | null>(null);
+  const [pickupDistance, setPickupDistance] = useState<{ distance_km: number; eta_mins: number; source: string } | null>(null);
+  const [dropDistance, setDropDistance] = useState<{ distance_km: number; eta_mins: number; source: string } | null>(null);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
-  // Calculate real-time distance when modal opens
+  // Calculate real-time distances when modal opens
   useEffect(() => {
     if (!isOpen || !orderData) {
-      setRealTimeDistance(null);
+      setPickupDistance(null);
+      setDropDistance(null);
       return;
     }
 
-    const calculateDistance = async () => {
+    const calculateDistances = async () => {
       try {
         setIsCalculatingDistance(true);
         
@@ -96,19 +98,33 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
           return;
         }
         
-        // Calculate real-time distance using Mapbox routing
-        const result = await calculateRealTimeDistance(agentLocation, customerCoords, orderData.id);
-        setRealTimeDistance(result);
-        
-        console.log('✅ Real-time distance calculated:', result);
+        // Calculate distance from agent to pickup (if pickup address exists)
+        if (orderData.pickup_address) {
+          const pickupCoords = extractCoordinatesFromAddress(orderData.pickup_address);
+          if (pickupCoords) {
+            const pickupResult = await calculateRealTimeDistance(agentLocation, pickupCoords, orderData.id);
+            setPickupDistance(pickupResult);
+            console.log('✅ Agent to Pickup distance:', pickupResult);
+            
+            // Calculate distance from pickup to drop
+            const dropResult = await calculateRealTimeDistance(pickupCoords, customerCoords, orderData.id);
+            setDropDistance(dropResult);
+            console.log('✅ Pickup to Drop distance:', dropResult);
+          }
+        } else {
+          // If no pickup address, just calculate agent to customer
+          const result = await calculateRealTimeDistance(agentLocation, customerCoords, orderData.id);
+          setDropDistance(result);
+          console.log('✅ Direct distance to customer:', result);
+        }
       } catch (error) {
-        console.error('❌ Failed to calculate real-time distance:', error);
+        console.error('❌ Failed to calculate real-time distances:', error);
       } finally {
         setIsCalculatingDistance(false);
       }
     };
 
-    calculateDistance();
+    calculateDistances();
   }, [isOpen, orderData]);
 
   // Auto-dismiss countdown
@@ -281,16 +297,26 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
             <div className="text-right">
               {isCalculatingDistance ? (
                 <Skeleton className="h-8 w-20 bg-white/30 rounded-full" />
-              ) : realTimeDistance ? (
+              ) : (pickupDistance || dropDistance) ? (
                 <div className="space-y-1">
-                  <div className="bg-white/20 px-3 py-1 rounded-full">
-                    <p className="text-xs text-white font-semibold flex items-center gap-1">
-                      <Navigation className="h-3 w-3" />
-                      {realTimeDistance.distance_km.toFixed(1)} KM
-                    </p>
-                  </div>
+                  {pickupDistance && (
+                    <div className="bg-white/20 px-3 py-1 rounded-full">
+                      <p className="text-xs text-white font-semibold flex items-center gap-1">
+                        <Navigation className="h-3 w-3" />
+                        {pickupDistance.distance_km.toFixed(1)} km
+                      </p>
+                    </div>
+                  )}
+                  {dropDistance && (
+                    <div className="bg-white/20 px-3 py-1 rounded-full mt-1">
+                      <p className="text-xs text-white font-semibold flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {dropDistance.distance_km.toFixed(1)} km
+                      </p>
+                    </div>
+                  )}
                   <Badge className="bg-white/30 text-white text-[10px] px-2 py-0 border-0">
-                    Live {realTimeDistance.source === 'mapbox' ? '🗺️' : '📍'}
+                    Live Route 🗺️
                   </Badge>
                 </div>
               ) : orderData.distance_km ? (
@@ -321,52 +347,61 @@ export const EmergencyOrderModal: React.FC<EmergencyOrderModalProps> = ({
             </div>
 
             {/* Distance & Time Info */}
-            {(realTimeDistance || orderData.distance_km || orderData.estimated_time_minutes || isCalculatingDistance) && (
+            {(pickupDistance || dropDistance || orderData.distance_km || orderData.estimated_time_minutes || isCalculatingDistance) && (
               <div className="flex items-start gap-3 bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-lg">
                 <div className="bg-blue-100 p-2 rounded-lg flex-shrink-0">
                   <Navigation className="h-4 w-4 text-blue-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-500 font-medium mb-1 flex items-center gap-2">
-                    Delivery Info
-                    {realTimeDistance && (
+                  <p className="text-xs text-gray-500 font-medium mb-2 flex items-center gap-2">
+                    Route Details
+                    {(pickupDistance || dropDistance) && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        Live Route
+                        Live Route 🗺️
                       </Badge>
                     )}
                   </p>
-                  <div className="flex items-center gap-3">
-                    {isCalculatingDistance ? (
-                      <>
-                        <Skeleton className="h-5 w-16" />
-                        <Skeleton className="h-4 w-20" />
-                      </>
-                    ) : realTimeDistance ? (
-                      <>
-                        <p className="text-sm font-bold text-gray-900">
-                          {realTimeDistance.distance_km.toFixed(1)} km
-                        </p>
-                        <p className="text-xs text-gray-600 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          ~{realTimeDistance.eta_mins} min
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        {orderData.distance_km && (
-                          <p className="text-sm font-bold text-gray-900">
-                            {orderData.distance_km.toFixed(1)} km
-                          </p>
-                        )}
-                        {orderData.estimated_time_minutes && (
-                          <p className="text-xs text-gray-600 flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            ~{orderData.estimated_time_minutes} min
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  {isCalculatingDistance ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-full" />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pickupDistance && (
+                        <div className="flex items-center justify-between bg-white/50 px-3 py-1.5 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Navigation className="h-3.5 w-3.5 text-blue-600" />
+                            <span className="text-xs font-medium text-gray-700">To Pickup</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-gray-900">{pickupDistance.distance_km.toFixed(1)} km</span>
+                            <span className="text-xs text-gray-600">~{pickupDistance.eta_mins} min</span>
+                          </div>
+                        </div>
+                      )}
+                      {dropDistance && (
+                        <div className="flex items-center justify-between bg-white/50 px-3 py-1.5 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3.5 w-3.5 text-orange-600" />
+                            <span className="text-xs font-medium text-gray-700">{pickupDistance ? 'Pickup to Drop' : 'To Drop'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-gray-900">{dropDistance.distance_km.toFixed(1)} km</span>
+                            <span className="text-xs text-gray-600">~{dropDistance.eta_mins} min</span>
+                          </div>
+                        </div>
+                      )}
+                      {!pickupDistance && !dropDistance && orderData.distance_km && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-gray-900">{orderData.distance_km.toFixed(1)} km</span>
+                          {orderData.estimated_time_minutes && (
+                            <span className="text-xs text-gray-600">~{orderData.estimated_time_minutes} min</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
