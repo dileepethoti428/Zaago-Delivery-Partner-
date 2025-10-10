@@ -79,6 +79,7 @@ interface Order {
   coordinates?: { lat: number; lng: number };
   distance_km?: number;
   agent_to_shop_distance?: number; // Real-time distance from agent to pickup shop for "Nearest First" sorting
+  total_distance?: number; // Total distance (agent to shop + shop to customer)
   products_count?: number;
   restaurant?: string;
   backend_calculated?: boolean;
@@ -1447,19 +1448,22 @@ const Home = () => {
     return [...orders].sort((a, b) => {
       switch (sortBy) {
         case 'nearest':
-          // Use real-time agent-to-shop distance from backend (agent to pickup location)
-          const distA = a.agent_to_shop_distance ?? a.distance_km ?? 999;
-          const distB = b.agent_to_shop_distance ?? b.distance_km ?? 999;
+          // Priority: agent_to_shop_distance (backend) > total_distance > distance_km
+          const distA = a.agent_to_shop_distance ?? a.total_distance ?? a.distance_km ?? 999;
+          const distB = b.agent_to_shop_distance ?? b.total_distance ?? b.distance_km ?? 999;
+          console.log(`🎯 Sorting nearest: Order A (${distA.toFixed(2)}km) vs Order B (${distB.toFixed(2)}km)`);
           return distA - distB;
         case 'newest':
           // Sort by order creation time from backend (newest first)
           const timeA = new Date(a.created_at).getTime();
           const timeB = new Date(b.created_at).getTime();
+          console.log(`🕐 Sorting newest: Order A (${new Date(a.created_at).toLocaleString()}) vs Order B (${new Date(b.created_at).toLocaleString()})`);
           return timeB - timeA;
         case 'highest':
           // Sort by agent payout calculated from backend (highest first)
           const payoutA = a.agent_payout ?? calculateAgentPayout(a.distance_km || 2.5);
           const payoutB = b.agent_payout ?? calculateAgentPayout(b.distance_km || 2.5);
+          console.log(`💰 Sorting highest: Order A (₹${payoutA.toFixed(2)}) vs Order B (₹${payoutB.toFixed(2)})`);
           return payoutB - payoutA;
         default:
           return 0;
@@ -2056,30 +2060,21 @@ const Home = () => {
               <SelectContent className="z-[100] bg-white border-2 border-gray-200 shadow-2xl rounded-xl min-w-[180px] p-2">
                 <SelectItem 
                   value="nearest" 
-                  className="text-gray-900 hover:bg-green-50 cursor-pointer rounded-lg px-3 py-2.5 my-1 font-medium flex items-center data-[state=checked]:bg-green-100 data-[state=checked]:text-green-700"
+                  className="text-gray-900 hover:bg-green-50 cursor-pointer rounded-lg px-3 py-2.5 my-1 font-medium data-[state=checked]:bg-green-100 data-[state=checked]:text-green-700"
                 >
-                  <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4" />
-                    <span>Nearest First</span>
-                  </div>
+                  Nearest First
                 </SelectItem>
                 <SelectItem 
                   value="newest" 
-                  className="text-gray-900 hover:bg-green-50 cursor-pointer rounded-lg px-3 py-2.5 my-1 font-medium flex items-center data-[state=checked]:bg-green-100 data-[state=checked]:text-green-700"
+                  className="text-gray-900 hover:bg-green-50 cursor-pointer rounded-lg px-3 py-2.5 my-1 font-medium data-[state=checked]:bg-green-100 data-[state=checked]:text-green-700"
                 >
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    <span>Newest First</span>
-                  </div>
+                  Newest First
                 </SelectItem>
                 <SelectItem 
                   value="highest" 
-                  className="text-gray-900 hover:bg-green-50 cursor-pointer rounded-lg px-3 py-2.5 my-1 font-medium flex items-center data-[state=checked]:bg-green-100 data-[state=checked]:text-green-700"
+                  className="text-gray-900 hover:bg-green-50 cursor-pointer rounded-lg px-3 py-2.5 my-1 font-medium data-[state=checked]:bg-green-100 data-[state=checked]:text-green-700"
                 >
-                  <div className="flex items-center gap-2">
-                    <IndianRupee className="w-4 h-4" />
-                    <span>Highest First</span>
-                  </div>
+                  Highest First
                 </SelectItem>
               </SelectContent>
             </Select>

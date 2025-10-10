@@ -480,6 +480,7 @@ serve(async (req) => {
             
             // Calculate two-leg distance: Agent → Pickup → Customer
             let totalDistance = 0;
+            let agentToShopDistance = 0;
             
             if (pickupLocation) {
               // Leg 1: Agent to pickup location
@@ -487,6 +488,7 @@ serve(async (req) => {
                 { lat: agentLocation.latitude, lng: agentLocation.longitude },
                 { lat: pickupLocation.lat, lng: pickupLocation.lng }
               );
+              agentToShopDistance = distanceToPickup;
               
               // Leg 2: Pickup to customer location
               const distanceToCustomer = await calculateDistance(
@@ -501,9 +503,10 @@ serve(async (req) => {
                 { lat: agentLocation.latitude, lng: agentLocation.longitude },
                 { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
               );
+              agentToShopDistance = totalDistance;
             }
             
-            console.log(`Order ${order.id} total distance: ${totalDistance.toFixed(2)}km`);
+            console.log(`Order ${order.id} - Agent→Shop: ${agentToShopDistance.toFixed(2)}km, Total: ${totalDistance.toFixed(2)}km`);
             
             // Include orders within 15km radius
             if (totalDistance <= 15) {
@@ -518,6 +521,7 @@ serve(async (req) => {
               nearbyOrders.push({
                 ...order,
                 distance_km: shopToCustomerDistance, // Actual delivery distance (shop to customer)
+                agent_to_shop_distance: agentToShopDistance, // Distance from agent's location to pickup shop
                 total_distance: totalDistance, // Total distance (agent to shop + shop to customer)
                 agent_payout: agentPayout,
                 estimated_delivery_time: Math.ceil(shopToCustomerDistance * 2), // 2 minutes per km for delivery
