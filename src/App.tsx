@@ -10,8 +10,7 @@ import RequireAuth from "@/components/RequireAuth";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Bell, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 // Import critical pages (loaded immediately)
 import Splash from "./pages/Splash";
@@ -51,10 +50,6 @@ const AppContent = () => {
     type: 'iphone-6-ringtone',
     frequency: 'double',
   });
-  const [audioInitialized, setAudioInitialized] = useState(() => {
-    return localStorage.getItem('audio_initialized') === 'true';
-  });
-  const [showAudioPrompt, setShowAudioPrompt] = useState(false);
 
   const { playNotificationSound } = useAudioNotification(agentSettings);
 
@@ -97,12 +92,6 @@ const AppContent = () => {
     loadAgentSettings();
   }, []);
 
-  // Show audio initialization prompt if not initialized
-  useEffect(() => {
-    if (!audioInitialized && hasPermission) {
-      setShowAudioPrompt(true);
-    }
-  }, [audioInitialized, hasPermission]);
 
   // Request notification permission on first load
   useEffect(() => {
@@ -130,45 +119,10 @@ const AppContent = () => {
     };
   }, [playNotificationSound]);
 
-  const handleEnableAudio = () => {
-    // User interaction to initialize audio
-    const audio = new Audio('/notification-sound.mp3');
-    audio.volume = 0.1;
-    audio.play().then(() => {
-      console.log('✅ Audio initialized with user interaction');
-      localStorage.setItem('audio_initialized', 'true');
-      setAudioInitialized(true);
-      setShowAudioPrompt(false);
-    }).catch(error => {
-      console.error('❌ Failed to initialize audio:', error);
-    });
-  };
 
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-background relative">
-        {/* Audio Initialization Prompt */}
-        {showAudioPrompt && (
-          <div className="fixed top-0 left-0 right-0 z-50 bg-primary/95 backdrop-blur-sm p-4 shadow-lg">
-            <div className="max-w-md mx-auto flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Bell className="w-6 h-6 text-primary-foreground" />
-                <div>
-                  <p className="text-sm font-semibold text-primary-foreground">Enable Notification Sounds</p>
-                  <p className="text-xs text-primary-foreground/80">Tap to hear order alerts even when app is closed</p>
-                </div>
-              </div>
-              <Button 
-                onClick={handleEnableAudio}
-                size="sm"
-                variant="secondary"
-                className="shrink-0"
-              >
-                Enable
-              </Button>
-            </div>
-          </div>
-        )}
         <Suspense fallback={
           <div className="min-h-screen flex items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
