@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,11 +41,13 @@ import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from "@/lib/distanceService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { QrScannerDialog } from "@/components/QrScannerDialog";
-import { LocationPicker } from "@/components/LocationPicker";
 import DeliveryTimer from "@/components/DeliveryTimer";
-import { EmergencyOrderModal } from "@/components/EmergencyOrderModal";
 import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
+
+// Lazy load heavy components
+const QrScannerDialog = lazy(() => import("@/components/QrScannerDialog").then(m => ({ default: m.QrScannerDialog })));
+const LocationPicker = lazy(() => import("@/components/LocationPicker").then(m => ({ default: m.LocationPicker })));
+const EmergencyOrderModal = lazy(() => import("@/components/EmergencyOrderModal").then(m => ({ default: m.EmergencyOrderModal })));
 
 // Get greeting based on current time
 const getGreeting = () => {
@@ -2331,45 +2333,51 @@ const Home = () => {
       </div>
 
       {/* QR Scanner Dialog */}
-      <QrScannerDialog 
-        open={showQrScanner} 
-        onOpenChange={setShowQrScanner}
-        onDeliveryComplete={() => {
-          console.log('🔄 QR delivery completed, refreshing orders');
-          // Refresh orders to remove completed delivery
-          debouncedRefresh('qr-delivery-complete', true);
-          toast({
-            title: "Order Removed",
-            description: "Completed order has been removed from available orders",
-          });
-        }}
-      />
+      <Suspense fallback={<div />}>
+        <QrScannerDialog 
+          open={showQrScanner} 
+          onOpenChange={setShowQrScanner}
+          onDeliveryComplete={() => {
+            console.log('🔄 QR delivery completed, refreshing orders');
+            // Refresh orders to remove completed delivery
+            debouncedRefresh('qr-delivery-complete', true);
+            toast({
+              title: "Order Removed",
+              description: "Completed order has been removed from available orders",
+            });
+          }}
+        />
+      </Suspense>
 
       {/* Location Picker - Hidden trigger */}
-      <LocationPicker
-        onLocationSelected={(locationData) => {
-          setCurrentLocation(locationData.address || 'Location selected');
-          toast({
-            title: "Location Updated",
-            description: "Your delivery location has been updated successfully.",
-          });
-        }}
-      >
-        <button 
-          ref={setLocationPickerTrigger}
-          style={{ display: 'none' }}
-        />
-      </LocationPicker>
+      <Suspense fallback={<div />}>
+        <LocationPicker
+          onLocationSelected={(locationData) => {
+            setCurrentLocation(locationData.address || 'Location selected');
+            toast({
+              title: "Location Updated",
+              description: "Your delivery location has been updated successfully.",
+            });
+          }}
+        >
+          <button 
+            ref={setLocationPickerTrigger}
+            style={{ display: 'none' }}
+          />
+        </LocationPicker>
+      </Suspense>
 
       {/* Emergency Order Modal */}
-      <EmergencyOrderModal
-        isOpen={showEmergencyModal}
-        orderData={emergencyOrderData}
-        onClose={handleCloseEmergencyModal}
-        onAccept={handleEmergencyAcceptOrder}
-        onReject={handleEmergencyRejectOrder}
-        onStopAlarm={handleStopAlarm}
-      />
+      <Suspense fallback={<div />}>
+        <EmergencyOrderModal
+          isOpen={showEmergencyModal}
+          orderData={emergencyOrderData}
+          onClose={handleCloseEmergencyModal}
+          onAccept={handleEmergencyAcceptOrder}
+          onReject={handleEmergencyRejectOrder}
+          onStopAlarm={handleStopAlarm}
+        />
+      </Suspense>
     </div>
   );
 };

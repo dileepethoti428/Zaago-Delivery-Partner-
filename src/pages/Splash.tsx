@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Truck, Zap } from "lucide-react";
-import zaagoLogo from "@/assets/zaago-logo.png";
+import zaagoLogo from "@/assets/zaago-logo.webp";
 
 const Splash = () => {
   const navigate = useNavigate();
@@ -26,6 +26,7 @@ const Splash = () => {
             src={zaagoLogo} 
             alt="Zaago Logo" 
             className="w-24 h-24 animate-glow-pulse"
+            decoding="async"
           />
         </div>
       </div>
