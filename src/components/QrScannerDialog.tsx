@@ -128,6 +128,39 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
         return;
       }
 
+      // Handle "already paid online" status - auto-complete delivery
+      if (data && data.status === 'already_paid') {
+        console.log('✅ Order already paid online, auto-completing delivery');
+        
+        try {
+          setIsProcessing(true);
+          setCurrentQrCode(result);
+          
+          // Complete delivery immediately with Online payment
+          const deliveryResult = await completeDelivery('Online');
+          
+          toast({
+            title: "✅ Delivered Successfully!",
+            description: `Order for ${data.order.customer_name} was already paid online. Delivery completed!`,
+          });
+          
+          onOpenChange(false);
+          if (onDeliveryComplete) {
+            onDeliveryComplete();
+          }
+        } catch (error) {
+          console.error('❌ Auto-completion failed:', error);
+          toast({
+            title: "Delivery Failed",
+            description: error instanceof Error ? error.message : "Failed to complete delivery",
+            variant: "destructive"
+          });
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
+
       // Handle error responses from the edge function (both with and without error object)
       if (error || !data || !data.success) {
         let errorMsg = 'Invalid QR code';

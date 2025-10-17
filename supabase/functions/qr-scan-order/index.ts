@@ -141,6 +141,35 @@ serve(async (req) => {
       );
     }
 
+    // Check if order is already paid online
+    if (order.payment_status === 'paid_online' || order.payment_status === 'paid') {
+      console.log('✅ Order already paid online, returning already_paid status');
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          status: 'already_paid',
+          message: 'Order already paid online. Proceed with delivery completion.',
+          order: {
+            id: order.id,
+            customer_name: order.customer_name,
+            customer_phone: order.customer_phone,
+            address: order.address,
+            items: order.items,
+            total: order.total,
+            payment_status: order.payment_status,
+            special_instructions: order.special_instructions,
+            delivery_time_slot: order.delivery_time_slot,
+            estimated_payout: 25 // Default payout for already paid orders
+          },
+          agent: {
+            name: agent.name,
+            id: agent.id
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Check if order is assigned to this agent
     if (order.agent_id !== agent.id) {
       return new Response(
