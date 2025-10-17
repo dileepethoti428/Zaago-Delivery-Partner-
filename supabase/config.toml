@@ -53,3 +53,6 @@ verify_jwt = true
 
 [functions.unified-complete-delivery]
 verify_jwt = true
+
+[functions.generate-payment-qr]
+verify_jwt = true
