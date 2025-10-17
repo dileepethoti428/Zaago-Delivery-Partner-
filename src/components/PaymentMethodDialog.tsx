@@ -34,6 +34,53 @@ export const PaymentMethodDialog = ({
   const [showRazorpayQR, setShowRazorpayQR] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
+  const [razorpayQrId, setRazorpayQrId] = useState<string>('');
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
+
+  // Reset states when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setQrCodeUrl(null);
+      setShowRazorpayQR(false);
+      setIsGeneratingQR(false);
+      setRazorpayQrId('');
+      setIsCheckingPayment(false);
+    }
+  }, [open]);
+
+  // Poll for payment completion
+  useEffect(() => {
+    if (!razorpayQrId || !showRazorpayQR || isCheckingPayment) return;
+
+    const checkPaymentStatus = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('check-payment-status', {
+          body: { qr_id: razorpayQrId }
+        });
+
+        if (error) throw error;
+
+        if (data?.isPaid) {
+          setIsCheckingPayment(true);
+          toast({
+            title: "Payment Received!",
+            description: "Completing order automatically...",
+          });
+          await handlePaymentComplete();
+        }
+      } catch (error) {
+        console.error('Error checking payment status:', error);
+      }
+    };
+
+    // Check immediately
+    checkPaymentStatus();
+
+    // Then poll every 3 seconds
+    const interval = setInterval(checkPaymentStatus, 3000);
+
+    return () => clearInterval(interval);
+  }, [razorpayQrId, showRazorpayQR, isCheckingPayment]);
 
   const handlePaymentMethod = async (method: 'COD' | 'Online') => {
     console.log('🎯 Payment method selected:', method);
@@ -67,6 +114,7 @@ export const PaymentMethodDialog = ({
         if (data?.success && data?.qr_code_url) {
           console.log('✅ QR code generated successfully');
           setQrCodeUrl(data.qr_code_url);
+          setRazorpayQrId(data.qr_code_id);
           setShowRazorpayQR(true);
         } else {
           throw new Error('Failed to generate QR code');
@@ -319,7 +367,7 @@ export const PaymentMethodDialog = ({
               </div>
 
               <p className="text-xs text-gray-500 pt-2">
-                Click "Payment Complete" after customer pays
+                {isCheckingPayment ? '⏳ Detecting payment...' : 'Waiting for payment or click "Payment Complete" button'}
               </p>
             </div>
           </div>
