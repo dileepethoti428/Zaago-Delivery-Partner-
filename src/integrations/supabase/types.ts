@@ -4661,7 +4661,7 @@ export type Database = {
         Args:
           | { p_user_id?: string; p_vacation_id: string }
           | { p_vacation_id: string }
-        Returns: Json
+        Returns: boolean
       }
       check_rate_limit: {
         Args: {
@@ -4715,7 +4715,7 @@ export type Database = {
               p_payment_method?: string
             }
           | { p_order_id: string; p_payment_method?: string }
-        Returns: undefined
+        Returns: Json
       }
       complete_delivery_minimal_update: {
         Args: { p_order_id: string; p_payment_method?: string }
@@ -4890,12 +4890,10 @@ export type Database = {
       get_agent_performance: {
         Args: Record<PropertyKey, never> | { limit_count?: number }
         Returns: {
-          agent_id: string
-          agent_name: string
-          average_rating: number
-          success_rate: number
-          total_deliveries: number
-          total_earnings: number
+          avg_rating: number
+          deliveries_today: number
+          online_agents: number
+          total_agents: number
         }[]
       }
       get_agent_profile_with_metrics: {
@@ -5065,10 +5063,7 @@ export type Database = {
           | { customer_lat: number; customer_lon: number; range_km?: number }
           | { customer_lat: number; customer_lon: number; range_km?: number }
         Returns: {
-          discount_percentage: number
-          discounted_price: number
           distance_km: number
-          original_price: number
           product_description: string
           product_id: string
           product_image_url: string
@@ -5155,12 +5150,9 @@ export type Database = {
       get_top_products: {
         Args: Record<PropertyKey, never> | { limit_count?: number }
         Returns: {
-          image_url: string
-          product_id: string
-          product_name: string
-          seller_name: string
-          total_revenue: number
-          total_sold: number
+          name: string
+          qty_sold: number
+          revenue: number
         }[]
       }
       get_top_products_analytics: {
@@ -5381,20 +5373,11 @@ export type Database = {
         Returns: number
       }
       qr_complete_delivery_v3: {
-        Args:
-          | {
-              p_agent_id: string
-              p_agent_location?: Json
-              p_customer_location?: Json
-              p_distance_km?: number
-              p_order_id: string
-              p_payment_method: string
-            }
-          | {
-              p_agent_id: string
-              p_payment_method: string
-              p_qr_code_data: string
-            }
+        Args: {
+          p_agent_id: string
+          p_payment_method: string
+          p_qr_code_data: string
+        }
         Returns: Json
       }
       reconcile_completed_orders: {
