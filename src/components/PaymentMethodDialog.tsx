@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CreditCard, Banknote, Loader2, X } from "lucide-react";
-import razorpayQR from "@/assets/razorpay-qr.png";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PaymentMethodDialogProps {
   open: boolean;
@@ -32,6 +32,8 @@ export const PaymentMethodDialog = ({
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showRazorpayQR, setShowRazorpayQR] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false);
 
   const handlePaymentMethod = async (method: 'COD' | 'Online') => {
     console.log('🎯 Payment method selected:', method);
@@ -47,9 +49,38 @@ export const PaymentMethodDialog = ({
       return;
     }
 
-    // If Online Payment selected, show Razorpay QR first
+    // If Online Payment selected, generate and show Razorpay QR
     if (method === 'Online') {
-      setShowRazorpayQR(true);
+      setIsGeneratingQR(true);
+      try {
+        console.log('🔐 Generating dynamic Razorpay QR code...');
+        const { data, error } = await supabase.functions.invoke('generate-payment-qr', {
+          body: {
+            order_id: order.order_id,
+            amount: order.total_amount,
+            customer_name: order.customer_name
+          }
+        });
+
+        if (error) throw error;
+        
+        if (data?.success && data?.qr_code_url) {
+          console.log('✅ QR code generated successfully');
+          setQrCodeUrl(data.qr_code_url);
+          setShowRazorpayQR(true);
+        } else {
+          throw new Error('Failed to generate QR code');
+        }
+      } catch (error) {
+        console.error('❌ QR generation failed:', error);
+        toast({
+          title: "QR Code Generation Failed",
+          description: "Could not generate payment QR code. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsGeneratingQR(false);
+      }
       return;
     }
     
@@ -180,11 +211,20 @@ export const PaymentMethodDialog = ({
                   
                   <Button
                     onClick={() => handlePaymentMethod('Online')}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isGeneratingQR}
                     className="w-full h-12 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
                   >
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    Online Payment
+                    {isGeneratingQR ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Generating QR...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-5 h-5 mr-2" />
+                        Online Payment
+                      </>
+                    )}
                   </Button>
                 </div>
 
@@ -227,11 +267,17 @@ export const PaymentMethodDialog = ({
               </div>
 
               <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-2xl">
-                <img 
-                  src={razorpayQR} 
-                  alt="UPI Payment QR Code" 
-                  className="w-full max-w-xs mx-auto rounded-xl shadow-lg"
-                />
+                {qrCodeUrl ? (
+                  <img 
+                    src={qrCodeUrl} 
+                    alt="UPI Payment QR Code" 
+                    className="w-full max-w-xs mx-auto rounded-xl shadow-lg"
+                  />
+                ) : (
+                  <div className="w-full max-w-xs mx-auto h-64 flex items-center justify-center">
+                    <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
