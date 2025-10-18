@@ -63,20 +63,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if already delivered
+    // Check if already delivered by this agent (idempotency)
     const { data: existingDelivery } = await supabase
       .from('delivery_history')
-      .select('id')
+      .select('id, completed_at')
       .eq('order_id', order_id)
+      .eq('agent_id', agent.id)
       .maybeSingle();
 
     if (existingDelivery) {
-      console.log('⚠️ Order already delivered');
+      console.log('⚠️ Order already delivered by this agent at:', existingDelivery.completed_at);
       return new Response(
         JSON.stringify({ 
           success: true, 
           message: 'Order already delivered',
-          already_completed: true 
+          already_completed: true,
+          completed_at: existingDelivery.completed_at
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -130,28 +132,44 @@ Deno.serve(async (req) => {
       agent_id: agent.id
     });
 
-    // 1. Insert delivery history
-    const { error: historyError } = await supabase
-      .from('delivery_history')
-      .insert({
-        order_id: order_id,
-        agent_id: agent.id,
-        customer_name: order.delivery_address?.fullName || order.customer_name || 'Customer',
-        customer_phone: order.delivery_address?.phone || order.customer_phone || '',
-        delivery_address: order.delivery_address || order.address,
-        items: order.items,
-        total_amount: order.total,
-        payment_method: normalizedPayment,
-        payment_status: paymentStatus,
-        delivery_payout: rounded_payout,
-        delivery_date: new Date().toISOString().split('T')[0],
-        completed_at: new Date().toISOString(),
-        distance_traveled: distance_km
-      });
+    // 1. Insert delivery history with duplicate handling
+    try {
+      const { error: historyError } = await supabase
+        .from('delivery_history')
+        .insert({
+          order_id: order_id,
+          agent_id: agent.id,
+          customer_name: order.delivery_address?.fullName || order.customer_name || 'Customer',
+          customer_phone: order.delivery_address?.phone || order.customer_phone || '',
+          delivery_address: order.delivery_address || order.address,
+          items: order.items,
+          total_amount: order.total,
+          payment_method: normalizedPayment,
+          payment_status: paymentStatus,
+          delivery_payout: rounded_payout,
+          delivery_date: new Date().toISOString().split('T')[0],
+          completed_at: new Date().toISOString(),
+          distance_traveled: distance_km
+        });
 
-    if (historyError) {
-      console.error('Failed to insert delivery history:', historyError);
-      throw historyError;
+      if (historyError) {
+        // Handle duplicate key error (race condition)
+        if (historyError.code === '23505') {
+          console.log('⚠️ Duplicate delivery detected (race condition), returning success');
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: 'Order already delivered',
+              already_completed: true 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        throw historyError;
+      }
+    } catch (error) {
+      console.error('Failed to insert delivery history:', error);
+      throw error;
     }
 
     // 2. Update orders table
