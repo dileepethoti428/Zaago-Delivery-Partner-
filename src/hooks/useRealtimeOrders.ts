@@ -39,11 +39,26 @@ export const useRealtimeOrders = (agentId: string | null) => {
           event: '*',
           schema: 'public',
           table: 'orders',
-          filter: `status=in.(placed,confirmed,packed)`
+          filter: `status=in.(placed,confirmed,packed,delivered)`
         },
         (payload) => {
           const newOrder = payload.new as any;
-          console.log('📦 Real-time order update:', payload.eventType, newOrder?.id);
+          console.log('📦 Real-time order update:', payload.eventType, newOrder?.id, 'status:', newOrder?.status);
+          
+          // If order is delivered, remove it from available orders
+          if (newOrder?.status === 'delivered') {
+            console.log('✅ Order delivered, removing from cache:', newOrder.id);
+            queryClient.setQueryData(
+              queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
+              (oldData: any) => {
+                if (!oldData) return oldData;
+                return oldData.filter((order: any) => order.id !== newOrder.id);
+              }
+            );
+            setLastUpdate(new Date());
+            setUpdateCount(prev => prev + 1);
+            return;
+          }
           
           // Update cache immediately for better UX
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {

@@ -14,6 +14,7 @@ import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordina
 import { ArrowLeft, MapPin, Phone, Clock, Calendar, Navigation, CheckCircle2, Package, User, CreditCard, AlertCircle, X } from "lucide-react";
 import DeliveryTimer from "@/components/DeliveryTimer";
 import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
+import { queryKeys } from "@/lib/react-query-config";
 interface Order {
   id: string;
   customer_name: string;
@@ -469,6 +470,27 @@ const DeliveryDetails = () => {
           delivered_at: new Date().toISOString()
         };
         setOrder(updatedOrder);
+        
+        // Optimistically remove from available orders cache
+        const { data: user } = await supabase.auth.getUser();
+        if (user.user?.email) {
+          const { data: agentData } = await supabase
+            .from('delivery_agents')
+            .select('id')
+            .eq('email', user.user.email)
+            .eq('is_active', true)
+            .maybeSingle();
+          
+          if (agentData?.id) {
+            queryClient.setQueryData(
+              queryKeys.availableOrders(agentData.id, { lat: 0, lng: 0 }),
+              (oldData: any) => {
+                if (!oldData) return oldData;
+                return oldData.filter((o: any) => o.id !== order.id);
+              }
+            );
+          }
+        }
         
         // Invalidate all relevant queries for immediate UI refresh
         await queryClient.invalidateQueries({ queryKey: ['orders'] });
