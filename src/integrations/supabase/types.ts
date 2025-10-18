@@ -1701,6 +1701,53 @@ export type Database = {
           },
         ]
       }
+      flexible_payments: {
+        Row: {
+          agent_id: string
+          amount: number
+          created_at: string
+          expires_at: string
+          id: string
+          payment_received_at: string | null
+          qr_code_url: string
+          razorpay_qr_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          amount: number
+          created_at?: string
+          expires_at: string
+          id?: string
+          payment_received_at?: string | null
+          qr_code_url: string
+          razorpay_qr_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          amount?: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          payment_received_at?: string | null
+          qr_code_url?: string
+          razorpay_qr_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flexible_payments_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       milk_transactions: {
         Row: {
           created_at: string

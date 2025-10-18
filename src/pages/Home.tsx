@@ -43,6 +43,7 @@ import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordina
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import DeliveryTimer from "@/components/DeliveryTimer";
 import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
+import { FlexiblePaymentDialog } from "@/components/FlexiblePaymentDialog";
 
 // Lazy load heavy components
 const OtpVerificationDialog = lazy(() => import("@/components/OtpVerificationDialog").then(m => ({ default: m.OtpVerificationDialog })));
@@ -159,6 +160,8 @@ const Home = () => {
   const [isLoadingDistance, setIsLoadingDistance] = useState<boolean>(false);
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
+  const [showFlexiblePaymentDialog, setShowFlexiblePaymentDialog] = useState(false);
+  const [agent, setAgent] = useState<{ id: string } | null>(null);
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
   const notificationCooldownRef = useRef<Map<string, number>>(new Map());
   
@@ -208,19 +211,22 @@ const Home = () => {
       if (!user?.email) return;
 
       // Get agent details
-      const { data: agent } = await supabase
+      const { data: agentData } = await supabase
         .from('delivery_agents')
         .select('id')
         .eq('email', user.email)
         .eq('is_active', true)
         .maybeSingle();
 
-      if (agent) {
+      if (agentData) {
+        // Store agent for flexible payment
+        setAgent(agentData);
+        
         // Get agent settings - respect user preferences
         const { data: agentSettings } = await supabase
           .from('agent_settings')
           .select('ringtone_enabled, ringtone_volume, ringtone_type, notification_frequency')
-          .eq('agent_id', agent.id)
+          .eq('agent_id', agentData.id)
           .maybeSingle();
 
         if (agentSettings) {
@@ -2028,6 +2034,18 @@ const Home = () => {
             )}
           </Button>
 
+          {/* Payment QR */}
+          <Button
+            onClick={() => setShowFlexiblePaymentDialog(true)}
+            variant="outline"
+            className="h-12 rounded-lg border-blue-300 text-blue-700 hover:bg-blue-50 bg-white"
+          >
+            <div className="flex items-center">
+              <QrCode className="w-4 h-4 text-blue-700 mr-1" />
+              <span className="text-xs text-blue-700">Payment QR</span>
+            </div>
+          </Button>
+
         </div>
       </div>
 
@@ -2354,6 +2372,13 @@ const Home = () => {
           }}
         />
       </Suspense>
+
+      {/* Flexible Payment Dialog */}
+      <FlexiblePaymentDialog
+        open={showFlexiblePaymentDialog}
+        onOpenChange={setShowFlexiblePaymentDialog}
+        agentId={agent?.id || ''}
+      />
 
       {/* Location Picker - Hidden trigger */}
       <Suspense fallback={<div />}>
