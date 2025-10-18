@@ -330,8 +330,8 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     try {
       console.log('🚚 Completing QR delivery with payment method:', paymentMethod);
       
-      // Use the original qr-complete-delivery function
-      const { data: result, error: functionError } = await supabase.functions.invoke('qr-complete-delivery', {
+      // Use the new direct-qr-complete function for reliable completion
+      const { data: result, error: functionError } = await supabase.functions.invoke('direct-qr-complete', {
         body: {
           qr_code_data: qrData,
           payment_method: paymentMethod
