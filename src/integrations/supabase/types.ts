@@ -5299,11 +5299,9 @@ export type Database = {
         Returns: undefined
       }
       manual_complete_delivery: {
-        Args: {
-          p_agent_id: string
-          p_order_id: string
-          p_payment_method: string
-        }
+        Args:
+          | { p_agent_id: string; p_order_id: string; p_payment_method: string }
+          | { p_agent_id: string; p_order_id: string; p_payment_method: string }
         Returns: Json
       }
       manual_process_subscriptions: {
@@ -5373,11 +5371,13 @@ export type Database = {
         Returns: number
       }
       qr_complete_delivery_v3: {
-        Args: {
-          p_agent_id: string
-          p_payment_method: string
-          p_qr_code_data: string
-        }
+        Args:
+          | { p_agent_id: string; p_order_id: string; p_payment_method: string }
+          | {
+              p_agent_id: string
+              p_payment_method: string
+              p_qr_code_data: string
+            }
         Returns: Json
       }
       reconcile_completed_orders: {
