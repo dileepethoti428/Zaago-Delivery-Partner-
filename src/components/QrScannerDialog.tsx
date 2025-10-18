@@ -136,10 +136,9 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
         
         try {
           setIsProcessing(true);
-          setCurrentQrCode(result);
           
-          // Complete delivery immediately with Online payment
-          const deliveryResult = await completeDelivery('Online');
+          // Complete delivery immediately with Online payment, passing QR code data directly
+          const deliveryResult = await completeDelivery('Online', result);
           
           // Show success screen with order details
           setSuccessOrderData({
@@ -308,8 +307,10 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     setIsScanning(true);
   };
 
-  const completeDelivery = async (paymentMethod: string) => {
-    if (!currentQrCode) {
+  const completeDelivery = async (paymentMethod: string, qrCodeData?: string) => {
+    const qrData = qrCodeData || currentQrCode;
+    
+    if (!qrData) {
       toast({
         title: "Error",
         description: "No QR code data available",
@@ -324,7 +325,7 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
       // Use the original qr-complete-delivery function
       const { data: result, error: functionError } = await supabase.functions.invoke('qr-complete-delivery', {
         body: {
-          qr_code_data: currentQrCode,
+          qr_code_data: qrData,
           payment_method: paymentMethod
         }
       });
