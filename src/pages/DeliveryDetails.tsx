@@ -262,11 +262,21 @@ const DeliveryDetails = () => {
   };
   const handleMarkAsDelivery = async () => {
     if (!order) return;
-    console.log('🎯 Mark as delivery clicked - showing payment dialog');
+    console.log('🎯 Mark as delivery clicked');
     console.log('🎯 Order ID:', order.id);
 
-    // Always show payment options (COD and Online) regardless of payment status
-    setShowPaymentDialog(true);
+    // Check if order is already paid
+    const isAlreadyPaid = order.payment_status === 'paid' || 
+                          order.payment_status === 'paid_online' ||
+                          order.payment_status === 'completed';
+
+    if (isAlreadyPaid) {
+      console.log('🎯 Order already paid - auto-completing delivery');
+      await completeDeliveryOnline('Online');
+    } else {
+      console.log('🎯 Order not paid - showing payment dialog');
+      setShowPaymentDialog(true);
+    }
   };
 
   // Zepto-style ultra-fast delivery with real-time tracking
