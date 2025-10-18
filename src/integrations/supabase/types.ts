@@ -5375,6 +5375,7 @@ export type Database = {
       qr_complete_delivery_v3: {
         Args:
           | { p_agent_id: string; p_order_id: string; p_payment_method: string }
+          | { p_agent_id: string; p_order_id: string; p_payment_method: string }
           | {
               p_agent_id: string
               p_payment_method: string
