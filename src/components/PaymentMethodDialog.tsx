@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CreditCard, Banknote, Loader2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface PaymentMethodDialogProps {
   open: boolean;
@@ -30,6 +31,7 @@ export const PaymentMethodDialog = ({
   onRetry
 }: PaymentMethodDialogProps) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showRazorpayQR, setShowRazorpayQR] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
@@ -132,26 +134,63 @@ export const PaymentMethodDialog = ({
       return;
     }
     
-    // For COD, proceed directly with completion
-    if (!onSuccess) {
-      console.error('❌ No onSuccess function provided');
-      return;
-    }
-    
+    // For COD, call backend to complete delivery
     setIsProcessing(true);
     
     try {
-      console.log('🚀 Calling onSuccess with payment method:', method);
-      const result = await onSuccess(method);
-      console.log('✅ onSuccess completed:', result);
+      console.log('🚀 Completing delivery with COD payment method');
       
-      // Show success message with payment method and actual delivery amount from backend
-      const paymentMethodText = 'Cash on Delivery (COD)';
-      const deliveryAmount = (result && typeof result === 'object' && result.payout_amount) ? `₹${result.payout_amount}` : '₹25';
-      toast({
-        title: "✅ Product Delivered Successfully!",
-        description: `Delivery Type: ${paymentMethodText} • Agent Earned: ${deliveryAmount}`,
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      console.log('📤 Invoking unified-complete-delivery function...');
+
+      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+        body: {
+          order_id: order.order_id,
+          payment_method: method.toUpperCase()
+        }
       });
+
+      console.log('📥 Edge function response:', { data, error });
+
+      if (error) {
+        console.error('❌ Edge function error:', error);
+        throw new Error(`Edge function error: ${error.message}`);
+      }
+
+      if (!data) {
+        console.error('❌ No data returned from edge function');
+        throw new Error('No response from server');
+      }
+
+      if (data.success === false) {
+        console.error('❌ Delivery completion failed:', data);
+        throw new Error(data.error || 'Failed to complete delivery');
+      }
+
+      console.log('✅ Delivery completion successful:', data);
+
+      // Show success with payout info
+      const payoutAmount = data.payout_amount || 25;
+      const isAlreadyCompleted = data.already_completed || false;
+      
+      toast({
+        title: isAlreadyCompleted ? "✅ Already Completed" : "✅ Product Delivered Successfully!",
+        description: `Delivery Type: Cash on Delivery (COD) • Agent Earned: ₹${payoutAmount}`,
+      });
+
+      // Invalidate queries to refresh from server
+      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['delivery-history'] });
+      
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        await onSuccess(method);
+      }
       
       // Close dialog after successful completion
       onOpenChange(false);
@@ -159,7 +198,6 @@ export const PaymentMethodDialog = ({
     } catch (error) {
       console.error('❌ Delivery completion failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Error details:', errorMessage);
       toast({
         title: "Delivery Failed",
         description: `Error: ${errorMessage}`,
@@ -171,23 +209,62 @@ export const PaymentMethodDialog = ({
   };
 
   const handlePaymentComplete = async () => {
-    if (!onSuccess) {
-      console.error('❌ No onSuccess function provided');
-      return;
-    }
-    
     setIsProcessing(true);
     
     try {
       console.log('🚀 Completing delivery with Online payment after QR scan');
-      const result = await onSuccess('Online');
-      console.log('✅ onSuccess completed:', result);
       
-      const deliveryAmount = (result && typeof result === 'object' && result.payout_amount) ? `₹${result.payout_amount}` : '₹25';
-      toast({
-        title: "✅ Delivery Successfully Completed!",
-        description: `Payment received via Online Payment • Agent Earned: ${deliveryAmount}`,
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      console.log('📤 Invoking unified-complete-delivery function for Online payment...');
+
+      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+        body: {
+          order_id: order.order_id,
+          payment_method: 'ONLINE'
+        }
       });
+
+      console.log('📥 Edge function response:', { data, error });
+
+      if (error) {
+        console.error('❌ Edge function error:', error);
+        throw new Error(`Edge function error: ${error.message}`);
+      }
+
+      if (!data) {
+        console.error('❌ No data returned from edge function');
+        throw new Error('No response from server');
+      }
+
+      if (data.success === false) {
+        console.error('❌ Delivery completion failed:', data);
+        throw new Error(data.error || 'Failed to complete delivery');
+      }
+
+      console.log('✅ Delivery completion successful:', data);
+
+      // Show success with payout info
+      const payoutAmount = data.payout_amount || 25;
+      const isAlreadyCompleted = data.already_completed || false;
+      
+      toast({
+        title: isAlreadyCompleted ? "✅ Already Completed" : "✅ Delivery Successfully Completed!",
+        description: `Payment received via Online Payment • Agent Earned: ₹${payoutAmount}`,
+      });
+
+      // Invalidate queries to refresh from server
+      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['delivery-history'] });
+      
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        await onSuccess('Online');
+      }
       
       // Close all dialogs
       setShowRazorpayQR(false);
