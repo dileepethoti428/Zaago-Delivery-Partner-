@@ -118,6 +118,18 @@ Deno.serve(async (req) => {
 
     console.log('💰 Calculated payout:', { distance_km, payout_amount: rounded_payout });
 
+    // Enhanced logging before INSERT
+    console.log('🔍 Pre-INSERT verification:', {
+      payment_method: normalizedPayment,
+      payment_status: paymentStatus,
+      typeof_payment_method: typeof normalizedPayment,
+      value_length: normalizedPayment?.length,
+      char_codes: normalizedPayment?.split('').map(c => c.charCodeAt(0)),
+      json_stringify: JSON.stringify({ payment_method: normalizedPayment }),
+      order_id: order_id,
+      agent_id: agent.id
+    });
+
     // 1. Insert delivery history
     const { error: historyError } = await supabase
       .from('delivery_history')
