@@ -272,7 +272,7 @@ const DeliveryDetails = () => {
 
     if (isAlreadyPaid) {
       console.log('🎯 Order already paid - auto-completing delivery');
-      await completeDeliveryOnline('Online');
+      await completeDeliveryOnline('ONLINE');
     } else {
       console.log('🎯 Order not paid - showing payment dialog');
       setShowPaymentDialog(true);
@@ -410,7 +410,7 @@ const DeliveryDetails = () => {
   };
 
   // Simple delivery completion using the new streamlined function
-  const completeDeliveryOnline = async (paymentMethod: 'COD' | 'Online') => {
+  const completeDeliveryOnline = async (paymentMethod: 'COD' | 'ONLINE') => {
     if (!order) return { success: false };
     
     setIsProcessing(true);
@@ -1187,7 +1187,7 @@ const DeliveryDetails = () => {
           total_amount: order.total,
           payment_status: order.payment_status
         }} 
-        onSuccess={async (paymentMethod: 'COD' | 'Online') => {
+        onSuccess={async (paymentMethod: 'COD' | 'ONLINE') => {
           return await completeDeliveryOnline(paymentMethod);
         }}
       />}

@@ -97,11 +97,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Normalize payment method
-    const normalizedPayment = payment_method?.toUpperCase() === 'ONLINE' || 
-                              payment_method?.toUpperCase() === 'UPI' || 
-                              payment_method?.toUpperCase() === 'CARD' 
-                              ? 'ONLINE' : 'COD';
+    // Normalize payment method - convert to uppercase first
+    const upperPayment = (payment_method || 'COD').toUpperCase();
+    const normalizedPayment = (upperPayment === 'ONLINE' || upperPayment === 'UPI' || upperPayment === 'CARD' || upperPayment === 'ONLINE PAYMENT') 
+      ? 'ONLINE' 
+      : 'COD';
+    
+    console.log('🔄 Payment normalization:', { 
+      original: payment_method, 
+      upper: upperPayment,
+      normalized: normalizedPayment 
+    });
     
     const paymentStatus = normalizedPayment === 'ONLINE' ? 'paid' : 'pending';
 
