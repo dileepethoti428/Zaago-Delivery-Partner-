@@ -556,7 +556,7 @@ const SellerDashboard = () => {
 
                       {/* Special highlight for packed orders */}
                       {/* Mark as Packed Button */}
-                      {(order.status === 'confirmed' || order.status === 'preparing') && (
+                      {(order.status === 'placed' || order.status === 'confirmed' || order.status === 'preparing') && (
                         <Button
                           size="sm"
                           onClick={async () => {
