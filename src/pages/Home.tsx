@@ -2028,21 +2028,6 @@ const Home = () => {
             )}
           </Button>
 
-          {/* Verify OTP */}
-          <Button
-            onClick={() => {
-              // For now, open dialog without specific order - agent will enter order OTP
-              setSelectedOrderForOtp(null);
-              setShowOtpDialog(true);
-            }}
-            variant="outline"
-            className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
-          >
-            <div className="flex items-center">
-              <CheckCircle className="w-4 h-4 text-gray-700 mr-1" />
-              <span className="text-xs text-gray-700">Verify OTP</span>
-            </div>
-          </Button>
         </div>
       </div>
 
@@ -2279,15 +2264,28 @@ const Home = () => {
                           </div>
                         </div>
 
-                        {/* Action Button */}
-                        {order.status === 'assigned' ? (
-                          <Button 
-                            onClick={() => navigate(`/delivery-details/${order.id}`)}
-                            className="w-full bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium flex items-center justify-center"
-                          >
-                            <Settings className="w-4 h-4 mr-2" />
-                            Manage Delivery
-                          </Button>
+                        {/* Action Buttons */}
+                        {order.status === 'assigned' || order.status === 'out_for_delivery' ? (
+                          <div className="space-y-3">
+                            <Button 
+                              onClick={() => navigate(`/delivery-details/${order.id}`)}
+                              className="w-full bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium flex items-center justify-center"
+                            >
+                              <Settings className="w-4 h-4 mr-2" />
+                              Manage Delivery
+                            </Button>
+                            <Button 
+                              onClick={() => {
+                                setSelectedOrderForOtp(order);
+                                setShowOtpDialog(true);
+                              }}
+                              variant="outline"
+                              className="w-full bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 h-12 rounded-lg font-medium flex items-center justify-center"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Verify OTP
+                            </Button>
+                          </div>
                         ) : (
                           <div className="flex space-x-3">
                             <Button 

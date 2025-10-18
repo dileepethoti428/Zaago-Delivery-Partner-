@@ -144,6 +144,22 @@ serve(async (req) => {
 
     console.log(`Order ${order_id} successfully accepted by agent ${agent_id}`);
     
+    // Generate OTP for delivery verification
+    try {
+      const { data: otpData, error: otpError } = await supabase.functions.invoke('generate-delivery-otp', {
+        body: { order_id }
+      });
+      
+      if (otpError) {
+        console.error('Error generating OTP:', otpError);
+      } else {
+        console.log(`✅ OTP generated for order ${order_id}:`, otpData);
+      }
+    } catch (otpErr) {
+      console.error('Failed to generate OTP:', otpErr);
+      // Don't fail the order acceptance if OTP generation fails
+    }
+    
     // BROADCAST ORDER ASSIGNMENT to all agents via real-time
     // This immediately notifies other agents to stop showing this order
     const channel = supabase.channel('orders-realtime-updates')
