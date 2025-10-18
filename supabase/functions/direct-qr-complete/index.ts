@@ -125,7 +125,8 @@ Deno.serve(async (req) => {
       delivery_date: new Date().toISOString().split('T')[0],
       payment_method: normalizedPayment,
       payment_status: paymentStatus,
-      delivery_payout: 25.00
+      delivery_payout: 25.00,
+      delivery_time_slot: null  // Explicitly set optional field for proper column alignment
       // completed_at, created_at, updated_at will use database defaults (now())
     };
     
