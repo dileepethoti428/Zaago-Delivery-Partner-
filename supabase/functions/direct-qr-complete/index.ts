@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
 
     console.log('💰 Payment:', normalizedPayment, 'Status:', paymentStatus);
 
-    // 1. Insert delivery history - let database handle timestamps with defaults
+    // 1. Insert delivery history - explicitly set all timestamps to avoid NULL issues
     const deliveryRecord = {
       order_id: orderId,
       agent_id: agent.id,
@@ -126,8 +126,10 @@ Deno.serve(async (req) => {
       payment_method: normalizedPayment,
       payment_status: paymentStatus,
       delivery_payout: 25.00,
-      delivery_time_slot: null  // Explicitly set optional field for proper column alignment
-      // completed_at, created_at, updated_at will use database defaults (now())
+      delivery_time_slot: null,
+      completed_at: currentTime,  // Explicitly set to avoid Supabase client NULL insertion
+      created_at: currentTime,    // Explicitly set to avoid Supabase client NULL insertion
+      updated_at: currentTime     // Explicitly set to avoid Supabase client NULL insertion
     };
     
     console.log('📝 Creating delivery history:', deliveryRecord);
