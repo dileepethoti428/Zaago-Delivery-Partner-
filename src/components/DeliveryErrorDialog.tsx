@@ -1,15 +1,13 @@
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertTriangle, RefreshCw, HeadphonesIcon } from "lucide-react";
 
 interface DeliveryErrorDialogProps {
   open: boolean;
@@ -18,8 +16,7 @@ interface DeliveryErrorDialogProps {
   message: string;
   onRetry?: () => void;
   onContactSupport?: () => void;
-  showRetry?: boolean;
-  showSupport?: boolean;
+  canRetry?: boolean;
 }
 
 export const DeliveryErrorDialog = ({
@@ -29,73 +26,66 @@ export const DeliveryErrorDialog = ({
   message,
   onRetry,
   onContactSupport,
-  showRetry = true,
-  showSupport = true,
+  canRetry = true,
 }: DeliveryErrorDialogProps) => {
-  const handleContactSupport = () => {
-    onOpenChange(false);
-    if (onContactSupport) {
-      onContactSupport();
-    } else {
-      // Default: Navigate to help page
-      window.location.href = "/help";
-    }
-  };
-
-  const handleRetry = () => {
-    onOpenChange(false);
-    if (onRetry) {
-      onRetry();
-    }
-  };
-
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-sm bg-card border-destructive/20">
-        <AlertDialogHeader className="items-center text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-            <AlertTriangle className="w-8 h-8 text-destructive" />
+      <AlertDialogContent className="max-w-sm bg-background border-destructive/20">
+        <AlertDialogHeader className="space-y-4">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="w-10 h-10 text-destructive" />
+            </div>
           </div>
           
-          <AlertDialogTitle className="text-2xl font-bold text-foreground">
+          <AlertDialogTitle className="text-center text-xl font-bold text-foreground">
             {title}
           </AlertDialogTitle>
           
-          <AlertDialogDescription className="text-base text-muted-foreground leading-relaxed">
+          <AlertDialogDescription className="text-center text-base text-muted-foreground leading-relaxed">
             {message}
           </AlertDialogDescription>
         </AlertDialogHeader>
         
-        <AlertDialogFooter className="flex-col space-y-2 sm:space-y-2">
-          {showSupport && (
-            <AlertDialogCancel asChild>
-              <Button
-                variant="outline"
-                onClick={handleContactSupport}
-                className="w-full"
-              >
-                Contact Support
-              </Button>
-            </AlertDialogCancel>
+        <AlertDialogFooter className="flex-col sm:flex-col space-y-2 mt-2">
+          {canRetry && onRetry && (
+            <Button
+              onClick={() => {
+                onRetry();
+                onOpenChange(false);
+              }}
+              className="w-full bg-primary hover:bg-primary/90"
+              size="lg"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
           )}
           
-          {showRetry && (
-            <AlertDialogAction asChild>
-              <Button
-                onClick={handleRetry}
-                className="w-full bg-gradient-neon hover:shadow-neon"
-              >
-                Try Again
-              </Button>
-            </AlertDialogAction>
+          {onContactSupport && (
+            <Button
+              onClick={() => {
+                onContactSupport();
+                onOpenChange(false);
+              }}
+              variant="outline"
+              className="w-full"
+              size="lg"
+            >
+              <HeadphonesIcon className="w-4 h-4 mr-2" />
+              Contact Support
+            </Button>
           )}
           
-          {!showRetry && !showSupport && (
-            <AlertDialogCancel asChild>
-              <Button variant="outline" className="w-full">
-                Close
-              </Button>
-            </AlertDialogCancel>
+          {!canRetry && !onContactSupport && (
+            <Button
+              onClick={() => onOpenChange(false)}
+              variant="outline"
+              className="w-full"
+              size="lg"
+            >
+              Close
+            </Button>
           )}
         </AlertDialogFooter>
       </AlertDialogContent>

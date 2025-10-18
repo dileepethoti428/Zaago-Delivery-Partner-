@@ -44,8 +44,15 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [successOrderData, setSuccessOrderData] = useState<ScannedOrder | null>(null);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string>('');
-  const [errorTitle, setErrorTitle] = useState<string>('Delivery Failed');
+  const [errorDetails, setErrorDetails] = useState<{
+    title: string;
+    message: string;
+    canRetry: boolean;
+  }>({
+    title: "Delivery Failed",
+    message: "",
+    canRetry: true,
+  });
 
   const handleScan = async (detectedCodes: any[]) => {
     if (!detectedCodes || detectedCodes.length === 0) return;
@@ -62,11 +69,12 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
       console.log('🔐 Current session:', !!session);
       
       if (!session) {
-        toast({
+        setErrorDetails({
           title: "Authentication Required",
-          description: "Please log in to scan QR codes.",
-          variant: "destructive"
+          message: "Please log in to scan QR codes and complete deliveries.",
+          canRetry: false,
         });
+        setShowErrorDialog(true);
         onOpenChange(false);
         return;
       }
@@ -89,20 +97,22 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
           // For Supabase function errors, the actual error details are often in the data response
           // Let it fall through to parse the data object for specific error details
         } else if (error.message?.includes('Authentication') || error.message?.includes('401')) {
-          toast({
+          setErrorDetails({
             title: "Authentication Error",
-            description: "Please log out and log back in, then try again.",
-            variant: "destructive"
+            message: "Your session has expired. Please log out and log back in, then try again.",
+            canRetry: false,
           });
+          setShowErrorDialog(true);
           onOpenChange(false);
           return;
         } else {
-          // Only show generic error for actual network/connection issues
-          toast({
-            title: "Scan Failed", 
-            description: error.message || "Unable to process QR code. Please try again.",
-            variant: "destructive"
+          // Network/connection issues
+          setErrorDetails({
+            title: "Connection Error",
+            message: "Unable to connect to the server. Please check your internet connection and try again.",
+            canRetry: true,
           });
+          setShowErrorDialog(true);
           onOpenChange(false);
           return;
         }
@@ -162,12 +172,13 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
           
         } catch (error) {
           console.error('❌ Auto-completion failed:', error);
-          setErrorTitle("Delivery Failed");
-          setErrorMessage(
-            error instanceof Error 
+          setErrorDetails({
+            title: "Delivery Failed",
+            message: error instanceof Error 
               ? error.message 
-              : "We couldn't complete this delivery. Please try again or contact support if the issue persists."
-          );
+              : "We couldn't complete this delivery. Please try again or contact support if the issue persists.",
+            canRetry: true,
+          });
           setShowErrorDialog(true);
           onOpenChange(false);
         } finally {
@@ -219,8 +230,11 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
           userFriendlyMessage = errorMsg || "We couldn't process this QR code. Please try again or contact support if the issue persists.";
         }
         
-        setErrorTitle(userFriendlyTitle);
-        setErrorMessage(userFriendlyMessage);
+        setErrorDetails({
+          title: userFriendlyTitle,
+          message: userFriendlyMessage,
+          canRetry: true,
+        });
         setShowErrorDialog(true);
         onOpenChange(false);
         return;
@@ -256,8 +270,11 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
 
     } catch (error) {
       console.error('❌ QR Scan error:', error);
-      setErrorTitle("Scan Failed");
-      setErrorMessage("Unable to process QR code. Please try scanning again.");
+      setErrorDetails({
+        title: "Scan Failed",
+        message: "Unable to process QR code. Please try scanning again.",
+        canRetry: true,
+      });
       setShowErrorDialog(true);
       onOpenChange(false);
     }
@@ -301,11 +318,12 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     const qrData = qrCodeData || currentQrCode;
     
     if (!qrData) {
-      toast({
-        title: "Error",
-        description: "No QR code data available",
-        variant: "destructive"
+      setErrorDetails({
+        title: "Missing QR Data",
+        message: "No QR code data available. Please scan the QR code again.",
+        canRetry: true,
       });
+      setShowErrorDialog(true);
       throw new Error("No QR code data available");
     }
 
@@ -360,13 +378,21 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     setShowSuccessScreen(false);
     setSuccessOrderData(null);
     setShowErrorDialog(false);
-    setErrorMessage('');
-    setErrorTitle('Delivery Failed');
+    setErrorDetails({
+      title: "Delivery Failed",
+      message: "",
+      canRetry: true,
+    });
   };
 
   const handleErrorRetry = () => {
     resetScanner();
     onOpenChange(true);
+  };
+
+  const handleContactSupport = () => {
+    // Navigate to help page
+    window.location.href = '/help';
   };
 
   const handleSuccessClose = () => {
@@ -518,11 +544,11 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
       <DeliveryErrorDialog
         open={showErrorDialog}
         onOpenChange={setShowErrorDialog}
-        title={errorTitle}
-        message={errorMessage}
+        title={errorDetails.title}
+        message={errorDetails.message}
         onRetry={handleErrorRetry}
-        showRetry={true}
-        showSupport={true}
+        onContactSupport={handleContactSupport}
+        canRetry={errorDetails.canRetry}
       />
     </>
   );
