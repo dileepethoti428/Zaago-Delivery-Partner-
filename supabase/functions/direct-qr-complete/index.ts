@@ -113,23 +113,25 @@ Deno.serve(async (req) => {
 
     console.log('💰 Payment:', normalizedPayment, 'Status:', paymentStatus);
 
-    // 1. Insert delivery history using safe database function with explicit column mapping
-    console.log('📝 Creating delivery history via database function');
+    // 1. Insert delivery history - let database defaults handle timestamps (100% accurate method)
+    console.log('📝 Creating delivery history with database defaults');
     
-    const { data: deliveryHistoryId, error: historyError } = await supabaseAdmin
-      .rpc('insert_delivery_history_safe', {
-        p_order_id: orderId,
-        p_agent_id: agent.id,
-        p_customer_name: order.customer_name || 'Customer',
-        p_customer_phone: order.customer_phone,
-        p_delivery_address: order.address,
-        p_items: order.items,
-        p_total_amount: order.total,
-        p_delivery_date: new Date().toISOString().split('T')[0],
-        p_payment_method: normalizedPayment,
-        p_payment_status: paymentStatus,
-        p_delivery_payout: 25.00,
-        p_delivery_time_slot: null
+    const { error: historyError } = await supabaseAdmin
+      .from('delivery_history')
+      .insert({
+        order_id: orderId,
+        agent_id: agent.id,
+        customer_name: order.customer_name || 'Customer',
+        customer_phone: order.customer_phone,
+        delivery_address: order.address,
+        items: order.items,
+        total_amount: order.total,
+        delivery_date: new Date().toISOString().split('T')[0],
+        payment_method: normalizedPayment,
+        payment_status: paymentStatus,
+        delivery_payout: 25.00,
+        delivery_time_slot: null
+        // NOT setting completed_at, created_at, updated_at - let DEFAULT now() handle it
       });
 
     if (historyError) {
@@ -140,7 +142,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('✅ Delivery history created with ID:', deliveryHistoryId);
+    console.log('✅ Delivery history created successfully');
 
     // 2. Update order status using admin client
     const { error: orderError } = await supabaseAdmin
