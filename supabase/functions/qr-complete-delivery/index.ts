@@ -371,7 +371,7 @@ serve(async (req) => {
           manual_error: manualError?.message || manualResult?.error,
           simple_error: simpleError?.message || simpleResult?.error
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
@@ -452,7 +452,7 @@ serve(async (req) => {
           manual_error: manualError?.message || manualResult?.error,
           simple_error: simpleError?.message || simpleResult?.error
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
