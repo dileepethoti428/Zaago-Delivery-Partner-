@@ -328,7 +328,20 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     }
 
     try {
-      console.log('🚚 Completing QR delivery with payment method:', paymentMethod);
+      console.log('🚚 Starting QR delivery completion');
+      console.log('Payment method:', paymentMethod);
+      console.log('QR code data:', qrData.substring(0, 20) + '...');
+      
+      // Check authentication first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.error('❌ Authentication check failed:', sessionError);
+        throw new Error('Authentication required. Please log in again.');
+      }
+      
+      console.log('✅ Authentication verified');
+      console.log('Invoking direct-qr-complete function...');
       
       // Use the new direct-qr-complete function for reliable completion
       const { data: result, error: functionError } = await supabase.functions.invoke('direct-qr-complete', {
@@ -338,12 +351,15 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
         }
       });
 
+      console.log('Function response:', { result, functionError });
+
       if (functionError) {
-        console.error('QR delivery completion error:', functionError);
-        throw new Error(`Delivery completion failed: ${functionError.message}`);
+        console.error('❌ QR delivery completion error:', functionError);
+        throw new Error(`Delivery completion failed: ${functionError.message || 'Unknown error'}`);
       }
 
       if (!result?.success) {
+        console.error('❌ Function returned error:', result);
         throw new Error(result?.error || 'Failed to complete delivery');
       }
 
@@ -365,6 +381,15 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     } catch (error) {
       console.error('💥 QR delivery completion failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      // Show user-friendly error
+      setErrorDetails({
+        title: "Delivery Failed",
+        message: errorMessage,
+        canRetry: true,
+      });
+      setShowErrorDialog(true);
+      
       throw new Error(errorMessage);
     }
   };
