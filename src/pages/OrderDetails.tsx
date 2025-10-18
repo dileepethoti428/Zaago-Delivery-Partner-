@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import MapPreview from "@/components/MapPreview";
 import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, extractCoordinatesFromAddress } from "@/lib/distanceService";
-import { QrScannerDialog } from "@/components/QrScannerDialog";
+import { OtpVerificationDialog } from "@/components/OtpVerificationDialog";
 import { ManualCompleteDialog } from "@/components/ManualCompleteDialog";
 import { 
   ArrowLeft, 
@@ -29,8 +29,7 @@ import {
   Timer,
   ShoppingBag,
   Route,
-  Zap,
-  QrCode
+  Zap
 } from "lucide-react";
 
 interface OrderData {
@@ -70,7 +69,7 @@ const OrderDetails = () => {
   const [customerRating, setCustomerRating] = useState<number | null>(null);
   const [realTimeDistance, setRealTimeDistance] = useState<string>('Calculating...');
   const [realTimeEta, setRealTimeEta] = useState<string>('Calculating...');
-  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [showManualComplete, setShowManualComplete] = useState(false);
 
   // Fetch order data from backend
@@ -535,15 +534,15 @@ const OrderDetails = () => {
               <>
                 {/* Primary Completion Methods */}
                 <div className="grid grid-cols-2 gap-3">
-                  {/* QR Scan Button */}
+                  {/* Verify OTP Button */}
                   <Button 
-                    onClick={() => setShowQrScanner(true)}
+                    onClick={() => setShowOtpDialog(true)}
                     className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white h-14 shadow-lg hover:shadow-xl transition-all duration-300"
                   >
-                    <QrCode className="w-5 h-5 mr-2" />
+                    <CheckCircle className="w-5 h-5 mr-2" />
                     <div className="text-left">
-                      <div className="font-semibold">Scan QR</div>
-                      <div className="text-xs opacity-90">Camera scan</div>
+                      <div className="font-semibold">Verify OTP</div>
+                      <div className="text-xs opacity-90">Enter 6-digit code</div>
                     </div>
                   </Button>
 
@@ -562,7 +561,7 @@ const OrderDetails = () => {
 
                 {/* Helper Text */}
                 <p className="text-xs text-center text-muted-foreground">
-                  Use QR scan for verification or mark as delivered manually
+                  Enter customer's OTP to verify delivery or mark as delivered manually
                 </p>
               </>
             )}
@@ -627,15 +626,21 @@ const OrderDetails = () => {
         </div>
       </ScrollArea>
 
-      {/* QR Scanner Dialog */}
-      <QrScannerDialog
-        open={showQrScanner}
-        onOpenChange={setShowQrScanner}
+      {/* OTP Verification Dialog */}
+      <OtpVerificationDialog
+        open={showOtpDialog}
+        onOpenChange={setShowOtpDialog}
+        orderDetails={orderData ? {
+          id: orderData.id || orderId || '',
+          customer_name: orderData.customer_name,
+          total: orderData.total || orderData.total_amount,
+          items: orderData.items
+        } : undefined}
         onDeliveryComplete={() => {
-          setShowQrScanner(false);
+          setShowOtpDialog(false);
           toast({
             title: "✅ Delivery Completed!",
-            description: "Order marked as delivered via QR scan",
+            description: "Order marked as delivered via OTP verification",
           });
           setTimeout(() => navigate('/home'), 1500);
         }}

@@ -2186,11 +2186,17 @@ export type Database = {
           delivered_at: string | null
           delivery_address_id: string | null
           delivery_date: string | null
+          delivery_otp: string | null
           delivery_time: string | null
           delivery_time_slot: string | null
           id: string
           items: Json
           notification_count: number
+          otp_attempts: number | null
+          otp_expires_at: string | null
+          otp_verified: boolean | null
+          otp_verified_at: string | null
+          otp_verified_by: string | null
           payment_id: string | null
           payment_method: string | null
           payment_status: string | null
@@ -2221,11 +2227,17 @@ export type Database = {
           delivered_at?: string | null
           delivery_address_id?: string | null
           delivery_date?: string | null
+          delivery_otp?: string | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
           id?: string
           items: Json
           notification_count?: number
+          otp_attempts?: number | null
+          otp_expires_at?: string | null
+          otp_verified?: boolean | null
+          otp_verified_at?: string | null
+          otp_verified_by?: string | null
           payment_id?: string | null
           payment_method?: string | null
           payment_status?: string | null
@@ -2256,11 +2268,17 @@ export type Database = {
           delivered_at?: string | null
           delivery_address_id?: string | null
           delivery_date?: string | null
+          delivery_otp?: string | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
           id?: string
           items?: Json
           notification_count?: number
+          otp_attempts?: number | null
+          otp_expires_at?: string | null
+          otp_verified?: boolean | null
+          otp_verified_at?: string | null
+          otp_verified_by?: string | null
           payment_id?: string | null
           payment_method?: string | null
           payment_status?: string | null
@@ -2292,6 +2310,13 @@ export type Database = {
             columns: ["delivery_address_id"]
             isOneToOne: false
             referencedRelation: "delivery_addresses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_otp_verified_by_fkey"
+            columns: ["otp_verified_by"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
             referencedColumns: ["id"]
           },
           {
@@ -5578,6 +5603,10 @@ export type Database = {
       validate_secret_code: {
         Args: { input_code: string }
         Returns: boolean
+      }
+      verify_order_otp: {
+        Args: { p_agent_id: string; p_order_id: string; p_otp_code: string }
+        Returns: Json
       }
     }
     Enums: {

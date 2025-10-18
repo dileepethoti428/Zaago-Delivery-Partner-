@@ -45,7 +45,7 @@ import DeliveryTimer from "@/components/DeliveryTimer";
 import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
 
 // Lazy load heavy components
-const QrScannerDialog = lazy(() => import("@/components/QrScannerDialog").then(m => ({ default: m.QrScannerDialog })));
+const OtpVerificationDialog = lazy(() => import("@/components/OtpVerificationDialog").then(m => ({ default: m.OtpVerificationDialog })));
 const LocationPicker = lazy(() => import("@/components/LocationPicker").then(m => ({ default: m.LocationPicker })));
 const EmergencyOrderModal = lazy(() => import("@/components/EmergencyOrderModal").then(m => ({ default: m.EmergencyOrderModal })));
 
@@ -148,7 +148,8 @@ const Home = () => {
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notificationCount] = useState(3);
-  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const [selectedOrderForOtp, setSelectedOrderForOtp] = useState<Order | null>(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<string>('Tap to set location');
   const [locationPickerTrigger, setLocationPickerTrigger] = useState<HTMLButtonElement | null>(null);
@@ -2027,15 +2028,19 @@ const Home = () => {
             )}
           </Button>
 
-          {/* QR Scanner */}
+          {/* Verify OTP */}
           <Button
-            onClick={() => setShowQrScanner(true)}
+            onClick={() => {
+              // For now, open dialog without specific order - agent will enter order OTP
+              setSelectedOrderForOtp(null);
+              setShowOtpDialog(true);
+            }}
             variant="outline"
             className="h-12 rounded-lg border-gray-300 text-gray-700 hover:bg-gray-100 bg-white"
           >
             <div className="flex items-center">
-              <QrCode className="w-4 h-4 text-gray-700 mr-1" />
-              <span className="text-xs text-gray-700">Scan QR</span>
+              <CheckCircle className="w-4 h-4 text-gray-700 mr-1" />
+              <span className="text-xs text-gray-700">Verify OTP</span>
             </div>
           </Button>
         </div>
@@ -2332,16 +2337,22 @@ const Home = () => {
         </ScrollArea>
       </div>
 
-      {/* QR Scanner Dialog */}
+      {/* OTP Verification Dialog */}
       <Suspense fallback={<div />}>
-        <QrScannerDialog 
-          open={showQrScanner} 
-          onOpenChange={setShowQrScanner}
+        <OtpVerificationDialog 
+          open={showOtpDialog} 
+          onOpenChange={setShowOtpDialog}
+          orderDetails={selectedOrderForOtp ? {
+            id: selectedOrderForOtp.id,
+            customer_name: selectedOrderForOtp.customer_name,
+            total: selectedOrderForOtp.total,
+            items: selectedOrderForOtp.items
+          } : undefined}
           onDeliveryComplete={() => {
-            console.log('🔄 QR delivery completed, performing optimistic update and refresh');
+            console.log('🔄 OTP delivery completed, performing optimistic update and refresh');
             
             // Immediately trigger refresh without debounce for instant feedback
-            debouncedRefresh('qr-delivery-complete', true);
+            debouncedRefresh('otp-delivery-complete', true);
           }}
         />
       </Suspense>
