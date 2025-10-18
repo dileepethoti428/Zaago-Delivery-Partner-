@@ -44,7 +44,7 @@ export const ManualCompleteDialog = ({
 
       console.log('📤 Invoking unified-complete-delivery function...');
 
-      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('direct-complete-delivery', {
         body: {
           order_id: orderId,
           payment_method: paymentMethod
