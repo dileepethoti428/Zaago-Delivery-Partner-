@@ -52,7 +52,6 @@ serve(async (req) => {
         fixed_amount: true,
         payment_amount: amount * 100, // Convert to paise
         description: `Flexible payment collection by delivery agent`,
-        customer_id: agent_id,
         close_by: Math.floor(Date.now() / 1000) + (30 * 60), // 30 minutes expiry
       }),
     });
