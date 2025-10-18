@@ -46,7 +46,6 @@ import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
 import { FlexiblePaymentDialog } from "@/components/FlexiblePaymentDialog";
 
 // Lazy load heavy components
-const OtpVerificationDialog = lazy(() => import("@/components/OtpVerificationDialog").then(m => ({ default: m.OtpVerificationDialog })));
 const LocationPicker = lazy(() => import("@/components/LocationPicker").then(m => ({ default: m.LocationPicker })));
 const EmergencyOrderModal = lazy(() => import("@/components/EmergencyOrderModal").then(m => ({ default: m.EmergencyOrderModal })));
 
@@ -149,8 +148,6 @@ const Home = () => {
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notificationCount] = useState(3);
-  const [showOtpDialog, setShowOtpDialog] = useState(false);
-  const [selectedOrderForOtp, setSelectedOrderForOtp] = useState<Order | null>(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<string>('Tap to set location');
   const [locationPickerTrigger, setLocationPickerTrigger] = useState<HTMLButtonElement | null>(null);
@@ -2284,26 +2281,13 @@ const Home = () => {
 
                         {/* Action Buttons */}
                         {order.status === 'assigned' || order.status === 'out_for_delivery' ? (
-                          <div className="space-y-3">
-                            <Button 
-                              onClick={() => navigate(`/delivery-details/${order.id}`)}
-                              className="w-full bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium flex items-center justify-center"
-                            >
-                              <Settings className="w-4 h-4 mr-2" />
-                              Manage Delivery
-                            </Button>
-                            <Button 
-                              onClick={() => {
-                                setSelectedOrderForOtp(order);
-                                setShowOtpDialog(true);
-                              }}
-                              variant="outline"
-                              className="w-full bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 h-12 rounded-lg font-medium flex items-center justify-center"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-2" />
-                              Verify OTP
-                            </Button>
-                          </div>
+                          <Button 
+                            onClick={() => navigate(`/delivery-details/${order.id}`)}
+                            className="w-full bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium flex items-center justify-center"
+                          >
+                            <Settings className="w-4 h-4 mr-2" />
+                            Manage Delivery
+                          </Button>
                         ) : (
                           <div className="flex space-x-3">
                             <Button 
@@ -2352,26 +2336,6 @@ const Home = () => {
           </div>
         </ScrollArea>
       </div>
-
-      {/* OTP Verification Dialog */}
-      <Suspense fallback={<div />}>
-        <OtpVerificationDialog 
-          open={showOtpDialog} 
-          onOpenChange={setShowOtpDialog}
-          orderDetails={selectedOrderForOtp ? {
-            id: selectedOrderForOtp.id,
-            customer_name: selectedOrderForOtp.customer_name,
-            total: selectedOrderForOtp.total,
-            items: selectedOrderForOtp.items
-          } : undefined}
-          onDeliveryComplete={() => {
-            console.log('🔄 OTP delivery completed, performing optimistic update and refresh');
-            
-            // Immediately trigger refresh without debounce for instant feedback
-            debouncedRefresh('otp-delivery-complete', true);
-          }}
-        />
-      </Suspense>
 
       {/* Flexible Payment Dialog */}
       <FlexiblePaymentDialog

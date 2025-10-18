@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import MapPreview from "@/components/MapPreview";
 import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, extractCoordinatesFromAddress } from "@/lib/distanceService";
-import { OtpVerificationDialog } from "@/components/OtpVerificationDialog";
 import { ManualCompleteDialog } from "@/components/ManualCompleteDialog";
 import { 
   ArrowLeft, 
@@ -69,7 +68,6 @@ const OrderDetails = () => {
   const [customerRating, setCustomerRating] = useState<number | null>(null);
   const [realTimeDistance, setRealTimeDistance] = useState<string>('Calculating...');
   const [realTimeEta, setRealTimeEta] = useState<string>('Calculating...');
-  const [showOtpDialog, setShowOtpDialog] = useState(false);
   const [showManualComplete, setShowManualComplete] = useState(false);
 
   // Fetch order data from backend
@@ -533,35 +531,20 @@ const OrderDetails = () => {
             {orderData.status === 'assigned' && (
               <>
                 {/* Primary Completion Methods */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Verify OTP Button */}
-                  <Button 
-                    onClick={() => setShowOtpDialog(true)}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white h-14 shadow-lg hover:shadow-xl transition-all duration-300"
-                  >
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    <div className="text-left">
-                      <div className="font-semibold">Verify OTP</div>
-                      <div className="text-xs opacity-90">Enter 6-digit code</div>
-                    </div>
-                  </Button>
-
-                  {/* Manual Complete Button */}
-                  <Button 
-                    onClick={() => setShowManualComplete(true)}
-                    className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white h-14 shadow-lg hover:shadow-xl transition-all duration-300"
-                  >
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    <div className="text-left">
-                      <div className="font-semibold">Mark Delivered</div>
-                      <div className="text-xs opacity-90">Quick complete</div>
-                    </div>
-                  </Button>
-                </div>
+                <Button 
+                  onClick={() => setShowManualComplete(true)}
+                  className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white h-14 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <CheckCircle className="w-5 h-5 mr-2" />
+                  <div className="text-left">
+                    <div className="font-semibold">Mark as Delivered</div>
+                    <div className="text-xs opacity-90">Complete delivery</div>
+                  </div>
+                </Button>
 
                 {/* Helper Text */}
                 <p className="text-xs text-center text-muted-foreground">
-                  Enter customer's OTP to verify delivery or mark as delivered manually
+                  Mark order as delivered when customer receives their items
                 </p>
               </>
             )}
@@ -625,26 +608,6 @@ const OrderDetails = () => {
           </div>
         </div>
       </ScrollArea>
-
-      {/* OTP Verification Dialog */}
-      <OtpVerificationDialog
-        open={showOtpDialog}
-        onOpenChange={setShowOtpDialog}
-        orderDetails={orderData ? {
-          id: orderData.id || orderId || '',
-          customer_name: orderData.customer_name,
-          total: orderData.total || orderData.total_amount,
-          items: orderData.items
-        } : undefined}
-        onDeliveryComplete={() => {
-          setShowOtpDialog(false);
-          toast({
-            title: "✅ Delivery Completed!",
-            description: "Order marked as delivered via OTP verification",
-          });
-          setTimeout(() => navigate('/home'), 1500);
-        }}
-      />
 
       {/* Manual Complete Dialog */}
       <ManualCompleteDialog
