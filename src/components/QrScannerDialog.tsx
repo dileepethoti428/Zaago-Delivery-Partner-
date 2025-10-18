@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Scanner } from "@yudiel/react-qr-scanner";
-import { X } from "lucide-react";
+import { X, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "./PaymentMethodDialog";
 
@@ -40,6 +40,8 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentQrCode, setCurrentQrCode] = useState<string>('');
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [successOrderData, setSuccessOrderData] = useState<ScannedOrder | null>(null);
 
   const handleScan = async (detectedCodes: any[]) => {
     if (!detectedCodes || detectedCodes.length === 0) return;
@@ -128,9 +130,9 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
         return;
       }
 
-      // Handle "already paid online" status - auto-complete delivery
+      // Handle "already paid online" status - show success screen after completing delivery
       if (data && data.status === 'already_paid') {
-        console.log('✅ Order already paid online, auto-completing delivery');
+        console.log('✅ Order already paid online, completing delivery and showing success screen');
         
         try {
           setIsProcessing(true);
@@ -139,15 +141,22 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
           // Complete delivery immediately with Online payment
           const deliveryResult = await completeDelivery('Online');
           
-          toast({
-            title: "✅ Delivered Successfully!",
-            description: `Order for ${data.order.customer_name} was already paid online. Delivery completed!`,
+          // Show success screen with order details
+          setSuccessOrderData({
+            order_id: data.order.id,
+            customer_name: data.order.customer_name,
+            customer_phone: '',
+            total_amount: data.order.total,
+            payment_status: 'completed',
+            estimated_payout: data.order.estimated_payout || 0
           });
+          setShowSuccessScreen(true);
           
-          onOpenChange(false);
-          if (onDeliveryComplete) {
-            onDeliveryComplete();
-          }
+          // Dispatch orderCompleted event for immediate refresh
+          window.dispatchEvent(new CustomEvent('orderCompleted', { 
+            detail: { orderId: data.order.id } 
+          }));
+          
         } catch (error) {
           console.error('❌ Auto-completion failed:', error);
           toast({
@@ -155,6 +164,7 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
             description: error instanceof Error ? error.message : "Failed to complete delivery",
             variant: "destructive"
           });
+          onOpenChange(false);
         } finally {
           setIsProcessing(false);
         }
@@ -356,6 +366,19 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     setPaymentOptions([]);
     setShowPaymentDialog(false);
     setCurrentQrCode('');
+    setShowSuccessScreen(false);
+    setSuccessOrderData(null);
+  };
+
+  const handleSuccessClose = () => {
+    setShowSuccessScreen(false);
+    setSuccessOrderData(null);
+    onOpenChange(false);
+    
+    // Trigger the callback to refresh home page
+    if (onDeliveryComplete) {
+      onDeliveryComplete();
+    }
   };
 
   return (
@@ -428,6 +451,55 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
                 </Button>
               )}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Screen Dialog */}
+      <Dialog open={showSuccessScreen} onOpenChange={setShowSuccessScreen}>
+        <DialogContent className="bg-card border-border max-w-sm">
+          <div className="space-y-6 py-4">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center">
+                <CheckCircle className="w-12 h-12 text-success" />
+              </div>
+              
+              <div>
+                <h2 className="text-2xl font-bold text-foreground mb-2">
+                  Product Delivered Successfully ✅
+                </h2>
+                <p className="text-muted-foreground">
+                  The order has been completed and marked as delivered
+                </p>
+              </div>
+
+              {successOrderData && (
+                <div className="w-full space-y-3 pt-2">
+                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <span className="text-sm text-muted-foreground">Customer</span>
+                    <span className="font-semibold text-foreground">{successOrderData.customer_name}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <span className="text-sm text-muted-foreground">Order Amount</span>
+                    <span className="font-semibold text-foreground">₹{successOrderData.total_amount}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center p-3 bg-success/10 rounded-lg border border-success/20">
+                    <span className="text-sm text-muted-foreground">Your Earnings</span>
+                    <span className="font-bold text-success text-lg">₹{successOrderData.estimated_payout}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button
+              onClick={handleSuccessClose}
+              className="w-full bg-gradient-neon hover:shadow-neon"
+              size="lg"
+            >
+              Done
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

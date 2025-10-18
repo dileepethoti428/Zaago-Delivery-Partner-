@@ -2338,13 +2338,10 @@ const Home = () => {
           open={showQrScanner} 
           onOpenChange={setShowQrScanner}
           onDeliveryComplete={() => {
-            console.log('🔄 QR delivery completed, refreshing orders');
-            // Refresh orders to remove completed delivery
+            console.log('🔄 QR delivery completed, performing optimistic update and refresh');
+            
+            // Immediately trigger refresh without debounce for instant feedback
             debouncedRefresh('qr-delivery-complete', true);
-            toast({
-              title: "Order Removed",
-              description: "Completed order has been removed from available orders",
-            });
           }}
         />
       </Suspense>
