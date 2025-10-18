@@ -22,12 +22,19 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Get authenticated user
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    // Admin client for database operations (bypasses RLS)
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // User client for authentication only
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser(token);
 
     if (userError || !user) {
       console.error('❌ Authentication failed:', userError);
@@ -37,8 +44,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get agent
-    const { data: agents } = await supabase
+    // Get agent using admin client
+    const { data: agents } = await supabaseAdmin
       .from('delivery_agents')
       .select('*')
       .eq('email', user.email)
@@ -56,8 +63,8 @@ Deno.serve(async (req) => {
     const agent = agents[0];
     console.log('✅ Agent found:', agent.id);
 
-    // Get order from QR code
-    const { data: qrData } = await supabase
+    // Get order from QR code using admin client
+    const { data: qrData } = await supabaseAdmin
       .from('order_qr_codes')
       .select('order_id, is_scanned')
       .eq('qr_code_data', qr_code_data)
@@ -74,8 +81,8 @@ Deno.serve(async (req) => {
     const orderId = qrData.order_id;
     console.log('✅ Order ID from QR:', orderId);
 
-    // Get order details
-    const { data: order } = await supabase
+    // Get order details using admin client
+    const { data: order } = await supabaseAdmin
       .from('orders')
       .select('*')
       .eq('id', orderId)
@@ -124,7 +131,7 @@ Deno.serve(async (req) => {
     
     console.log('📝 Creating delivery history:', deliveryRecord);
     
-    const { error: historyError } = await supabase
+    const { error: historyError } = await supabaseAdmin
       .from('delivery_history')
       .insert(deliveryRecord);
 
@@ -138,8 +145,8 @@ Deno.serve(async (req) => {
 
     console.log('✅ Delivery history created');
 
-    // 2. Update order status
-    const { error: orderError } = await supabase
+    // 2. Update order status using admin client
+    const { error: orderError } = await supabaseAdmin
       .from('orders')
       .update({
         status: 'delivered',
@@ -153,8 +160,8 @@ Deno.serve(async (req) => {
       console.error('❌ Order update failed:', orderError);
     }
 
-    // 3. Update agent stats
-    const { error: agentError } = await supabase
+    // 3. Update agent stats using admin client
+    const { error: agentError } = await supabaseAdmin
       .from('delivery_agents')
       .update({
         total_deliveries: agent.total_deliveries + 1,
@@ -169,15 +176,15 @@ Deno.serve(async (req) => {
       console.error('❌ Agent update failed:', agentError);
     }
 
-    // 4. Update agent wallet
-    const { data: wallet } = await supabase
+    // 4. Update agent wallet using admin client
+    const { data: wallet } = await supabaseAdmin
       .from('agent_wallet')
       .select('balance')
       .eq('agent_id', agent.id)
       .single();
 
     if (wallet) {
-      await supabase
+      await supabaseAdmin
         .from('agent_wallet')
         .update({
           balance: wallet.balance + 25.00,
@@ -185,7 +192,7 @@ Deno.serve(async (req) => {
         })
         .eq('agent_id', agent.id);
     } else {
-      await supabase
+      await supabaseAdmin
         .from('agent_wallet')
         .insert({
           agent_id: agent.id,
@@ -197,8 +204,8 @@ Deno.serve(async (req) => {
 
     console.log('✅ Wallet updated');
 
-    // 5. Create wallet transaction
-    const { error: txError } = await supabase
+    // 5. Create wallet transaction using admin client
+    const { error: txError } = await supabaseAdmin
       .from('agent_wallet_transactions')
       .insert({
         agent_id: agent.id,
@@ -215,8 +222,8 @@ Deno.serve(async (req) => {
       console.error('❌ Transaction insert failed:', txError);
     }
 
-    // 6. Mark QR as scanned
-    await supabase
+    // 6. Mark QR as scanned using admin client
+    await supabaseAdmin
       .from('order_qr_codes')
       .update({ is_scanned: true, scanned_at: currentTime })
       .eq('qr_code_data', qr_code_data);
