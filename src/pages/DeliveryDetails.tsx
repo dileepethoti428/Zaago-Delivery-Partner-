@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "@/components/PaymentMethodDialog";
 import { NavigationMap } from "@/components/NavigationMap";
+import { InstantDeliveryButton } from "@/components/InstantDeliveryButton";
 import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
 import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from "@/lib/distanceService";
@@ -261,53 +262,21 @@ const DeliveryDetails = () => {
     // Show in-app navigation
     setShowNavigationMap(true);
   };
-  const handleMarkAsDelivery = async () => {
-    try {
-      if (!order) {
-        console.error('❌ No order found');
-        toast({
-          title: "Error",
-          description: "Order not found",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      console.log('🎯 Mark as delivery clicked');
-      console.log('🎯 Order ID:', order.id);
-      console.log('🎯 Order payment status:', order.payment_status);
+  // Simplified delivery handler - opens payment dialog for COD orders
+  const handleMarkAsDelivery = () => {
+    console.log("🎯 Mark as delivered clicked", { 
+      orderId: order?.id,
+      paymentStatus: order?.payment_status 
+    });
 
-      // Check if order is already paid
-      const isAlreadyPaid = order.payment_status === 'paid' || 
-                            order.payment_status === 'paid_online' ||
-                            order.payment_status === 'completed';
-
-      console.log('🎯 Is already paid:', isAlreadyPaid);
-
-      if (isAlreadyPaid) {
-        console.log('🎯 Order already paid - auto-completing delivery');
-        const result = await completeDeliveryOnline('ONLINE');
-        console.log('🎯 Completion result:', result);
-        
-        if (!result?.success) {
-          toast({
-            title: "❌ Delivery Completion Failed",
-            description: result?.error || "Please try again or use force complete option",
-            variant: "destructive"
-          });
-        }
-      } else {
-        console.log('🎯 Order not paid - showing payment dialog');
-        setShowPaymentDialog(true);
-      }
-    } catch (error) {
-      console.error('❌ Error in handleMarkAsDelivery:', error);
-      toast({
-        title: "❌ Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive"
-      });
+    // For COD orders, show payment dialog
+    if (order?.payment_status === "pending" || order?.payment_status === "COD") {
+      setShowPaymentDialog(true);
+      return;
     }
+
+    // For paid orders, the InstantDeliveryButton handles it
+    console.log("✅ Paid order - InstantDeliveryButton will handle completion");
   };
 
   // Zepto-style ultra-fast delivery with real-time tracking
@@ -1146,10 +1115,20 @@ const DeliveryDetails = () => {
                   <span className="text-xs">Navigate to Customer</span>
                 </Button>
                 
-                <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
-                </Button>
+                {(order.payment_status === "paid" || order.payment_status === "paid_online") ? (
+                  <InstantDeliveryButton
+                    orderId={order.id}
+                    orderTotal={order.total}
+                    customerName={order.customer_name}
+                    paymentStatus={order.payment_status}
+                    className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1 text-xs"
+                  />
+                ) : (
+                  <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                  </Button>
+                )}
               </div>
 
               <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>

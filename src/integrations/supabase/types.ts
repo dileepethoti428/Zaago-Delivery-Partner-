@@ -5517,6 +5517,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      safe_complete_delivery: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
       sanitize_input: {
         Args: { input_text: string }
         Returns: string
