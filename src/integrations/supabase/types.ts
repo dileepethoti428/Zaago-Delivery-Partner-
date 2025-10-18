@@ -5239,6 +5239,23 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_delivery_history_safe: {
+        Args: {
+          p_agent_id: string
+          p_customer_name: string
+          p_customer_phone: string
+          p_delivery_address: Json
+          p_delivery_date: string
+          p_delivery_payout: number
+          p_delivery_time_slot?: string
+          p_items: Json
+          p_order_id: string
+          p_payment_method: string
+          p_payment_status: string
+          p_total_amount: number
+        }
+        Returns: string
+      }
       is_admin: {
         Args: { user_email: string }
         Returns: boolean
