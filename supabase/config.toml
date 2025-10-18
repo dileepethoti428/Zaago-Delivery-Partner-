@@ -68,3 +68,6 @@ verify_jwt = true
 
 [functions.check-flexible-payment-status]
 verify_jwt = true
+
+[functions.direct-complete-delivery]
+verify_jwt = true
