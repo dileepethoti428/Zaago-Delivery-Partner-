@@ -292,21 +292,21 @@ export const PaymentMethodDialog = ({
 
       {/* Razorpay QR Code Full Screen Overlay */}
       {showRazorpayQR && (
-        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-4 max-w-sm w-full max-h-[90vh] overflow-y-auto shadow-2xl relative animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-3 backdrop-blur-sm">
+          <div className="bg-white rounded-xl p-3 max-w-[340px] w-full max-h-[95vh] overflow-y-auto shadow-2xl relative animate-in fade-in zoom-in duration-300">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setShowRazorpayQR(false)}
               disabled={isProcessing}
-              className="absolute top-2 right-2 h-7 w-7 rounded-full hover:bg-gray-100"
+              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full hover:bg-gray-100 z-10"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </Button>
 
-            <div className="text-center space-y-3">
+            <div className="text-center space-y-2.5 pt-1">
               <div>
-                <h2 className="text-lg font-bold text-gray-900 mb-1">
+                <h2 className="text-base font-bold text-gray-900 mb-0.5">
                   Scan QR to Pay
                 </h2>
                 <p className="text-xs text-gray-600">
@@ -314,35 +314,35 @@ export const PaymentMethodDialog = ({
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-3 rounded-xl">
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-2.5 rounded-lg">
                 {qrCodeUrl ? (
                   <img 
                     src={qrCodeUrl} 
                     alt="UPI Payment QR Code" 
-                    className="w-full max-w-[220px] mx-auto rounded-lg shadow-lg"
+                    className="w-full max-w-[200px] mx-auto rounded-md shadow-lg"
                   />
                 ) : (
-                  <div className="w-full max-w-[220px] mx-auto h-48 flex items-center justify-center">
-                    <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                  <div className="w-full max-w-[200px] mx-auto h-40 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
                   </div>
                 )}
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-0.5 py-1">
                 <p className="text-xs text-gray-600">Order Amount</p>
-                <p className="text-3xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-blue-600">
                   ₹{order.total_amount}
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 truncate px-2">
                   {order.customer_name}
                 </p>
               </div>
 
-              <div className="space-y-2 pt-2">
+              <div className="space-y-1.5 pt-1">
                 <Button
                   onClick={handlePaymentComplete}
                   disabled={isProcessing}
-                  className="w-full h-10 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold shadow-lg"
+                  className="w-full h-9 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-sm font-semibold shadow-lg"
                 >
                   {isProcessing ? (
                     <>
@@ -360,13 +360,13 @@ export const PaymentMethodDialog = ({
                   variant="outline"
                   onClick={() => setShowRazorpayQR(false)}
                   disabled={isProcessing}
-                  className="w-full h-9"
+                  className="w-full h-8 text-sm"
                 >
                   Cancel
                 </Button>
               </div>
 
-              <p className="text-xs text-gray-500 pt-1">
+              <p className="text-xs text-gray-500 pt-0.5 leading-tight">
                 {isCheckingPayment ? '⏳ Detecting payment...' : 'Waiting for payment or click "Payment Complete" button'}
               </p>
             </div>
