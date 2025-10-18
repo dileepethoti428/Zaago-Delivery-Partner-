@@ -91,7 +91,9 @@ serve(async (req) => {
           console.log('✅ QR completion successful');
           result = qrResult;
         } else {
-          console.log('⚠️ QR completion failed, trying manual method:', qrError);
+          console.log('⚠️ QR completion failed, trying manual method');
+          console.log('QR Error details:', JSON.stringify(qrError, null, 2));
+          console.log('QR Result:', JSON.stringify(qrResult, null, 2));
         }
       } catch (qrErr) {
         console.log('⚠️ QR completion exception, trying manual method:', qrErr);
@@ -115,7 +117,9 @@ serve(async (req) => {
           console.log('✅ Manual completion successful');
           result = manualResult;
         } else {
-          console.log('⚠️ Manual completion failed, trying simple method:', manualError);
+          console.log('⚠️ Manual completion failed, trying simple method');
+          console.log('Manual Error details:', JSON.stringify(manualError, null, 2));
+          console.log('Manual Result:', JSON.stringify(manualResult, null, 2));
         }
       } catch (manualErr) {
         console.log('⚠️ Manual completion exception, trying simple method:', manualErr);
@@ -140,11 +144,16 @@ serve(async (req) => {
           result = simpleResult;
         } else {
           console.error('❌ All completion methods failed');
+          console.error('Simple Error details:', JSON.stringify(simpleError, null, 2));
+          console.error('Simple Result:', JSON.stringify(simpleResult, null, 2));
           return new Response(
             JSON.stringify({ 
               success: false, 
               error: 'All delivery completion methods failed',
-              details: simpleError
+              details: {
+                simple_error: simpleError,
+                simple_result: simpleResult
+              }
             }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
