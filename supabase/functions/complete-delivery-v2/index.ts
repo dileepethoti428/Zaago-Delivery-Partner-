@@ -155,12 +155,30 @@ Deno.serve(async (req) => {
       if (historyError) {
         // Handle duplicate key error (race condition)
         if (historyError.code === '23505') {
-          console.log('⚠️ Duplicate delivery detected (race condition), returning success');
+          console.log('⚠️ Duplicate delivery_history detected, ensuring order is marked delivered');
+          
+          // Even if delivery_history exists, make sure order status is updated
+          const { error: orderStatusUpdateError } = await supabase
+            .from('orders')
+            .update({
+              status: 'delivered',
+              payment_status: paymentStatus,
+              delivered_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', order_id)
+            .neq('status', 'delivered'); // Only update if not already delivered
+          
+          if (orderStatusUpdateError) {
+            console.error('Failed to update order status on duplicate:', orderStatusUpdateError);
+          }
+          
           return new Response(
             JSON.stringify({ 
               success: true, 
               message: 'Order already delivered',
-              already_completed: true 
+              already_completed: true,
+              status_updated: !orderStatusUpdateError
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
