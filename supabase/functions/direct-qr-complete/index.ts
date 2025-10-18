@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
 
     console.log('💰 Payment:', normalizedPayment, 'Status:', paymentStatus);
 
-    // 1. Insert delivery history with ALL fields explicitly set
+    // 1. Insert delivery history - let database handle timestamps with defaults
     const deliveryRecord = {
       order_id: orderId,
       agent_id: agent.id,
@@ -118,10 +118,8 @@ Deno.serve(async (req) => {
       delivery_date: new Date().toISOString().split('T')[0],
       payment_method: normalizedPayment,
       payment_status: paymentStatus,
-      delivery_payout: 25.00,
-      completed_at: currentTime,
-      created_at: currentTime,
-      updated_at: currentTime
+      delivery_payout: 25.00
+      // completed_at, created_at, updated_at will use database defaults (now())
     };
     
     console.log('📝 Creating delivery history:', deliveryRecord);
