@@ -261,21 +261,51 @@ const DeliveryDetails = () => {
     setShowNavigationMap(true);
   };
   const handleMarkAsDelivery = async () => {
-    if (!order) return;
-    console.log('🎯 Mark as delivery clicked');
-    console.log('🎯 Order ID:', order.id);
+    try {
+      if (!order) {
+        console.error('❌ No order found');
+        toast({
+          title: "Error",
+          description: "Order not found",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      console.log('🎯 Mark as delivery clicked');
+      console.log('🎯 Order ID:', order.id);
+      console.log('🎯 Order payment status:', order.payment_status);
 
-    // Check if order is already paid
-    const isAlreadyPaid = order.payment_status === 'paid' || 
-                          order.payment_status === 'paid_online' ||
-                          order.payment_status === 'completed';
+      // Check if order is already paid
+      const isAlreadyPaid = order.payment_status === 'paid' || 
+                            order.payment_status === 'paid_online' ||
+                            order.payment_status === 'completed';
 
-    if (isAlreadyPaid) {
-      console.log('🎯 Order already paid - auto-completing delivery');
-      await completeDeliveryOnline('ONLINE');
-    } else {
-      console.log('🎯 Order not paid - showing payment dialog');
-      setShowPaymentDialog(true);
+      console.log('🎯 Is already paid:', isAlreadyPaid);
+
+      if (isAlreadyPaid) {
+        console.log('🎯 Order already paid - auto-completing delivery');
+        const result = await completeDeliveryOnline('ONLINE');
+        console.log('🎯 Completion result:', result);
+        
+        if (!result?.success) {
+          toast({
+            title: "❌ Delivery Completion Failed",
+            description: result?.error || "Please try again or use force complete option",
+            variant: "destructive"
+          });
+        }
+      } else {
+        console.log('🎯 Order not paid - showing payment dialog');
+        setShowPaymentDialog(true);
+      }
+    } catch (error) {
+      console.error('❌ Error in handleMarkAsDelivery:', error);
+      toast({
+        title: "❌ Error",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive"
+      });
     }
   };
 
@@ -468,7 +498,14 @@ const DeliveryDetails = () => {
       }
     } catch (error) {
       console.error('❌ Delivery completion failed:', error);
-      return { success: false };
+      
+      toast({
+        title: "❌ Delivery Completion Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive"
+      });
+      
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     } finally {
       setIsProcessing(false);
     }
