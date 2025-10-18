@@ -190,25 +190,60 @@ serve(async (req) => {
       );
     }
 
-    if (order.status !== 'assigned') {
-      if (order.status === 'delivered') {
+    // Handle already delivered orders
+    if (order.status === 'delivered') {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: '🎉 Product already delivered successfully!',
+          already_delivered: true,
+          order: {
+            id: order.id,
+            customer_name: order.customer_name,
+            total: order.total,
+            payment_status: order.payment_status,
+            delivered_at: order.delivered_at
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Auto-assign paid orders to scanning agent if not assigned
+    if ((order.status === 'placed' || order.status === 'packed') && 
+        (order.payment_status === 'paid' || order.payment_status === 'paid_online') && 
+        !order.agent_id) {
+      
+      console.log(`🔄 Auto-assigning paid order to scanning agent ${agent.id}...`);
+      
+      const { error: assignError } = await supabaseClient
+        .from('orders')
+        .update({
+          agent_id: agent.id,
+          status: 'assigned',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id);
+      
+      if (assignError) {
+        console.error('❌ Failed to auto-assign order:', assignError);
         return new Response(
           JSON.stringify({ 
-            success: true, 
-            message: '🎉 Product already delivered successfully!',
-            already_delivered: true,
-            order: {
-              id: order.id,
-              customer_name: order.customer_name,
-              total: order.total,
-              payment_status: order.payment_status,
-              delivered_at: order.delivered_at
-            }
+            success: false, 
+            error: 'Failed to assign order to agent. Please try again.' 
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         );
       }
       
+      console.log('✅ Order auto-assigned to agent successfully');
+      // Update local order object
+      order.agent_id = agent.id;
+      order.status = 'assigned';
+    }
+
+    // Validate order is ready for delivery
+    if (order.status !== 'assigned') {
       return new Response(
         JSON.stringify({ 
           success: false, 
