@@ -6,6 +6,7 @@ import { Scanner } from "@yudiel/react-qr-scanner";
 import { X, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentMethodDialog } from "./PaymentMethodDialog";
+import { DeliveryErrorDialog } from "./DeliveryErrorDialog";
 
 interface QrScannerDialogProps {
   open: boolean;
@@ -42,6 +43,9 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
   const [currentQrCode, setCurrentQrCode] = useState<string>('');
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [successOrderData, setSuccessOrderData] = useState<ScannedOrder | null>(null);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [errorTitle, setErrorTitle] = useState<string>('Delivery Failed');
 
   const handleScan = async (detectedCodes: any[]) => {
     if (!detectedCodes || detectedCodes.length === 0) return;
@@ -158,11 +162,13 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
           
         } catch (error) {
           console.error('❌ Auto-completion failed:', error);
-          toast({
-            title: "Delivery Failed",
-            description: error instanceof Error ? error.message : "Failed to complete delivery",
-            variant: "destructive"
-          });
+          setErrorTitle("Delivery Failed");
+          setErrorMessage(
+            error instanceof Error 
+              ? error.message 
+              : "We couldn't complete this delivery. Please try again or contact support if the issue persists."
+          );
+          setShowErrorDialog(true);
           onOpenChange(false);
         } finally {
           setIsProcessing(false);
@@ -173,63 +179,49 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
       // Handle error responses from the edge function (both with and without error object)
       if (error || !data || !data.success) {
         let errorMsg = 'Invalid QR code';
+        let userFriendlyTitle = 'Delivery Failed';
+        let userFriendlyMessage = '';
         
         // If there's an error object and it contains a non-2xx status, try to extract details
         if (error && error.message?.includes('non-2xx status code')) {
-          // For Supabase function errors with non-2xx status, check if data has error details
           errorMsg = data?.error || data?.message || error.message || 'Invalid QR code';
         } else if (data && !data.success) {
-          // If no error object but data indicates failure
           errorMsg = data.error || data.message || 'Invalid QR code';
         } else if (error) {
-          // For other types of errors
           errorMsg = error.message || 'Invalid QR code';
         }
         
         console.error('❌ QR scan failed:', errorMsg);
         
-        // Special handling for specific error messages
-        // For 403 errors, Supabase returns generic "Edge Function returned a non-2xx status code" 
-        // which means the order is not assigned to this user
+        // Map technical errors to user-friendly messages
         if (errorMsg.includes('not assigned to you') || 
             errorMsg.includes('Order is not assigned to you') ||
+            errorMsg.includes('Order not ready for delivery') ||
+            errorMsg.includes('not ready for delivery') ||
+            errorMsg.includes('not ready') ||
             (errorMsg.includes('Edge Function returned a non-2xx status code') && error && error.message?.includes('non-2xx status code'))) {
-          toast({
-            title: "🚫 Order Not Assigned to You",
-            description: "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.",
-            variant: "destructive"
-          });
-        } else if (errorMsg.includes('Order not ready for delivery') || errorMsg.includes('not ready for delivery')) {
-          toast({
-            title: "🚫 Order Not Assigned to You",
-            description: "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.",
-            variant: "destructive"
-          });
+          userFriendlyTitle = "Order Not Assigned";
+          userFriendlyMessage = "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.";
         } else if (errorMsg.includes('already delivered')) {
-          toast({
-            title: "Product Already Delivered ✅",
-            description: "This order has already been completed and delivered.",
-            variant: "default"
-          });
+          userFriendlyTitle = "Already Delivered";
+          userFriendlyMessage = "This order has already been completed and delivered successfully.";
         } else if (errorMsg.includes('already used') || errorMsg.includes('already scanned')) {
-          toast({
-            title: "QR Code Already Used",
-            description: "This QR code was already scanned. If the previous delivery failed, please contact admin for assistance.",
-            variant: "destructive"
-          });
-        } else if (errorMsg.includes('not ready')) {
-          toast({
-            title: "🚫 Order Not Assigned to You",
-            description: "This order is assigned to another delivery agent. Only the assigned agent can scan and complete this delivery.",
-            variant: "destructive"
-          });
+          userFriendlyTitle = "QR Code Already Used";
+          userFriendlyMessage = "This QR code was already scanned. If the previous delivery failed, please contact support for assistance.";
+        } else if (errorMsg.includes('Invalid QR')) {
+          userFriendlyTitle = "Invalid QR Code";
+          userFriendlyMessage = "This QR code is not valid. Please scan the correct order QR code provided by the customer.";
+        } else if (errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('offline')) {
+          userFriendlyTitle = "Connection Issue";
+          userFriendlyMessage = "Unable to connect to the server. Please check your internet connection and try again.";
         } else {
-          toast({
-            title: "Invalid QR Code",
-            description: errorMsg,
-            variant: "destructive"
-          });
+          userFriendlyTitle = "Delivery Failed";
+          userFriendlyMessage = errorMsg || "We couldn't process this QR code. Please try again or contact support if the issue persists.";
         }
+        
+        setErrorTitle(userFriendlyTitle);
+        setErrorMessage(userFriendlyMessage);
+        setShowErrorDialog(true);
         onOpenChange(false);
         return;
       }
@@ -264,11 +256,9 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
 
     } catch (error) {
       console.error('❌ QR Scan error:', error);
-      toast({
-        title: "Scan Failed",
-        description: "Unable to process QR code. Please try again.",
-        variant: "destructive"
-      });
+      setErrorTitle("Scan Failed");
+      setErrorMessage("Unable to process QR code. Please try scanning again.");
+      setShowErrorDialog(true);
       onOpenChange(false);
     }
   };
@@ -369,6 +359,14 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
     setCurrentQrCode('');
     setShowSuccessScreen(false);
     setSuccessOrderData(null);
+    setShowErrorDialog(false);
+    setErrorMessage('');
+    setErrorTitle('Delivery Failed');
+  };
+
+  const handleErrorRetry = () => {
+    resetScanner();
+    onOpenChange(true);
   };
 
   const handleSuccessClose = () => {
@@ -516,6 +514,16 @@ export const QrScannerDialog = ({ open, onOpenChange, onDeliveryComplete }: QrSc
           }}
         />
       )}
+
+      <DeliveryErrorDialog
+        open={showErrorDialog}
+        onOpenChange={setShowErrorDialog}
+        title={errorTitle}
+        message={errorMessage}
+        onRetry={handleErrorRetry}
+        showRetry={true}
+        showSupport={true}
+      />
     </>
   );
 };
