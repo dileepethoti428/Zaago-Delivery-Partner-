@@ -53,7 +53,7 @@ export const InstantDeliveryButton = ({
         {
           body: {
             order_id: orderId,
-            payment_method: paymentStatus === "paid" ? "ONLINE" : "COD",
+            payment_method: (paymentStatus === "paid" || paymentStatus === "paid_online") ? "ONLINE" : "COD",
           },
         }
       );
@@ -78,7 +78,7 @@ export const InstantDeliveryButton = ({
 
       toast({
         title: "Failed to update delivery status",
-        description: error.message || "Please try again",
+        description: error.message || error.error || "Please try again",
         variant: "destructive",
       });
 
