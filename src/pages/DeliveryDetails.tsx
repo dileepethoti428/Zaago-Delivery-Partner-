@@ -451,7 +451,7 @@ const DeliveryDetails = () => {
         paymentMethod
       });
 
-      const { data, error } = await supabase.functions.invoke('direct-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('complete-delivery-v2', {
         body: {
           order_id: order.id,
           payment_method: paymentMethod
