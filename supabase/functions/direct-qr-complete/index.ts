@@ -107,24 +107,28 @@ Deno.serve(async (req) => {
     console.log('💰 Payment:', normalizedPayment, 'Status:', paymentStatus);
 
     // 1. Insert delivery history with ALL fields explicitly set
+    const deliveryRecord = {
+      order_id: orderId,
+      agent_id: agent.id,
+      customer_name: order.customer_name || 'Customer',
+      customer_phone: order.customer_phone,
+      delivery_address: order.address,
+      items: order.items,
+      total_amount: order.total,
+      delivery_date: new Date().toISOString().split('T')[0],
+      payment_method: normalizedPayment,
+      payment_status: paymentStatus,
+      delivery_payout: 25.00,
+      completed_at: currentTime,
+      created_at: currentTime,
+      updated_at: currentTime
+    };
+    
+    console.log('📝 Creating delivery history:', deliveryRecord);
+    
     const { error: historyError } = await supabase
       .from('delivery_history')
-      .insert({
-        order_id: orderId,
-        agent_id: agent.id,
-        customer_name: order.customer_name || 'Customer',
-        customer_phone: order.customer_phone,
-        delivery_address: order.address,
-        items: order.items,
-        total_amount: order.total,
-        delivery_date: new Date().toISOString().split('T')[0],
-        payment_method: normalizedPayment,
-        payment_status: paymentStatus,
-        delivery_payout: 25.00,
-        completed_at: currentTime,
-        created_at: currentTime,
-        updated_at: currentTime
-      });
+      .insert(deliveryRecord);
 
     if (historyError) {
       console.error('❌ History insert failed:', historyError);
