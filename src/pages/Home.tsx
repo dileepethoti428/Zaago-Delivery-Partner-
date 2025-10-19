@@ -169,6 +169,12 @@ const Home = () => {
   // Emergency modal state
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [emergencyOrderData, setEmergencyOrderData] = useState<Order | null>(null);
+  
+  // Track rejected orders to prevent them from reappearing
+  const [rejectedOrderIds, setRejectedOrderIds] = useState<Set<string>>(() => {
+    const stored = localStorage.getItem('rejectedOrderIds');
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
 
   // Load agent settings on component mount - deferred for faster initial load
   useEffect(() => {
@@ -177,6 +183,42 @@ const Home = () => {
     }, 100); // Defer non-critical loading
     
     return () => clearTimeout(timeout);
+  }, []);
+  
+  // Clean up old rejected orders from localStorage (keep only last 7 days)
+  useEffect(() => {
+    const cleanupRejectedOrders = () => {
+      try {
+        // Get current timestamp
+        const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        
+        // Get timestamp of when rejected orders were last cleaned
+        const lastCleanup = localStorage.getItem('rejectedOrdersLastCleanup');
+        
+        // Only clean up once per day
+        if (lastCleanup && parseInt(lastCleanup) > sevenDaysAgo) {
+          return;
+        }
+        
+        // Clear rejected orders (they should be filtered by backend anyway)
+        // This is just client-side cache that gets refreshed periodically
+        localStorage.removeItem('rejectedOrderIds');
+        localStorage.setItem('rejectedOrdersLastCleanup', Date.now().toString());
+        setRejectedOrderIds(new Set());
+        
+        console.log('🧹 Cleaned up old rejected orders from cache');
+      } catch (error) {
+        console.error('Error cleaning up rejected orders:', error);
+      }
+    };
+    
+    // Run cleanup on mount
+    cleanupRejectedOrders();
+    
+    // Run cleanup daily
+    const cleanupInterval = setInterval(cleanupRejectedOrders, 24 * 60 * 60 * 1000);
+    
+    return () => clearInterval(cleanupInterval);
   }, []);
 
   // Listen for order completion events and refresh home page immediately
@@ -450,6 +492,12 @@ const Home = () => {
               continue;
             }
             
+            // Skip rejected orders
+            if (rejectedOrderIds.has(order.id)) {
+              console.log('🚫 [POLLING] Skipping rejected order:', order.id);
+              continue;
+            }
+            
             const modalKey = `modal-${order.id}`;
             const acceptedKey = `accepted-${order.id}`;
             
@@ -478,7 +526,7 @@ const Home = () => {
     pollForPackedOrders();
 
     return () => clearInterval(pollInterval);
-  }, [emergencyOrderData, recentNotifications]);
+  }, [emergencyOrderData, recentNotifications, rejectedOrderIds]);
 
   // Check if order should trigger immediate packed status notification
   const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
@@ -622,6 +670,12 @@ const Home = () => {
     // CRITICAL: Double-check agent_id is null before showing
     if (orderData.agent_id) {
       console.log('⚠️ [PACKED-NOTIFICATION] Skipping - order already has agent:', orderData.agent_id);
+      return;
+    }
+    
+    // CRITICAL: Skip rejected orders
+    if (rejectedOrderIds.has(orderData.id)) {
+      console.log('🚫 [PACKED-NOTIFICATION] Skipping - order was rejected by agent:', orderData.id);
       return;
     }
     
@@ -1026,9 +1080,20 @@ const Home = () => {
       });
 
       const deduplicatedOrders = Array.from(orderMap.values());
-      console.log(`📊 Orders processed: ${availableOrders.length} available, ${assignedOrders.length} assigned, ${deduplicatedOrders.length} total after deduplication`);
       
-      return deduplicatedOrders;
+      // Filter out rejected orders client-side to prevent reappearance
+      const filteredOrders = deduplicatedOrders.filter(order => !rejectedOrderIds.has(order.id));
+      
+      if (rejectedOrderIds.size > 0) {
+        const rejectedCount = deduplicatedOrders.length - filteredOrders.length;
+        if (rejectedCount > 0) {
+          console.log(`🚫 Filtered out ${rejectedCount} rejected orders`);
+        }
+      }
+      
+      console.log(`📊 Orders processed: ${availableOrders.length} available, ${assignedOrders.length} assigned, ${deduplicatedOrders.length} total after deduplication, ${filteredOrders.length} after filtering rejected`);
+      
+      return filteredOrders;
     } catch (error) {
       console.error('Error fetching orders:', error);
       throw error;
@@ -1414,6 +1479,14 @@ const Home = () => {
         return;
       }
 
+      // Add to rejected orders list immediately to prevent reappearance
+      setRejectedOrderIds(prev => {
+        const updated = new Set(prev);
+        updated.add(orderId);
+        localStorage.setItem('rejectedOrderIds', JSON.stringify(Array.from(updated)));
+        return updated;
+      });
+
       // Call backend to persist rejection
       const { error } = await supabase.functions.invoke('cancel-delivery', {
         body: { 
@@ -1425,6 +1498,13 @@ const Home = () => {
 
       if (error) {
         console.error('Error rejecting order:', error);
+        // Revert rejection on error
+        setRejectedOrderIds(prev => {
+          const updated = new Set(prev);
+          updated.delete(orderId);
+          localStorage.setItem('rejectedOrderIds', JSON.stringify(Array.from(updated)));
+          return updated;
+        });
         toast({
           title: "Error",
           description: "Failed to reject order. Please try again.",
@@ -1438,7 +1518,15 @@ const Home = () => {
         description: "You won't see this order again.",
       });
       
+      // Remove from current orders list
       setOrders(prev => prev.filter(order => order.id !== orderId));
+      
+      // Close emergency modal if it's showing this order
+      if (emergencyOrderData?.id === orderId) {
+        setShowEmergencyModal(false);
+        setEmergencyOrderData(null);
+        stopRingtone();
+      }
     } catch (error) {
       console.error('Error rejecting order:', error);
       toast({
