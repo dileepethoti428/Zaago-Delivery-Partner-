@@ -140,6 +140,7 @@ serve(async (req) => {
     }
 
     // Get available orders - show only new, unassigned 'packed' orders
+    // Exclude orders that are delivered, completed, or have a completion record
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -152,6 +153,14 @@ serve(async (req) => {
       .eq('status', 'packed')
       .is('agent_id', null)
       .order('created_at', { ascending: true }); // Show oldest orders first
+
+    // Filter out any orders that have been completed
+    const { data: completedOrderIds } = await supabase
+      .from('delivery_completions')
+      .select('order_id')
+      .eq('status', 'completed');
+    
+    const completedIds = new Set(completedOrderIds?.map(c => c.order_id) || []);
 
     console.log('Raw query result:', orders?.map(o => ({ 
       id: o.id, 
@@ -192,9 +201,14 @@ serve(async (req) => {
     }
 
     // Double-check: filter out any orders that somehow have an agent_id (safety check)
-    let availableOrders = orders?.filter(order => order.agent_id === null && order.status === 'packed') || [];
+    // Also exclude orders that have been completed (are in delivery_completions)
+    let availableOrders = orders?.filter(order => 
+      order.agent_id === null && 
+      order.status === 'packed' && 
+      !completedIds.has(order.id)
+    ) || [];
     
-    console.log(`After safety filter: ${availableOrders.length} orders remain`);
+    console.log(`After safety filter (excluding ${completedIds.size} completed orders): ${availableOrders.length} orders remain`);
     
     // Filter out excluded orders and orders from restaurant/business sellers
     const excludedOrderIds = exclusions?.map(ex => ex.order_id) || [];

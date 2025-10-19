@@ -56,6 +56,15 @@ export const InstantDeliveryButton = ({
 
       const agentId = agentQuery.data.id;
 
+      // OPTIMISTIC UPDATE: Remove order from cache immediately
+      queryClient.setQueryData(['orders'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          orders: oldData.orders?.filter((order: any) => order.id !== orderId) || []
+        };
+      });
+
       // Call the safe wrapper function that catches ALL exceptions
       const { data: rawData, error } = await supabase.rpc('complete_delivery_safe_wrapper', {
         p_order_id: orderId,
@@ -79,7 +88,7 @@ export const InstantDeliveryButton = ({
         description: `Delivery for ${customerName} completed`,
       });
 
-      // Dispatch event for Home page to refresh
+      // Dispatch event for Home page to refresh (silently)
       window.dispatchEvent(new CustomEvent('orderCompleted', { 
         detail: { orderId, customerName } 
       }));
@@ -90,7 +99,7 @@ export const InstantDeliveryButton = ({
     } catch (error: any) {
       console.error("❌ Delivery completion failed:", error);
 
-      // Rollback optimistic update
+      // Rollback optimistic update - refetch from server
       queryClient.invalidateQueries({ queryKey: ["orders"] });
 
       toast({

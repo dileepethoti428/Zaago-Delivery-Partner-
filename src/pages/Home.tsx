@@ -183,8 +183,10 @@ const Home = () => {
   useEffect(() => {
     const handleOrderCompleted = (event: any) => {
       console.log('🎉 Order completed event received:', event.detail);
-      // Immediately refresh orders to remove completed order from list
-      debouncedRefresh('order_completed', true);
+      // Immediately refresh orders silently (no toast) to sync with backend
+      fetchOrdersForRefresh().catch(error => {
+        console.error('Error refreshing after order completion:', error);
+      });
     };
 
     const handleRefreshOrders = () => {
