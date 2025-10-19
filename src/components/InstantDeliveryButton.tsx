@@ -56,8 +56,8 @@ export const InstantDeliveryButton = ({
 
       const agentId = agentQuery.data.id;
 
-      // Call the database function directly - bypass edge function
-      const { data: rawData, error } = await supabase.rpc('safe_complete_delivery', {
+      // Call the safe wrapper function that catches ALL exceptions
+      const { data: rawData, error } = await supabase.rpc('complete_delivery_safe_wrapper', {
         p_order_id: orderId,
         p_agent_id: agentId,
         p_payment_method: (paymentStatus === "paid" || paymentStatus === "paid_online") ? "ONLINE" : "COD"

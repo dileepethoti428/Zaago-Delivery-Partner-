@@ -4801,6 +4801,14 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_delivery_safe_wrapper: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
       complete_delivery_simple: {
         Args: {
           p_agent_id: string
