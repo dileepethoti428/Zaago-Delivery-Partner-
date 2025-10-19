@@ -56,6 +56,11 @@ export const InstantDeliveryButton = ({
 
       const agentId = agentQuery.data.id;
 
+      console.log("🔄 Starting delivery completion:", { orderId, agentId, paymentStatus });
+
+      // Store old data for proper rollback if needed
+      const oldOrdersData = queryClient.getQueryData(['orders']);
+
       // OPTIMISTIC UPDATE: Remove order from cache immediately
       queryClient.setQueryData(['orders'], (oldData: any) => {
         if (!oldData) return oldData;
@@ -65,6 +70,8 @@ export const InstantDeliveryButton = ({
         };
       });
 
+      console.log("🚀 Calling complete_delivery_safe_wrapper RPC...");
+
       // Call the safe wrapper function that catches ALL exceptions
       const { data: rawData, error } = await supabase.rpc('complete_delivery_safe_wrapper', {
         p_order_id: orderId,
@@ -72,11 +79,17 @@ export const InstantDeliveryButton = ({
         p_payment_method: (paymentStatus === "paid" || paymentStatus === "paid_online") ? "ONLINE" : "COD"
       });
 
-      if (error) throw error;
+      console.log("📦 RPC Response:", { rawData, error });
+
+      if (error) {
+        console.error("❌ RPC Error:", error);
+        throw error;
+      }
 
       const data = rawData as unknown as DeliveryCompletionResult;
 
       if (!data?.success) {
+        console.error("❌ Delivery completion failed:", data?.message);
         throw new Error(data?.message || "Failed to complete delivery");
       }
 
@@ -89,12 +102,16 @@ export const InstantDeliveryButton = ({
       });
 
       // Dispatch event for Home page to refresh (silently)
+      console.log("📡 Dispatching orderCompleted event...");
       window.dispatchEvent(new CustomEvent('orderCompleted', { 
         detail: { orderId, customerName } 
       }));
 
-      // Navigate back after successful completion
-      setTimeout(() => navigate("/"), 300);
+      // Wait a bit for the event to process, then navigate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log("🏠 Navigating to home...");
+      navigate("/");
 
     } catch (error: any) {
       console.error("❌ Delivery completion failed:", error);
