@@ -225,15 +225,55 @@ serve(async (req) => {
     
     console.log('✅ Order found:', { id: order.id, status: order.status, customer: order.customer_name });
 
-    console.log('✅ Order validation complete');
-
-    // Check if order is already delivered
+    // IDEMPOTENCY CHECK #1: If order is already delivered, return success immediately
     if (order.status === 'delivered') {
+      console.log('✅ Order already delivered, returning success (idempotent)');
       return new Response(
-        JSON.stringify({ success: true, message: 'Order already delivered' }),
+        JSON.stringify({ 
+          success: true, 
+          message: 'Order already delivered successfully',
+          already_delivered: true,
+          order: {
+            id: order_id,
+            customer_name: order.customer_name,
+            total: order.total,
+            status: 'delivered',
+            delivered_at: order.delivered_at
+          }
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // IDEMPOTENCY CHECK #2: Check if completion record already exists
+    console.log('🔍 Checking for existing completion record...');
+    const { data: existingCompletion } = await supabaseClient
+      .from('delivery_completions')
+      .select('id, completed_at')
+      .eq('order_id', order_id)
+      .eq('agent_id', agent.id)
+      .maybeSingle();
+
+    if (existingCompletion) {
+      console.log('✅ Delivery already completed (found completion record), returning success');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Delivery already completed',
+          already_delivered: true,
+          order: {
+            id: order_id,
+            customer_name: order.customer_name,
+            total: order.total,
+            status: order.status,
+            completed_at: existingCompletion.completed_at
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('✅ Order validation complete - proceeding with delivery completion');
 
     // Simple calculation like qr-complete-delivery
     const distance_km_calc = distance_km || 2.5;
@@ -334,6 +374,22 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Complete Delivery Error:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    
+    // Handle duplicate key constraint violations (already completed)
+    if (error instanceof Error && 
+        (error.message.includes('duplicate key') || 
+         error.message.includes('unique_order_delivery') ||
+         error.message.includes('23505'))) {
+      console.log('✅ Duplicate key error detected - order was already completed, returning success');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Order was already completed successfully',
+          already_delivered: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     // Determine if this is a recoverable error
     const isRecoverable = error instanceof Error && (
