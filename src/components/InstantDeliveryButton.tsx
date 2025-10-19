@@ -14,6 +14,12 @@ interface InstantDeliveryButtonProps {
   className?: string;
 }
 
+interface DeliveryCompletionResult {
+  success: boolean;
+  message?: string;
+  order_id?: string;
+}
+
 export const InstantDeliveryButton = ({
   orderId,
   orderTotal,
@@ -26,27 +32,42 @@ export const InstantDeliveryButton = ({
   const navigate = useNavigate();
 
   const handleInstantComplete = async () => {
-    // Prevent double-clicks
     if (isProcessing) return;
 
     setIsProcessing(true);
 
     try {
-      // Call the backend FIRST before UI updates
-      const { data, error } = await supabase.functions.invoke(
-        "complete-delivery-instant",
-        {
-          body: {
-            order_id: orderId,
-            payment_method: (paymentStatus === "paid" || paymentStatus === "paid_online") ? "ONLINE" : "COD",
-          },
-        }
-      );
+      // Get current user and their agent profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Get agent profile - type assertion to avoid deep instantiation error
+      // @ts-ignore - Supabase type inference issue
+      const agentQuery = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (agentQuery.error || !agentQuery.data) {
+        throw new Error("Agent profile not found");
+      }
+
+      const agentId = agentQuery.data.id;
+
+      // Call the database function directly - bypass edge function
+      const { data: rawData, error } = await supabase.rpc('safe_complete_delivery', {
+        p_order_id: orderId,
+        p_agent_id: agentId,
+        p_payment_method: (paymentStatus === "paid" || paymentStatus === "paid_online") ? "ONLINE" : "COD"
+      });
 
       if (error) throw error;
 
+      const data = rawData as unknown as DeliveryCompletionResult;
+
       if (!data?.success) {
-        throw new Error(data?.error || "Failed to complete delivery");
+        throw new Error(data?.message || "Failed to complete delivery");
       }
 
       console.log("✅ Delivery completed successfully:", data);
