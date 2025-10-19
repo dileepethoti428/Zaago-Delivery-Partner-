@@ -32,22 +32,7 @@ export const InstantDeliveryButton = ({
     setIsProcessing(true);
 
     try {
-      // Show optimistic success message immediately
-      toast({
-        title: "Product successfully delivered",
-        description: `Delivery for ${customerName} completed`,
-      });
-
-      // Optimistically remove from UI
-      queryClient.setQueryData(["orders"], (oldData: any) => {
-        if (!oldData) return oldData;
-        return oldData.filter((order: any) => order.id !== orderId);
-      });
-
-      // Navigate back immediately for better UX
-      setTimeout(() => navigate("/"), 100);
-
-      // Call the backend in background
+      // Call the backend FIRST before UI updates
       const { data, error } = await supabase.functions.invoke(
         "complete-delivery-instant",
         {
@@ -66,9 +51,19 @@ export const InstantDeliveryButton = ({
 
       console.log("✅ Delivery completed successfully:", data);
 
-      // Invalidate queries to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["delivery-history"] });
+      // Show success message
+      toast({
+        title: "Product successfully delivered",
+        description: `Delivery for ${customerName} completed`,
+      });
+
+      // Dispatch event for Home page to refresh
+      window.dispatchEvent(new CustomEvent('orderCompleted', { 
+        detail: { orderId, customerName } 
+      }));
+
+      // Navigate back after successful completion
+      setTimeout(() => navigate("/"), 300);
 
     } catch (error: any) {
       console.error("❌ Delivery completion failed:", error);
