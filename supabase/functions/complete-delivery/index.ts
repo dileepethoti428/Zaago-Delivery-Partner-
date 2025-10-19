@@ -420,6 +420,30 @@ serve(async (req) => {
       console.log('✅ Delivery history record created/updated');
     }
     
+    // Track purchase history for each item (Blinkit approach - trigger disabled)
+    console.log('📝 Tracking purchase history for items...');
+    for (const item of order.items) {
+      const { error: purchaseError } = await supabaseClient
+        .from('user_purchase_history')
+        .upsert({
+          user_id: order.user_id,
+          product_id: item.id,
+          order_id: order_id,
+          quantity: item.quantity,
+          unit_price: item.price,
+          purchased_at: now
+        }, {
+          onConflict: 'user_id,product_id,order_id',
+          ignoreDuplicates: false  // Update if exists
+        });
+      
+      if (purchaseError) {
+        console.warn(`⚠️ Failed to track purchase for item ${item.id} (non-blocking):`, purchaseError);
+        // Don't fail the delivery - purchase tracking is secondary
+      }
+    }
+    console.log('✅ Purchase history tracked');
+    
     console.log('🎉 Delivery completed successfully');
 
     return new Response(
