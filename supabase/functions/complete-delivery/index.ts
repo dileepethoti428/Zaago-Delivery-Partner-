@@ -302,6 +302,43 @@ serve(async (req) => {
 
     if (orderUpdateError) {
       console.error('❌ Order update failed:', orderUpdateError);
+      
+      // If it's a duplicate key error, check if order was delivered by concurrent request
+      if (orderUpdateError.code === '23505' || 
+          orderUpdateError.message?.includes('unique_order_delivery') ||
+          orderUpdateError.message?.includes('duplicate key')) {
+        console.log('⚠️ Duplicate key error detected - checking if order was delivered by another request...');
+        
+        // Wait briefly for the concurrent request to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Re-check order status
+        const { data: recheckOrder } = await supabaseClient
+          .from('orders')
+          .select('status, delivered_at, payment_status, customer_name, total')
+          .eq('id', order_id)
+          .single();
+        
+        if (recheckOrder?.status === 'delivered') {
+          console.log('✅ Order was delivered by concurrent request - returning success');
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: 'Product delivered successfully!',
+              already_delivered: true,
+              order: {
+                id: order_id,
+                customer_name: recheckOrder.customer_name,
+                total: recheckOrder.total,
+                status: 'delivered',
+                delivered_at: recheckOrder.delivered_at
+              }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
