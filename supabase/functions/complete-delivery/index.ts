@@ -389,6 +389,37 @@ serve(async (req) => {
 
     console.log('✅ Order marked as delivered successfully!');
     
+    // Create delivery_history record explicitly (Blinkit approach - trigger disabled)
+    console.log('📝 Creating delivery history record...');
+    const { error: historyError } = await supabaseClient
+      .from('delivery_history')
+      .upsert({
+        order_id: order_id,
+        agent_id: agent.id,
+        customer_name: order.customer_name,
+        customer_phone: order.customer_phone || null,
+        delivery_address: order.address,
+        items: order.items,
+        total_amount: order.total,
+        payment_method: payment_method === 'COD' ? 'COD' : 'Online',
+        payment_status: payment_status,
+        delivery_date: new Date().toISOString().split('T')[0],
+        delivery_time_slot: order.delivery_time_slot || null,
+        special_instructions: order.special_instructions || null,
+        delivery_payout: payout_amount,
+        completed_at: now
+      }, {
+        onConflict: 'order_id,agent_id',
+        ignoreDuplicates: false  // Update if exists
+      });
+    
+    if (historyError) {
+      console.warn('⚠️ Failed to create delivery history (non-blocking):', historyError);
+      // Don't fail the delivery - history creation is secondary
+    } else {
+      console.log('✅ Delivery history record created/updated');
+    }
+    
     console.log('🎉 Delivery completed successfully');
 
     return new Response(
