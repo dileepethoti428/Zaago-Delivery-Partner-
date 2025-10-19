@@ -53,25 +53,11 @@ export const InstantDeliveryButton = ({
         throw new Error("User email not found");
       }
 
-      // 3. PRE-VALIDATION: Get agent profile
-      // @ts-ignore - Supabase type inference issue
-      const agentQuery = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (agentQuery.error || !agentQuery.data) {
-        throw new Error("Agent profile not found. Please contact support.");
-      }
-
-      const agentId = agentQuery.data.id;
+      // 3. Prepare payment method (edge function will get agent from auth token)
       const paymentMethod = (paymentStatus === "paid" || paymentStatus === "paid_online") ? "ONLINE" : "COD";
 
       console.log("🔄 Starting delivery completion with validated data:", { 
         orderId, 
-        agentId, 
         paymentMethod,
         userEmail: user.email 
       });
@@ -99,24 +85,25 @@ export const InstantDeliveryButton = ({
 
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          console.log(`🔄 Attempt ${attempt}/3: Calling complete_delivery_safe_wrapper RPC...`);
+          console.log(`🔄 Attempt ${attempt}/3: Calling complete-delivery edge function...`);
           
-          const rpcCall = supabase.rpc('complete_delivery_safe_wrapper', {
-            p_order_id: orderId,
-            p_agent_id: agentId,
-            p_payment_method: paymentMethod
+          const edgeFunctionCall = supabase.functions.invoke('complete-delivery', {
+            body: {
+              order_id: orderId,
+              payment_method: paymentMethod
+            }
           });
           
-          // Race between RPC call and 10-second timeout
+          // Race between edge function call and 10-second timeout
           const { data: rawData, error } = await Promise.race([
-            rpcCall,
+            edgeFunctionCall,
             timeout(10000)
           ]) as any;
           
-          console.log(`📦 Attempt ${attempt}/3 RPC Response:`, { rawData, error });
+          console.log(`📦 Attempt ${attempt}/3 Edge Function Response:`, { rawData, error });
 
           if (error) {
-            console.error(`❌ Attempt ${attempt}/3 RPC Error:`, {
+            console.error(`❌ Attempt ${attempt}/3 Edge Function Error:`, {
               message: error.message,
               details: error.details,
               hint: error.hint,
