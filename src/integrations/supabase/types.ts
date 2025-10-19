@@ -218,6 +218,55 @@ export type Database = {
           },
         ]
       }
+      agent_order_rejections: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          order_id: string
+          rejection_reason: string | null
+          rejection_type: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          order_id: string
+          rejection_reason?: string | null
+          rejection_type?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          order_id?: string
+          rejection_reason?: string | null
+          rejection_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_order_rejections_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_order_rejections_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_order_rejections_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_settings: {
         Row: {
           agent_id: string

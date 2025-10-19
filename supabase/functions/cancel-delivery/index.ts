@@ -54,16 +54,19 @@ serve(async (req) => {
 
     if (!order.agent_id) {
       // Unassigned -> agent is rejecting the order. Do not change order status.
-      const { error: exclusionError } = await supabase
-        .from('order_exclusions')
+      const { error: rejectionError } = await supabase
+        .from('agent_order_rejections')
         .insert({
           order_id,
           agent_id,
-          reason: cancellation_reason || 'Agent rejected delivery'
+          rejection_reason: cancellation_reason || 'Agent rejected delivery',
+          rejection_type: 'manual'
         });
 
-      if (exclusionError) {
-        console.warn('Failed to create order exclusion:', exclusionError);
+      if (rejectionError) {
+        console.warn('Failed to record order rejection:', rejectionError);
+      } else {
+        console.log(`Agent ${agent_id} rejected order ${order_id}`);
       }
 
       // Log rejection
@@ -154,17 +157,20 @@ serve(async (req) => {
       console.warn('Failed to log cancellation:', logError);
     }
 
-    // Add exclusion to avoid showing it again to this agent
-    const { error: exclusionError2 } = await supabase
-      .from('order_exclusions')
+    // Record rejection to avoid showing it again to this agent
+    const { error: rejectionError2 } = await supabase
+      .from('agent_order_rejections')
       .insert({
         order_id,
         agent_id,
-        reason: cancellation_reason || 'Agent cancelled delivery'
+        rejection_reason: cancellation_reason || 'Agent cancelled delivery',
+        rejection_type: 'cancelled'
       });
 
-    if (exclusionError2) {
-      console.warn('Failed to log order exclusion:', exclusionError2);
+    if (rejectionError2) {
+      console.warn('Failed to record order rejection:', rejectionError2);
+    } else {
+      console.log(`Agent ${agent_id} cancelled order ${order_id} - will not see it again`);
     }
 
     console.log('Delivery cancelled successfully for order:', order_id);

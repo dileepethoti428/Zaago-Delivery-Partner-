@@ -190,15 +190,17 @@ serve(async (req) => {
       .eq('is_active', true)
       .order('priority');
 
-    // Get excluded order IDs for this agent
-    const { data: exclusions, error: exclusionError } = await supabase
-      .from('order_exclusions')
+    // Get rejected order IDs for this agent
+    const { data: rejections, error: rejectionError } = await supabase
+      .from('agent_order_rejections')
       .select('order_id')
       .eq('agent_id', agent_id);
 
-    if (exclusionError) {
-      console.warn('Failed to fetch exclusions:', exclusionError);
+    if (rejectionError) {
+      console.warn('Failed to fetch rejected orders:', rejectionError);
     }
+    
+    console.log(`Agent ${agent_id} has ${rejections?.length || 0} rejected orders`);
 
     // Double-check: filter out any orders that somehow have an agent_id (safety check)
     // Also exclude orders that have been completed (are in delivery_completions)
@@ -210,9 +212,13 @@ serve(async (req) => {
     
     console.log(`After safety filter (excluding ${completedIds.size} completed orders): ${availableOrders.length} orders remain`);
     
-    // Filter out excluded orders and orders from restaurant/business sellers
-    const excludedOrderIds = exclusions?.map(ex => ex.order_id) || [];
-    let filteredOrders = availableOrders.filter(order => !excludedOrderIds.includes(order.id));
+    // Filter out rejected orders and orders from restaurant/business sellers
+    const rejectedOrderIds = rejections?.map(r => r.order_id) || [];
+    let filteredOrders = availableOrders.filter(order => !rejectedOrderIds.includes(order.id));
+    
+    if (rejectedOrderIds.length > 0) {
+      console.log(`Filtered out ${rejectedOrderIds.length} rejected orders for agent ${agent_id}`);
+    }
     
     // Filter out orders from sellers/restaurants - only exclude pure business sellers
     const userOrdersPromises = filteredOrders.map(async (order) => {
