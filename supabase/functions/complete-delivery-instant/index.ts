@@ -67,24 +67,59 @@ Deno.serve(async (req) => {
         p_payment_method: payment_method
       });
 
+    // Check if we got a result from the database function
+    if (result) {
+      // If the database function returned success, we're good
+      if (result.success) {
+        console.log('✅ Delivery completion result:', result);
+        return new Response(
+          JSON.stringify(result),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // If the database function returned success: false, check if it's a duplicate/already completed
+      if (!result.success && result.message && 
+          (result.message.includes('already completed') || 
+           result.message.includes('concurrent request') ||
+           result.message.includes('duplicate'))) {
+        // Treat already completed as success
+        console.log('✅ Delivery already completed:', result);
+        return new Response(
+          JSON.stringify({ ...result, success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Genuine error from the database function
+      console.error('❌ Database function error:', result);
+      return new Response(
+        JSON.stringify(result),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Only if we couldn't get any result at all (RPC failure, network issue, etc.)
     if (completionError) {
-      console.error('❌ Completion error:', completionError);
+      console.error('❌ RPC call failed:', completionError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to complete delivery',
+          error: 'Failed to complete delivery - RPC error',
           details: completionError.message 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('✅ Delivery completion result:', result);
-
-    // Return the result from the database function
+    // Shouldn't reach here, but handle it just in case
+    console.error('❌ No result and no error from RPC call');
     return new Response(
-      JSON.stringify(result),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: false, 
+        error: 'Unexpected error - no result returned' 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
