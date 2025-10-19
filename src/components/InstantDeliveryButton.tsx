@@ -39,18 +39,19 @@ export const InstantDeliveryButton = ({
     try {
       // Get current user and their agent profile
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!user?.email) throw new Error("Not authenticated");
 
-      // Get agent profile - type assertion to avoid deep instantiation error
+      // Get agent profile by email (delivery_agents uses email, not user_id)
       // @ts-ignore - Supabase type inference issue
       const agentQuery = await supabase
         .from('delivery_agents')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('email', user.email)
+        .eq('is_active', true)
         .maybeSingle();
 
       if (agentQuery.error || !agentQuery.data) {
-        throw new Error("Agent profile not found");
+        throw new Error("Agent profile not found. Please contact support.");
       }
 
       const agentId = agentQuery.data.id;
