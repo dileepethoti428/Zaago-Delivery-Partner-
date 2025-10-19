@@ -262,7 +262,22 @@ const DeliveryDetails = () => {
     // Show in-app navigation
     setShowNavigationMap(true);
   };
-  // Removed handleMarkAsDelivery - InstantDeliveryButton now handles ALL orders (both paid and COD)
+  // Hybrid payment handler - paid orders instant, COD orders show dialog
+  const handleMarkAsDelivery = () => {
+    console.log("🎯 Mark as delivered clicked", { 
+      orderId: order?.id,
+      paymentStatus: order?.payment_status 
+    });
+
+    // For COD orders, show payment dialog with both options
+    if (order?.payment_status === "pending" || order?.payment_status === "COD") {
+      setShowPaymentDialog(true);
+      return;
+    }
+
+    // For paid orders, the InstantDeliveryButton handles it
+    console.log("✅ Paid order - InstantDeliveryButton will handle completion");
+  };
 
   // Zepto-style ultra-fast delivery with real-time tracking
   const handleZeptoStyleDelivery = async () => {
@@ -1100,14 +1115,21 @@ const DeliveryDetails = () => {
                   <span className="text-xs">Navigate to Customer</span>
                 </Button>
                 
-                {/* Always use InstantDeliveryButton for ALL orders (paid and COD) - Blinkit approach */}
-                <InstantDeliveryButton
-                  orderId={order.id}
-                  orderTotal={order.total}
-                  customerName={order.customer_name}
-                  paymentStatus={order.payment_status}
-                  className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1 text-xs"
-                />
+                {/* Hybrid approach: Instant for paid, dialog for COD */}
+                {(order.payment_status === "paid" || order.payment_status === "paid_online") ? (
+                  <InstantDeliveryButton
+                    orderId={order.id}
+                    orderTotal={order.total}
+                    customerName={order.customer_name}
+                    paymentStatus={order.payment_status}
+                    className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1 text-xs"
+                  />
+                ) : (
+                  <Button className="flex items-center justify-center space-x-1 h-8 bg-gradient-neon hover:shadow-neon transition-smooth px-2 -ml-1" onClick={handleMarkAsDelivery} disabled={isProcessing}>
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span className="text-xs">{isProcessing ? 'Processing...' : 'Mark as Delivered'}</span>
+                  </Button>
+                )}
               </div>
 
               <Button variant="destructive" className="w-full flex items-center justify-center space-x-2 h-8" onClick={handleCancelDelivery} disabled={isCancelling}>

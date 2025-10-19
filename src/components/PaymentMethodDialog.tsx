@@ -146,12 +146,12 @@ export const PaymentMethodDialog = ({
         throw new Error('Not authenticated');
       }
 
-      console.log('📤 Invoking unified-complete-delivery function...');
+      console.log('📤 Invoking complete-delivery function (Blinkit approach)...');
 
-      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: {
           order_id: order.order_id,
-          payment_method: method.toUpperCase()
+          payment_method: 'COD'
         }
       });
 
@@ -220,9 +220,9 @@ export const PaymentMethodDialog = ({
         throw new Error('Not authenticated');
       }
 
-      console.log('📤 Invoking unified-complete-delivery function for Online payment...');
+      console.log('📤 Invoking complete-delivery function for Online payment (Blinkit approach)...');
 
-      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+      const { data, error } = await supabase.functions.invoke('complete-delivery', {
         body: {
           order_id: order.order_id,
           payment_method: 'ONLINE'
