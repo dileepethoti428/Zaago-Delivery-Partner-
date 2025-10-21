@@ -72,12 +72,12 @@ const Earnings = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchAgentData();
+    fetchEarningsFromBackend();
 
     // Listen for order completion events to refresh earnings
     const handleOrderCompleted = () => {
       console.log('Order completed, refreshing earnings...');
-      fetchEarningsData();
+      fetchEarningsFromBackend();
     };
 
     window.addEventListener('orderCompleted', handleOrderCompleted);
@@ -87,285 +87,55 @@ const Earnings = () => {
     };
   }, []);
 
-  const fetchAgentData = async () => {
-    try {
-      // Fetch all data for earnings
-      await Promise.all([
-        fetchEarningsData(),
-        fetchPayoutConfig(),
-        fetchDistanceStats()
-      ]);
-    } catch (error) {
-      console.error('Error fetching agent data:', error);
-    }
-  };
-
-  const fetchPayoutConfig = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('payout_config')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      
-      if (data) {
-        setPayoutConfig(data);
-      }
-    } catch (error) {
-      console.error('Error fetching payout config:', error);
-    }
-  };
-
-  const fetchDistanceStats = async () => {
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return;
-      
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!agent) return;
-
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().split('T')[0];
-      
-      // Fix week start calculation
-      const currentWeekStart = new Date(now);
-      currentWeekStart.setDate(now.getDate() - now.getDay());
-      currentWeekStart.setHours(0, 0, 0, 0);
-      const weekStartStr = currentWeekStart.toISOString().split('T')[0];
-      
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-
-      // Query delivery_history for actual distance_traveled data
-      const { data: todayHistory } = await supabase
-        .from('delivery_history')
-        .select('distance_traveled, order_id, completed_at')
-        .eq('agent_id', agent.id)
-        .gte('delivery_date', todayStart);
-
-      const { data: weekHistory } = await supabase
-        .from('delivery_history')
-        .select('distance_traveled, order_id, completed_at')
-        .eq('agent_id', agent.id)
-        .gte('delivery_date', weekStartStr);
-
-      const { data: monthHistory } = await supabase
-        .from('delivery_history')
-        .select('distance_traveled, order_id, completed_at')
-        .eq('agent_id', agent.id)
-        .gte('delivery_date', monthStart);
-
-      console.log('🔍 Distance from delivery_history:', {
-        todayRecords: todayHistory?.length || 0,
-        weekRecords: weekHistory?.length || 0,
-        monthRecords: monthHistory?.length || 0
-      });
-
-      // Calculate distances from delivery_history
-      const calculateDistance = (historyRecords: any[]) => {
-        return (historyRecords || []).reduce((total, record) => {
-          const distance = record.distance_traveled || 0;
-          if (distance > 0) {
-            console.log(`📏 Distance for order ${record.order_id}: ${distance}km`);
-          }
-          return total + distance;
-        }, 0);
-      };
-
-      const distance_today = calculateDistance(todayHistory);
-      const distance_week = calculateDistance(weekHistory);
-      const distance_month = calculateDistance(monthHistory);
-
-      const finalStats = {
-        distance_today: Math.round(distance_today * 10) / 10,
-        distance_week: Math.round(distance_week * 10) / 10,
-        distance_month: Math.round(distance_month * 10) / 10
-      };
-
-      setDistanceStats(finalStats);
-
-      console.log('✅ Distance stats from delivery_history:', finalStats);
-      
-    } catch (error) {
-      console.error('Error fetching distance stats:', error);
-    }
-  };
-
-  const fetchEarningsData = async () => {
+  const fetchEarningsFromBackend = async () => {
     try {
       setIsLoading(true);
       
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return;
-      
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!agent) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         toast({
-          title: "No active agent profile",
-          description: "Please complete your agent setup first.",
+          title: "Authentication required",
+          description: "Please log in to view your earnings.",
+          variant: "destructive"
         });
         return;
       }
 
-      // Fetch earnings with proper date filtering and include distance_km
-      const { data: earnings, error: earningsError } = await supabase
-        .from('earnings')
-        .select('*, distance_km')
-        .eq('agent_id', agent.id)
-        .order('created_at', { ascending: false});
-
-      if (earningsError) throw earningsError;
-
-      // Calculate earnings by period with proper date ranges
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekStart = new Date(now.setDate(now.getDate() - now.getDay())); // Start of current week
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      // Fetch work sessions to calculate actual hours worked
-      const { data: workSessions } = await supabase
-        .from('agent_work_sessions')
-        .select('session_start, session_end, total_hours')
-        .eq('agent_id', agent.id)
-        .order('session_start', { ascending: false });
-
-      const calculatePeriodData = (startDate: Date, endDate: Date = new Date()) => {
-        const periodEarnings = (earnings || []).filter(earning => {
-          const earningDate = new Date(earning.created_at);
-          return earningDate >= startDate && earningDate <= endDate;
-        });
-
-        // Calculate actual hours worked from work sessions for the period
-        const periodSessions = (workSessions || []).filter(session => {
-          const sessionDate = new Date(session.session_start);
-          return sessionDate >= startDate && sessionDate <= endDate;
-        });
-
-        const totalHours = periodSessions.reduce((sum, session) => {
-          return sum + (session.total_hours || 0);
-        }, 0);
-
-        return {
-          amount: periodEarnings.reduce((sum, e) => sum + (e.amount || 0), 0),
-          deliveries: periodEarnings.length,
-          hours: totalHours > 0 ? totalHours : periodEarnings.length * 0.5 // Fallback to estimate if no sessions
-        };
-      };
-
-      const newEarningsData = {
-        today: calculatePeriodData(todayStart),
-        week: calculatePeriodData(weekStart),
-        month: calculatePeriodData(monthStart)
-      };
-
-      setEarningsData(newEarningsData);
-
-      // Fetch delivery history for customer names and distance data
-      const { data: deliveryHistory } = await supabase
-        .from('delivery_history')
-        .select('order_id, customer_name, delivery_date, total_amount, distance_traveled')
-        .eq('agent_id', agent.id)
-        .order('completed_at', { ascending: false });
-
-      // Format recent earnings for display with synced distance data
-      const recentData = (earnings || []).slice(0, 10).map(earning => {
-        const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
-        
-        // Prioritize distance from delivery_history (most accurate), then earnings table
-        let distance = 0;
-        let distanceSource: 'backend' | 'history' | 'delivery' = 'delivery';
-        
-        if (historyData?.distance_traveled && historyData.distance_traveled > 0) {
-          distance = historyData.distance_traveled;
-          distanceSource = 'history';
-        } else if (earning.distance_km && earning.distance_km > 0) {
-          distance = earning.distance_km;
-          distanceSource = 'backend';
-        } else {
-          distance = 3.5; // Realistic fallback
-          distanceSource = 'delivery';
-        }
-        
-        // Calculate breakdown using actual payout config - standardized calculation
-        const basePay = 40; // ₹40 base pay for up to 3km
-        const baseDistanceKm = 3;
-        const perKmRate = 9; // ₹9 per km after 3km
-        
-        const distancePay = distance > baseDistanceKm ? 
-          (distance - baseDistanceKm) * perKmRate : 0;
-        
-        // Check if this was a peak hour delivery
-        const earningTime = new Date(earning.created_at).toTimeString().substring(0, 5);
-        const isPeakHour = earningTime >= '06:00' && earningTime <= '12:00';
-        
-        // Calculate surge (15% during peak hours)
-        const subtotal = basePay + distancePay;
-        const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
-        const totalBeforeFee = subtotal + surgeAmount;
-        const platformFee = 13;
-        const expectedTotal = totalBeforeFee - platformFee;
-        
-        // Calculate actual peak bonus based on difference from expected
-        const peakBonus = Math.max(0, (earning.amount || 0) - expectedTotal);
-        
-        return {
-          id: earning.id,
-          order_id: earning.order_id,
-          customer_name: historyData?.customer_name || 'Customer',
-          amount: earning.amount || 0,
-          time: new Date(earning.created_at).toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-          }),
-          delivery_date: historyData?.delivery_date || earning.created_at,
-          distance_km: distance,
-          distance_source: distanceSource,
-          breakdown: {
-            base_pay: basePay,
-            distance_pay: distancePay,
-            peak_bonus: peakBonus
-          }
-        };
+      const supabaseUrl = 'https://amhpjsmubciahslghobw.supabase.co';
+      const response = await fetch(`${supabaseUrl}/functions/v1/get-agent-earnings`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
       });
 
-      setRecentEarnings(recentData);
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
 
-      // Count today's peak hour orders using config
-      const todayPeakOrders = (earnings || []).filter(earning => {
-        const earningDate = new Date(earning.created_at);
-        const earningTime = earningDate.toTimeString().substring(0, 5);
-        const peakStart = payoutConfig?.peak_hour_start || '06:00';
-        const peakEnd = payoutConfig?.peak_hour_end || '12:00';
-        return earningDate >= todayStart && 
-               earningTime >= peakStart && 
-               earningTime <= peakEnd;
-      }).length;
-
-      setPeakOrdersToday(todayPeakOrders);
-
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        setEarningsData(result.data.earnings_summary);
+        setDistanceStats(result.data.distance_stats);
+        setRecentEarnings(result.data.recent_earnings);
+        setPayoutConfig(result.data.payout_config);
+        setPeakOrdersToday(result.data.peak_orders_today);
+        
+        console.log('✅ Earnings data loaded from backend:', {
+          today: result.data.earnings_summary.today,
+          recentCount: result.data.recent_earnings.length
+        });
+      } else {
+        throw new Error(result.error || 'Failed to fetch earnings data');
+      }
     } catch (error) {
-      console.error('Error fetching earnings:', error);
+      console.error('❌ Error fetching earnings from backend:', error);
       toast({
         title: "Error",
-        description: "Failed to load earnings data",
+        description: "Failed to load earnings data. Please try again.",
         variant: "destructive"
       });
     } finally {
