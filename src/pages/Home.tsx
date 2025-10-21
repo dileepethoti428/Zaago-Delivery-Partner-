@@ -1541,31 +1541,82 @@ const Home = () => {
 
   // Sort orders based on selected criteria - all data comes from backend calculations
   const getSortedOrders = (orders: Order[]) => {
+    if (!orders || orders.length === 0) {
+      console.log('🎯 No orders to sort');
+      return [];
+    }
+
+    console.log(`🎯 Sorting ${orders.length} orders by: ${sortBy}`);
+    
     return [...orders].sort((a, b) => {
       switch (sortBy) {
-        case 'nearest':
+        case 'nearest': {
           // Priority: agent_to_shop_distance (backend) > total_distance > distance_km
-          const distA = a.agent_to_shop_distance ?? a.total_distance ?? a.distance_km ?? 999;
-          const distB = b.agent_to_shop_distance ?? b.total_distance ?? b.distance_km ?? 999;
-          console.log(`🎯 Sorting nearest: Order A (${distA.toFixed(2)}km) vs Order B (${distB.toFixed(2)}km)`);
+          const distA = Number(a.agent_to_shop_distance ?? a.total_distance ?? a.distance_km ?? 999);
+          const distB = Number(b.agent_to_shop_distance ?? b.total_distance ?? b.distance_km ?? 999);
+          
+          // Validation check
+          if (isNaN(distA) || isNaN(distB)) {
+            console.warn(`⚠️ Invalid distance values: A=${distA}, B=${distB}`);
+            return 0;
+          }
+          
+          console.log(`  📍 Order ${a.id.slice(0, 8)}: ${distA.toFixed(2)}km vs ${b.id.slice(0, 8)}: ${distB.toFixed(2)}km`);
           return distA - distB;
-        case 'newest':
+        }
+        case 'newest': {
           // Sort by order creation time from backend (newest first)
           const timeA = new Date(a.created_at).getTime();
           const timeB = new Date(b.created_at).getTime();
-          console.log(`🕐 Sorting newest: Order A (${new Date(a.created_at).toLocaleString()}) vs Order B (${new Date(b.created_at).toLocaleString()})`);
+          
+          // Validation check
+          if (isNaN(timeA) || isNaN(timeB)) {
+            console.warn(`⚠️ Invalid date values: A=${a.created_at}, B=${b.created_at}`);
+            return 0;
+          }
+          
+          console.log(`  🕐 Order ${a.id.slice(0, 8)}: ${new Date(a.created_at).toLocaleTimeString()} vs ${b.id.slice(0, 8)}: ${new Date(b.created_at).toLocaleTimeString()}`);
           return timeB - timeA;
-        case 'highest':
+        }
+        case 'highest': {
           // Sort by agent payout calculated from backend (highest first)
-          const payoutA = a.agent_payout ?? calculateAgentPayout(a.distance_km || 2.5);
-          const payoutB = b.agent_payout ?? calculateAgentPayout(b.distance_km || 2.5);
-          console.log(`💰 Sorting highest: Order A (₹${payoutA.toFixed(2)}) vs Order B (₹${payoutB.toFixed(2)})`);
+          const payoutA = Number(a.agent_payout ?? calculateAgentPayout(a.distance_km || 2.5));
+          const payoutB = Number(b.agent_payout ?? calculateAgentPayout(b.distance_km || 2.5));
+          
+          // Validation check
+          if (isNaN(payoutA) || isNaN(payoutB)) {
+            console.warn(`⚠️ Invalid payout values: A=${payoutA}, B=${payoutB}`);
+            return 0;
+          }
+          
+          console.log(`  💰 Order ${a.id.slice(0, 8)}: ₹${payoutA.toFixed(2)} vs ${b.id.slice(0, 8)}: ₹${payoutB.toFixed(2)}`);
           return payoutB - payoutA;
+        }
         default:
           return 0;
       }
     });
   };
+
+  // Force re-sort when sortBy changes
+  useEffect(() => {
+    console.log(`🔄 Sort criteria changed to: ${sortBy}`);
+    if (orders.length > 0) {
+      const sorted = getSortedOrders(orders);
+      console.log(`✅ Orders re-sorted: ${sorted.length} orders`);
+      // Trigger re-render by updating state if needed
+      setOrders(prev => {
+        const prevIds = prev.map(o => o.id).join(',');
+        const sortedIds = sorted.map(o => o.id).join(',');
+        // Only update if order actually changed
+        if (prevIds !== sortedIds) {
+          console.log('📊 Order sequence changed, updating state');
+          return sorted;
+        }
+        return prev;
+      });
+    }
+  }, [sortBy]);
 
   const availableOrders = getSortedOrders(orders.filter(order => order.status !== 'delivered'));
   const assignedOrders = availableOrders.filter(order => order.status === 'assigned');

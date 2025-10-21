@@ -498,68 +498,117 @@ serve(async (req) => {
               }
             }
             
-            // Calculate two-leg distance: Agent → Pickup → Customer
-            let totalDistance = 0;
-            let agentToShopDistance = 0;
+            // Calculate two-leg distance: Agent → Pickup → Customer with error handling
+            let totalDistance = 2.5; // Default fallback
+            let agentToShopDistance = 2.5; // Default fallback
             
-            if (pickupLocation) {
-              // Leg 1: Agent to pickup location
-              const distanceToPickup = await calculateDistance(
-                { lat: agentLocation.latitude, lng: agentLocation.longitude },
-                { lat: pickupLocation.lat, lng: pickupLocation.lng }
-              );
-              agentToShopDistance = distanceToPickup;
-              
-              // Leg 2: Pickup to customer location
-              const distanceToCustomer = await calculateDistance(
-                { lat: pickupLocation.lat, lng: pickupLocation.lng },
-                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-              );
-              
-              totalDistance = distanceToPickup + distanceToCustomer;
-            } else {
-              // Fallback: Direct distance to customer
-              totalDistance = await calculateDistance(
-                { lat: agentLocation.latitude, lng: agentLocation.longitude },
-                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-              );
-              agentToShopDistance = totalDistance;
+            try {
+              if (pickupLocation) {
+                // Leg 1: Agent to pickup location
+                try {
+                  const distanceToPickup = await calculateDistance(
+                    { lat: agentLocation.latitude, lng: agentLocation.longitude },
+                    { lat: pickupLocation.lat, lng: pickupLocation.lng }
+                  );
+                  agentToShopDistance = Number(distanceToPickup.toFixed(2));
+                  console.log(`✅ Agent to shop distance: ${agentToShopDistance}km`);
+                } catch (distError) {
+                  console.warn(`⚠️ Failed to calculate agent-to-shop distance for order ${order.id}, using fallback`);
+                  agentToShopDistance = 2.5;
+                }
+                
+                // Leg 2: Pickup to customer location
+                try {
+                  const distanceToCustomer = await calculateDistance(
+                    { lat: pickupLocation.lat, lng: pickupLocation.lng },
+                    { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+                  );
+                  totalDistance = Number((agentToShopDistance + distanceToCustomer).toFixed(2));
+                  console.log(`✅ Total distance (agent→shop→customer): ${totalDistance}km`);
+                } catch (distError) {
+                  console.warn(`⚠️ Failed to calculate shop-to-customer distance for order ${order.id}, using fallback`);
+                  totalDistance = agentToShopDistance + 2.5;
+                }
+              } else {
+                // Fallback: Direct distance to customer
+                try {
+                  totalDistance = await calculateDistance(
+                    { lat: agentLocation.latitude, lng: agentLocation.longitude },
+                    { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+                  );
+                  totalDistance = Number(totalDistance.toFixed(2));
+                  agentToShopDistance = totalDistance;
+                  console.log(`✅ Direct distance to customer: ${totalDistance}km`);
+                } catch (distError) {
+                  console.warn(`⚠️ Failed to calculate direct distance for order ${order.id}, using fallback`);
+                  totalDistance = 2.5;
+                  agentToShopDistance = 2.5;
+                }
+              }
+            } catch (error) {
+              console.error(`❌ Error calculating distances for order ${order.id}:`, error);
+              totalDistance = 2.5;
+              agentToShopDistance = 2.5;
             }
             
-            console.log(`Order ${order.id} - Agent→Shop: ${agentToShopDistance.toFixed(2)}km, Total: ${totalDistance.toFixed(2)}km`);
+            console.log(`📊 Order ${order.id} - Agent→Shop: ${agentToShopDistance}km, Total: ${totalDistance}km`);
             
             // Include orders within 15km radius
             if (totalDistance <= 15) {
-              // Calculate shop-to-customer distance for accurate payout
-              const shopToCustomerDistance = pickupLocation ? 
-                await calculateDistance(
-                  { lat: pickupLocation.lat, lng: pickupLocation.lng },
-                  { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-                ).catch(() => totalDistance) : totalDistance;
+              // Calculate shop-to-customer distance for accurate payout with error handling
+              let shopToCustomerDistance = totalDistance - agentToShopDistance;
               
-              const agentPayout = calculateAgentPayout(shopToCustomerDistance);
-              nearbyOrders.push({
-                ...order,
-                distance_km: shopToCustomerDistance, // Actual delivery distance (shop to customer)
-                agent_to_shop_distance: agentToShopDistance, // Distance from agent's location to pickup shop
-                total_distance: totalDistance, // Total distance (agent to shop + shop to customer)
-                agent_payout: agentPayout,
-                estimated_delivery_time: Math.ceil(shopToCustomerDistance * 2), // 2 minutes per km for delivery
-                backend_calculated: true,
-                pickup_location: pickupLocation,
-                pickup_address: pickupAddress,
-                pickup_status: 'pending',
-                seller_name: sellerName,
-                seller_phone: sellerPhone,
-                // Use calculated delivery type from timing database
-                calculated_delivery_type: calculatedType,
-                delivery_type: calculatedType,
-                delivery_time_slot: properTimeSlot || order.delivery_time_slot,
-                // Preserve original created_at for accurate timer calculations
-                original_created_at: order.created_at,
-                // Add immediate timing configuration for frontend
-                immediate_timing_config: immediateTimingConfig
-              });
+              if (pickupLocation && shopToCustomerDistance <= 0) {
+                try {
+                  shopToCustomerDistance = await calculateDistance(
+                    { lat: pickupLocation.lat, lng: pickupLocation.lng },
+                    { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+                  );
+                  shopToCustomerDistance = Number(shopToCustomerDistance.toFixed(2));
+                  console.log(`✅ Shop to customer distance recalculated: ${shopToCustomerDistance}km`);
+                } catch (error) {
+                  console.warn(`⚠️ Failed to recalculate shop-to-customer distance, using fallback`);
+                  shopToCustomerDistance = 2.5;
+                }
+              }
+              
+              // Ensure positive distance
+              shopToCustomerDistance = Math.max(0.5, shopToCustomerDistance);
+              
+              // Calculate payout - ensure it's always valid
+              const agentPayout = Number(calculateAgentPayout(shopToCustomerDistance).toFixed(2));
+              const estimatedTime = Math.max(5, Math.ceil(shopToCustomerDistance * 2)); // Minimum 5 minutes
+              
+              // Validate all numeric fields before adding
+              if (isNaN(agentToShopDistance) || isNaN(totalDistance) || isNaN(agentPayout)) {
+                console.error(`❌ Invalid numeric values for order ${order.id}, skipping`);
+              } else {
+                console.log(`✅ Adding order ${order.id} with payout: ₹${agentPayout}`);
+                nearbyOrders.push({
+                  ...order,
+                  distance_km: Number(shopToCustomerDistance.toFixed(2)), // Actual delivery distance (shop to customer)
+                  agent_to_shop_distance: Number(agentToShopDistance.toFixed(2)), // Distance from agent's location to pickup shop
+                  total_distance: Number(totalDistance.toFixed(2)), // Total distance (agent to shop + shop to customer)
+                  agent_payout: Number(agentPayout.toFixed(2)),
+                  estimated_delivery_time: Number(estimatedTime), // 2 minutes per km for delivery
+                  backend_calculated: true,
+                  pickup_location: pickupLocation,
+                  pickup_address: pickupAddress,
+                  pickup_status: 'pending',
+                  seller_name: sellerName,
+                  seller_phone: sellerPhone,
+                  // Use calculated delivery type from timing database
+                  calculated_delivery_type: calculatedType,
+                  delivery_type: calculatedType,
+                  delivery_time_slot: properTimeSlot || order.delivery_time_slot,
+                  // Preserve original created_at for accurate timer calculations
+                  original_created_at: order.created_at,
+                  // Add immediate timing configuration for frontend
+                  immediate_timing_config: immediateTimingConfig
+                });
+              }
+            } else {
+              console.log(`❌ Order ${order.id} too far: ${totalDistance}km > 15km`);
             }
           } catch (distanceError) {
             console.warn(`Failed to calculate distance for order ${order.id}:`, distanceError);
