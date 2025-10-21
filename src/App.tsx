@@ -11,6 +11,7 @@ import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
+import { OneSignalInit } from "@/components/OneSignalInit";
 
 // Import critical pages (loaded immediately)
 import Splash from "./pages/Splash";
@@ -176,6 +177,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <OneSignalInit />
         <AppContent />
       </TooltipProvider>
     </ThemeProvider>

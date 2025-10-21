@@ -35,6 +35,7 @@ import {
   MessageCircle,
   Play
 } from "lucide-react";
+import { TestOrderUpdateButton } from "@/components/TestOrderUpdateButton";
 
 const getRingtoneDescription = (type: string) => {
   switch (type) {
@@ -772,6 +773,23 @@ const Settings = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Test Order Update Notification */}
+      {!isEditMode && (
+        <Card className="bg-card border-border animate-slide-up">
+          <CardHeader>
+            <CardTitle className="text-lg">Test Notifications</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground mb-3">
+                Test OneSignal push notifications for order updates
+              </p>
+              <TestOrderUpdateButton />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Save Button - Only show in edit mode */}
       {isEditMode && (
