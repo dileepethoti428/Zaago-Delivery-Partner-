@@ -87,17 +87,26 @@ Deno.serve(async (req) => {
 
     console.log('📊 Payout config loaded:', payoutConfig ? 'Yes' : 'No');
 
-    // Fetch all earnings for the agent
-    const { data: earnings, error: earningsError } = await supabase
+    // Fetch delivery_history as PRIMARY source (contains all completed deliveries)
+    const { data: deliveryHistory, error: historyError } = await supabase
+      .from('delivery_history')
+      .select('*')
+      .eq('agent_id', agent.id)
+      .order('completed_at', { ascending: false });
+
+    if (historyError) {
+      console.error('❌ Error fetching delivery history:', historyError);
+      throw historyError;
+    }
+
+    console.log(`✅ Fetched ${deliveryHistory?.length || 0} delivery history records`);
+
+    // Fetch earnings table as SECONDARY source (for backward compatibility)
+    const { data: earnings } = await supabase
       .from('earnings')
       .select('*, distance_km')
       .eq('agent_id', agent.id)
       .order('created_at', { ascending: false });
-
-    if (earningsError) {
-      console.error('❌ Error fetching earnings:', earningsError);
-      throw earningsError;
-    }
 
     console.log(`✅ Fetched ${earnings?.length || 0} earnings records`);
 
@@ -118,11 +127,12 @@ Deno.serve(async (req) => {
     weekStart.setHours(0, 0, 0, 0);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Helper function to calculate period data
+    // Helper function to calculate period data from delivery_history
     const calculatePeriodData = (startDate: Date, endDate: Date = new Date()): EarningsSummary => {
-      const periodEarnings = (earnings || []).filter(earning => {
-        const earningDate = new Date(earning.created_at);
-        return earningDate >= startDate && earningDate <= endDate;
+      // Use delivery_history as primary source
+      const periodDeliveries = (deliveryHistory || []).filter(delivery => {
+        const deliveryDate = new Date(delivery.completed_at);
+        return deliveryDate >= startDate && deliveryDate <= endDate;
       });
 
       const periodSessions = (workSessions || []).filter(session => {
@@ -134,10 +144,16 @@ Deno.serve(async (req) => {
         return sum + (session.total_hours || 0);
       }, 0);
 
+      // Calculate total earnings from delivery_history
+      const totalAmount = periodDeliveries.reduce((sum, delivery) => {
+        // Use delivery_payout if available, otherwise use 0
+        return sum + (delivery.delivery_payout || 0);
+      }, 0);
+
       return {
-        amount: periodEarnings.reduce((sum, e) => sum + (e.amount || 0), 0),
-        deliveries: periodEarnings.length,
-        hours: totalHours > 0 ? totalHours : periodEarnings.length * 0.5
+        amount: totalAmount,
+        deliveries: periodDeliveries.length,
+        hours: totalHours > 0 ? totalHours : periodDeliveries.length * 0.5
       };
     };
 
@@ -150,30 +166,15 @@ Deno.serve(async (req) => {
 
     console.log('📊 Earnings summary:', earningsSummary);
 
-    // Fetch delivery history for distance and customer data
+    // Calculate distance stats from delivery_history
     const todayStartStr = todayStart.toISOString().split('T')[0];
     const weekStartStr = weekStart.toISOString().split('T')[0];
     const monthStartStr = monthStart.toISOString().split('T')[0];
 
-    const { data: todayHistory } = await supabase
-      .from('delivery_history')
-      .select('distance_traveled, order_id')
-      .eq('agent_id', agent.id)
-      .gte('delivery_date', todayStartStr);
+    const todayHistory = (deliveryHistory || []).filter(d => d.delivery_date >= todayStartStr);
+    const weekHistory = (deliveryHistory || []).filter(d => d.delivery_date >= weekStartStr);
+    const monthHistory = (deliveryHistory || []).filter(d => d.delivery_date >= monthStartStr);
 
-    const { data: weekHistory } = await supabase
-      .from('delivery_history')
-      .select('distance_traveled, order_id')
-      .eq('agent_id', agent.id)
-      .gte('delivery_date', weekStartStr);
-
-    const { data: monthHistory } = await supabase
-      .from('delivery_history')
-      .select('distance_traveled, order_id')
-      .eq('agent_id', agent.id)
-      .gte('delivery_date', monthStartStr);
-
-    // Calculate distance stats
     const calculateDistance = (historyRecords: any[]) => {
       return (historyRecords || []).reduce((total, record) => {
         return total + (record.distance_traveled || 0);
@@ -188,40 +189,21 @@ Deno.serve(async (req) => {
 
     console.log('📏 Distance stats:', distanceStats);
 
-    // Fetch full delivery history for recent earnings
-    const { data: deliveryHistory } = await supabase
-      .from('delivery_history')
-      .select('order_id, customer_name, delivery_date, total_amount, distance_traveled')
-      .eq('agent_id', agent.id)
-      .order('completed_at', { ascending: false });
+    // Format recent earnings from delivery_history (primary source)
+    const basePay = payoutConfig?.base_pay_amount || 40;
+    const baseDistanceKm = payoutConfig?.base_pay_distance_km || 3;
+    const perKmRate = payoutConfig?.per_km_max_rate || 9;
 
-    // Format recent earnings with breakdown
-    const basePay = 40;
-    const baseDistanceKm = 3;
-    const perKmRate = 9;
-
-    const recentEarnings = (earnings || []).slice(0, 10).map(earning => {
-      const historyData = deliveryHistory?.find(h => h.order_id === earning.order_id);
-      
-      let distance = 0;
-      let distanceSource: 'backend' | 'history' | 'delivery' = 'delivery';
-      
-      if (historyData?.distance_traveled && historyData.distance_traveled > 0) {
-        distance = historyData.distance_traveled;
-        distanceSource = 'history';
-      } else if (earning.distance_km && earning.distance_km > 0) {
-        distance = earning.distance_km;
-        distanceSource = 'backend';
-      } else {
-        distance = 3.5;
-        distanceSource = 'delivery';
-      }
+    const recentEarnings = (deliveryHistory || []).slice(0, 10).map(delivery => {
+      const distance = delivery.distance_traveled || 0;
       
       const distancePay = distance > baseDistanceKm ? 
         (distance - baseDistanceKm) * perKmRate : 0;
       
-      const earningTime = new Date(earning.created_at).toTimeString().substring(0, 5);
-      const isPeakHour = earningTime >= '06:00' && earningTime <= '12:00';
+      const deliveryTime = new Date(delivery.completed_at).toTimeString().substring(0, 5);
+      const peakStart = payoutConfig?.peak_hour_start || '06:00';
+      const peakEnd = payoutConfig?.peak_hour_end || '12:00';
+      const isPeakHour = deliveryTime >= peakStart && deliveryTime <= peakEnd;
       
       const subtotal = basePay + distancePay;
       const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
@@ -229,41 +211,39 @@ Deno.serve(async (req) => {
       const platformFee = 13;
       const expectedTotal = totalBeforeFee - platformFee;
       
-      const peakBonus = Math.max(0, (earning.amount || 0) - expectedTotal);
+      // Use actual delivery_payout if available
+      const actualPayout = delivery.delivery_payout || expectedTotal;
+      const peakBonus = Math.max(0, actualPayout - expectedTotal);
       
       return {
-        id: earning.id,
-        order_id: earning.order_id,
-        customer_name: historyData?.customer_name || 'Customer',
-        amount: earning.amount || 0,
-        time: new Date(earning.created_at).toLocaleTimeString('en-US', { 
+        id: delivery.id,
+        order_id: delivery.order_id,
+        customer_name: delivery.customer_name || 'Customer',
+        amount: actualPayout,
+        time: new Date(delivery.completed_at).toLocaleTimeString('en-US', { 
           hour: 'numeric', 
           minute: '2-digit',
           hour12: true 
         }),
-        delivery_date: historyData?.delivery_date || earning.created_at,
+        delivery_date: delivery.delivery_date,
         distance_km: distance,
-        distance_source: distanceSource,
         breakdown: {
           base_pay: basePay,
-          distance_pay: distancePay,
-          peak_bonus: peakBonus
+          distance_pay: Math.round(distancePay * 100) / 100,
+          peak_bonus: Math.round(peakBonus * 100) / 100
         }
       };
     });
 
     console.log(`✅ Formatted ${recentEarnings.length} recent earnings`);
 
-    // Count today's peak hour orders
+    // Count today's peak hour orders from delivery_history
     const peakStart = payoutConfig?.peak_hour_start || '06:00';
     const peakEnd = payoutConfig?.peak_hour_end || '12:00';
     
-    const peakOrdersToday = (earnings || []).filter(earning => {
-      const earningDate = new Date(earning.created_at);
-      const earningTime = earningDate.toTimeString().substring(0, 5);
-      return earningDate >= todayStart && 
-             earningTime >= peakStart && 
-             earningTime <= peakEnd;
+    const peakOrdersToday = todayHistory.filter(delivery => {
+      const deliveryTime = new Date(delivery.completed_at).toTimeString().substring(0, 5);
+      return deliveryTime >= peakStart && deliveryTime <= peakEnd;
     }).length;
 
     // Calculate performance metrics
