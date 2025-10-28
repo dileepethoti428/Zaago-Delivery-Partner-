@@ -30,11 +30,11 @@ export function OneSignalInit() {
         // Set external user ID when user is authenticated
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          console.log('Setting OneSignal external user ID:', user.id);
-          await window.OneSignal.setExternalUserId(user.id);
+          console.log('Setting OneSignal user login:', user.id);
+          await window.OneSignal.login(user.id);
           
           // Get player ID and store it in delivery_agents table
-          const playerId = await window.OneSignal.getUserId();
+          const playerId = await window.OneSignal.User.PushSubscription.id;
           console.log('OneSignal player ID:', playerId);
           
           if (playerId) {
@@ -56,10 +56,10 @@ export function OneSignalInit() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user && window.OneSignal) {
-        console.log('User signed in, setting OneSignal external user ID');
-        await window.OneSignal.setExternalUserId(session.user.id);
+        console.log('User signed in, setting OneSignal login');
+        await window.OneSignal.login(session.user.id);
         
-        const playerId = await window.OneSignal.getUserId();
+        const playerId = await window.OneSignal.User.PushSubscription.id;
         if (playerId) {
           await supabase
             .from('delivery_agents')
@@ -67,8 +67,8 @@ export function OneSignalInit() {
             .eq('id', session.user.id);
         }
       } else if (event === 'SIGNED_OUT' && window.OneSignal) {
-        console.log('User signed out, removing OneSignal external user ID');
-        await window.OneSignal.removeExternalUserId();
+        console.log('User signed out, logging out from OneSignal');
+        await window.OneSignal.logout();
       }
     });
 
