@@ -16,59 +16,75 @@ export function OneSignalInit() {
     document.head.appendChild(script);
 
     script.onload = () => {
-      // Initialize OneSignal
+      // Initialize OneSignal with error handling
       window.OneSignal = window.OneSignal || [];
       window.OneSignal.push(async function() {
-        await window.OneSignal.init({
-          appId: import.meta.env.VITE_ONESIGNAL_APP_ID || 'YOUR_ONESIGNAL_APP_ID',
-          notifyButton: {
-            enable: false,
-          },
-          allowLocalhostAsSecureOrigin: true,
-        });
+        try {
+          await window.OneSignal.init({
+            appId: import.meta.env.VITE_ONESIGNAL_APP_ID || 'YOUR_ONESIGNAL_APP_ID',
+            notifyButton: {
+              enable: false,
+            },
+            allowLocalhostAsSecureOrigin: true,
+          });
 
-        // Set external user ID when user is authenticated
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          console.log('Setting OneSignal user login:', user.id);
-          await window.OneSignal.login(user.id);
-          
-          // Get player ID and store it in delivery_agents table
-          const playerId = await window.OneSignal.User.PushSubscription.id;
-          console.log('OneSignal player ID:', playerId);
-          
-          if (playerId) {
-            // Update delivery_agents with OneSignal player ID
-            await supabase
-              .from('delivery_agents')
-              .update({ onesignal_player_id: playerId })
-              .eq('id', user.id);
+          // Set external user ID when user is authenticated
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user && window.OneSignal.login) {
+            console.log('Setting OneSignal user login:', user.id);
+            await window.OneSignal.login(user.id);
+            
+            // Get player ID and store it in delivery_agents table
+            if (window.OneSignal.User?.PushSubscription?.id) {
+              const playerId = await window.OneSignal.User.PushSubscription.id;
+              console.log('OneSignal player ID:', playerId);
+              
+              if (playerId) {
+                // Update delivery_agents with OneSignal player ID
+                await supabase
+                  .from('delivery_agents')
+                  .update({ onesignal_player_id: playerId })
+                  .eq('id', user.id);
+              }
+            }
           }
-        }
 
-        // Listen for foreground notifications
-        window.OneSignal.on('notificationDisplay', function(event: any) {
-          console.log('OneSignal notification displayed:', event);
-        });
+          // Listen for foreground notifications
+          if (window.OneSignal.on) {
+            window.OneSignal.on('notificationDisplay', function(event: any) {
+              console.log('OneSignal notification displayed:', event);
+            });
+          }
+        } catch (error) {
+          console.error('OneSignal initialization error:', error);
+          // Silently fail - don't show error to user
+        }
       });
     };
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user && window.OneSignal) {
-        console.log('User signed in, setting OneSignal login');
-        await window.OneSignal.login(session.user.id);
-        
-        const playerId = await window.OneSignal.User.PushSubscription.id;
-        if (playerId) {
-          await supabase
-            .from('delivery_agents')
-            .update({ onesignal_player_id: playerId })
-            .eq('id', session.user.id);
+      try {
+        if (event === 'SIGNED_IN' && session?.user && window.OneSignal?.login) {
+          console.log('User signed in, setting OneSignal login');
+          await window.OneSignal.login(session.user.id);
+          
+          if (window.OneSignal.User?.PushSubscription?.id) {
+            const playerId = await window.OneSignal.User.PushSubscription.id;
+            if (playerId) {
+              await supabase
+                .from('delivery_agents')
+                .update({ onesignal_player_id: playerId })
+                .eq('id', session.user.id);
+            }
+          }
+        } else if (event === 'SIGNED_OUT' && window.OneSignal?.logout) {
+          console.log('User signed out, logging out from OneSignal');
+          await window.OneSignal.logout();
         }
-      } else if (event === 'SIGNED_OUT' && window.OneSignal) {
-        console.log('User signed out, logging out from OneSignal');
-        await window.OneSignal.logout();
+      } catch (error) {
+        console.error('OneSignal auth state change error:', error);
+        // Silently fail - don't show error to user
       }
     });
 
