@@ -1677,122 +1677,13 @@ const Home = () => {
     }
   }, [location.address, location.latitude, location.longitude, orders.length]);
 
-  // Set up real-time subscription for order updates with enhanced logging
+  // Optimized real-time subscription - only broadcast events
+  // useRealtimeOrders hook handles all order database changes efficiently
   useEffect(() => {
-    console.log('🔧 [REALTIME-SETUP] Initializing real-time subscription for orders...');
-    console.log('🔧 [REALTIME-SETUP] Ringtone settings:', ringtoneSettings);
+    console.log('🔧 [REALTIME-SETUP] Setting up optimized broadcast listeners');
     
     const channel = supabase
       .channel('orders-realtime-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders'
-        },
-        (payload) => {
-          console.log('📝 [REALTIME-UPDATE] Order updated - Full payload:', payload);
-          console.log('📝 [REALTIME-UPDATE] Old status:', payload.old?.status, 'New status:', payload.new?.status);
-          
-          // Handle status change notifications
-          if (payload.new && payload.old && payload.new.status !== payload.old.status) {
-            console.log(`🔄 [REALTIME-UPDATE] Status change detected: ${payload.old.status} → ${payload.new.status}`);
-            
-            // PRIMARY: Handle immediate packed status notification for ANY order changing to packed
-            if (payload.new.status === 'packed' && payload.old.status !== 'packed') {
-              console.log('🚨🚨🚨 [REALTIME-UPDATE] PACKED STATUS DETECTED');
-              console.log('🚨 [REALTIME-UPDATE] Order details:', {
-                id: payload.new.id,
-                customer_name: payload.new.customer_name,
-                total: payload.new.total,
-                agent_id: payload.new.agent_id
-              });
-              
-              // CRITICAL: Only trigger if agent_id is null (unassigned order)
-              if (!payload.new.agent_id) {
-                console.log('✅ [REALTIME-UPDATE] Order is unassigned - showing emergency modal');
-                handlePackedStatusNotification(payload.new);
-                debouncedRefresh('order-packed', true);
-              } else {
-                console.log('⏭️ [REALTIME-UPDATE] Order already has agent - skipping notification');
-              }
-            }
-            
-            // Also check for INSERT events with packed status
-            if (!payload.old && payload.new.status === 'packed' && !payload.new.agent_id) {
-              console.log('🆕🚨 [REALTIME-INSERT] New unassigned order with PACKED status');
-              handlePackedStatusNotification(payload.new);
-              debouncedRefresh('order-packed-insert', true);
-            }
-            
-            // For other status changes, use debounced refresh
-            if (payload.new.status !== 'packed') {
-              debouncedRefresh(`status-change-to-${payload.new.status}`);
-            }
-          }
-          
-          // Also refresh if agent assignment changes
-          if (payload.new && payload.old && payload.new.agent_id !== payload.old.agent_id) {
-            console.log('👤 [REALTIME-UPDATE] Agent assignment changed, refreshing...');
-            debouncedRefresh('agent-assignment-change');
-          }
-
-          // Refresh payout when order distance or other payout-affecting fields change
-          if (payload.new && payload.old && 
-              (payload.new.distance_km !== payload.old.distance_km || 
-               payload.new.agent_payout !== payload.old.agent_payout)) {
-            console.log('💰 [REALTIME-UPDATE] Order payout data changed, refreshing...');
-            debouncedRefresh('payout-change');
-          }
-         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders'
-        },
-        (payload) => {
-          console.log('🆕 New order created:', payload);
-          
-          // Handle immediate notification for new orders
-          if (payload.new) {
-            console.log('🚨 Triggering immediate notification for new order:', payload.new.id);
-            handleImmediateOrderNotification(payload.new);
-          }
-          
-          // Immediate refresh for new orders
-          debouncedRefresh('new-order-insert', true);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'earnings'
-        },
-        (payload) => {
-          console.log('💰 Earnings updated:', payload);
-          // Debounced refresh for earnings updates
-          debouncedRefresh('earnings-update');
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'payout_config'  
-        },
-        (payload) => {
-          console.log('⚙️ Payout configuration updated:', payload);
-          // Debounced refresh to recalculate payouts with new rates
-          debouncedRefresh('payout-config-update');
-        }
-      )
       .on(
         'broadcast',
         { event: 'urgent_notification' },
@@ -1848,37 +1739,10 @@ const Home = () => {
           }
         }
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'agent_notifications'
-        },
-        (payload) => {
-          console.log('🔔 New agent notification received:', payload);
-          
-          // Handle new agent notifications for immediate alerts
-          if (payload.new) {
-            const notification = payload.new;
-            console.log('📝 Processing agent notification:', notification.type, notification.title);
-            
-            // NO AUDIO HERE - audio is handled ONLY by urgent_notification broadcast
-            // Just show toast for non-urgent notifications
-            if (notification.type !== 'order_packed') {
-              toast({
-                title: notification.title,
-                description: notification.message,
-                duration: 5000,
-              });
-            }
-          }
-        }
-      )
       .subscribe((status) => {
-        console.log('📡 Real-time subscription status:', status);
+        console.log('📡 Optimized real-time subscription status:', status);
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Successfully subscribed to orders, earnings, payout config, and urgent notifications');
+          console.log('✅ Connected to broadcast channels (order updates handled by useRealtimeOrders hook)');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Real-time subscription error');
         }

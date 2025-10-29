@@ -154,63 +154,13 @@ const History = () => {
 
     window.addEventListener('orderCompleted', handleOrderCompleted);
 
-    // Set up real-time subscription for new deliveries
-    let channel: any = null;
-    
-    const setupRealtimeSubscription = async () => {
-      const agentId = await getCurrentAgent();
-      if (!agentId) return;
+    // Optimized: Removed real-time subscription for historical data
+    // History doesn't need live updates - data is fetched on mount and refresh only
+    // This reduces unnecessary WebSocket connections by 1 per agent
 
-      channel = supabase
-        .channel('delivery-history-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'delivery_history',
-            filter: `agent_id=eq.${agentId}`
-          },
-          (payload) => {
-            console.log('New delivery added:', payload);
-            const newDelivery = payload.new as DeliveryHistoryItem;
-            setDeliveries(prev => [newDelivery, ...prev]);
-            
-            toast({
-              title: "New Delivery Added! ✅",
-              description: `Delivery for ${newDelivery.customer_name} added to history`,
-            });
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'delivery_history',
-            filter: `agent_id=eq.${agentId}`
-          },
-          (payload) => {
-            console.log('Delivery updated:', payload);
-            const updatedDelivery = payload.new as DeliveryHistoryItem;
-            setDeliveries(prev => 
-              prev.map(delivery => 
-                delivery.id === updatedDelivery.id ? updatedDelivery : delivery
-              )
-            );
-          }
-        )
-        .subscribe();
-    };
-
-    setupRealtimeSubscription();
-
-    // Cleanup subscription on unmount
+    // Cleanup event listener on unmount
     return () => {
       window.removeEventListener('orderCompleted', handleOrderCompleted);
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
     };
   }, []);
 

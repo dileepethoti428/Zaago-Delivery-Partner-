@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,11 +75,7 @@ const DeliveryDetails = () => {
   const [isCancelling, setIsCancelling] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [showForceComplete, setShowForceComplete] = useState(false);
-  useEffect(() => {
-    if (orderId) {
-      fetchOrderDetails();
-    }
-  }, [orderId]);
+  // Removed manual fetch - now using React Query above
   useEffect(() => {
     if (order) {
       calculateDistanceAndPayout();
@@ -168,35 +164,41 @@ const DeliveryDetails = () => {
       setPayout(Math.round(12 + (2.5 - 1) * 8)); // ₹24 for 2.5km
     }
   };
-  const fetchOrderDetails = async () => {
-    try {
-      const {
-        data,
-        error
-      } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+  // Migrated to React Query for automatic caching
+  const { data: orderData, isLoading: isLoadingOrder } = useQuery({
+    queryKey: ['order-details', orderId],
+    queryFn: async () => {
+      if (!orderId) return null;
+      
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+      
       if (error) throw error;
-      if (!data) {
-        setOrder(null);
-        return;
-      }
-
+      if (!data) return null;
+      
       // Transform the data to match our interface
-      const transformedOrder = {
+      return {
         ...data,
         items: Array.isArray(data.items) ? data.items : []
-      };
-      setOrder(transformedOrder);
-    } catch (error) {
-      console.error('Error fetching order details:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load order details",
-        variant: "destructive"
-      });
-    } finally {
+      } as Order;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    enabled: !!orderId,
+  });
+  
+  // Update local order state when query data changes
+  useEffect(() => {
+    if (orderData) {
+      setOrder(orderData);
+      setIsLoading(false);
+    } else if (!isLoadingOrder) {
       setIsLoading(false);
     }
-  };
+  }, [orderData, isLoadingOrder]);
   const handleNavigation = async () => {
     if (!order?.address) {
       toast({

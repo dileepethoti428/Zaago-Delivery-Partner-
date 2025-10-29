@@ -25,25 +25,26 @@ export const useRealtimeOrders = (agentId: string | null) => {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
 
-  // WebSocket connection for real-time updates
+  // WebSocket connection for real-time updates - optimized with specific events
   useEffect(() => {
     if (!agentId || !isOnline) return;
 
     console.log('🔌 Establishing real-time connection for orders');
     
+    // Listen to INSERT events for new orders (placed status only)
     const channel = supabase
       .channel('orders-realtime')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'orders',
-          filter: `status=in.(placed,confirmed,packed,delivered)`
+          filter: `status=eq.placed`
         },
         (payload) => {
           const newOrder = payload.new as any;
-          console.log('📦 Real-time order update:', payload.eventType, newOrder?.id, 'status:', newOrder?.status);
+          console.log('📦 Real-time new order:', newOrder?.id, 'status:', newOrder?.status);
           
           // If order is delivered, remove it from available orders
           if (newOrder?.status === 'delivered') {
@@ -60,38 +61,47 @@ export const useRealtimeOrders = (agentId: string | null) => {
             return;
           }
           
-          // Update cache immediately for better UX
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            queryClient.setQueryData(
-              queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
-              (oldData: any) => {
-                if (!oldData) return oldData;
-                
-                const newOrder = payload.new as RealtimeOrder;
-                const existingIndex = oldData.findIndex((order: any) => order.id === newOrder.id);
-                
-                if (existingIndex >= 0) {
-                  // Update existing order
-                  const updatedData = [...oldData];
-                  updatedData[existingIndex] = { ...updatedData[existingIndex], ...newOrder };
-                  return updatedData;
-                } else if (payload.eventType === 'INSERT') {
-                  // Add new order
-                  return [newOrder, ...oldData];
-                }
-                
-                return oldData;
+          // Add new order to cache
+          queryClient.setQueryData(
+            queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
+            (oldData: any) => {
+              if (!oldData) return oldData;
+              const newOrder = payload.new as RealtimeOrder;
+              return [newOrder, ...oldData];
+            }
+          );
+          
+          setLastUpdate(new Date());
+          setUpdateCount(prev => prev + 1);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `status=in.(packed,confirmed)`
+        },
+        (payload) => {
+          const updatedOrder = payload.new as any;
+          console.log('📦 Real-time order update:', updatedOrder?.id, 'status:', updatedOrder?.status);
+          
+          // Update existing order in cache
+          queryClient.setQueryData(
+            queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
+            (oldData: any) => {
+              if (!oldData) return oldData;
+              
+              const existingIndex = oldData.findIndex((order: any) => order.id === updatedOrder.id);
+              if (existingIndex >= 0) {
+                const updatedData = [...oldData];
+                updatedData[existingIndex] = { ...updatedData[existingIndex], ...updatedOrder };
+                return updatedData;
               }
-            );
-          } else if (payload.eventType === 'DELETE') {
-            queryClient.setQueryData(
-              queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
-              (oldData: any) => {
-                if (!oldData) return oldData;
-                return oldData.filter((order: any) => order.id !== payload.old.id);
-              }
-            );
-          }
+              return oldData;
+            }
+          );
           
           setLastUpdate(new Date());
           setUpdateCount(prev => prev + 1);
