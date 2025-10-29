@@ -188,18 +188,31 @@ const MyDeliveries = () => {
     }
   }, [location.latitude, location.longitude]);
 
-  // Set up visibility change listener to refresh when page becomes visible
+  // Set up visibility change listener with debounce and staleness check
   useEffect(() => {
+    let debounceTimeout: NodeJS.Timeout;
+    let lastFetch = Date.now();
+    
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('📱 Page visible again, refreshing orders');
-        fetchAssignedOrders();
+        const timeSinceLastFetch = Date.now() - lastFetch;
+        
+        // Only refetch if data is older than 2 minutes
+        if (timeSinceLastFetch > 2 * 60 * 1000) {
+          clearTimeout(debounceTimeout);
+          debounceTimeout = setTimeout(() => {
+            console.log('📱 Page visible again, refreshing stale orders');
+            lastFetch = Date.now();
+            fetchAssignedOrders();
+          }, 500); // 500ms debounce
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
+      clearTimeout(debounceTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,50 +56,15 @@ interface DistanceStats {
 
 const Earnings = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("today");
-  const [earningsData, setEarningsData] = useState<Record<string, EarningsSummary>>({
-    today: { amount: 0, deliveries: 0, hours: 0 },
-    week: { amount: 0, deliveries: 0, hours: 0 },
-    month: { amount: 0, deliveries: 0, hours: 0 }
-  });
-  const [recentEarnings, setRecentEarnings] = useState<RecentEarning[]>([]);
-  const [payoutConfig, setPayoutConfig] = useState<PayoutConfig | null>(null);
-  const [peakOrdersToday, setPeakOrdersToday] = useState(0);
-  const [distanceStats, setDistanceStats] = useState<DistanceStats>({
-    distance_today: 0,
-    distance_week: 0,
-    distance_month: 0
-  });
-  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchEarningsFromBackend();
-
-    // Listen for order completion events to refresh earnings
-    const handleOrderCompleted = () => {
-      console.log('Order completed, refreshing earnings...');
-      fetchEarningsFromBackend();
-    };
-
-    window.addEventListener('orderCompleted', handleOrderCompleted);
-
-    return () => {
-      window.removeEventListener('orderCompleted', handleOrderCompleted);
-    };
-  }, []);
-
-  const fetchEarningsFromBackend = async () => {
-    try {
-      setIsLoading(true);
-      
+  // Use React Query for automatic caching and smart refetching
+  const { data: earningsResponse, isLoading, refetch } = useQuery({
+    queryKey: ['agent-earnings'],
+    queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast({
-          title: "Authentication required",
-          description: "Please log in to view your earnings.",
-          variant: "destructive"
-        });
-        return;
+        throw new Error('Not authenticated');
       }
 
       const supabaseUrl = 'https://amhpjsmubciahslghobw.supabase.co';
@@ -117,30 +83,57 @@ const Earnings = () => {
 
       const result = await response.json();
       
-      if (result.success && result.data) {
-        setEarningsData(result.data.earnings_summary);
-        setDistanceStats(result.data.distance_stats);
-        setRecentEarnings(result.data.recent_earnings);
-        setPayoutConfig(result.data.payout_config);
-        setPeakOrdersToday(result.data.peak_orders_today);
-        
-        console.log('✅ Earnings data loaded from backend:', {
-          today: result.data.earnings_summary.today,
-          recentCount: result.data.recent_earnings.length
-        });
-      } else {
+      if (!result.success || !result.data) {
         throw new Error(result.error || 'Failed to fetch earnings data');
       }
-    } catch (error) {
-      console.error('❌ Error fetching earnings from backend:', error);
+
+      console.log('✅ Earnings data loaded from backend:', {
+        today: result.data.earnings_summary.today,
+        recentCount: result.data.recent_earnings.length
+      });
+
+      return result.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 3,
+  });
+
+  // Listen for order completion events to refresh earnings
+  useEffect(() => {
+    const handleOrderCompleted = () => {
+      console.log('Order completed, refreshing earnings...');
+      refetch();
+    };
+
+    window.addEventListener('orderCompleted', handleOrderCompleted);
+
+    return () => {
+      window.removeEventListener('orderCompleted', handleOrderCompleted);
+    };
+  }, [refetch]);
+
+  // Handle errors with toast
+  useEffect(() => {
+    if (!isLoading && !earningsResponse) {
       toast({
         title: "Error",
         description: "Failed to load earnings data. Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
+  }, [isLoading, earningsResponse, toast]);
+
+  const earningsData = earningsResponse?.earnings_summary || {
+    today: { amount: 0, deliveries: 0, hours: 0 },
+    week: { amount: 0, deliveries: 0, hours: 0 },
+    month: { amount: 0, deliveries: 0, hours: 0 }
+  };
+  const recentEarnings = earningsResponse?.recent_earnings || [];
+  const distanceStats = earningsResponse?.distance_stats || {
+    distance_today: 0,
+    distance_week: 0,
+    distance_month: 0
   };
 
   const currentData = earningsData[selectedPeriod as keyof typeof earningsData];

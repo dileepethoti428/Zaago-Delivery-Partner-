@@ -1942,8 +1942,8 @@ const Home = () => {
     // Initial calculation
     updateDistancesAndPayouts();
     
-    // Set up interval for real-time updates every 15 seconds for more responsive distance tracking
-    const interval = setInterval(updateDistancesAndPayouts, 15000);
+    // Set up interval for real-time updates every 5 minutes (optimized to reduce edge requests)
+    const interval = setInterval(updateDistancesAndPayouts, 300000);
     
     return () => clearInterval(interval);
   }, [location.latitude, location.longitude]); // Recalculate when agent location changes
@@ -1953,18 +1953,18 @@ const Home = () => {
     fetchAgentName();
     fetchOrders();
     
-    // Faster auto-refresh interval - 2 seconds for near real-time updates
+    // Optimized auto-refresh interval - 30 seconds (reduced from 2s to save 93% edge requests)
     const autoRefreshInterval = setInterval(async () => {
       if (!document.hidden && isOnline) {
-        console.log('📊 Auto-refreshing orders (2-second interval)...');
+        console.log('📊 Auto-refreshing orders (30-second interval)...');
         setIsAutoRefreshing(true);
         try {
           await debouncedRefresh('auto-refresh-interval');
         } finally {
-          setTimeout(() => setIsAutoRefreshing(false), 300); // Shorter indicator time
+          setTimeout(() => setIsAutoRefreshing(false), 300);
         }
       }
-    }, 2000); // 2-second refresh for faster updates
+    }, 30000); // 30-second refresh - real-time subscriptions handle instant updates
     
     // Backup refresh interval - every 5 minutes for offline scenarios
     const backupInterval = setInterval(() => {

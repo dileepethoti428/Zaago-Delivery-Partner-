@@ -136,7 +136,7 @@ export const useRealtimeOrders = (agentId: string | null) => {
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: true,
-    refetchInterval: isOnline ? 30000 : false, // 30 seconds when online
+    refetchInterval: false, // Disabled - real-time subscriptions handle updates
     retry: (failureCount, error) => {
       // Don't retry if offline
       if (!isOnline) return false;

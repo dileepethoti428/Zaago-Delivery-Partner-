@@ -11,11 +11,11 @@ export const queryClient = new QueryClient({
       // Retry failed requests 3 times
       retry: 3,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      // Enable background refetch
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-      // Serve stale data while refetching
-      refetchOnMount: 'always',
+      // Smart background refetch - optimized to reduce edge requests
+      refetchOnWindowFocus: false, // Disabled - manual refresh available
+      refetchOnReconnect: true, // Keep for offline recovery
+      // Only refetch if data is stale
+      refetchOnMount: false,
     },
     mutations: {
       retry: 3,
