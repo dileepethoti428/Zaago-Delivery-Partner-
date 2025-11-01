@@ -420,6 +420,33 @@ serve(async (req) => {
       console.log('✅ Delivery history record created/updated');
     }
     
+    // Update agent_earnings_tracking to mark as confirmed
+    console.log('📊 Updating agent earnings tracking...');
+    const { error: trackingUpdateError } = await supabaseClient
+      .from('agent_earnings_tracking')
+      .update({
+        completed_at: now,
+        actual_payout: payout_amount,
+        payout_status: 'confirmed',
+        distance_km: distance_km_calc,
+        payment_method: payment_method === 'COD' ? 'COD' : 'Online',
+        updated_at: now
+      })
+      .eq('order_id', order_id)
+      .eq('agent_id', agent.id);
+
+    if (trackingUpdateError) {
+      console.error('❌ Failed to update earnings tracking:', trackingUpdateError);
+      // Log but don't fail - order is already delivered
+    } else {
+      console.log('✅ Earnings tracking updated to confirmed:', {
+        order_id,
+        agent_id: agent.id,
+        actual_payout: payout_amount,
+        payout_status: 'confirmed'
+      });
+    }
+    
     // Track purchase history for each item (Blinkit approach - trigger disabled)
     console.log('📝 Tracking purchase history for items...');
     for (const item of order.items) {
