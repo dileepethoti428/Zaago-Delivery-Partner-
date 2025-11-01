@@ -92,6 +92,16 @@ serve(async (req) => {
       const deliveries = periodData.filter(t => t.payout_status === 'confirmed').length;
       const inProgress = periodData.filter(t => t.payout_status === 'pending').length;
       
+      console.log('📊 Period earnings breakdown:', {
+        period: startDate,
+        total_records: periodData.length,
+        confirmed_count: deliveries,
+        pending_count: inProgress,
+        cancelled_count: periodData.filter(t => t.payout_status === 'cancelled').length,
+        confirmed_amount: confirmed.toFixed(2),
+        pending_amount: pending.toFixed(2)
+      });
+      
       return {
         pending: parseFloat(pending.toFixed(2)),
         confirmed: parseFloat(confirmed.toFixed(2)),

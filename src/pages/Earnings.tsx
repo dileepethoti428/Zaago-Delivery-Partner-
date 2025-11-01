@@ -91,8 +91,15 @@ const Earnings = () => {
 
   // Listen for order completion and cancellation events to refresh earnings
   useEffect(() => {
-    const handleOrderCompleted = () => {
-      console.log('Order completed, refreshing earnings...');
+    const handleOrderCompleted = (event: any) => {
+      console.log('Order completed, refreshing earnings...', event.detail);
+      
+      // Show brief success animation
+      toast({
+        title: "💰 Earnings Updated!",
+        description: "Your completed delivery has been added to earnings",
+      });
+      
       refetch();
     };
 
@@ -101,14 +108,14 @@ const Earnings = () => {
       refetch();
     };
 
-    window.addEventListener('orderCompleted', handleOrderCompleted);
+    window.addEventListener('orderCompleted', handleOrderCompleted as any);
     window.addEventListener('orderCancelled', handleOrderCancelled);
 
     return () => {
-      window.removeEventListener('orderCompleted', handleOrderCompleted);
+      window.removeEventListener('orderCompleted', handleOrderCompleted as any);
       window.removeEventListener('orderCancelled', handleOrderCancelled);
     };
-  }, [refetch]);
+  }, [refetch, toast]);
 
   // Handle errors with toast
   useEffect(() => {

@@ -16,8 +16,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get request body
-    const { order_id, payment_method } = await req.json();
-    console.log('📦 Complete delivery V2:', { order_id, payment_method });
+    const { order_id, payment_method, live_distance_km } = await req.json();
+    console.log('📦 Complete delivery V2:', { order_id, payment_method, live_distance_km });
 
     if (!order_id) {
       return new Response(
@@ -113,12 +113,25 @@ Deno.serve(async (req) => {
     
     const paymentStatus = normalizedPayment === 'ONLINE' ? 'paid' : 'pending';
 
+    // Use live distance if provided, otherwise fallback to order distance
+    const distance_km = live_distance_km || order.distance_km || 2.5;
+
+    console.log('📍 Distance calculation:', {
+      live_distance_km,
+      order_distance_km: order.distance_km,
+      final_distance_km: distance_km,
+      source: live_distance_km ? 'live' : (order.distance_km ? 'order' : 'fallback')
+    });
+
     // Calculate payout (₹12 base + ₹8 per km after 1km)
-    const distance_km = order.distance_km || 2.5;
     const payout_amount = distance_km <= 1 ? 12 : 12 + (distance_km - 1) * 8;
     const rounded_payout = Math.round(payout_amount);
 
-    console.log('💰 Calculated payout:', { distance_km, payout_amount: rounded_payout });
+    console.log('💰 Calculated payout:', { 
+      distance_km, 
+      payout_amount: rounded_payout,
+      calculation: `${distance_km}km: ₹12 base + ₹${((distance_km - 1) * 8).toFixed(2)} distance = ₹${rounded_payout}`
+    });
 
     // Enhanced logging before INSERT
     console.log('🔍 Pre-INSERT verification:', {
@@ -306,10 +319,17 @@ Deno.serve(async (req) => {
       .eq('agent_id', agent.id);
 
     if (trackingUpdateError) {
-      console.error('Failed to update earnings tracking:', trackingUpdateError);
-      // Don't throw - not critical
+      console.error('❌ CRITICAL: Failed to update earnings tracking:', trackingUpdateError);
+      // This is critical - throw error instead of just logging
+      throw new Error('Failed to update earnings tracking: ' + trackingUpdateError.message);
     } else {
-      console.log('✅ Earnings tracking updated to confirmed');
+      console.log('✅ Earnings tracking updated to confirmed', {
+        order_id,
+        agent_id: agent.id,
+        actual_payout: rounded_payout,
+        distance_km: distance_km,
+        payout_status: 'confirmed'
+      });
     }
 
     console.log('✅ Delivery completed successfully (V2)');

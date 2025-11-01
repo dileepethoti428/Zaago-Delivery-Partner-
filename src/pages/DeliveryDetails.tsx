@@ -426,7 +426,8 @@ const DeliveryDetails = () => {
       const { data, error } = await supabase.functions.invoke('complete-delivery-v2', {
         body: {
           order_id: order.id,
-          payment_method: paymentMethod
+          payment_method: paymentMethod,
+          live_distance_km: distance  // Pass real-time distance
         }
       });
 
