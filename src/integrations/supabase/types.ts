@@ -168,6 +168,79 @@ export type Database = {
           },
         ]
       }
+      agent_earnings_tracking: {
+        Row: {
+          accepted_at: string
+          actual_payout: number | null
+          agent_id: string
+          completed_at: string | null
+          created_at: string | null
+          distance_km: number | null
+          expected_payout: number
+          id: string
+          is_peak_hour: boolean | null
+          order_id: string
+          payment_method: string | null
+          payout_breakdown: Json | null
+          payout_status: string
+          updated_at: string | null
+        }
+        Insert: {
+          accepted_at: string
+          actual_payout?: number | null
+          agent_id: string
+          completed_at?: string | null
+          created_at?: string | null
+          distance_km?: number | null
+          expected_payout?: number
+          id?: string
+          is_peak_hour?: boolean | null
+          order_id: string
+          payment_method?: string | null
+          payout_breakdown?: Json | null
+          payout_status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          accepted_at?: string
+          actual_payout?: number | null
+          agent_id?: string
+          completed_at?: string | null
+          created_at?: string | null
+          distance_km?: number | null
+          expected_payout?: number
+          id?: string
+          is_peak_hour?: boolean | null
+          order_id?: string
+          payment_method?: string | null
+          payout_breakdown?: Json | null
+          payout_status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_earnings_tracking_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_earnings_tracking_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_earnings_tracking_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_notifications: {
         Row: {
           agent_id: string
@@ -1023,6 +1096,33 @@ export type Database = {
         }
         Relationships: []
       }
+      cron_execution_logs: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          executed_at: string | null
+          id: string
+          job_name: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          executed_at?: string | null
+          id?: string
+          job_name: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          executed_at?: string | null
+          id?: string
+          job_name?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
       customer_spending: {
         Row: {
           created_at: string
@@ -1109,6 +1209,7 @@ export type Database = {
           pincode: string
           state: string
           updated_at: string
+          usage_count: number
           user_id: string
           user_name: string | null
         }
@@ -1125,6 +1226,7 @@ export type Database = {
           pincode: string
           state: string
           updated_at?: string
+          usage_count?: number
           user_id: string
           user_name?: string | null
         }
@@ -1141,6 +1243,7 @@ export type Database = {
           pincode?: string
           state?: string
           updated_at?: string
+          usage_count?: number
           user_id?: string
           user_name?: string | null
         }
@@ -2271,6 +2374,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          accepted_at: string | null
           address: Json
           agent_id: string | null
           agent_notification_sent: boolean | null
@@ -2309,10 +2413,12 @@ export type Database = {
           status: string
           subscription_id: string | null
           total: number
+          tracking_id: string
           updated_at: string
           user_id: string | null
         }
         Insert: {
+          accepted_at?: string | null
           address: Json
           agent_id?: string | null
           agent_notification_sent?: boolean | null
@@ -2351,10 +2457,12 @@ export type Database = {
           status?: string
           subscription_id?: string | null
           total: number
+          tracking_id: string
           updated_at?: string
           user_id?: string | null
         }
         Update: {
+          accepted_at?: string | null
           address?: Json
           agent_id?: string | null
           agent_notification_sent?: boolean | null
@@ -2393,6 +2501,7 @@ export type Database = {
           status?: string
           subscription_id?: string | null
           total?: number
+          tracking_id?: string
           updated_at?: string
           user_id?: string | null
         }
@@ -2504,7 +2613,7 @@ export type Database = {
           email: string
           expires_at: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           is_used: boolean
           locked_until: string | null
           reset_key: string
@@ -2517,7 +2626,7 @@ export type Database = {
           email: string
           expires_at: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           is_used?: boolean
           locked_until?: string | null
           reset_key: string
@@ -2530,7 +2639,7 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           is_used?: boolean
           locked_until?: string | null
           reset_key?: string
@@ -2763,6 +2872,9 @@ export type Database = {
       phone_otps: {
         Row: {
           created_at: string | null
+          delivery_attempts: number | null
+          delivery_method: string | null
+          delivery_status: string | null
           expires_at: string
           id: string
           otp: string
@@ -2770,9 +2882,13 @@ export type Database = {
           updated_at: string | null
           user_data: Json | null
           verified: boolean | null
+          whatsapp_message_id: string | null
         }
         Insert: {
           created_at?: string | null
+          delivery_attempts?: number | null
+          delivery_method?: string | null
+          delivery_status?: string | null
           expires_at: string
           id?: string
           otp: string
@@ -2780,9 +2896,13 @@ export type Database = {
           updated_at?: string | null
           user_data?: Json | null
           verified?: boolean | null
+          whatsapp_message_id?: string | null
         }
         Update: {
           created_at?: string | null
+          delivery_attempts?: number | null
+          delivery_method?: string | null
+          delivery_status?: string | null
           expires_at?: string
           id?: string
           otp?: string
@@ -2790,6 +2910,7 @@ export type Database = {
           updated_at?: string | null
           user_data?: Json | null
           verified?: boolean | null
+          whatsapp_message_id?: string | null
         }
         Relationships: []
       }
@@ -2910,6 +3031,9 @@ export type Database = {
         Row: {
           admin_notes: string | null
           created_at: string
+          customer_latitude: number | null
+          customer_location: Json | null
+          customer_longitude: number | null
           description: string
           id: string
           image_url: string | null
@@ -2922,6 +3046,9 @@ export type Database = {
         Insert: {
           admin_notes?: string | null
           created_at?: string
+          customer_latitude?: number | null
+          customer_location?: Json | null
+          customer_longitude?: number | null
           description: string
           id?: string
           image_url?: string | null
@@ -2934,6 +3061,9 @@ export type Database = {
         Update: {
           admin_notes?: string | null
           created_at?: string
+          customer_latitude?: number | null
+          customer_location?: Json | null
+          customer_longitude?: number | null
           description?: string
           id?: string
           image_url?: string | null
@@ -3396,7 +3526,7 @@ export type Database = {
           created_at: string | null
           details: Json | null
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           resource: string
           user_agent: string | null
           user_id: string | null
@@ -3406,7 +3536,7 @@ export type Database = {
           created_at?: string | null
           details?: Json | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           resource: string
           user_agent?: string | null
           user_id?: string | null
@@ -3416,12 +3546,64 @@ export type Database = {
           created_at?: string | null
           details?: Json | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           resource?: string
           user_agent?: string | null
           user_id?: string | null
         }
         Relationships: []
+      }
+      seller_product_suggestion_status: {
+        Row: {
+          created_at: string
+          id: string
+          seller_id: string
+          seller_notes: string | null
+          status: string
+          suggestion_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          seller_id: string
+          seller_notes?: string | null
+          status?: string
+          suggestion_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          seller_id?: string
+          seller_notes?: string | null
+          status?: string
+          suggestion_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seller_product_suggestion_status_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "seller_analytics_view"
+            referencedColumns: ["seller_id"]
+          },
+          {
+            foreignKeyName: "seller_product_suggestion_status_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seller_product_suggestion_status_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "product_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sellers: {
         Row: {
@@ -3868,7 +4050,22 @@ export type Database = {
           vacation_days_used?: number | null
           vacation_extension_days?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_tickets: {
         Row: {
@@ -4681,16 +4878,20 @@ export type Database = {
         Args: { p_order_id: string; p_product_id: string; p_seller_id: string }
         Returns: Json
       }
-      activate_delivery_agent: {
-        Args: { agent_email: string }
-        Returns: Json
-      }
-      apply_coupon: {
-        Args:
-          | { p_coupon_code: string; p_order_total: number }
-          | { p_coupon_code: string; p_order_total: number; p_user_id?: string }
-        Returns: Json
-      }
+      activate_delivery_agent: { Args: { agent_email: string }; Returns: Json }
+      apply_coupon:
+        | {
+            Args: {
+              p_coupon_code: string
+              p_order_total: number
+              p_user_id?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: { p_coupon_code: string; p_order_total: number }
+            Returns: Json
+          }
       apply_targeted_coupon: {
         Args: { p_coupon_code: string; p_order_total?: number }
         Returns: Json
@@ -4739,31 +4940,44 @@ export type Database = {
         Args: { p_distance_km?: number; p_transaction_type?: string }
         Returns: number
       }
-      calculate_distance: {
-        Args:
-          | { lat1: number; lat2: number; lon1: number; lon2: number }
-          | { lat1: number; lat2: number; lon1: number; lon2: number }
-        Returns: number
-      }
-      calculate_next_delivery_date: {
-        Args:
-          | {
-              current_hour?: number
-              input_current_date?: string
-              last_delivery_date?: string
-              subscription_type: string
-            }
-          | {
-              input_current_date?: string
-              last_delivery_date?: string
-              subscription_type: string
-            }
-          | {
+      calculate_distance:
+        | {
+            Args: { lat1: number; lat2: number; lon1: number; lon2: number }
+            Returns: number
+          }
+        | {
+            Args: { lat1: number; lat2: number; lon1: number; lon2: number }
+            Returns: number
+          }
+      calculate_next_delivery_date:
+        | {
+            Args: {
               p_current_date: string
               p_frequency_days: string[]
               p_frequency_type: string
               p_frequency_value: number
             }
+            Returns: string
+          }
+        | {
+            Args: {
+              input_current_date?: string
+              last_delivery_date?: string
+              subscription_type: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              current_hour?: number
+              input_current_date?: string
+              last_delivery_date?: string
+              subscription_type: string
+            }
+            Returns: string
+          }
+      calculate_next_delivery_with_vacation_skip: {
+        Args: { p_current_date?: string; p_subscription_id: string }
         Returns: string
       }
       calculate_seller_payouts: {
@@ -4784,15 +4998,29 @@ export type Database = {
         }
         Returns: number
       }
-      can_register_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
+      can_register_admin: { Args: never; Returns: boolean }
+      cancel_vacation_and_resume_subscription:
+        | { Args: { p_vacation_id: string }; Returns: boolean }
+        | { Args: { p_user_id?: string; p_vacation_id: string }; Returns: Json }
+      check_cron_health: {
+        Args: never
+        Returns: {
+          jobname: string
+          last_run: string
+          last_run_ist: string
+          schedule: string
+          status: string
+        }[]
       }
-      cancel_vacation_and_resume_subscription: {
-        Args:
-          | { p_user_id?: string; p_vacation_id: string }
-          | { p_vacation_id: string }
-        Returns: boolean
+      check_duplicate_address: {
+        Args: {
+          p_city: string
+          p_exclude_id?: string
+          p_full_address: string
+          p_pincode: string
+          p_user_id: string
+        }
+        Returns: string
       }
       check_rate_limit: {
         Args: {
@@ -4803,8 +5031,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      check_stuck_subscriptions: {
+        Args: never
+        Returns: {
+          ist_time: string
+          next_delivery_date: string
+          product_id: string
+          stuck_duration_hours: number
+          subscription_id: string
+          user_id: string
+        }[]
+      }
+      check_subscription_automation_health: { Args: never; Returns: Json }
       check_subscription_delivery_anomalies: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           days_in_future: number
           has_active_vacation: boolean
@@ -4818,18 +5058,9 @@ export type Database = {
         Args: { p_check_date?: string; p_user_id: string }
         Returns: Json
       }
-      cleanup_abandoned_payment_orders: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      cleanup_expired_otps: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      clear_user_cart: {
-        Args: { cart_user_id: string }
-        Returns: undefined
-      }
+      cleanup_abandoned_payment_orders: { Args: never; Returns: number }
+      cleanup_expired_otps: { Args: never; Returns: number }
+      clear_user_cart: { Args: { cart_user_id: string }; Returns: undefined }
       complete_cod_delivery: {
         Args: {
           p_agent_id: string
@@ -4838,16 +5069,19 @@ export type Database = {
         }
         Returns: Json
       }
-      complete_delivery_bypass_validation: {
-        Args:
-          | {
+      complete_delivery_bypass_validation:
+        | {
+            Args: {
               p_agent_id: string
               p_order_id: string
               p_payment_method?: string
             }
-          | { p_order_id: string; p_payment_method?: string }
-        Returns: Json
-      }
+            Returns: Json
+          }
+        | {
+            Args: { p_order_id: string; p_payment_method?: string }
+            Returns: undefined
+          }
       complete_delivery_minimal_update: {
         Args: { p_order_id: string; p_payment_method?: string }
         Returns: boolean
@@ -4915,10 +5149,7 @@ export type Database = {
         }
         Returns: string
       }
-      create_birthday_coupons: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      create_birthday_coupons: { Args: never; Returns: number }
       create_delivery_agent: {
         Args: {
           agent_email: string
@@ -4949,25 +5180,25 @@ export type Database = {
         }
         Returns: string
       }
-      create_subscription_monitoring_alerts: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      create_vacation_period: {
-        Args:
-          | {
-              p_end_date: string
-              p_start_date: string
-              p_subscription_id: string
-            }
-          | {
+      create_subscription_monitoring_alerts: { Args: never; Returns: number }
+      create_vacation_period:
+        | {
+            Args: {
               p_end_date: string
               p_start_date: string
               p_subscription_id: string
               p_user_id: string
             }
-        Returns: Json
-      }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_end_date: string
+              p_start_date: string
+              p_subscription_id: string
+            }
+            Returns: Json
+          }
       create_validated_payout: {
         Args: { end_date: string; start_date: string; target_seller_id: string }
         Returns: string
@@ -4985,10 +5216,7 @@ export type Database = {
         }
         Returns: Json
       }
-      ensure_delivery_data_consistency: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      ensure_delivery_data_consistency: { Args: never; Returns: undefined }
       extend_subscription_by_vacation: {
         Args: { p_subscription_id: string; p_vacation_days: number }
         Returns: Json
@@ -4997,14 +5225,8 @@ export type Database = {
         Args: { order_items: Json }
         Returns: string[]
       }
-      fix_subscription_delivery_dates: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      fix_uncategorized_products: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      fix_subscription_delivery_dates: { Args: never; Returns: Json }
+      fix_uncategorized_products: { Args: never; Returns: Json }
       force_complete_delivery_bypass: {
         Args: {
           p_agent_id: string
@@ -5018,33 +5240,37 @@ export type Database = {
         Args: { order_uuid: string }
         Returns: undefined
       }
-      get_agent_distance_stats: {
-        Args: { agent_uuid: string }
-        Returns: Json
-      }
-      get_agent_hours_today: {
-        Args: { agent_uuid: string }
-        Returns: number
-      }
-      get_agent_performance: {
-        Args: Record<PropertyKey, never> | { limit_count?: number }
-        Returns: {
-          avg_rating: number
-          deliveries_today: number
-          online_agents: number
-          total_agents: number
-        }[]
-      }
+      generate_tracking_id: { Args: never; Returns: string }
+      get_agent_distance_stats: { Args: { agent_uuid: string }; Returns: Json }
+      get_agent_hours_today: { Args: { agent_uuid: string }; Returns: number }
+      get_agent_performance:
+        | {
+            Args: never
+            Returns: {
+              avg_rating: number
+              deliveries_today: number
+              online_agents: number
+              total_agents: number
+            }[]
+          }
+        | {
+            Args: { limit_count?: number }
+            Returns: {
+              agent_id: string
+              agent_name: string
+              average_rating: number
+              success_rate: number
+              total_deliveries: number
+              total_earnings: number
+            }[]
+          }
       get_agent_profile_with_metrics: {
         Args: { agent_email: string }
         Returns: Json
       }
-      get_agent_work_stats: {
-        Args: { agent_uuid: string }
-        Returns: Json
-      }
+      get_agent_work_stats: { Args: { agent_uuid: string }; Returns: Json }
       get_all_user_categories: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           is_birthday_month: boolean
           is_high_spender: boolean
@@ -5073,7 +5299,7 @@ export type Database = {
         }[]
       }
       get_available_orders_for_agents: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           area: string
           created_at: string
@@ -5087,22 +5313,14 @@ export type Database = {
         Args: { end_date: string; start_date: string }
         Returns: Json
       }
-      get_cart_total: {
-        Args: { cart_user_id: string }
-        Returns: number
-      }
-      get_current_user_category: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      get_cart_total: { Args: { cart_user_id: string }; Returns: number }
+      get_current_ist_date: { Args: never; Returns: string }
+      get_current_user_category: { Args: never; Returns: Json }
       get_current_user_role: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
-      get_dashboard_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      get_dashboard_stats: { Args: never; Returns: Json }
       get_delivery_agent_analytics: {
         Args: { time_period?: string }
         Returns: {
@@ -5160,6 +5378,12 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "notification_preferences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_order_analytics_series: {
         Args: { p_period: string }
@@ -5186,6 +5410,19 @@ export type Database = {
           total_quantity: number
         }[]
       }
+      get_processing_history: {
+        Args: { p_days?: number }
+        Returns: {
+          completed_at: string
+          duration_seconds: number
+          errors_count: number
+          orders_created: number
+          processing_date: string
+          processing_status: string
+          started_at: string
+          subscriptions_processed: number
+        }[]
+      }
       get_product_special_offer: {
         Args: { p_product_id: string }
         Returns: {
@@ -5197,22 +5434,46 @@ export type Database = {
           original_price: number
         }[]
       }
-      get_products_within_range: {
-        Args:
-          | { customer_lat: number; customer_lon: number; range_km?: number }
-          | { customer_lat: number; customer_lon: number; range_km?: number }
-        Returns: {
-          distance_km: number
-          product_description: string
-          product_id: string
-          product_image_url: string
-          product_name: string
-          product_price: number
-          seller_id: string
-          seller_location: Json
-          stock_quantity: number
-        }[]
-      }
+      get_products_within_range:
+        | {
+            Args: {
+              customer_lat: number
+              customer_lon: number
+              range_km?: number
+            }
+            Returns: {
+              distance_km: number
+              product_description: string
+              product_id: string
+              product_image_url: string
+              product_name: string
+              product_price: number
+              seller_id: string
+              seller_location: Json
+              stock_quantity: number
+            }[]
+          }
+        | {
+            Args: {
+              customer_lat: number
+              customer_lon: number
+              range_km?: number
+            }
+            Returns: {
+              discount_percentage: number
+              discounted_price: number
+              distance_km: number
+              original_price: number
+              product_description: string
+              product_id: string
+              product_image_url: string
+              product_name: string
+              product_price: number
+              seller_id: string
+              seller_location: Json
+              stock_quantity: number
+            }[]
+          }
       get_recently_viewed_products: {
         Args: { p_limit?: number; p_user_id: string }
         Returns: {
@@ -5278,22 +5539,53 @@ export type Database = {
           updated_at: string
         }[]
       }
-      get_seller_stats: {
-        Args: { seller_user_id: string }
-        Returns: Json
-      }
+      get_seller_stats: { Args: { seller_user_id: string }; Returns: Json }
       get_seller_stats_with_period: {
         Args: { seller_user_id: string; time_period?: string }
         Returns: Json
       }
-      get_top_products: {
-        Args: Record<PropertyKey, never> | { limit_count?: number }
+      get_suggestions_within_range: {
+        Args: { range_km?: number; seller_lat: number; seller_lon: number }
         Returns: {
-          name: string
-          qty_sold: number
-          revenue: number
+          additional_notes: string
+          admin_notes: string
+          category: string
+          created_at: string
+          customer_latitude: number
+          customer_location: Json
+          customer_longitude: number
+          description: string
+          distance_km: number
+          estimated_price_range: string
+          id: string
+          image_url: string
+          product_name: string
+          status: string
+          suggested_images: string[]
+          updated_at: string
+          user_id: string
         }[]
       }
+      get_top_products:
+        | {
+            Args: never
+            Returns: {
+              name: string
+              qty_sold: number
+              revenue: number
+            }[]
+          }
+        | {
+            Args: { limit_count?: number }
+            Returns: {
+              image_url: string
+              product_id: string
+              product_name: string
+              seller_name: string
+              total_revenue: number
+              total_sold: number
+            }[]
+          }
       get_top_products_analytics: {
         Args: { limit_count?: number; time_period?: string }
         Returns: {
@@ -5318,10 +5610,7 @@ export type Database = {
           total_purchases: number
         }[]
       }
-      get_user_category_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      get_user_category_stats: { Args: never; Returns: Json }
       get_user_eligible_coupons: {
         Args: { p_user_id?: string }
         Returns: {
@@ -5363,10 +5652,15 @@ export type Database = {
           user_id: string
         }[]
       }
-      handle_expired_subscriptions: {
-        Args: Record<PropertyKey, never>
+      get_vacation_adjusted_delivery_schedule: {
+        Args: {
+          p_subscription_id: string
+          p_vacation_end_date: string
+          p_vacation_start_date: string
+        }
         Returns: Json
       }
+      handle_expired_subscriptions: { Args: never; Returns: Json }
       has_agent_rejected_order: {
         Args: { p_agent_id: string; p_order_id: string }
         Returns: boolean
@@ -5395,22 +5689,8 @@ export type Database = {
         }
         Returns: string
       }
-      is_admin: {
-        Args: { user_email: string }
-        Returns: boolean
-      }
-      is_approved_seller: {
-        Args: { user_uuid?: string }
-        Returns: boolean
-      }
-      is_current_user_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_current_user_admin_v2: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_approved_seller: { Args: { user_uuid?: string }; Returns: boolean }
+      is_current_user_admin_v2: { Args: never; Returns: boolean }
       is_location_serviceable: {
         Args: {
           customer_lat: number
@@ -5454,6 +5734,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      lookup_order_by_tracking_id: {
+        Args: { tracking_id_input: string }
+        Returns: Json
+      }
       manual_complete_delivery: {
         Args: {
           p_agent_id: string
@@ -5466,26 +5750,14 @@ export type Database = {
         Args: { p_processing_date?: string }
         Returns: Json
       }
-      manual_trigger_subscription_processing: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      mark_order_as_packed: {
-        Args: { order_id: string }
-        Returns: undefined
-      }
-      mark_order_as_packed_simple: {
-        Args: { order_id: string }
-        Returns: Json
-      }
+      manual_trigger_subscription_processing: { Args: never; Returns: Json }
+      mark_order_as_packed: { Args: { order_id: string }; Returns: undefined }
+      mark_order_as_packed_simple: { Args: { order_id: string }; Returns: Json }
       mark_order_as_packed_v2: {
         Args: { order_id: string }
         Returns: undefined
       }
-      mark_payout_paid: {
-        Args: { payout_id: string }
-        Returns: undefined
-      }
+      mark_payout_paid: { Args: { payout_id: string }; Returns: undefined }
       notify_nearby_delivery_agents: {
         Args: { p_order_id: string }
         Returns: number
@@ -5498,10 +5770,10 @@ export type Database = {
         }
         Returns: Json
       }
-      process_daily_subscriptions_with_notifications: {
-        Args: { p_scheduled_time?: string }
-        Returns: Json
-      }
+      populate_daily_deals_and_offers: { Args: never; Returns: Json }
+      process_daily_subscriptions_with_notifications:
+        | { Args: never; Returns: Json }
+        | { Args: { p_scheduled_time?: string }; Returns: Json }
       process_delivery_payout: {
         Args: {
           p_agent_id: string
@@ -5520,33 +5792,37 @@ export type Database = {
         }
         Returns: Json
       }
-      process_due_existing_subscriptions: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      process_due_subscriptions: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      qr_complete_delivery_v3: {
-        Args:
-          | { p_agent_id: string; p_order_id: string; p_payment_method: string }
-          | { p_agent_id: string; p_order_id: string; p_payment_method: string }
-          | {
+      process_due_existing_subscriptions: { Args: never; Returns: number }
+      process_due_subscriptions: { Args: never; Returns: number }
+      process_subscriptions_update_dates_only: { Args: never; Returns: Json }
+      process_subscriptions_with_order_creation: { Args: never; Returns: Json }
+      qr_complete_delivery_v3:
+        | {
+            Args: {
               p_agent_id: string
               p_payment_method: string
               p_qr_code_data: string
             }
-        Returns: Json
-      }
-      reconcile_completed_orders: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      refresh_todays_best_deals: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_agent_id: string
+              p_order_id: string
+              p_payment_method: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_agent_id: string
+              p_order_id: string
+              p_payment_method: string
+            }
+            Returns: Json
+          }
+      reconcile_completed_orders: { Args: never; Returns: Json }
+      refresh_todays_best_deals: { Args: never; Returns: undefined }
       reject_order: {
         Args: { p_agent_id: string; p_order_id: string; p_reason?: string }
         Returns: Json
@@ -5564,6 +5840,7 @@ export type Database = {
         Args: { admin_user_id: string; reason?: string; target_user_id: string }
         Returns: Json
       }
+      repair_subscription_dates: { Args: never; Returns: Json }
       request_secret_code_reset: {
         Args: {
           requester_email: string
@@ -5572,17 +5849,14 @@ export type Database = {
         }
         Returns: Json
       }
-      reset_daily_delivery_counts: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      resolve_agent_email: {
-        Args: { identifier: string }
-        Returns: string
-      }
+      reset_daily_delivery_counts: { Args: never; Returns: undefined }
+      resolve_agent_email: { Args: { identifier: string }; Returns: string }
       resume_expired_vacations: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
+        Args: never
+        Returns: {
+          resumed_count: number
+          subscription_ids: string[]
+        }[]
       }
       safe_complete_delivery: {
         Args: {
@@ -5592,10 +5866,7 @@ export type Database = {
         }
         Returns: Json
       }
-      sanitize_input: {
-        Args: { input_text: string }
-        Returns: string
-      }
+      sanitize_input: { Args: { input_text: string }; Returns: string }
       scan_qr_and_deliver_order: {
         Args: { agent_id: string; order_id: string; qr_code_id: string }
         Returns: boolean
@@ -5604,10 +5875,7 @@ export type Database = {
         Args: { p_action: string; p_order_id: string; p_seller_user_id: string }
         Returns: Json
       }
-      send_birthday_messages: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      send_birthday_messages: { Args: never; Returns: number }
       send_subscription_notification: {
         Args: {
           p_notification_type?: string
@@ -5628,6 +5896,10 @@ export type Database = {
         Args: { p_subscription_id: string }
         Returns: boolean
       }
+      should_skip_delivery_for_vacation_v2: {
+        Args: { p_delivery_date: string; p_subscription_id: string }
+        Returns: boolean
+      }
       should_skip_delivery_for_vacation_v3: {
         Args: { p_delivery_date: string; p_subscription_id: string }
         Returns: boolean
@@ -5644,26 +5916,18 @@ export type Database = {
         }
         Returns: Json
       }
-      sync_special_offers_from_products: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      sync_special_offers_from_products: { Args: never; Returns: undefined }
       sync_user_player_id: {
         Args: { device_info?: Json; player_id: string; target_user_id: string }
         Returns: boolean
       }
-      track_product_view: {
-        Args: { p_product_id: string }
-        Returns: undefined
-      }
+      test_subscription_processing: { Args: never; Returns: Json }
+      track_product_view: { Args: { p_product_id: string }; Returns: undefined }
       trigger_immediate_processing_after_vacation_cancel: {
         Args: { p_metadata?: Json; p_reason?: string; p_user_id: string }
         Returns: Json
       }
-      trigger_subscription_processing: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      trigger_subscription_processing: { Args: never; Returns: string }
       ultra_simple_complete_delivery: {
         Args: {
           p_agent_id: string
@@ -5695,13 +5959,10 @@ export type Database = {
         Returns: Json
       }
       update_subscription_next_delivery_dates: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: undefined
       }
-      update_trending_products: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      update_trending_products: { Args: never; Returns: undefined }
       upsert_delivery_agent: {
         Args: {
           p_agent_id: string
@@ -5724,14 +5985,8 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: Json
       }
-      validate_reset_token: {
-        Args: { token: string }
-        Returns: boolean
-      }
-      validate_secret_code: {
-        Args: { input_code: string }
-        Returns: boolean
-      }
+      validate_reset_token: { Args: { token: string }; Returns: boolean }
+      validate_secret_code: { Args: { input_code: string }; Returns: boolean }
       verify_order_otp: {
         Args: { p_agent_id: string; p_order_id: string; p_otp_code: string }
         Returns: Json

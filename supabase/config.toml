@@ -3,6 +3,9 @@ project_id = "amhpjsmubciahslghobw"
 [functions.get-agent-earnings]
 verify_jwt = true
 
+[functions.get-agent-live-earnings]
+verify_jwt = true
+
 [functions.simple-complete-delivery]
 verify_jwt = true
 

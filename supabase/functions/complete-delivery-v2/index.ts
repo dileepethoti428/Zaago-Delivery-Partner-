@@ -291,6 +291,27 @@ Deno.serve(async (req) => {
       // Don't throw - not critical
     }
 
+    // 7. Update earnings tracking
+    const { error: trackingUpdateError } = await supabase
+      .from('agent_earnings_tracking')
+      .update({
+        completed_at: new Date().toISOString(),
+        actual_payout: rounded_payout,
+        payout_status: 'confirmed',
+        distance_km: distance_km,
+        payment_method: normalizedPayment,
+        updated_at: new Date().toISOString()
+      })
+      .eq('order_id', order_id)
+      .eq('agent_id', agent.id);
+
+    if (trackingUpdateError) {
+      console.error('Failed to update earnings tracking:', trackingUpdateError);
+      // Don't throw - not critical
+    } else {
+      console.log('✅ Earnings tracking updated to confirmed');
+    }
+
     console.log('✅ Delivery completed successfully (V2)');
 
     return new Response(

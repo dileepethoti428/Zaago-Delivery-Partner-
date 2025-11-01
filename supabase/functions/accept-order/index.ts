@@ -55,6 +55,23 @@ serve(async (req) => {
     
     console.log(`✅ Order ${order_id} is available for acceptance by agent ${agent_id}`);
 
+    // Get payout configuration for earnings calculation
+    const { data: payoutConfig } = await supabase
+      .from('payout_config')
+      .select('*')
+      .eq('is_active', true)
+      .single();
+
+    const basePay = payoutConfig?.base_pay_amount || 40;
+    const baseDistanceKm = payoutConfig?.base_pay_distance_km || 3;
+    const perKmRate = payoutConfig?.per_km_max_rate || 9;
+    
+    // Check if peak hour
+    const currentTime = new Date().toTimeString().substring(0, 5);
+    const peakStart = payoutConfig?.peak_hour_start || '06:00';
+    const peakEnd = payoutConfig?.peak_hour_end || '12:00';
+    const isPeakHour = currentTime >= peakStart && currentTime <= peakEnd;
+
     // Get seller information for pickup location
     let pickupLocation = null;
     let pickupAddress = null;
@@ -120,17 +137,30 @@ serve(async (req) => {
       }
     }
 
+    // Calculate expected payout (estimated distance: 5km for now, will be updated on completion)
+    const estimatedDistance = 5; // Default estimate
+    const distancePay = estimatedDistance > baseDistanceKm ? 
+      (estimatedDistance - baseDistanceKm) * perKmRate : 0;
+    
+    const subtotal = basePay + distancePay;
+    const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
+    const platformFee = 13;
+    const expectedPayout = subtotal + surgeAmount - platformFee;
+    
+    const acceptedAt = new Date().toISOString();
+
     // Update order status to assigned and save pickup location data
     const { error: updateError } = await supabase
       .from('orders')
       .update({
         status: 'assigned',
         agent_id: agent_id,
+        accepted_at: acceptedAt,
         pickup_location: pickupLocation,
         pickup_address: pickupAddress,
         seller_name: sellerName,
         seller_phone: sellerPhone,
-        updated_at: new Date().toISOString()
+        updated_at: acceptedAt
       })
       .eq('id', order_id);
 
@@ -143,6 +173,32 @@ serve(async (req) => {
     }
 
     console.log(`Order ${order_id} successfully accepted by agent ${agent_id}`);
+    
+    // Create earnings tracking record
+    const { error: trackingError } = await supabase
+      .from('agent_earnings_tracking')
+      .insert({
+        agent_id: agent_id,
+        order_id: order_id,
+        accepted_at: acceptedAt,
+        expected_payout: expectedPayout,
+        payout_status: 'pending',
+        distance_km: estimatedDistance,
+        is_peak_hour: isPeakHour,
+        payout_breakdown: {
+          base_pay: basePay,
+          distance_pay: distancePay,
+          peak_bonus: surgeAmount,
+          platform_fee: platformFee
+        }
+      });
+
+    if (trackingError) {
+      console.error('❌ Failed to create earnings tracking:', trackingError);
+      // Don't fail the order acceptance, just log
+    } else {
+      console.log(`✅ Earnings tracking created: ₹${expectedPayout} expected payout`);
+    }
     
     // Generate OTP for delivery verification
     try {

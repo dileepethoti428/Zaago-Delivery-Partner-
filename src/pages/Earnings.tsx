@@ -58,45 +58,35 @@ const Earnings = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("today");
   const { toast } = useToast();
 
-  // Use React Query for automatic caching and smart refetching
+  // Use React Query for live earnings tracking from order acceptance
   const { data: earningsResponse, isLoading, refetch } = useQuery({
-    queryKey: ['agent-earnings'],
+    queryKey: ['agent-live-earnings'],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('Not authenticated');
       }
 
-      const supabaseUrl = 'https://amhpjsmubciahslghobw.supabase.co';
-      const response = await fetch(`${supabaseUrl}/functions/v1/get-agent-earnings`, {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('get-agent-live-earnings', {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({})
       });
 
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
-      }
-
-      const result = await response.json();
+      if (error) throw error;
       
-      if (!result.success || !result.data) {
-        throw new Error(result.error || 'Failed to fetch earnings data');
-      }
-
-      console.log('✅ Earnings data loaded from backend:', {
-        today: result.data.earnings_summary.today,
-        recentCount: result.data.recent_earnings.length
+      console.log('✅ Live earnings data loaded:', {
+        today_pending: data?.data?.today?.pending,
+        today_confirmed: data?.data?.today?.confirmed,
+        live_payout: data?.data?.live_payout
       });
 
-      return result.data;
+      return data?.data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    staleTime: 10000, // Cache for 10 seconds (more real-time)
+    gcTime: 2 * 60 * 1000, // Keep in cache for 2 minutes
     retry: 3,
+    refetchInterval: 30000, // Auto-refresh every 30 seconds for live updates
   });
 
   // Listen for order completion events to refresh earnings
@@ -124,17 +114,23 @@ const Earnings = () => {
     }
   }, [isLoading, earningsResponse, toast]);
 
-  const earningsData = earningsResponse?.earnings_summary || {
-    today: { amount: 0, deliveries: 0, hours: 0 },
-    week: { amount: 0, deliveries: 0, hours: 0 },
-    month: { amount: 0, deliveries: 0, hours: 0 }
+  const earningsData = {
+    today: earningsResponse?.today || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0 },
+    week: earningsResponse?.week || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0 },
+    month: earningsResponse?.month || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0 }
   };
-  const recentEarnings = earningsResponse?.recent_earnings || [];
-  const distanceStats = earningsResponse?.distance_stats || {
-    distance_today: 0,
-    distance_week: 0,
-    distance_month: 0
-  };
+  
+  const recentEarnings = (earningsResponse?.recent_earnings || []).map((earning: any) => ({
+    id: earning.order_id,
+    order_id: earning.order_id,
+    customer_name: earning.status === 'confirmed' ? 'Completed' : 'In Progress',
+    amount: earning.status === 'confirmed' ? earning.actual_payout : earning.expected_payout,
+    time: new Date(earning.accepted_at).toLocaleTimeString(),
+    delivery_date: new Date(earning.accepted_at).toLocaleDateString(),
+    distance_km: earning.distance_km || 0,
+    breakdown: earning.payout_breakdown,
+    status: earning.status
+  }));
 
   const currentData = earningsData[selectedPeriod as keyof typeof earningsData];
 
@@ -157,40 +153,42 @@ const Earnings = () => {
         <p className="text-muted-foreground">Track your delivery income and performance</p>
       </div>
 
-      {/* Quick Stats */}
-      <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 animate-slide-up">
+      {/* Quick Stats - Live Pending Payout */}
+      <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20 animate-slide-up">
         <CardContent className="p-4">
           <div className="text-center">
             <div className="flex items-center justify-center space-x-2 mb-2">
-              <DollarSign className="w-6 h-6 text-primary animate-pulse" />
-              <span className="text-2xl font-bold text-primary">
-                ₹{currentData.amount.toFixed(2)}
+              <Wallet className="w-6 h-6 text-green-600 animate-pulse" />
+              <span className="text-3xl font-bold text-green-600">
+                ₹{currentData.pending.toFixed(2)}
               </span>
             </div>
-            <p className="text-primary/80 mb-3 text-sm">
-              {selectedPeriod === "today" ? "Today's Earnings" : 
-               selectedPeriod === "week" ? "This Week" : "This Month"}
+            <p className="text-green-600/80 mb-1 text-sm font-medium">
+              Live Payout (Pending)
+            </p>
+            <p className="text-xs text-muted-foreground mb-3">
+              {currentData.in_progress} order{currentData.in_progress !== 1 ? 's' : ''} in progress
             </p>
             
-            <div className="grid grid-cols-3 gap-3">
+            <div className="bg-background/50 rounded-lg p-3 mb-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Confirmed:</span>
+                <span className="font-semibold text-foreground">₹{currentData.confirmed.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm mt-1">
+                <span className="text-muted-foreground">Total:</span>
+                <span className="font-bold text-primary">₹{currentData.total.toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
               <div className="text-center">
-                <p className="text-xl font-bold text-primary">{currentData.deliveries}</p>
-                <p className="text-xs text-primary/70">Deliveries</p>
+                <p className="text-xl font-bold text-foreground">{currentData.deliveries}</p>
+                <p className="text-xs text-muted-foreground">Completed</p>
               </div>
               <div className="text-center">
-                <p className="text-xl font-bold text-primary">{currentData.hours.toFixed(1)}</p>
-                <p className="text-xs text-primary/70">Hours</p>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center space-x-1">
-                  <MapPin className="w-3 h-3 text-primary" />
-                  <p className="text-xl font-bold text-primary">
-                    {selectedPeriod === "today" ? distanceStats.distance_today.toFixed(1) : 
-                     selectedPeriod === "week" ? distanceStats.distance_week.toFixed(1) : 
-                     distanceStats.distance_month.toFixed(1)}
-                  </p>
-                </div>
-                <p className="text-xs text-primary/70">KM Covered</p>
+                <p className="text-xl font-bold text-green-600">{currentData.in_progress}</p>
+                <p className="text-xs text-muted-foreground">In Progress</p>
               </div>
             </div>
           </div>
@@ -215,9 +213,9 @@ const Earnings = () => {
                 <TrendingUp className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Avg per Hour</p>
+                <p className="text-xs text-muted-foreground">Per Delivery</p>
                 <p className="text-lg font-bold text-foreground">
-                  ₹{((currentData.hours ? currentData.amount / currentData.hours : 0)).toFixed(2)}
+                  ₹{((currentData.deliveries ? currentData.confirmed / currentData.deliveries : 0)).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -227,43 +225,19 @@ const Earnings = () => {
         <Card className="bg-card border-border">
           <CardContent className="p-3">
             <div className="flex items-center space-x-2">
-              <div className="p-1.5 bg-primary/10 rounded-lg">
-                <Truck className="w-4 h-4 text-primary" />
+              <div className="p-1.5 bg-green-500/10 rounded-lg">
+                <Wallet className="w-4 h-4 text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Per Delivery</p>
-                <p className="text-lg font-bold text-foreground">
-                  ₹{((currentData.deliveries ? currentData.amount / currentData.deliveries : 0)).toFixed(2)}
+                <p className="text-xs text-muted-foreground">Live Pending</p>
+                <p className="text-lg font-bold text-green-600">
+                  ₹{currentData.pending.toFixed(2)}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Distance Statistics */}
-      <Card className="bg-card border-border animate-slide-up">
-        <CardContent className="p-3">
-          <div className="flex items-center space-x-2 mb-3">
-            <MapPin className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Distance Travelled</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-2 bg-secondary/20 rounded-lg">
-              <p className="text-sm font-bold text-primary">{distanceStats.distance_today.toFixed(1)} km</p>
-              <p className="text-xs text-muted-foreground">Today</p>
-            </div>
-            <div className="text-center p-2 bg-secondary/20 rounded-lg">
-              <p className="text-sm font-bold text-primary">{distanceStats.distance_week.toFixed(1)} km</p>
-              <p className="text-xs text-muted-foreground">This Week</p>
-            </div>
-            <div className="text-center p-2 bg-secondary/20 rounded-lg">
-              <p className="text-sm font-bold text-primary">{distanceStats.distance_month.toFixed(1)} km</p>
-              <p className="text-xs text-muted-foreground">This Month</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Recent Earnings */}
       <Card className="bg-card border-border animate-slide-up">
@@ -273,15 +247,25 @@ const Earnings = () => {
         <CardContent>
           <ScrollArea className="h-80">
             <div className="space-y-3 pr-4">
-              {recentEarnings.length > 0 ? recentEarnings.map((earning) => (
-                <div key={earning.id} className="p-4 bg-secondary/50 rounded-lg overflow-hidden">
+              {recentEarnings.length > 0 ? recentEarnings.map((earning: any) => (
+                <div key={earning.id} className="p-4 bg-secondary/50 rounded-lg overflow-hidden border-l-4 border-l-transparent"
+                     style={{ borderLeftColor: earning.status === 'pending' ? 'rgb(34 197 94)' : 'transparent' }}>
                   <div className="space-y-3">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Truck className="w-5 h-5 text-primary" />
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        earning.status === 'pending' ? 'bg-green-500/20' : 'bg-primary/20'
+                      }`}>
+                        <Truck className={`w-5 h-5 ${earning.status === 'pending' ? 'text-green-600' : 'text-primary'}`} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground truncate">{earning.customer_name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground truncate">{earning.customer_name}</p>
+                          {earning.status === 'pending' && (
+                            <Badge variant="outline" className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border-green-200">
+                              Pending
+                            </Badge>
+                          )}
+                        </div>
                         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                           <Clock className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">{earning.time}</span>
@@ -292,16 +276,13 @@ const Earnings = () => {
                     </div>
                     
                     <div className="flex items-center justify-between">
-                      <p className="font-bold text-foreground text-lg">₹{earning.amount.toFixed(2)}</p>
+                      <p className={`font-bold text-lg ${earning.status === 'pending' ? 'text-green-600' : 'text-foreground'}`}>
+                        ₹{earning.amount.toFixed(2)}
+                      </p>
                       {earning.distance_km > 0 && (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs px-2 py-1">
-                            {earning.distance_km.toFixed(1)} km
-                          </Badge>
-                          <Badge variant="outline" className="text-xs px-2 py-1 bg-green-50 text-green-700 border-green-200">
-                            Live
-                          </Badge>
-                        </div>
+                        <Badge variant="secondary" className="text-xs px-2 py-1">
+                          {earning.distance_km.toFixed(1)} km
+                        </Badge>
                       )}
                     </div>
                   </div>
