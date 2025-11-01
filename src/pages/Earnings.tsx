@@ -12,7 +12,8 @@ import {
   Clock, 
   Truck,
   MapPin,
-  Wallet
+  Wallet,
+  Package
 } from "lucide-react";
 
 interface EarningsSummary {
@@ -129,9 +130,9 @@ const Earnings = () => {
   }, [isLoading, earningsResponse, toast]);
 
   const earningsData = {
-    today: earningsResponse?.today || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0 },
-    week: earningsResponse?.week || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0 },
-    month: earningsResponse?.month || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0 }
+    today: earningsResponse?.today || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0 },
+    week: earningsResponse?.week || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0 },
+    month: earningsResponse?.month || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0 }
   };
   
   const recentEarnings = (earningsResponse?.recent_earnings || []).map((earning: any) => ({
@@ -195,14 +196,53 @@ const Earnings = () => {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
-              <div className="text-center">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center bg-background/30 rounded-lg p-2">
                 <p className="text-xl font-bold text-foreground">{currentData.deliveries}</p>
                 <p className="text-xs text-muted-foreground">Completed</p>
               </div>
-              <div className="text-center">
+              <div className="text-center bg-background/30 rounded-lg p-2">
                 <p className="text-xl font-bold text-green-600">{currentData.in_progress}</p>
                 <p className="text-xs text-muted-foreground">In Progress</p>
+              </div>
+              <div className="text-center bg-background/30 rounded-lg p-2">
+                <p className="text-xl font-bold text-primary">{currentData.total_orders || 0}</p>
+                <p className="text-xs text-muted-foreground">Total Orders</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Total Orders Summary Card */}
+      <Card className="bg-card border-border animate-slide-up">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Package className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Orders ({selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)})</p>
+                <p className="text-2xl font-bold text-foreground">{currentData.total_orders || 0}</p>
+              </div>
+            </div>
+            <div className="text-right text-xs">
+              <div className="flex flex-col space-y-1">
+                <div>
+                  <span className="text-green-600 font-semibold">{currentData.deliveries}</span>
+                  <span className="text-muted-foreground"> completed</span>
+                </div>
+                <div>
+                  <span className="text-yellow-600 font-semibold">{currentData.in_progress}</span>
+                  <span className="text-muted-foreground"> pending</span>
+                </div>
+                {(currentData.cancelled || 0) > 0 && (
+                  <div>
+                    <span className="text-red-600 font-semibold">{currentData.cancelled}</span>
+                    <span className="text-muted-foreground"> cancelled</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

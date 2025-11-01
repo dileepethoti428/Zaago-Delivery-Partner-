@@ -91,13 +91,16 @@ serve(async (req) => {
       
       const deliveries = periodData.filter(t => t.payout_status === 'confirmed').length;
       const inProgress = periodData.filter(t => t.payout_status === 'pending').length;
+      const cancelled = periodData.filter(t => t.payout_status === 'cancelled').length;
+      const totalOrders = deliveries + inProgress + cancelled;
       
       console.log('📊 Period earnings breakdown:', {
         period: startDate,
         total_records: periodData.length,
         confirmed_count: deliveries,
         pending_count: inProgress,
-        cancelled_count: periodData.filter(t => t.payout_status === 'cancelled').length,
+        cancelled_count: cancelled,
+        total_orders: totalOrders,
         confirmed_amount: confirmed.toFixed(2),
         pending_amount: pending.toFixed(2)
       });
@@ -107,7 +110,9 @@ serve(async (req) => {
         confirmed: parseFloat(confirmed.toFixed(2)),
         total: parseFloat((pending + confirmed).toFixed(2)),
         deliveries,
-        in_progress: inProgress
+        in_progress: inProgress,
+        cancelled,
+        total_orders: totalOrders
       };
     };
 
