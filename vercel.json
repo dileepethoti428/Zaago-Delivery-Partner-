@@ -2,6 +2,24 @@
   "rewrites": [{ "source": "/(.*)", "destination": "/" }],
   "headers": [
     {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/zaago-delivery-favicon.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         {
@@ -11,20 +29,11 @@
       ]
     },
     {
-      "source": "/:path*\\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|mp3|wav|woff|woff2|ttf|eot)",
+      "source": "/**/*.(js|css|png|jpg|jpeg|webp|gif|svg|ico|mp3|wav|woff|woff2|ttf|eot)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/index.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
         }
       ]
     },

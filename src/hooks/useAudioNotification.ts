@@ -321,11 +321,7 @@ export const useAudioNotification = (settings?: RingtoneSettings) => {
         ringtoneFile = '/iphone-6-original-ringtone.mp3';
     }
     
-    // Add cache-busting parameter to force reload of audio file
-    const cacheBuster = Date.now();
-    const ringtoneUrl = `${ringtoneFile}?v=${cacheBuster}`;
-    console.log('🎵 Loading ringtone:', ringtoneUrl);
-
+    const ringtoneUrl = ringtoneFile; // Use static URL for proper caching
     console.log('🔊 Selected ringtone file:', ringtoneFile);
 
     try {
