@@ -89,17 +89,24 @@ const Earnings = () => {
     refetchInterval: 30000, // Auto-refresh every 30 seconds for live updates
   });
 
-  // Listen for order completion events to refresh earnings
+  // Listen for order completion and cancellation events to refresh earnings
   useEffect(() => {
     const handleOrderCompleted = () => {
       console.log('Order completed, refreshing earnings...');
       refetch();
     };
 
+    const handleOrderCancelled = () => {
+      console.log('Order cancelled, refreshing earnings...');
+      refetch();
+    };
+
     window.addEventListener('orderCompleted', handleOrderCompleted);
+    window.addEventListener('orderCancelled', handleOrderCancelled);
 
     return () => {
       window.removeEventListener('orderCompleted', handleOrderCompleted);
+      window.removeEventListener('orderCancelled', handleOrderCancelled);
     };
   }, [refetch]);
 

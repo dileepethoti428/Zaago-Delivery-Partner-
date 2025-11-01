@@ -140,6 +140,25 @@ serve(async (req) => {
       );
     }
 
+    // Update earnings tracking to cancelled status
+    const { error: trackingError } = await supabase
+      .from('agent_earnings_tracking')
+      .update({
+        payout_status: 'cancelled',
+        completed_at: new Date().toISOString(),
+        actual_payout: 0,
+        updated_at: new Date().toISOString()
+      })
+      .eq('order_id', order_id)
+      .eq('agent_id', agent_id)
+      .eq('payout_status', 'pending');
+
+    if (trackingError) {
+      console.warn('Failed to update earnings tracking:', trackingError);
+    } else {
+      console.log('✅ Earnings tracking marked as cancelled for order:', order_id);
+    }
+
     // Log the cancellation
     const { error: logError } = await supabase
       .from('delivery_logs')
