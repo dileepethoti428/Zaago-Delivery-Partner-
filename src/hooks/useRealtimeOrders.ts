@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { queryKeys } from '@/lib/react-query-config';
 import { useBackgroundSync } from './useBackgroundSync';
+import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordinatesFromAddress } from '@/lib/distanceService';
 
 interface RealtimeOrder {
   id: string;
@@ -42,7 +43,7 @@ export const useRealtimeOrders = (agentId: string | null) => {
           table: 'orders',
           filter: `status=eq.placed`
         },
-        (payload) => {
+        async (payload) => {
           const newOrder = payload.new as any;
           console.log('📦 Real-time new order:', newOrder?.id, 'status:', newOrder?.status);
           
@@ -59,6 +60,34 @@ export const useRealtimeOrders = (agentId: string | null) => {
             setLastUpdate(new Date());
             setUpdateCount(prev => prev + 1);
             return;
+          }
+          
+          // ✅ Validate distance before adding to cache
+          const agentLocation = getAgentLocationFromStorage();
+          
+          if (agentLocation && newOrder.delivery_address) {
+            try {
+              const customerLocation = extractCoordinatesFromAddress(newOrder.delivery_address);
+              
+              if (customerLocation) {
+                const distanceResult = await calculateRealTimeDistance(
+                  agentLocation,
+                  customerLocation,
+                  newOrder.id
+                );
+                
+                // Only add if within 15km
+                if (distanceResult.distance_km > 15) {
+                  console.log(`❌ Order ${newOrder.id} is ${distanceResult.distance_km.toFixed(2)}km away - filtering out (>15km)`);
+                  return; // Don't add to cache
+                }
+                
+                console.log(`✅ Order ${newOrder.id} is ${distanceResult.distance_km.toFixed(2)}km away - adding to cache`);
+              }
+            } catch (error) {
+              console.warn('⚠️ Failed to validate order distance, including by default:', error);
+              // Fall through to add order (fail open for backward compatibility)
+            }
           }
           
           // Add new order to cache

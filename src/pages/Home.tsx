@@ -423,7 +423,7 @@ const Home = () => {
           return newSet;
         });
       })
-      .on('broadcast', { event: 'urgent_notification' }, (payload) => {
+      .on('broadcast', { event: 'urgent_notification' }, async (payload) => {
         console.log('🚨 [URGENT-NOTIFICATION-EARLY] Received broadcast:', payload);
         
         const notificationData = payload.payload;
@@ -434,6 +434,42 @@ const Home = () => {
 
         const orderId = notificationData.order_id;
         const notifType = notificationData.notification_type || 'urgent';
+
+        // ✅ Validate distance before showing notification
+        const agentLocation = getAgentLocationFromStorage();
+        
+        if (agentLocation && orderId) {
+          try {
+            // Fetch order details to get delivery address
+            const { data: order } = await supabase
+              .from('orders')
+              .select('address, pickup_location')
+              .eq('id', orderId)
+              .single();
+            
+            if (order?.address) {
+              const customerLocation = extractCoordinatesFromAddress(order.address);
+              
+              if (customerLocation) {
+                const distanceResult = await calculateRealTimeDistance(
+                  agentLocation,
+                  customerLocation,
+                  orderId
+                );
+                
+                if (distanceResult.distance_km > 15) {
+                  console.log(`❌ Urgent notification for order ${orderId} ignored - ${distanceResult.distance_km.toFixed(2)}km away (>15km)`);
+                  return; // Don't show notification
+                }
+                
+                console.log(`✅ Urgent notification for order ${orderId} allowed - ${distanceResult.distance_km.toFixed(2)}km away`);
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to validate notification distance:', error);
+            // Fall through to show notification (fail open)
+          }
+        }
 
         // CRITICAL: NO AUDIO HERE - audio handled by main broadcast listener only
         console.log('📝 [URGENT-NOTIFICATION-EARLY] Notification received, audio will be played by main listener');
