@@ -47,13 +47,36 @@ serve(async (req) => {
     
     console.log('📋 Request parameters:', { order_id, payment_method, has_agent_location: !!agent_location });
     
-    // Validate required parameters
-    if (!order_id) {
-      console.error('❌ Missing order_id in request');
+    // Validate order_id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!order_id || !uuidRegex.test(order_id)) {
+      console.error('❌ Invalid or missing order_id');
       return new Response(
-        JSON.stringify({ success: false, error: 'Order ID is required' }),
+        JSON.stringify({ success: false, error: 'Valid Order ID (UUID) is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
+    }
+
+    // Validate distance_km if provided
+    if (distance_km !== undefined && distance_km !== null) {
+      if (typeof distance_km !== 'number' || distance_km < 0 || distance_km > 1000) {
+        console.error('❌ Invalid distance_km:', distance_km);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Distance must be between 0 and 1000 km' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+    }
+
+    // Validate agent_payout if provided
+    if (agent_payout !== undefined && agent_payout !== null) {
+      if (typeof agent_payout !== 'number' || agent_payout < 0 || agent_payout > 10000) {
+        console.error('❌ Invalid agent_payout:', agent_payout);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Payout must be between ₹0 and ₹10,000' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
     }
     
     // Validate and normalize payment method

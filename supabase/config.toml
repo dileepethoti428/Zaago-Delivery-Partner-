@@ -10,28 +10,28 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.bypass-complete-delivery]
-verify_jwt = false
+verify_jwt = true
 
 [functions.safe-complete-delivery]
-verify_jwt = false
+verify_jwt = true
 
 [functions.nuclear-complete-delivery]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bulletproof-complete-delivery]
-verify_jwt = false
+verify_jwt = true
 
 [functions.sync-order-status]
-verify_jwt = false
+verify_jwt = true
 
 [functions.reconcile-order-completions]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ultimate-complete-delivery]
 verify_jwt = true
 
 [functions.simple-delivery-complete]
-verify_jwt = false
+verify_jwt = true
 
 [functions.agent-autopay-monitor]
 verify_jwt = false

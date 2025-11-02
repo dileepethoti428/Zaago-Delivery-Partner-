@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,14 +15,53 @@ serve(async (req) => {
   }
 
   try {
+    // Authenticate the user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Authentication required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+
+    if (authError || !user?.email) {
+      console.error('❌ Authentication failed:', authError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Authentication failed' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    const agent_email = user.email;
+    console.log('✅ Authenticated user:', agent_email);
+
     const body = await req.json();
-    const { order_id, payment_method = 'Online', agent_email } = body;
+    const { order_id, payment_method = 'Online' } = body;
     
     console.log('📋 Nuclear processing:', { order_id, payment_method, agent_email });
     
-    if (!order_id) {
+    // Validate order_id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!order_id || !uuidRegex.test(order_id)) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Order ID is required' }),
+        JSON.stringify({ success: false, error: 'Valid Order ID (UUID) is required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Validate payment_method
+    const validPaymentMethods = ['Online', 'COD', 'UPI', 'Card'];
+    if (payment_method && !validPaymentMethods.includes(payment_method)) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid payment method' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -44,18 +84,33 @@ serve(async (req) => {
       await client.queryArray('BEGIN');
       console.log('🔄 Transaction started');
 
-      // Get agent info
+      // Get agent info for authenticated user
       const agentResult = await client.queryArray(
         'SELECT id, email, name FROM delivery_agents WHERE email = $1 AND is_active = true LIMIT 1',
-        [agent_email || 'default@agent.com']
+        [agent_email]
       );
 
       if (agentResult.rows.length === 0) {
-        throw new Error('Agent not found or inactive');
+        throw new Error('Agent not found or inactive for authenticated user');
       }
 
       const [agent_id, email, agent_name] = agentResult.rows[0];
       console.log('✅ Agent verified:', { agent_id, email, agent_name });
+
+      // Verify the order is assigned to this agent
+      const orderCheckResult = await client.queryArray(
+        'SELECT agent_id FROM orders WHERE id = $1',
+        [order_id]
+      );
+
+      if (orderCheckResult.rows.length === 0) {
+        throw new Error('Order not found');
+      }
+
+      const [assigned_agent_id] = orderCheckResult.rows[0];
+      if (assigned_agent_id !== agent_id) {
+        throw new Error('Order is not assigned to this agent');
+      }
 
       // Get COMPLETE order data with ALL required fields
       const orderResult = await client.queryArray(

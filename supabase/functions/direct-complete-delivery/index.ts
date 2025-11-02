@@ -17,6 +17,20 @@ Deno.serve(async (req) => {
 
     // Get request body
     const { order_id, payment_method } = await req.json();
+
+    // Validate order_id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!order_id || !uuidRegex.test(order_id)) {
+      throw new Error('Valid Order ID (UUID) is required');
+    }
+
+    // Validate payment_method if provided
+    if (payment_method) {
+      const validPaymentMethods = ['Online', 'COD', 'UPI', 'Card'];
+      if (!validPaymentMethods.includes(payment_method)) {
+        throw new Error('Invalid payment method. Must be one of: Online, COD, UPI, Card');
+      }
+    }
     console.log('📦 Direct complete delivery:', { order_id, payment_method });
 
     if (!order_id) {

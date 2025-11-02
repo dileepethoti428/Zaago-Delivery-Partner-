@@ -1030,6 +1030,7 @@ export type Database = {
           high_spenders_only: boolean | null
           id: string
           is_active: boolean
+          is_hidden: boolean
           low_spenders_only: boolean | null
           maximum_discount_amount: number | null
           maximum_user_spending: number | null
@@ -1055,6 +1056,7 @@ export type Database = {
           high_spenders_only?: boolean | null
           id?: string
           is_active?: boolean
+          is_hidden?: boolean
           low_spenders_only?: boolean | null
           maximum_discount_amount?: number | null
           maximum_user_spending?: number | null
@@ -1080,6 +1082,7 @@ export type Database = {
           high_spenders_only?: boolean | null
           id?: string
           is_active?: boolean
+          is_hidden?: boolean
           low_spenders_only?: boolean | null
           maximum_discount_amount?: number | null
           maximum_user_spending?: number | null
@@ -1945,6 +1948,13 @@ export type Database = {
             foreignKeyName: "milk_transactions_seller_id_fkey"
             columns: ["seller_id"]
             isOneToOne: false
+            referencedRelation: "public_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "milk_transactions_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
             referencedRelation: "seller_analytics_view"
             referencedColumns: ["seller_id"]
           },
@@ -2572,6 +2582,41 @@ export type Database = {
           last_attempt?: string
         }
         Relationships: []
+      }
+      otp_verification_attempts: {
+        Row: {
+          attempt_count: number | null
+          created_at: string | null
+          id: string
+          last_attempt_at: string | null
+          otp_id: string | null
+          phone: string
+        }
+        Insert: {
+          attempt_count?: number | null
+          created_at?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          otp_id?: string | null
+          phone: string
+        }
+        Update: {
+          attempt_count?: number | null
+          created_at?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          otp_id?: string | null
+          phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "otp_verification_attempts_otp_id_fkey"
+            columns: ["otp_id"]
+            isOneToOne: false
+            referencedRelation: "phone_otps"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       password_reset_logs: {
         Row: {
@@ -3300,6 +3345,48 @@ export type Database = {
         }
         Relationships: []
       }
+      push_notification_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          message: string
+          notification_id: string | null
+          recipients_count: number | null
+          sent_by_user_id: string | null
+          success: boolean | null
+          target_type: string | null
+          target_user_id: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message: string
+          notification_id?: string | null
+          recipients_count?: number | null
+          sent_by_user_id?: string | null
+          success?: boolean | null
+          target_type?: string | null
+          target_user_id?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message?: string
+          notification_id?: string | null
+          recipients_count?: number | null
+          sent_by_user_id?: string | null
+          success?: boolean | null
+          target_type?: string | null
+          target_user_id?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       rate_limits: {
         Row: {
           action: string
@@ -3582,6 +3669,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "seller_product_suggestion_status_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "public_sellers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "seller_product_suggestion_status_seller_id_fkey"
             columns: ["seller_id"]
@@ -4735,6 +4829,30 @@ export type Database = {
         }
         Relationships: []
       }
+      public_sellers: {
+        Row: {
+          business_name: string | null
+          created_at: string | null
+          id: string | null
+          name: string | null
+          status: string | null
+        }
+        Insert: {
+          business_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          status?: string | null
+        }
+        Update: {
+          business_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       seller_analytics_view: {
         Row: {
           business_name: string | null
@@ -5612,27 +5730,29 @@ export type Database = {
       }
       get_user_category_stats: { Args: never; Returns: Json }
       get_user_eligible_coupons: {
-        Args: { p_user_id?: string }
+        Args: { p_user_id: string }
         Returns: {
           birthday_month_target: boolean
           code: string
+          created_at: string
           description: string
           discount_type: string
           discount_value: number
           high_spenders_only: boolean
           id: string
           is_active: boolean
-          is_eligible: boolean
+          is_hidden: boolean
           low_spenders_only: boolean
           maximum_discount_amount: number
           maximum_user_spending: number
+          minimum_order_amount: number
           minimum_user_spending: number
           name: string
           new_users_only: boolean
           returning_users_only: boolean
-          targeting_reason: string
+          updated_at: string
+          usage_count: number
           usage_limit: number
-          used_count: number
           valid_from: string
           valid_until: string
         }[]

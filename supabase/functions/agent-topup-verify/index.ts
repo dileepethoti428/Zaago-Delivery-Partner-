@@ -56,6 +56,22 @@ serve(async (req) => {
 
     const { order_id, payment_id, signature, amount }: VerifyRequest = await req.json();
 
+    // Validate inputs
+    if (!order_id || !payment_id || !signature || typeof amount !== 'number') {
+      return new Response(JSON.stringify({ error: "Missing or invalid required fields" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate amount bounds (₹10 to ₹100,000)
+    if (amount < 10 || amount > 100000) {
+      return new Response(JSON.stringify({ error: "Amount must be between ₹10 and ₹100,000" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Verify Razorpay signature
     const razorpaySecret = Deno.env.get("RAZORPAY_KEY_SECRET") ?? "";
     const razorpayKeyId = Deno.env.get("RAZORPAY_KEY_ID") ?? "";

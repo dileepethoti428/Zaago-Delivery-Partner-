@@ -37,13 +37,29 @@ serve(async (req) => {
     // Parse request body
     const { agent_id, amount }: SettlementRequest = await req.json();
 
+    // Validate inputs
     if (!agent_id || !amount) {
       throw new Error("Missing agent_id or amount");
     }
 
-    // Verify minimum amount
+    // Validate agent_id is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(agent_id)) {
+      throw new Error("Invalid agent_id format");
+    }
+
+    // Validate amount is a positive number
+    if (typeof amount !== 'number' || amount <= 0) {
+      throw new Error("Amount must be a positive number");
+    }
+
+    // Verify minimum and maximum amount
     if (amount < 500) {
       throw new Error("Minimum settlement amount is ₹500");
+    }
+
+    if (amount > 100000) {
+      throw new Error("Maximum settlement amount is ₹100,000");
     }
 
     // Verify agent belongs to the authenticated user
