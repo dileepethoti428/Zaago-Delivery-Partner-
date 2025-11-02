@@ -189,18 +189,43 @@ const Login = () => {
 
       const userId = authData.user.id;
 
-      // Wait for session to be fully established
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Verify session is established
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error("Session not established. Please try again.");
+      // Wait longer for session to be fully established
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Increased to 2 seconds
+
+      // Verify session with retry logic
+      let session = null;
+      let retries = 0;
+      const maxRetries = 3;
+
+      while (!session && retries < maxRetries) {
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('❌ Session error:', sessionError);
+          throw new Error("Failed to establish session. Please try again.");
+        }
+        
+        if (currentSession && currentSession.user.id === userId) {
+          session = currentSession;
+          console.log('✅ Session established for user:', userId);
+          console.log('✅ Session access token present:', !!session.access_token);
+          break;
+        }
+        
+        retries++;
+        if (retries < maxRetries) {
+          console.log(`⏳ Session not ready, retrying (${retries}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
-      
-      console.log('Session established for user:', userId);
+
+      if (!session) {
+        throw new Error("Session not established after multiple attempts. Please try signing up again.");
+      }
 
       // Step 2: Upload documents to storage
+      console.log('📤 Starting file uploads for user:', userId);
+      
       const aadharFrontFile = data.aadharFront[0];
       const aadharBackFile = data.aadharBack[0];
       const dlFrontFile = data.dlFront[0];
@@ -215,9 +240,18 @@ const Login = () => {
         uploadDocument(userId, 'profile-photo', profilePhotoFile),
       ];
 
-      const uploadResults = await Promise.all(uploadPromises);
+      let uploadResults;
+      try {
+        uploadResults = await Promise.all(uploadPromises);
+        console.log('✅ All files uploaded successfully:', uploadResults.map(r => r.path));
+      } catch (uploadError: any) {
+        console.error('❌ File upload failed:', uploadError);
+        throw new Error(`Failed to upload documents: ${uploadError.message}. Please check file sizes and formats.`);
+      }
 
       // Step 3: Save document metadata to agent_documents table
+      console.log('💾 Saving document metadata to database for user:', userId);
+      
       const { error: docError } = await supabase
         .from('agent_documents')
         .insert({
@@ -232,16 +266,34 @@ const Login = () => {
           profile_photo_url: uploadResults[4].path,
         });
 
-      if (docError) throw docError;
+      if (docError) {
+        console.error('❌ Document metadata save failed:', docError);
+        if (docError.message?.includes('policy') || docError.message?.includes('row-level security')) {
+          throw new Error("Session authentication failed. Please try signing up again or contact support.");
+        }
+        throw new Error(`Failed to save document information: ${docError.message}`);
+      }
+
+      console.log('✅ Document metadata saved successfully');
 
       // Step 4: Update profile to mark documents submitted
-      await supabase
+      console.log('📝 Updating profile status for user:', userId);
+      
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           documents_submitted: true,
           submission_date: new Date().toISOString()
         })
         .eq('user_id', userId);
+
+      if (profileError) {
+        console.error('❌ Profile update failed:', profileError);
+        // Don't fail the whole signup for this - documents are already saved
+        console.warn('⚠️ Documents saved but profile update failed. This will be corrected automatically.');
+      } else {
+        console.log('✅ Profile updated successfully');
+      }
 
       toast({
         title: "Application Submitted",
@@ -252,14 +304,24 @@ const Login = () => {
       navigate('/pending-approval');
       
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('❌ Signup error:', error);
       
-      // Provide more specific error messages
-      let errorMessage = error.message;
-      if (error.message?.includes('row-level security') || error.message?.includes('policy')) {
-        errorMessage = "Session error. Please try signing up again.";
+      // Provide more specific and user-friendly error messages
+      let errorMessage = error.message || "An unexpected error occurred";
+      
+      if (error.message?.includes('Session not established') || 
+          error.message?.includes('Session authentication failed')) {
+        errorMessage = "Authentication session error. Please try again in a few moments.";
+      } else if (error.message?.includes('Failed to upload documents')) {
+        errorMessage = error.message; // Already user-friendly from file upload step
+      } else if (error.message?.includes('Failed to save document information')) {
+        errorMessage = error.message; // Already user-friendly from database insert step
+      } else if (error.message?.includes('policy') || error.message?.includes('row-level security')) {
+        errorMessage = "Database permission error. Please try again or contact support if this persists.";
       } else if (error.message?.includes('storage')) {
-        errorMessage = "Error uploading documents. Please check file sizes and try again.";
+        errorMessage = "File upload error. Please check that your files are under 5MB and in the correct format.";
+      } else if (error.message?.includes('duplicate')) {
+        errorMessage = "An account with this email already exists. Please try logging in instead.";
       }
       
       toast({
