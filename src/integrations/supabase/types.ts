@@ -1386,6 +1386,7 @@ export type Database = {
           onesignal_player_id: string | null
           performance_score: number | null
           phone: string | null
+          profile_image: string | null
           push_subscription: Json | null
           total_deliveries: number | null
           total_earnings: number | null
@@ -1409,6 +1410,7 @@ export type Database = {
           onesignal_player_id?: string | null
           performance_score?: number | null
           phone?: string | null
+          profile_image?: string | null
           push_subscription?: Json | null
           total_deliveries?: number | null
           total_earnings?: number | null
@@ -1432,6 +1434,7 @@ export type Database = {
           onesignal_player_id?: string | null
           performance_score?: number | null
           phone?: string | null
+          profile_image?: string | null
           push_subscription?: Json | null
           total_deliveries?: number | null
           total_earnings?: number | null
@@ -3884,6 +3887,30 @@ export type Database = {
         }
         Relationships: []
       }
+      service_config: {
+        Row: {
+          created_at: string | null
+          encrypted: boolean | null
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string | null
+          encrypted?: boolean | null
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string | null
+          encrypted?: boolean | null
+          key?: string
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       special_offers: {
         Row: {
           created_at: string
@@ -5505,6 +5532,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_auth_user_phone: { Args: { user_email: string }; Returns: string }
       get_available_orders_for_agent: {
         Args: { p_agent_id: string }
         Returns: {
@@ -5767,6 +5795,7 @@ export type Database = {
         Args: { seller_user_id: string; time_period?: string }
         Returns: Json
       }
+      get_service_config: { Args: { config_key: string }; Returns: string }
       get_suggestions_within_range: {
         Args: { range_km?: number; seller_lat: number; seller_lon: number }
         Returns: {
@@ -5860,6 +5889,12 @@ export type Database = {
           usage_limit: number
           valid_from: string
           valid_until: string
+        }[]
+      }
+      get_user_phone_from_metadata: {
+        Args: { user_email: string }
+        Returns: {
+          phone: string
         }[]
       }
       get_user_player_ids: {
