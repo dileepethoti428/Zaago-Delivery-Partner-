@@ -32,6 +32,7 @@ const PrivacySecurity = lazy(() => import("./pages/PrivacySecurity"));
 const Help = lazy(() => import("./pages/Help"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SellerDashboard = lazy(() => import("./pages/SellerDashboard"));
+const AdminApprovals = lazy(() => import("./pages/AdminApprovals"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -149,6 +150,9 @@ const AppContent = () => {
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/privacy-security" element={<RequireAuth><PrivacySecurity /></RequireAuth>} />
             <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin/approvals" element={<RequireAuth><AdminApprovals /></RequireAuth>} />
 
             {/* Redirect old index route */}
             <Route path="/index" element={<Navigate to="/home" replace />} />
