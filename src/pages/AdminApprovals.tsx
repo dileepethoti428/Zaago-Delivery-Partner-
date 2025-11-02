@@ -125,11 +125,21 @@ const AdminApprovals = () => {
     try {
       setProcessingId(agent.user_id);
 
-      const { data, error } = await supabase.functions.invoke("approve-agent", {
-        body: {
-          user_id: agent.user_id,
-          approved: true,
-        },
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Authentication required",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.rpc("approve_agent_direct", {
+        p_user_id: agent.user_id,
+        p_approved: true,
+        p_rejection_reason: null,
+        p_admin_id: user.id,
       });
 
       if (error) throw error;
@@ -166,12 +176,21 @@ const AdminApprovals = () => {
     try {
       setProcessingId(selectedAgent.user_id);
 
-      const { data, error } = await supabase.functions.invoke("approve-agent", {
-        body: {
-          user_id: selectedAgent.user_id,
-          approved: false,
-          rejection_reason: rejectionReason,
-        },
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Authentication required",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.rpc("approve_agent_direct", {
+        p_user_id: selectedAgent.user_id,
+        p_approved: false,
+        p_rejection_reason: rejectionReason,
+        p_admin_id: user.id,
       });
 
       if (error) throw error;

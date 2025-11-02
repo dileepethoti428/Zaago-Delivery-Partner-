@@ -5106,6 +5106,19 @@ export type Database = {
         Args: { p_coupon_code: string; p_order_total?: number }
         Returns: Json
       }
+      approve_agent_direct: {
+        Args: {
+          p_admin_id?: string
+          p_approved: boolean
+          p_rejection_reason?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      approve_delivery_agent: {
+        Args: { p_admin_user_id: string; p_agent_id: string }
+        Returns: Json
+      }
       approve_user: {
         Args: { admin_user_id: string; target_user_id: string }
         Returns: Json
@@ -6035,6 +6048,10 @@ export type Database = {
           }
       reconcile_completed_orders: { Args: never; Returns: Json }
       refresh_todays_best_deals: { Args: never; Returns: undefined }
+      reject_delivery_agent: {
+        Args: { p_admin_user_id: string; p_agent_id: string; p_reason?: string }
+        Returns: Json
+      }
       reject_order: {
         Args: { p_agent_id: string; p_order_id: string; p_reason?: string }
         Returns: Json
@@ -6199,6 +6216,14 @@ export type Database = {
       }
       validate_reset_token: { Args: { token: string }; Returns: boolean }
       validate_secret_code: { Args: { input_code: string }; Returns: boolean }
+      verify_agent_document: {
+        Args: {
+          p_agent_id: string
+          p_document_type: string
+          p_verified_by: string
+        }
+        Returns: Json
+      }
       verify_order_otp: {
         Args: { p_agent_id: string; p_order_id: string; p_otp_code: string }
         Returns: Json
