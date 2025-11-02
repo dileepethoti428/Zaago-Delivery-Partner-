@@ -246,12 +246,6 @@ const SellerDashboard = () => {
     }, 30000);
 
     try {
-      // Play the ringtone only if enabled
-      if (ringtoneSettings.enabled) {
-        playNotificationSound();
-      }
-      addDebugLog(`✅ Ringtone played successfully for packed order: ${orderData.id}`);
-      
       // Show toast notification
       toast({
         title: "🎉 Order Ready for Pickup!",
@@ -476,7 +470,7 @@ const SellerDashboard = () => {
             </div>
           </div>
           <p className="text-sm text-gray-600 mb-3">
-            You'll hear a ringtone when orders are packed and ready for pickup
+            You'll be notified when orders are packed and ready for pickup
           </p>
           
           {/* Debug Panel */}
