@@ -617,9 +617,8 @@ const Home = () => {
       });
     }, 15000);
 
-    // Play the ringtone immediately for new orders - ALWAYS PLAY FOR URGENT ORDERS
-    console.log('🔊 Playing immediate notification sound for new order');
-    playNotificationSound();
+    // Ringtone disabled - showing visual notification only
+    console.log('📢 Showing immediate notification for new order (audio disabled)');
     
     // Show immediate toast notification with different styling
     toast({
@@ -649,9 +648,8 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play different notification sound for ready orders - ALWAYS PLAY
-    console.log('🔊 Playing availability notification sound');
-    playNotificationSound();
+    // Ringtone disabled - showing visual notification only
+    console.log('📢 Showing availability notification (audio disabled)');
     
     // Show availability toast notification
     toast({
@@ -680,9 +678,8 @@ const Home = () => {
       });
     }, 30000);
 
-    // Play the ringtone - ALWAYS PLAY FOR NEW PACKED ORDERS
-    console.log('🔊 Playing notification sound for packed order');
-    playNotificationSound();
+    // Ringtone disabled - showing visual notification only
+    console.log('📢 Showing packed order notification (audio disabled)');
     
     // Show toast notification
     toast({
@@ -1759,9 +1756,8 @@ const Home = () => {
               }
             }
             
-            // ⚠️ CRITICAL: ALWAYS play audio for urgent packed order notifications
-            console.log('🔊 [BROADCAST-AUDIO] Playing notification sound for packed order');
-            playNotificationSound();
+            // Ringtone disabled - showing visual notification only
+            console.log('📢 [BROADCAST] Showing notification for packed order (audio disabled)');
               
             // Show urgent toast
             toast({
