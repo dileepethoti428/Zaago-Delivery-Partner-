@@ -34,8 +34,7 @@ import {
   MapPinOff,
   Trophy,
   BarChart3,
-  ChevronDown,
-  UserCheck
+  ChevronDown
 } from "lucide-react";
 import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
@@ -161,8 +160,6 @@ const Home = () => {
   const [agent, setAgent] = useState<{ id: string } | null>(null);
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
   const notificationCooldownRef = useRef<Map<string, number>>(new Map());
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   
   // Refresh debouncing state
   const [isRealTimeRefreshing, setIsRealTimeRefreshing] = useState(false);
@@ -182,7 +179,6 @@ const Home = () => {
   useEffect(() => {
     const timeout = setTimeout(() => {
       loadAgentSettings();
-      checkAdminStatus();
     }, 100); // Defer non-critical loading
     
     return () => clearTimeout(timeout);
@@ -289,34 +285,6 @@ const Home = () => {
     }
   };
 
-  const checkAdminStatus = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin");
-
-      if (roles && roles.length > 0) {
-        setIsAdmin(true);
-        
-        // Fetch pending approvals count
-        const { data: pendingProfiles, error } = await supabase
-          .from("profiles")
-          .select("user_id", { count: "exact", head: true })
-          .eq("approval_status", "pending");
-        
-        if (!error && pendingProfiles) {
-          setPendingApprovalsCount(pendingProfiles.length || 0);
-        }
-      }
-    } catch (error) {
-      console.error("Error checking admin status:", error);
-    }
-  };
 
   // Check if a new order should trigger immediate notification (on INSERT)
   const shouldPlayImmediateNotificationForOrder = (orderData: any): boolean => {
@@ -2023,25 +1991,6 @@ const Home = () => {
           </div>
           
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Admin Approvals Button - Only show for admins */}
-            {isAdmin && (
-              <div className="relative">
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={() => navigate('/admin/approvals')}
-                  className="hover:bg-gray-100 h-9 w-9"
-                >
-                  <UserCheck className="w-5 h-5 text-gray-700" />
-                </Button>
-                {pendingApprovalsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
-                    {pendingApprovalsCount}
-                  </span>
-                )}
-              </div>
-            )}
-            
             {/* Notification Bell */}
             <div className="relative">
               <Button 
