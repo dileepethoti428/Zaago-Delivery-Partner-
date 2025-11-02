@@ -189,6 +189,17 @@ const Login = () => {
 
       const userId = authData.user.id;
 
+      // Wait for session to be fully established
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Verify session is established
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error("Session not established. Please try again.");
+      }
+      
+      console.log('Session established for user:', userId);
+
       // Step 2: Upload documents to storage
       const aadharFrontFile = data.aadharFront[0];
       const aadharBackFile = data.aadharBack[0];
@@ -242,9 +253,18 @@ const Login = () => {
       
     } catch (error: any) {
       console.error('Signup error:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = error.message;
+      if (error.message?.includes('row-level security') || error.message?.includes('policy')) {
+        errorMessage = "Session error. Please try signing up again.";
+      } else if (error.message?.includes('storage')) {
+        errorMessage = "Error uploading documents. Please check file sizes and try again.";
+      }
+      
       toast({
         title: "Signup Failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
