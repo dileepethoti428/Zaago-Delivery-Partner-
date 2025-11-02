@@ -25,6 +25,21 @@ const PendingApproval = () => {
           return;
         }
 
+        // Check if user is admin first
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        // If admin, redirect to home immediately
+        if (roleData?.role === 'admin') {
+          navigate('/home');
+          return;
+        }
+
+        // Otherwise check approval status
         const { data } = await supabase
           .from('profiles')
           .select('approval_status, rejection_reason, documents_submitted')

@@ -25,17 +25,32 @@ export default function RequireAuth({ children }: PropsWithChildren) {
         return;
       }
 
-      // User is authenticated, now check approval status
+      // User is authenticated
       setIsAuthed(true);
 
       try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('approval_status, documents_verified')
-          .eq('user_id', session.user.id)
-          .single();
+        // Fetch both user role and profile in parallel
+        const [roleResult, profileResult] = await Promise.all([
+          supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .eq('role', 'admin')
+            .maybeSingle(),
+          supabase
+            .from('profiles')
+            .select('approval_status, documents_verified')
+            .eq('user_id', session.user.id)
+            .single()
+        ]);
 
-        setIsApproved(profile?.approval_status === 'approved');
+        // If user is admin, grant immediate access
+        if (roleResult.data?.role === 'admin') {
+          setIsApproved(true);
+        } else {
+          // Otherwise check approval status
+          setIsApproved(profileResult.data?.approval_status === 'approved');
+        }
       } catch (err) {
         console.error('Error checking approval status:', err);
         setIsApproved(false);
@@ -60,13 +75,28 @@ export default function RequireAuth({ children }: PropsWithChildren) {
         setIsAuthed(true);
 
         try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('approval_status')
-            .eq('user_id', session.user.id)
-            .single();
+          // Fetch both user role and profile in parallel
+          const [roleResult, profileResult] = await Promise.all([
+            supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', session.user.id)
+              .eq('role', 'admin')
+              .maybeSingle(),
+            supabase
+              .from('profiles')
+              .select('approval_status')
+              .eq('user_id', session.user.id)
+              .single()
+          ]);
 
-          setIsApproved(profile?.approval_status === 'approved');
+          // If user is admin, grant immediate access
+          if (roleResult.data?.role === 'admin') {
+            setIsApproved(true);
+          } else {
+            // Otherwise check approval status
+            setIsApproved(profileResult.data?.approval_status === 'approved');
+          }
         } catch (err) {
           console.error('Error checking approval status:', err);
           setIsApproved(false);
