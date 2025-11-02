@@ -24,6 +24,7 @@ import {
   Save,
   Camera
 } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 interface ProfileData {
   id?: string;
@@ -310,17 +311,16 @@ const Profile = () => {
         <CardContent className="p-6">
           <div className="flex items-center space-x-4">
             <div className="relative">
-              <div className="w-20 h-20 bg-gradient-neon rounded-full flex items-center justify-center">
-                {profileData.photo_url ? (
-                  <img 
-                    src={profileData.photo_url} 
-                    alt="Profile" 
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
+              <Avatar className="w-20 h-20 border-2 border-primary">
+                <AvatarImage 
+                  src={profileData.photo_url} 
+                  alt={profileData.full_name || 'Agent'} 
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-gradient-neon">
                   <User className="w-10 h-10 text-white" />
-                )}
-              </div>
+                </AvatarFallback>
+              </Avatar>
               <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-background flex items-center justify-center">
                 {agentStats.is_active ? '🟢' : '🔴'}
               </div>
