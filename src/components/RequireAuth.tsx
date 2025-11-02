@@ -29,8 +29,8 @@ export default function RequireAuth({ children }: PropsWithChildren) {
       setIsAuthed(true);
 
       try {
-        // Fetch both user role and profile in parallel
-        const [roleResult, profileResult] = await Promise.all([
+        // Fetch both user role, profile, and delivery agent status in parallel
+        const [roleResult, profileResult, agentResult] = await Promise.all([
           supabase
             .from('user_roles')
             .select('role')
@@ -41,15 +41,32 @@ export default function RequireAuth({ children }: PropsWithChildren) {
             .from('profiles')
             .select('approval_status, documents_verified')
             .eq('user_id', session.user.id)
-            .single()
+            .single(),
+          supabase
+            .from('delivery_agents')
+            .select('verification_status')
+            .eq('agent_id', session.user.id)
+            .maybeSingle()
         ]);
 
         // If user is admin, grant immediate access
         if (roleResult.data?.role === 'admin') {
           setIsApproved(true);
         } else {
-          // Otherwise check approval status
-          setIsApproved(profileResult.data?.approval_status === 'approved');
+          // Check both profiles and delivery_agents for approval status (fallback mechanism)
+          const profileApproved = profileResult.data?.approval_status === 'approved';
+          const agentApproved = agentResult.data?.verification_status === 'approved';
+          
+          // Grant access if either table shows approved status
+          setIsApproved(profileApproved || agentApproved);
+          
+          // Log if there's a mismatch for debugging
+          if (profileApproved !== agentApproved) {
+            console.warn('Approval status mismatch detected:', {
+              profileStatus: profileResult.data?.approval_status,
+              agentStatus: agentResult.data?.verification_status
+            });
+          }
         }
       } catch (err) {
         console.error('Error checking approval status:', err);
@@ -75,8 +92,8 @@ export default function RequireAuth({ children }: PropsWithChildren) {
         setIsAuthed(true);
 
         try {
-          // Fetch both user role and profile in parallel
-          const [roleResult, profileResult] = await Promise.all([
+          // Fetch both user role, profile, and delivery agent status in parallel
+          const [roleResult, profileResult, agentResult] = await Promise.all([
             supabase
               .from('user_roles')
               .select('role')
@@ -87,15 +104,24 @@ export default function RequireAuth({ children }: PropsWithChildren) {
               .from('profiles')
               .select('approval_status')
               .eq('user_id', session.user.id)
-              .single()
+              .single(),
+            supabase
+              .from('delivery_agents')
+              .select('verification_status')
+              .eq('agent_id', session.user.id)
+              .maybeSingle()
           ]);
 
           // If user is admin, grant immediate access
           if (roleResult.data?.role === 'admin') {
             setIsApproved(true);
           } else {
-            // Otherwise check approval status
-            setIsApproved(profileResult.data?.approval_status === 'approved');
+            // Check both profiles and delivery_agents for approval status (fallback mechanism)
+            const profileApproved = profileResult.data?.approval_status === 'approved';
+            const agentApproved = agentResult.data?.verification_status === 'approved';
+            
+            // Grant access if either table shows approved status
+            setIsApproved(profileApproved || agentApproved);
           }
         } catch (err) {
           console.error('Error checking approval status:', err);

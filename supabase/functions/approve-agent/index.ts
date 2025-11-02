@@ -74,8 +74,8 @@ serve(async (req) => {
       );
     }
 
-    // Update profile approval status
-    const { error: profileError } = await supabaseClient
+    // Update profile approval status with explicit verification
+    const { data: profileData, error: profileError } = await supabaseClient
       .from('profiles')
       .update({
         approval_status: approved ? 'approved' : 'rejected',
@@ -84,30 +84,55 @@ serve(async (req) => {
         rejection_reason: approved ? null : rejection_reason,
         documents_verified: approved ? true : false,
       })
-      .eq('user_id', user_id);
+      .eq('user_id', user_id)
+      .select()
+      .single();
 
     if (profileError) {
       console.error('Profile update error:', profileError);
       return new Response(
-        JSON.stringify({ error: 'Failed to update profile', details: profileError }),
+        JSON.stringify({ 
+          error: 'Failed to update profile', 
+          details: profileError,
+          message: 'Could not update profile approval status. Please check RLS policies and try again.'
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    // Verify profile was actually updated
+    if (!profileData) {
+      console.error('Profile update succeeded but no data returned');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Profile update verification failed',
+          message: 'Profile update may not have been applied. Please check the database manually.'
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Profile updated successfully:', profileData);
+
     // If approved, update delivery_agents and agent_documents
     if (approved) {
-      // Update delivery_agents status
-      const { error: agentError } = await supabaseClient
+      // Update delivery_agents status with verification
+      const { data: agentData, error: agentError } = await supabaseClient
         .from('delivery_agents')
         .update({
           verification_status: 'approved',
           documents_verified: true,
           is_active: true,
         })
-        .eq('email', targetUser.user.email);
+        .eq('email', targetUser.user.email)
+        .select()
+        .single();
 
       if (agentError) {
         console.error('Agent update error:', agentError);
+        console.warn('Profile was updated but delivery_agents update failed. Trigger should sync this automatically.');
+      } else {
+        console.log('Delivery agent updated successfully:', agentData);
       }
 
       // Update agent_documents verification
@@ -125,17 +150,22 @@ serve(async (req) => {
         console.error('Document update error:', docError);
       }
     } else {
-      // If rejected, update delivery_agents status
-      const { error: agentError } = await supabaseClient
+      // If rejected, update delivery_agents status with verification
+      const { data: agentData, error: agentError } = await supabaseClient
         .from('delivery_agents')
         .update({
           verification_status: 'rejected',
           is_active: false,
         })
-        .eq('email', targetUser.user.email);
+        .eq('email', targetUser.user.email)
+        .select()
+        .single();
 
       if (agentError) {
         console.error('Agent update error:', agentError);
+        console.warn('Profile was updated but delivery_agents update failed. Trigger should sync this automatically.');
+      } else {
+        console.log('Delivery agent updated successfully:', agentData);
       }
     }
 
