@@ -17,6 +17,7 @@ import { OneSignalInit } from "@/components/OneSignalInit";
 import Splash from "./pages/Splash";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
+import PendingApproval from "./pages/PendingApproval";
 
 // Lazy load non-critical pages (loaded on demand)
 const MyDeliveries = lazy(() => import("./pages/MyDeliveries"));
@@ -133,6 +134,7 @@ const AppContent = () => {
             {/* Splash and Authentication */}
             <Route path="/" element={<Splash />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/pending-approval" element={<PendingApproval />} />
             
             {/* Main App Routes */}
             <Route path="/home" element={<RequireAuth><Home /></RequireAuth>} />

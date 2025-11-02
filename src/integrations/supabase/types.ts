@@ -168,6 +168,83 @@ export type Database = {
           },
         ]
       }
+      agent_documents: {
+        Row: {
+          aadhar_back_url: string | null
+          aadhar_front_url: string | null
+          aadhar_number: string | null
+          aadhar_verified: boolean | null
+          agent_id: string | null
+          created_at: string | null
+          dl_back_url: string | null
+          dl_expiry_date: string | null
+          dl_front_url: string | null
+          dl_number: string | null
+          dl_verified: boolean | null
+          id: string
+          profile_photo_url: string | null
+          rejection_reason: string | null
+          updated_at: string | null
+          uploaded_at: string | null
+          user_id: string
+          verification_notes: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          aadhar_back_url?: string | null
+          aadhar_front_url?: string | null
+          aadhar_number?: string | null
+          aadhar_verified?: boolean | null
+          agent_id?: string | null
+          created_at?: string | null
+          dl_back_url?: string | null
+          dl_expiry_date?: string | null
+          dl_front_url?: string | null
+          dl_number?: string | null
+          dl_verified?: boolean | null
+          id?: string
+          profile_photo_url?: string | null
+          rejection_reason?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          user_id: string
+          verification_notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          aadhar_back_url?: string | null
+          aadhar_front_url?: string | null
+          aadhar_number?: string | null
+          aadhar_verified?: boolean | null
+          agent_id?: string | null
+          created_at?: string | null
+          dl_back_url?: string | null
+          dl_expiry_date?: string | null
+          dl_front_url?: string | null
+          dl_number?: string | null
+          dl_verified?: boolean | null
+          id?: string
+          profile_photo_url?: string | null
+          rejection_reason?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          user_id?: string
+          verification_notes?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_documents_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_earnings_tracking: {
         Row: {
           accepted_at: string
@@ -1298,6 +1375,7 @@ export type Database = {
           created_at: string | null
           deliveries_today: number | null
           device_info: Json | null
+          documents_verified: boolean | null
           email: string
           id: string
           is_active: boolean | null
@@ -1312,6 +1390,7 @@ export type Database = {
           total_deliveries: number | null
           total_earnings: number | null
           updated_at: string | null
+          verification_status: string | null
         }
         Insert: {
           agent_id: string
@@ -1319,6 +1398,7 @@ export type Database = {
           created_at?: string | null
           deliveries_today?: number | null
           device_info?: Json | null
+          documents_verified?: boolean | null
           email: string
           id?: string
           is_active?: boolean | null
@@ -1333,6 +1413,7 @@ export type Database = {
           total_deliveries?: number | null
           total_earnings?: number | null
           updated_at?: string | null
+          verification_status?: string | null
         }
         Update: {
           agent_id?: string
@@ -1340,6 +1421,7 @@ export type Database = {
           created_at?: string | null
           deliveries_today?: number | null
           device_info?: Json | null
+          documents_verified?: boolean | null
           email?: string
           id?: string
           is_active?: boolean | null
@@ -1354,6 +1436,7 @@ export type Database = {
           total_deliveries?: number | null
           total_earnings?: number | null
           updated_at?: string | null
+          verification_status?: string | null
         }
         Relationships: []
       }
@@ -3280,6 +3363,8 @@ export type Database = {
           date_of_birth: string | null
           default_address: Json | null
           device_info: Json | null
+          documents_submitted: boolean | null
+          documents_verified: boolean | null
           emergency_contact: string | null
           full_name: string | null
           id: string
@@ -3290,6 +3375,7 @@ export type Database = {
           photo_url: string | null
           photo_verified: boolean | null
           rejection_reason: string | null
+          submission_date: string | null
           updated_at: string
           user_id: string
         }
@@ -3305,6 +3391,8 @@ export type Database = {
           date_of_birth?: string | null
           default_address?: Json | null
           device_info?: Json | null
+          documents_submitted?: boolean | null
+          documents_verified?: boolean | null
           emergency_contact?: string | null
           full_name?: string | null
           id?: string
@@ -3315,6 +3403,7 @@ export type Database = {
           photo_url?: string | null
           photo_verified?: boolean | null
           rejection_reason?: string | null
+          submission_date?: string | null
           updated_at?: string
           user_id: string
         }
@@ -3330,6 +3419,8 @@ export type Database = {
           date_of_birth?: string | null
           default_address?: Json | null
           device_info?: Json | null
+          documents_submitted?: boolean | null
+          documents_verified?: boolean | null
           emergency_contact?: string | null
           full_name?: string | null
           id?: string
@@ -3340,6 +3431,7 @@ export type Database = {
           photo_url?: string | null
           photo_verified?: boolean | null
           rejection_reason?: string | null
+          submission_date?: string | null
           updated_at?: string
           user_id?: string
         }

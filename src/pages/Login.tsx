@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage, FormLabel } from "@/components/ui/form";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Smartphone, Mail, Lock, User, Truck, Eye, EyeOff } from "lucide-react";
+import { Smartphone, Mail, Lock, User, Truck, Eye, EyeOff, Upload, FileText, Calendar } from "lucide-react";
 
 // Validation schemas
 const loginSchema = z.object({
@@ -25,6 +25,14 @@ const signupSchema = z.object({
   phone: z.string().regex(/^[0-9]{10}$/, "Phone must be 10 digits"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
+  aadharNumber: z.string().regex(/^[0-9]{12}$/, "Aadhar must be 12 digits"),
+  aadharFront: z.any().refine((file) => file?.length > 0, "Aadhar front image required"),
+  aadharBack: z.any().refine((file) => file?.length > 0, "Aadhar back image required"),
+  dlNumber: z.string().min(5, "Enter valid DL number"),
+  dlFront: z.any().refine((file) => file?.length > 0, "DL front image required"),
+  dlBack: z.any().refine((file) => file?.length > 0, "DL back image required"),
+  dlExpiry: z.string().min(1, "DL expiry date required"),
+  profilePhoto: z.any().refine((file) => file?.length > 0, "Profile photo required"),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -94,8 +102,24 @@ const Login = () => {
       phone: "",
       password: "",
       confirmPassword: "",
+      aadharNumber: "",
+      dlNumber: "",
+      dlExpiry: "",
     },
   });
+
+  // Helper function to upload document
+  const uploadDocument = async (userId: string, docType: string, file: File) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}/${docType}.${fileExt}`;
+    
+    const { data, error } = await supabase.storage
+      .from('agent-documents')
+      .upload(fileName, file, { upsert: true });
+      
+    if (error) throw error;
+    return data;
+  };
 
   const onLoginSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
@@ -107,12 +131,26 @@ const Login = () => {
 
       if (error) throw error;
 
+      // Check approval status
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('approval_status')
+        .eq('user_id', authData.user.id)
+        .single();
+
+      if (profile?.approval_status === 'pending') {
+        navigate('/pending-approval');
+        return;
+      } else if (profile?.approval_status === 'rejected') {
+        navigate('/pending-approval');
+        return;
+      }
+
       toast({
         title: "Login Successful",
         description: "Welcome back to Zaago!",
       });
       
-      // Simply redirect to home for existing users
       navigate('/home');
     } catch (error: any) {
       console.error('Login error:', error);
@@ -129,7 +167,8 @@ const Login = () => {
   const onSignupSubmit = async (data: SignupFormData) => {
     setIsLoading(true);
     try {
-      const { data: authData, error } = await supabase.auth.signUp({
+      // Step 1: Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
@@ -137,32 +176,71 @@ const Login = () => {
             full_name: data.name,
             phone: data.phone,
           },
-          emailRedirectTo: `${window.location.origin}/home`
+          emailRedirectTo: `${window.location.origin}/pending-approval`
         }
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("User creation failed");
 
-      if (authData.user && !authData.session) {
-        toast({
-          title: "Check Your Email",
-          description: "We've sent you a confirmation link to complete your registration.",
+      const userId = authData.user.id;
+
+      // Step 2: Upload documents to storage
+      const aadharFrontFile = data.aadharFront[0];
+      const aadharBackFile = data.aadharBack[0];
+      const dlFrontFile = data.dlFront[0];
+      const dlBackFile = data.dlBack[0];
+      const profilePhotoFile = data.profilePhoto[0];
+
+      const uploadPromises = [
+        uploadDocument(userId, 'aadhar-front', aadharFrontFile),
+        uploadDocument(userId, 'aadhar-back', aadharBackFile),
+        uploadDocument(userId, 'dl-front', dlFrontFile),
+        uploadDocument(userId, 'dl-back', dlBackFile),
+        uploadDocument(userId, 'profile-photo', profilePhotoFile),
+      ];
+
+      const uploadResults = await Promise.all(uploadPromises);
+
+      // Step 3: Save document metadata to agent_documents table
+      const { error: docError } = await supabase
+        .from('agent_documents')
+        .insert({
+          user_id: userId,
+          aadhar_number: data.aadharNumber,
+          aadhar_front_url: uploadResults[0].path,
+          aadhar_back_url: uploadResults[1].path,
+          dl_number: data.dlNumber,
+          dl_front_url: uploadResults[2].path,
+          dl_back_url: uploadResults[3].path,
+          dl_expiry_date: data.dlExpiry,
+          profile_photo_url: uploadResults[4].path,
         });
-        return;
-      }
-      
+
+      if (docError) throw docError;
+
+      // Step 4: Update profile to mark documents submitted
+      await supabase
+        .from('profiles')
+        .update({
+          documents_submitted: true,
+          submission_date: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+
       toast({
-        title: "Account Created",
-        description: "Welcome to Zaago!",
+        title: "Application Submitted",
+        description: "Your documents are under review. You'll be notified once approved.",
       });
       
-      // Redirect to home for new users
-      navigate('/home');
+      // Redirect to pending approval page
+      navigate('/pending-approval');
+      
     } catch (error: any) {
       console.error('Signup error:', error);
       toast({
         title: "Signup Failed",
-        description: error.message || "Failed to create account. Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -454,7 +532,196 @@ const Login = () => {
                     )}
                   />
                   
-                  <Button 
+                  {/* Document Section Divider */}
+                  <div className="border-t border-border pt-4 mt-6">
+                    <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" />
+                      Required Documents
+                    </h3>
+                  </div>
+
+                  {/* Aadhar Card Number */}
+                  <FormField
+                    control={signupForm.control}
+                    name="aadharNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Aadhar Card Number</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field}
+                            placeholder="Enter 12-digit Aadhar number"
+                            maxLength={12}
+                            className="bg-input/50 border-border focus:border-primary transition-all"
+                          />
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Aadhar Front */}
+                  <FormField
+                    control={signupForm.control}
+                    name="aadharFront"
+                    render={({ field: { onChange, value, ...field } }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Aadhar Card (Front)</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input 
+                              {...field}
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => onChange(e.target.files)}
+                              className="bg-input/50 border-border focus:border-primary transition-all file:mr-4 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/10 file:text-primary file:text-xs"
+                            />
+                            <Upload className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Aadhar Back */}
+                  <FormField
+                    control={signupForm.control}
+                    name="aadharBack"
+                    render={({ field: { onChange, value, ...field } }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Aadhar Card (Back)</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input 
+                              {...field}
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => onChange(e.target.files)}
+                              className="bg-input/50 border-border focus:border-primary transition-all file:mr-4 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/10 file:text-primary file:text-xs"
+                            />
+                            <Upload className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Driving License Number */}
+                  <FormField
+                    control={signupForm.control}
+                    name="dlNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Driving License Number</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field}
+                            placeholder="Enter DL number"
+                            className="bg-input/50 border-border focus:border-primary transition-all"
+                          />
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* DL Front */}
+                  <FormField
+                    control={signupForm.control}
+                    name="dlFront"
+                    render={({ field: { onChange, value, ...field } }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Driving License (Front)</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input 
+                              {...field}
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => onChange(e.target.files)}
+                              className="bg-input/50 border-border focus:border-primary transition-all file:mr-4 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/10 file:text-primary file:text-xs"
+                            />
+                            <Upload className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* DL Back */}
+                  <FormField
+                    control={signupForm.control}
+                    name="dlBack"
+                    render={({ field: { onChange, value, ...field } }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Driving License (Back)</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input 
+                              {...field}
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => onChange(e.target.files)}
+                              className="bg-input/50 border-border focus:border-primary transition-all file:mr-4 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/10 file:text-primary file:text-xs"
+                            />
+                            <Upload className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* DL Expiry Date */}
+                  <FormField
+                    control={signupForm.control}
+                    name="dlExpiry"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">DL Expiry Date</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                              {...field}
+                              type="date"
+                              className="pl-10 bg-input/50 border-border focus:border-primary transition-all"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Profile Photo */}
+                  <FormField
+                    control={signupForm.control}
+                    name="profilePhoto"
+                    render={({ field: { onChange, value, ...field } }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Profile Photo</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input 
+                              {...field}
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => onChange(e.target.files)}
+                              className="bg-input/50 border-border focus:border-primary transition-all file:mr-4 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/10 file:text-primary file:text-xs"
+                            />
+                            <Upload className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-destructive text-xs" />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button
                     type="submit"
                     className="w-full bg-gradient-neon hover:shadow-neon hover:scale-105 transition-all duration-300 font-semibold"
                     disabled={isLoading}

@@ -1,0 +1,185 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2, Clock, XCircle, CheckCircle } from "lucide-react";
+
+interface ProfileData {
+  approval_status: string;
+  rejection_reason?: string;
+  documents_submitted: boolean;
+}
+
+const PendingApproval = () => {
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          navigate('/login');
+          return;
+        }
+
+        const { data } = await supabase
+          .from('profiles')
+          .select('approval_status, rejection_reason, documents_submitted')
+          .eq('user_id', user.id)
+          .single();
+
+        setProfile(data);
+
+        // If approved, redirect to home
+        if (data?.approval_status === 'approved') {
+          navigate('/home');
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+
+    // Subscribe to profile changes
+    const subscribeToChanges = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const channel = supabase
+          .channel('profile-changes')
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'profiles',
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              const newProfile = payload.new as ProfileData;
+              setProfile(newProfile);
+              if (newProfile.approval_status === 'approved') {
+                navigate('/home');
+              }
+            }
+          )
+          .subscribe();
+
+        return channel;
+      }
+    };
+
+    let channel: any;
+    subscribeToChanges().then((ch) => {
+      channel = ch;
+    });
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [navigate]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-dark">
+      <Card className="w-full max-w-md glass border-primary/20 shadow-2xl">
+        <CardHeader className="text-center pb-6">
+          <div className="flex justify-center mb-4">
+            {profile?.approval_status === 'pending' && (
+              <div className="relative">
+                <Clock className="w-16 h-16 text-warning animate-pulse" />
+                <div className="absolute inset-0 w-16 h-16 bg-warning/20 rounded-full animate-ping" />
+              </div>
+            )}
+            {profile?.approval_status === 'rejected' && (
+              <XCircle className="w-16 h-16 text-destructive" />
+            )}
+          </div>
+          <CardTitle className="text-2xl text-foreground">
+            {profile?.approval_status === 'pending' ? 'Application Under Review' : 'Application Rejected'}
+          </CardTitle>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          {profile?.approval_status === 'pending' && (
+            <>
+              <div className="text-center space-y-3">
+                <p className="text-muted-foreground">
+                  Your documents are being verified by our team.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  This usually takes 24-48 hours. You'll receive an email once your application is approved.
+                </p>
+              </div>
+              
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+                <h3 className="font-semibold text-sm mb-2 text-foreground">Documents Submitted:</h3>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-success" />
+                    Aadhar Card
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-success" />
+                    Driving License
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-success" />
+                    Profile Photo
+                  </li>
+                </ul>
+              </div>
+            </>
+          )}
+
+          {profile?.approval_status === 'rejected' && (
+            <>
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                <h3 className="font-semibold text-sm mb-2 text-destructive">Rejection Reason:</h3>
+                <p className="text-sm text-muted-foreground">
+                  {profile.rejection_reason || 'Please contact support for more information.'}
+                </p>
+              </div>
+              
+              <Button 
+                onClick={() => navigate('/login')}
+                className="w-full bg-primary hover:bg-primary/90"
+              >
+                Resubmit Application
+              </Button>
+            </>
+          )}
+
+          <Button 
+            onClick={handleSignOut}
+            variant="outline"
+            className="w-full"
+          >
+            Sign Out
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default PendingApproval;
