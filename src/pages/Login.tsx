@@ -134,36 +134,18 @@ const Login = () => {
       // Small delay to allow auth state to settle
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Check both admin role and approval status in parallel
-      const [roleResult, profileResult] = await Promise.all([
-        supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', authData.user.id)
-          .eq('role', 'admin')
-          .maybeSingle(),
-        supabase
-          .from('profiles')
-          .select('approval_status')
-          .eq('user_id', authData.user.id)
-          .single()
-      ]);
+      // Check approval status
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('approval_status')
+        .eq('user_id', authData.user.id)
+        .single();
 
-      // If user is admin, grant immediate access
-      if (roleResult.data?.role === 'admin') {
-        toast({
-          title: "Login Successful",
-          description: "Welcome back, Admin!",
-        });
-        navigate('/home');
-        return;
-      }
-
-      // Check approval status for non-admin users
-      if (profileResult.data?.approval_status === 'pending') {
+      // Check approval status
+      if (profile?.approval_status === 'pending') {
         navigate('/pending-approval');
         return;
-      } else if (profileResult.data?.approval_status === 'rejected') {
+      } else if (profile?.approval_status === 'rejected') {
         navigate('/pending-approval');
         return;
       }
