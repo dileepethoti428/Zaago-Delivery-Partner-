@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Clock, XCircle, CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Clock, XCircle, CheckCircle, RefreshCw } from "lucide-react";
 
 interface ProfileData {
   approval_status: string;
@@ -13,8 +14,10 @@ interface ProfileData {
 
 const PendingApproval = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -101,6 +104,73 @@ const PendingApproval = () => {
     };
   }, [navigate]);
 
+  const handleRefreshStatus = async () => {
+    setRefreshing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+
+      // Check admin role first
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (roleData?.role === 'admin') {
+        toast({
+          title: "Access Granted",
+          description: "You have admin privileges. Redirecting...",
+        });
+        navigate('/home');
+        return;
+      }
+
+      // Fetch latest approval status from database
+      const { data: freshProfile } = await supabase
+        .from('profiles')
+        .select('approval_status, rejection_reason, documents_submitted')
+        .eq('user_id', user.id)
+        .single();
+
+      if (freshProfile) {
+        setProfile(freshProfile);
+        
+        if (freshProfile.approval_status === 'approved') {
+          toast({
+            title: "Application Approved!",
+            description: "Your account has been approved. Redirecting to home...",
+          });
+          navigate('/home');
+        } else if (freshProfile.approval_status === 'pending') {
+          toast({
+            title: "Still Pending",
+            description: "Your application is still under review.",
+          });
+        } else if (freshProfile.approval_status === 'rejected') {
+          toast({
+            title: "Application Status Updated",
+            description: "Please review the rejection reason below.",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing status:', error);
+      toast({
+        title: "Refresh Failed",
+        description: "Could not check status. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate('/login');
@@ -163,6 +233,25 @@ const PendingApproval = () => {
                   </li>
                 </ul>
               </div>
+
+              <Button 
+                onClick={handleRefreshStatus}
+                variant="outline"
+                className="w-full border-primary/20 hover:bg-primary/10"
+                disabled={refreshing}
+              >
+                {refreshing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Checking Status...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Check Status
+                  </>
+                )}
+              </Button>
             </>
           )}
 
