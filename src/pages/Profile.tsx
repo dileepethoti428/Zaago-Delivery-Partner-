@@ -113,18 +113,27 @@ const Profile = () => {
         .eq('user_id', agent.agent_id)
         .maybeSingle();
 
-      // Get agent documents for profile photo
+      // Get agent documents for profile photo (using user_id since agent_id might be null)
       const { data: agentDocs } = await supabase
         .from('agent_documents')
         .select('profile_photo_url')
-        .eq('agent_id', agent.id)
+        .eq('user_id', agent.agent_id)
         .maybeSingle();
+
+      // Generate public URL for the profile photo from storage
+      let photoUrl = agentDocs?.profile_photo_url || profile?.photo_url;
+      if (photoUrl && !photoUrl.startsWith('http')) {
+        const { data } = supabase.storage
+          .from('agent-documents')
+          .getPublicUrl(photoUrl);
+        photoUrl = data.publicUrl;
+      }
 
       const profileInfo = {
         full_name: profile?.full_name || agent.name,
         phone: profile?.phone || agent.phone,
         email: agent.email,
-        photo_url: agentDocs?.profile_photo_url || profile?.photo_url,
+        photo_url: photoUrl,
         address: profile?.address || '',
         emergency_contact: profile?.emergency_contact || '',
         user_id: agent.agent_id
