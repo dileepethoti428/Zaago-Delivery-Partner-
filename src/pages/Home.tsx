@@ -142,7 +142,17 @@ const Home = () => {
   
   // Use wake lock to keep app active in background when online
   const { isActive: isWakeLockActive } = useWakeLock(isOnline);
-  const [isLoading, setIsLoading] = useState(false);
+  // Get agent first to use with realtime hook
+  const [agent, setAgent] = useState<{ id: string } | null>(null);
+  
+  // Use realtime orders as primary data source
+  const {
+    orders: realtimeOrders,
+    isLoading: isLoadingRealtime,
+    isRefreshing: isRefreshingRealtime,
+    refreshOrders: realtimeRefresh,
+  } = useRealtimeOrders(agent?.id || null);
+  
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -157,7 +167,6 @@ const Home = () => {
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
   const [showFlexiblePaymentDialog, setShowFlexiblePaymentDialog] = useState(false);
-  const [agent, setAgent] = useState<{ id: string } | null>(null);
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
   const notificationCooldownRef = useRef<Map<string, number>>(new Map());
   
@@ -1059,79 +1068,95 @@ const Home = () => {
 
   // Unified fetch orders function with deduplication
   const fetchOrdersData = async (showLoading: boolean = false): Promise<Order[]> => {
-    if (showLoading) setIsLoading(true);
-    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return [];
-      
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
+      // Add 10-second timeout to prevent infinite loading
+      const fetchPromise = (async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) return [];
+        
+        const { data: agent } = await supabase
+          .from('delivery_agents')
+          .select('id')
+          .eq('email', user.email)
+          .eq('is_active', true)
+          .maybeSingle();
 
-      if (!agent) return [];
+        if (!agent) return [];
 
-      // Fetch both available and assigned orders in parallel
-      const [availableResponse, assignedResponse] = await Promise.all([
-        supabase.functions.invoke('get-available-orders', {
-          body: { agent_id: agent.id }
-        }),
-        supabase
-          .from('orders')
-          .select('*')
-          .eq('agent_id', agent.id)
-          .in('status', ['packed', 'assigned', 'picked_up', 'in_transit'])
-          .order('created_at', { ascending: false })
-      ]);
+        // Fetch both available and assigned orders in parallel
+        const [availableResponse, assignedResponse] = await Promise.all([
+          supabase.functions.invoke('get-available-orders', {
+            body: { agent_id: agent.id }
+          }),
+          supabase
+            .from('orders')
+            .select('*')
+            .eq('agent_id', agent.id)
+            .in('status', ['packed', 'assigned', 'picked_up', 'in_transit'])
+            .order('created_at', { ascending: false })
+        ]);
 
-      if (availableResponse.error) throw availableResponse.error;
-      if (assignedResponse.error) throw assignedResponse.error;
+        if (availableResponse.error) throw availableResponse.error;
+        if (assignedResponse.error) throw assignedResponse.error;
 
-      // Transform orders
-      const availableOrders = await Promise.all(
-        (availableResponse.data?.orders || []).map((order: any) => transformOrder(order, false))
-      );
-      
-      const assignedOrders = await Promise.all(
-        (assignedResponse.data || []).map((order: any) => transformOrder(order, true))
-      );
+        // Transform orders
+        const availableOrders = await Promise.all(
+          (availableResponse.data?.orders || []).map((order: any) => transformOrder(order, false))
+        );
+        
+        const assignedOrders = await Promise.all(
+          (assignedResponse.data || []).map((order: any) => transformOrder(order, true))
+        );
 
-      // Combine and deduplicate orders by ID
-      const orderMap = new Map<string, Order>();
-      
-      // Add available orders first
-      availableOrders.forEach(order => {
-        orderMap.set(order.id, order);
-      });
-      
-      // Add assigned orders (will override available ones if duplicate)
-      assignedOrders.forEach(order => {
-        orderMap.set(order.id, order);
-      });
+        // Combine and deduplicate orders by ID
+        const orderMap = new Map<string, Order>();
+        
+        // Add available orders first
+        availableOrders.forEach(order => {
+          orderMap.set(order.id, order);
+        });
+        
+        // Add assigned orders (will override available ones if duplicate)
+        assignedOrders.forEach(order => {
+          orderMap.set(order.id, order);
+        });
 
-      const deduplicatedOrders = Array.from(orderMap.values());
-      
-      // Filter out rejected orders client-side to prevent reappearance
-      const filteredOrders = deduplicatedOrders.filter(order => !rejectedOrderIds.has(order.id));
-      
-      if (rejectedOrderIds.size > 0) {
-        const rejectedCount = deduplicatedOrders.length - filteredOrders.length;
-        if (rejectedCount > 0) {
-          console.log(`🚫 Filtered out ${rejectedCount} rejected orders`);
+        const deduplicatedOrders = Array.from(orderMap.values());
+        
+        // Filter out rejected orders client-side to prevent reappearance
+        const filteredOrders = deduplicatedOrders.filter(order => !rejectedOrderIds.has(order.id));
+        
+        if (rejectedOrderIds.size > 0) {
+          const rejectedCount = deduplicatedOrders.length - filteredOrders.length;
+          if (rejectedCount > 0) {
+            console.log(`🚫 Filtered out ${rejectedCount} rejected orders`);
+          }
         }
-      }
+        
+        console.log(`📊 Orders processed: ${availableOrders.length} available, ${assignedOrders.length} assigned, ${deduplicatedOrders.length} total after deduplication, ${filteredOrders.length} after filtering rejected`);
+        
+        return filteredOrders;
+      })();
       
-      console.log(`📊 Orders processed: ${availableOrders.length} available, ${assignedOrders.length} assigned, ${deduplicatedOrders.length} total after deduplication, ${filteredOrders.length} after filtering rejected`);
+      // Create timeout promise
+      const timeoutPromise = new Promise<Order[]>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      );
       
-      return filteredOrders;
-    } catch (error) {
+      // Race between fetch and timeout
+      return await Promise.race([fetchPromise, timeoutPromise]);
+      
+    } catch (error: any) {
       console.error('Error fetching orders:', error);
-      throw error;
-    } finally {
-      if (showLoading) setIsLoading(false);
+      if (error?.message === 'Request timeout') {
+        console.error('⏱️ Fetch timeout - falling back to real-time data');
+        toast({
+          title: "Slow Connection",
+          description: "Using cached data. Pull to refresh when online.",
+          variant: "default",
+        });
+      }
+      return []; // Return empty array instead of throwing
     }
   };
 
@@ -1864,32 +1889,55 @@ const Home = () => {
 
   // Auto-refresh orders every 2 seconds when page is active (reduced from 5 seconds)
   useEffect(() => {
-    fetchAgentName();
-    fetchOrders();
+    // Fetch agent info and set up intervals
+    const initializeAgent = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) return;
+
+        const { data: agentData } = await supabase
+          .from('delivery_agents')
+          .select('id, name')
+          .eq('email', user.email)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (agentData) {
+          setAgent({ id: agentData.id });
+          setAgentName(agentData.name || '');
+        }
+      } catch (error) {
+        console.error('Error fetching agent:', error);
+      }
+    };
+
+    initializeAgent();
     
-    // Optimized auto-refresh interval - 30 seconds (reduced from 2s to save 93% edge requests)
+    // Optimized auto-refresh interval - 30 seconds
     const autoRefreshInterval = setInterval(async () => {
-      if (!document.hidden && isOnline) {
+      if (!document.hidden && isOnline && realtimeRefresh) {
         console.log('📊 Auto-refreshing orders (30-second interval)...');
         setIsAutoRefreshing(true);
         try {
-          await debouncedRefresh('auto-refresh-interval');
+          await realtimeRefresh();
         } finally {
           setTimeout(() => setIsAutoRefreshing(false), 300);
         }
       }
-    }, 30000); // 30-second refresh - real-time subscriptions handle instant updates
+    }, 30000);
     
-    // Backup refresh interval - every 5 minutes for offline scenarios
+    // Backup refresh interval - every 5 minutes
     const backupInterval = setInterval(() => {
-      debouncedRefresh('backup-refresh-interval'); // Silent backup refresh
+      if (realtimeRefresh) {
+        realtimeRefresh();
+      }
     }, 300000);
     
     return () => {
       clearInterval(autoRefreshInterval);
       clearInterval(backupInterval);
     };
-  }, [isOnline]);
+  }, [isOnline, realtimeRefresh]);
 
   // Trigger location picker when showLocationPicker changes
   useEffect(() => {
@@ -1899,7 +1947,17 @@ const Home = () => {
     }
   }, [showLocationPicker, locationPickerTrigger]);
 
-  if (isLoading) {
+  // Use realtime orders with processed data
+  useEffect(() => {
+    if (realtimeOrders && realtimeOrders.length > 0) {
+      // Process realtime orders through calculateOrderDistances
+      calculateOrderDistances(realtimeOrders).then(setOrders);
+    } else {
+      setOrders([]);
+    }
+  }, [realtimeOrders]);
+
+  if (isLoadingRealtime) {
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Header Skeleton */}
