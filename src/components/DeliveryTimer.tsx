@@ -64,6 +64,8 @@ const DeliveryTimer = ({
     const actualOrderTime = new Date(orderPlacedAt);
     console.log('🕐 Setting up immediate delivery timer for order placed at:', actualOrderTime);
 
+    let timer: NodeJS.Timeout | null = null;
+
     const calculateTimeLeft = () => {
       const now = new Date();
       
@@ -72,11 +74,13 @@ const DeliveryTimer = ({
       const deliveryTime = new Date(actualOrderTime.getTime() + durationMinutes * 60 * 1000);
       const difference = deliveryTime.getTime() - now.getTime();
 
-      console.log(`⏰ Calculating immediate delivery timer: ${durationMinutes}min from order time:`, actualOrderTime, 'Current time:', now, 'Delivery time:', deliveryTime);
-
       if (difference <= 0) {
         setTimeLeft({ minutes: 0, seconds: 0, isExpired: true });
-        console.log('⏰ Immediate delivery timer expired');
+        // Stop the interval immediately when timer expires
+        if (timer) {
+          clearInterval(timer);
+          console.log('✅ Timer stopped - delivery expired');
+        }
         return;
       }
 
@@ -90,9 +94,11 @@ const DeliveryTimer = ({
     calculateTimeLeft();
 
     // Update every second
-    const timer = setInterval(calculateTimeLeft, 1000);
+    timer = setInterval(calculateTimeLeft, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, [deliveryType, orderPlacedAt, immediateTimingConfig]);
 
   const formatTime = (num: number): string => {

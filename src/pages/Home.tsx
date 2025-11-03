@@ -1651,7 +1651,25 @@ const Home = () => {
     }
   }, [sortBy]);
 
-  const availableOrders = getSortedOrders(orders.filter(order => order.status !== 'delivered'));
+  const availableOrders = getSortedOrders(orders.filter(order => {
+    // Filter out delivered orders
+    if (order.status === 'delivered') return false;
+    
+    // Filter out expired immediate deliveries (more than 2 hours old)
+    if (order.delivery_type === 'immediate' && order.order_placed_at) {
+      const now = new Date();
+      const orderTime = new Date(order.order_placed_at);
+      const hoursSinceOrder = (now.getTime() - orderTime.getTime()) / (1000 * 60 * 60);
+      
+      // Only show immediate orders that are less than 2 hours old
+      if (hoursSinceOrder > 2) {
+        console.log(`⏰ Filtering out expired immediate order ${order.id} (${hoursSinceOrder.toFixed(1)} hours old)`);
+        return false;
+      }
+    }
+    
+    return true;
+  }));
   const assignedOrders = availableOrders.filter(order => order.status === 'assigned');
 
   // Track previous location to prevent unnecessary refreshes
