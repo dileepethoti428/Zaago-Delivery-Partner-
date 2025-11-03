@@ -142,16 +142,44 @@ const Home = () => {
   
   // Use wake lock to keep app active in background when online
   const { isActive: isWakeLockActive } = useWakeLock(isOnline);
-  // Get agent first to use with realtime hook
+  // Initialize agent state BEFORE using it in hooks
   const [agent, setAgent] = useState<{ id: string } | null>(null);
+  const [isAgentInitialized, setIsAgentInitialized] = useState(false);
   
-  // Use realtime orders as primary data source
+  // Initialize agent immediately on mount
+  useEffect(() => {
+    const initAgent = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) return;
+
+        const { data: agentData } = await supabase
+          .from('delivery_agents')
+          .select('id, name')
+          .eq('email', user.email)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (agentData) {
+          setAgent({ id: agentData.id });
+          setAgentName(agentData.name || '');
+          setIsAgentInitialized(true);
+        }
+      } catch (error) {
+        console.error('Error initializing agent:', error);
+      }
+    };
+
+    initAgent();
+  }, []);
+  
+  // Use realtime orders as primary data source - only after agent is initialized
   const {
     orders: realtimeOrders,
     isLoading: isLoadingRealtime,
     isRefreshing: isRefreshingRealtime,
     refreshOrders: realtimeRefresh,
-  } = useRealtimeOrders(agent?.id || null);
+  } = useRealtimeOrders(isAgentInitialized ? agent?.id || null : null);
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
@@ -1856,86 +1884,73 @@ const Home = () => {
     }
   }, [orders.length, location.latitude, location.longitude]); // Trigger when new orders are loaded or location is available
 
-  // Real-time distance and payout updates - recalculate every 30 seconds for active orders
+  // Real-time distance and payout updates - recalculate every 10 minutes only when location changes significantly
   useEffect(() => {
     if (orders.length === 0 || !location.latitude || !location.longitude) return;
     
+    let isMounted = true;
+    
     const updateDistancesAndPayouts = async () => {
-      console.log('🔄 Updating real-time distances and payouts...');
-      const updatedOrders = await calculateOrderDistances(orders);
+      if (!isMounted) return;
       
-      // Recalculate payouts using backend for all orders with updated distances
+      console.log('🔄 Updating real-time distances and payouts...');
+      const updatedOrders = await calculateOrderDistances(orders.slice(0, 20)); // Only top 20 orders
+      
+      if (!isMounted) return;
+      
+      // Recalculate payouts using backend for updated orders
       const ordersWithUpdatedPayouts = await Promise.all(
         updatedOrders.map(async (order) => {
           const backendPayout = await updatePayoutFromBackend(order.distance_km || 2.5, order.id);
           return {
             ...order,
-            agent_payout: backendPayout // Always refresh payout calculation
+            agent_payout: backendPayout
           };
         })
       );
       
+      if (!isMounted) return;
+      
+      // Only update orders that were recalculated
       setOrders(ordersWithUpdatedPayouts);
     };
 
     // Initial calculation
     updateDistancesAndPayouts();
     
-    // Set up interval for real-time updates every 5 minutes (optimized to reduce edge requests)
-    const interval = setInterval(updateDistancesAndPayouts, 300000);
+    // Reduce frequency to 10 minutes
+    const interval = setInterval(updateDistancesAndPayouts, 600000);
     
-    return () => clearInterval(interval);
-  }, [location.latitude, location.longitude]); // Recalculate when agent location changes
-
-  // Auto-refresh orders every 2 seconds when page is active (reduced from 5 seconds)
-  useEffect(() => {
-    // Fetch agent info and set up intervals
-    const initializeAgent = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user?.email) return;
-
-        const { data: agentData } = await supabase
-          .from('delivery_agents')
-          .select('id, name')
-          .eq('email', user.email)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        if (agentData) {
-          setAgent({ id: agentData.id });
-          setAgentName(agentData.name || '');
-        }
-      } catch (error) {
-        console.error('Error fetching agent:', error);
-      }
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
     };
+  }, [location.latitude, location.longitude]);
 
-    initializeAgent();
+  // Single auto-refresh interval - 60 seconds (reduced from 30)
+  useEffect(() => {
+    if (!realtimeRefresh || !isOnline) return;
     
-    // Optimized auto-refresh interval - 30 seconds
+    let isMounted = true;
+    
+    // Single consolidated auto-refresh
     const autoRefreshInterval = setInterval(async () => {
-      if (!document.hidden && isOnline && realtimeRefresh) {
-        console.log('📊 Auto-refreshing orders (30-second interval)...');
-        setIsAutoRefreshing(true);
-        try {
-          await realtimeRefresh();
-        } finally {
+      if (!isMounted || document.hidden || !isOnline) return;
+      
+      console.log('📊 Auto-refreshing orders (60-second interval)...');
+      setIsAutoRefreshing(true);
+      try {
+        await realtimeRefresh();
+      } finally {
+        if (isMounted) {
           setTimeout(() => setIsAutoRefreshing(false), 300);
         }
       }
-    }, 30000);
-    
-    // Backup refresh interval - every 5 minutes
-    const backupInterval = setInterval(() => {
-      if (realtimeRefresh) {
-        realtimeRefresh();
-      }
-    }, 300000);
+    }, 60000); // Single 60-second interval
     
     return () => {
+      isMounted = false;
       clearInterval(autoRefreshInterval);
-      clearInterval(backupInterval);
     };
   }, [isOnline, realtimeRefresh]);
 
@@ -1947,14 +1962,37 @@ const Home = () => {
     }
   }, [showLocationPicker, locationPickerTrigger]);
 
-  // Use realtime orders with processed data
+  // Process realtime orders with distance calculation - FIXED infinite loop
   useEffect(() => {
-    if (realtimeOrders && realtimeOrders.length > 0) {
-      // Process realtime orders through calculateOrderDistances
-      calculateOrderDistances(realtimeOrders).then(setOrders);
-    } else {
-      setOrders([]);
-    }
+    let isMounted = true;
+    
+    const processOrders = async () => {
+      if (!realtimeOrders || realtimeOrders.length === 0) {
+        if (isMounted) setOrders([]);
+        return;
+      }
+      
+      // Only recalculate if orders actually changed (compare IDs)
+      const newOrderIds = realtimeOrders.map(o => o.id).sort().join(',');
+      const currentOrderIds = orders.map(o => o.id).sort().join(',');
+      
+      if (newOrderIds === currentOrderIds) {
+        console.log('📊 Orders unchanged, skipping recalculation');
+        return;
+      }
+      
+      console.log('📊 Processing new realtime orders');
+      const processed = await calculateOrderDistances(realtimeOrders);
+      if (isMounted) {
+        setOrders(processed);
+      }
+    };
+    
+    processOrders();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [realtimeOrders]);
 
   if (isLoadingRealtime) {

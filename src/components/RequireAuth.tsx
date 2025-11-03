@@ -11,9 +11,31 @@ export default function RequireAuth({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let mounted = true;
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    // Cache auth check in sessionStorage to prevent duplicate checks
+    const cacheKey = 'auth_check_cache';
+    const cacheDuration = 30000; // 30 seconds
 
     // Check session and approval status
     const checkAuthAndApproval = async () => {
+      // Check cache first
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const { isAuthed: cachedAuth, isApproved: cachedApproval, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < cacheDuration) {
+            console.log('Using cached auth status');
+            setIsAuthed(cachedAuth);
+            setIsApproved(cachedApproval);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          // Invalid cache, continue with normal check
+        }
+      }
+
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (!mounted) return;
@@ -22,6 +44,11 @@ export default function RequireAuth({ children }: PropsWithChildren) {
         setIsAuthed(false);
         setIsApproved(false);
         setLoading(false);
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          isAuthed: false,
+          isApproved: false,
+          timestamp: Date.now()
+        }));
         return;
       }
 
@@ -29,7 +56,7 @@ export default function RequireAuth({ children }: PropsWithChildren) {
       setIsAuthed(true);
 
       try {
-        // Fetch both user role, profile, and delivery agent status in parallel
+        // Fetch approval status in parallel
         const [roleResult, profileResult, agentResult] = await Promise.all([
           supabase
             .from('user_roles')
@@ -39,7 +66,7 @@ export default function RequireAuth({ children }: PropsWithChildren) {
             .maybeSingle(),
           supabase
             .from('profiles')
-            .select('approval_status, documents_verified')
+            .select('approval_status')
             .eq('user_id', session.user.id)
             .single(),
           supabase
@@ -49,89 +76,60 @@ export default function RequireAuth({ children }: PropsWithChildren) {
             .maybeSingle()
         ]);
 
-        // If user is admin, grant immediate access
-        if (roleResult.data?.role === 'admin') {
-          setIsApproved(true);
-        } else {
-          // Check both profiles and delivery_agents for approval status (fallback mechanism)
-          const profileApproved = profileResult.data?.approval_status === 'approved';
-          const agentApproved = agentResult.data?.verification_status === 'approved';
-          
-          // Grant access if either table shows approved status
-          setIsApproved(profileApproved || agentApproved);
-          
-          // Log if there's a mismatch for debugging
-          if (profileApproved !== agentApproved) {
-            console.warn('Approval status mismatch detected:', {
-              profileStatus: profileResult.data?.approval_status,
-              agentStatus: agentResult.data?.verification_status
-            });
-          }
-        }
+        const isAdmin = roleResult.data?.role === 'admin';
+        const profileApproved = profileResult.data?.approval_status === 'approved';
+        const agentApproved = agentResult.data?.verification_status === 'approved';
+        const approved = isAdmin || profileApproved || agentApproved;
+        
+        if (!mounted) return;
+        
+        setIsApproved(approved);
+        
+        // Cache the result
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          isAuthed: true,
+          isApproved: approved,
+          timestamp: Date.now()
+        }));
       } catch (err) {
         console.error('Error checking approval status:', err);
-        setIsApproved(false);
+        if (mounted) setIsApproved(false);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     checkAuthAndApproval();
 
-    // Subscribe to auth changes
+    // Subscribe to auth changes with debouncing
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!mounted) return;
         
-        if (!session) {
-          setIsAuthed(false);
-          setIsApproved(false);
-          return;
-        }
-
-        setIsAuthed(true);
-
-        try {
-          // Fetch both user role, profile, and delivery agent status in parallel
-          const [roleResult, profileResult, agentResult] = await Promise.all([
-            supabase
-              .from('user_roles')
-              .select('role')
-              .eq('user_id', session.user.id)
-              .eq('role', 'admin')
-              .maybeSingle(),
-            supabase
-              .from('profiles')
-              .select('approval_status')
-              .eq('user_id', session.user.id)
-              .single(),
-            supabase
-              .from('delivery_agents')
-              .select('verification_status')
-              .eq('agent_id', session.user.id)
-              .maybeSingle()
-          ]);
-
-          // If user is admin, grant immediate access
-          if (roleResult.data?.role === 'admin') {
-            setIsApproved(true);
-          } else {
-            // Check both profiles and delivery_agents for approval status (fallback mechanism)
-            const profileApproved = profileResult.data?.approval_status === 'approved';
-            const agentApproved = agentResult.data?.verification_status === 'approved';
-            
-            // Grant access if either table shows approved status
-            setIsApproved(profileApproved || agentApproved);
+        // Clear cache on auth change
+        sessionStorage.removeItem(cacheKey);
+        
+        // Debounce rapid auth state changes
+        if (debounceTimer) clearTimeout(debounceTimer);
+        
+        debounceTimer = setTimeout(() => {
+          if (!mounted) return;
+          
+          if (!session) {
+            setIsAuthed(false);
+            setIsApproved(false);
+            return;
           }
-        } catch (err) {
-          console.error('Error checking approval status:', err);
-          setIsApproved(false);
-        }
+
+          // Re-check approval status
+          checkAuthAndApproval();
+        }, 200); // 200ms debounce
       }
     );
 
     return () => {
       mounted = false;
+      if (debounceTimer) clearTimeout(debounceTimer);
       subscription.unsubscribe();
     };
   }, []);

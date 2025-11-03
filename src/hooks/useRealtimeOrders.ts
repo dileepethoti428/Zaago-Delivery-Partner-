@@ -26,11 +26,24 @@ export const useRealtimeOrders = (agentId: string | null) => {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
 
-  // WebSocket connection for real-time updates - optimized with specific events
+  // WebSocket connection for real-time updates - optimized with debouncing
   useEffect(() => {
-    if (!agentId || !isOnline) return;
+    if (!agentId || !isOnline) {
+      console.log('⏸️ Skipping real-time connection - agentId:', !!agentId, 'isOnline:', isOnline);
+      return;
+    }
 
     console.log('🔌 Establishing real-time connection for orders');
+    
+    let debounceTimer: NodeJS.Timeout | null = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    
+    // Debounce function for batch updates
+    const debouncedUpdate = (callback: () => void) => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(callback, 100); // 100ms debounce
+    };
     
     // Listen to INSERT events for new orders (placed status only)
     const channel = supabase
@@ -50,15 +63,17 @@ export const useRealtimeOrders = (agentId: string | null) => {
           // If order is delivered, remove it from available orders
           if (newOrder?.status === 'delivered') {
             console.log('✅ Order delivered, removing from cache:', newOrder.id);
-            queryClient.setQueryData(
-              queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
-              (oldData: any) => {
-                if (!oldData) return oldData;
-                return oldData.filter((order: any) => order.id !== newOrder.id);
-              }
-            );
-            setLastUpdate(new Date());
-            setUpdateCount(prev => prev + 1);
+            debouncedUpdate(() => {
+              queryClient.setQueryData(
+                queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
+                (oldData: any) => {
+                  if (!oldData) return oldData;
+                  return oldData.filter((order: any) => order.id !== newOrder.id);
+                }
+              );
+              setLastUpdate(new Date());
+              setUpdateCount(prev => prev + 1);
+            });
             return;
           }
           
@@ -86,22 +101,27 @@ export const useRealtimeOrders = (agentId: string | null) => {
               }
             } catch (error) {
               console.warn('⚠️ Failed to validate order distance, including by default:', error);
-              // Fall through to add order (fail open for backward compatibility)
             }
           }
           
-          // Add new order to cache
-          queryClient.setQueryData(
-            queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
-            (oldData: any) => {
-              if (!oldData) return oldData;
-              const newOrder = payload.new as RealtimeOrder;
-              return [newOrder, ...oldData];
-            }
-          );
-          
-          setLastUpdate(new Date());
-          setUpdateCount(prev => prev + 1);
+          // Add new order to cache with debouncing
+          debouncedUpdate(() => {
+            queryClient.setQueryData(
+              queryKeys.availableOrders(agentId, { lat: 0, lng: 0 }),
+              (oldData: any) => {
+                if (!oldData) return oldData;
+                const newOrder = payload.new as RealtimeOrder;
+                // Prevent duplicates
+                if (oldData.some((o: any) => o.id === newOrder.id)) {
+                  console.log('📦 Order already in cache, skipping:', newOrder.id);
+                  return oldData;
+                }
+                return [newOrder, ...oldData];
+              }
+            );
+            setLastUpdate(new Date());
+            setUpdateCount(prev => prev + 1);
+          });
         }
       )
       .on(
@@ -138,10 +158,25 @@ export const useRealtimeOrders = (agentId: string | null) => {
       )
       .subscribe((status) => {
         console.log('📡 Real-time subscription status:', status);
+        
+        // Handle connection failures with exponential backoff
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          reconnectAttempts++;
+          if (reconnectAttempts >= maxReconnectAttempts) {
+            console.error('❌ Max reconnection attempts reached');
+            return;
+          }
+          
+          const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+          console.log(`⏳ Reconnecting in ${backoffDelay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+        } else if (status === 'SUBSCRIBED') {
+          reconnectAttempts = 0; // Reset on successful connection
+        }
       });
 
     return () => {
       console.log('🔌 Cleaning up real-time connection');
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [agentId, queryClient, isOnline]);

@@ -65,19 +65,28 @@ const Login = () => {
 
   // Check if user is already authenticated on component mount
   useEffect(() => {
+    let isNavigating = false;
+    
     const checkSession = async () => {
+      if (isNavigating) return;
+      
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      if (session && !isNavigating) {
+        isNavigating = true;
         navigate('/home', { replace: true });
       }
     };
     
     checkSession();
 
-    // Set up auth state listener
+    // Set up auth state listener with navigation guard
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && event === 'SIGNED_IN') {
-        navigate('/home', { replace: true });
+      if (session && event === 'SIGNED_IN' && !isNavigating) {
+        isNavigating = true;
+        // Small delay to let auth settle
+        setTimeout(() => {
+          navigate('/home', { replace: true });
+        }, 100);
       }
     });
 
