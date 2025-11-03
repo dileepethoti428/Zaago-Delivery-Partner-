@@ -1,6 +1,7 @@
 // Service Worker for background sync and caching
-const CACHE_NAME = 'zaago-cache-v1';
-const API_CACHE = 'zaago-api-cache-v1';
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = `zaago-cache-${CACHE_VERSION}`;
+const API_CACHE = `zaago-api-cache-${CACHE_VERSION}`;
 const BACKGROUND_SYNC_TAG = 'background-sync';
 
 // Ringtone files for notifications
@@ -43,7 +44,8 @@ self.addEventListener('activate', (event) => {
       .then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME && cacheName !== API_CACHE) {
+            // Delete ALL old caches that don't match current version
+            if (!cacheName.includes(CACHE_VERSION)) {
               console.log('🗑️ Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
@@ -62,27 +64,31 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Handle API requests with network-first strategy
-  if (url.pathname.includes('/functions/v1/') || url.pathname.includes('/rest/v1/')) {
-    event.respondWith(
-      networkFirstStrategy(request)
-    );
+  // NEVER cache Supabase API calls - always fetch fresh
+  if (url.hostname.includes('supabase.co')) {
+    event.respondWith(fetch(request));
     return;
   }
 
-  // Handle static assets with cache-first strategy
-  if (request.destination === 'script' || request.destination === 'style' || request.destination === 'image') {
-    event.respondWith(
-      cacheFirstStrategy(request)
-    );
+  // Handle API requests with network-first strategy (for edge functions)
+  if (url.pathname.includes('/functions/v1/') || url.pathname.includes('/rest/v1/')) {
+    event.respondWith(fetch(request)); // Always fresh
+    return;
+  }
+
+  // Cache static assets aggressively
+  if (request.destination === 'script' || 
+      request.destination === 'style' || 
+      request.destination === 'image' ||
+      request.destination === 'font' ||
+      request.destination === 'audio') {
+    event.respondWith(cacheFirstStrategy(request));
     return;
   }
 
   // Handle navigation requests
   if (request.mode === 'navigate') {
-    event.respondWith(
-      navigationStrategy(request)
-    );
+    event.respondWith(navigationStrategy(request));
     return;
   }
 });

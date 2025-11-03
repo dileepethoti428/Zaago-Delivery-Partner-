@@ -4,17 +4,16 @@ import { QueryClient } from '@tanstack/react-query';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Cache for 5 minutes by default
-      staleTime: 5 * 60 * 1000,
+      // Reduce staleTime for realtime data
+      staleTime: 2 * 60 * 1000, // 2 minutes (down from 5)
       // Keep cache for 30 minutes
       gcTime: 30 * 60 * 1000,
       // Retry failed requests 3 times
       retry: 3,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      // Smart background refetch - optimized to reduce edge requests
-      refetchOnWindowFocus: false, // Disabled - manual refresh available
-      refetchOnReconnect: true, // Keep for offline recovery
-      // Only refetch if data is stale
+      // Disable automatic refetches - rely on Supabase realtime
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false, // Changed from true - rely on realtime
       refetchOnMount: false,
     },
     mutations: {

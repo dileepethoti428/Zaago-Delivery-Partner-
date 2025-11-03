@@ -1,5 +1,7 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",
@@ -11,11 +13,33 @@
       ]
     },
     {
-      "source": "/:path*\\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|mp3|wav|woff|woff2|ttf|eot)",
+      "source": "/(.*)\\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|mp3|wav|woff|woff2|ttf|eot)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/favicon.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
         }
       ]
     },
