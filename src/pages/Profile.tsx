@@ -96,32 +96,50 @@ const Profile = () => {
         return;
       }
 
-      // Set agent stats
+      // Set agent stats from delivery_agents table
       setAgentStats({
         total_deliveries: agent.total_deliveries || 0,
-        average_rating: agent.average_rating || 0,
-        total_earnings: agent.total_earnings || 0,
+        average_rating: Number(agent.average_rating) || 0,
+        total_earnings: Number(agent.total_earnings) || 0,
         performance_score: agent.performance_score || 100,
         is_active: agent.is_active || false,
         last_delivery_at: agent.last_delivery_at
       });
 
-      // Try to get profile data (if exists)
-      const { data: profile } = await supabase
+      // Get or create profile data using auth user ID
+      let { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('user_id', agent.agent_id)
+        .eq('user_id', user.id)
         .maybeSingle();
 
-      // Get agent documents for profile photo (using user_id since agent_id might be null)
+      // If profile doesn't exist, create it
+      if (!profile) {
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            user_id: user.id,
+            full_name: agent.name,
+            phone: agent.phone,
+            approval_status: agent.verification_status
+          })
+          .select()
+          .single();
+
+        if (!createError) {
+          profile = newProfile;
+        }
+      }
+
+      // Get agent documents for profile photo
       const { data: agentDocs } = await supabase
         .from('agent_documents')
         .select('profile_photo_url')
-        .eq('user_id', agent.agent_id)
+        .eq('user_id', user.id)
         .maybeSingle();
 
       // Generate public URL for the profile photo from storage
-      let photoUrl = agentDocs?.profile_photo_url || profile?.photo_url;
+      let photoUrl = agent.profile_image || agentDocs?.profile_photo_url || profile?.photo_url;
       if (photoUrl && !photoUrl.startsWith('http')) {
         const { data } = supabase.storage
           .from('agent-documents')
@@ -136,7 +154,7 @@ const Profile = () => {
         photo_url: photoUrl,
         address: profile?.address || '',
         emergency_contact: profile?.emergency_contact || '',
-        user_id: agent.agent_id
+        user_id: user.id
       };
 
       setProfileData(profileInfo);
@@ -158,7 +176,7 @@ const Profile = () => {
       setIsSaving(true);
 
       // Update or create profile
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('profiles')
         .upsert({
           user_id: editData.user_id,
@@ -174,11 +192,19 @@ const Profile = () => {
 
       if (error) throw error;
 
-      // Update delivery agent name if changed
+      // Update delivery agent name and phone if changed
+      const agentUpdates: any = {};
       if (editData.full_name !== profileData.full_name) {
+        agentUpdates.name = editData.full_name;
+      }
+      if (editData.phone !== profileData.phone) {
+        agentUpdates.phone = editData.phone;
+      }
+
+      if (Object.keys(agentUpdates).length > 0) {
         const { error: agentError } = await supabase
           .from('delivery_agents')
-          .update({ name: editData.full_name })
+          .update(agentUpdates)
           .eq('email', profileData.email);
 
         if (agentError) throw agentError;
