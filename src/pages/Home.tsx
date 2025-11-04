@@ -142,27 +142,31 @@ const Home = () => {
   
   // Use wake lock to keep app active in background when online
   const { isActive: isWakeLockActive } = useWakeLock(isOnline);
-  // Initialize agent state BEFORE using it in hooks
-  const [agent, setAgent] = useState<{ id: string } | null>(null);
-  const [isAgentInitialized, setIsAgentInitialized] = useState(false);
+  // Initialize agent state BEFORE using it in hooks - synchronously from cache
+  const getCachedAgent = () => {
+    const cachedAgentId = sessionStorage.getItem('agentId');
+    const cachedAgentName = sessionStorage.getItem('agentName');
+    return cachedAgentId ? { id: cachedAgentId, name: cachedAgentName || '' } : null;
+  };
   
-  // Initialize agent immediately on mount - with sessionStorage cache
+  const cachedAgentData = getCachedAgent();
+  const [agent, setAgent] = useState<{ id: string } | null>(cachedAgentData);
+  const [isAgentInitialized, setIsAgentInitialized] = useState(!!cachedAgentData);
+  
+  // Initialize agent immediately on mount - fetch from DB if not cached
   useEffect(() => {
+    // Skip if already initialized from cache
+    if (isAgentInitialized && agent) {
+      console.log('✅ Using cached agent data:', agent);
+      if (cachedAgentData?.name) {
+        setAgentName(cachedAgentData.name);
+      }
+      return;
+    }
+    
     const initAgent = async () => {
       try {
-        // Check sessionStorage first for faster navigation
-        const cachedAgentId = sessionStorage.getItem('agentId');
-        const cachedAgentName = sessionStorage.getItem('agentName');
-        
-        if (cachedAgentId && cachedAgentName) {
-          console.log('✅ Using cached agent data:', { id: cachedAgentId, name: cachedAgentName });
-          setAgent({ id: cachedAgentId });
-          setAgentName(cachedAgentName);
-          setIsAgentInitialized(true);
-          return;
-        }
-        
-        // If not cached, fetch from database
+        // Fetch from database
         const { data: { user } } = await supabase.auth.getUser();
         if (!user?.email) return;
 
@@ -191,13 +195,13 @@ const Home = () => {
     initAgent();
   }, []); // Empty deps - only run once
   
-  // Use realtime orders as primary data source - only after agent is initialized
+  // Use realtime orders as primary data source - enabled immediately with cached agent
   const {
     orders: realtimeOrders,
     isLoading: isLoadingRealtime,
     isRefreshing: isRefreshingRealtime,
     refreshOrders: realtimeRefresh,
-  } = useRealtimeOrders(isAgentInitialized ? agent?.id || null : null);
+  } = useRealtimeOrders(agent?.id || null);
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
@@ -1749,10 +1753,12 @@ const Home = () => {
 
   // Auto-update location when geolocation data is available
   useEffect(() => {
-    if (location.address) {
+    if (location.address && location.address !== 'Fetching address...') {
       setCurrentLocation(location.address);
+    } else if (location.loading && location.latitude && location.longitude) {
+      setCurrentLocation('Fetching address...');
     } else if (location.latitude && location.longitude) {
-      setCurrentLocation(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
+      setCurrentLocation(`Near ${location.latitude.toFixed(4)}°N, ${location.longitude.toFixed(4)}°E`);
     }
     
     // Only refresh orders when location changes significantly (more than 500m)
