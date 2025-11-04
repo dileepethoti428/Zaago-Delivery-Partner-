@@ -40,6 +40,14 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
 
   // Reverse geocoding to get address from coordinates using Google Places API
   const getAddressFromCoordinates = async (lat: number, lng: number): Promise<string> => {
+    // Check cache first (cache by rounded coordinates)
+    const cacheKey = `address_${lat.toFixed(4)}_${lng.toFixed(4)}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      console.log('✅ Using cached address:', cached);
+      return cached;
+    }
+    
     try {
       const { data, error } = await supabase.functions.invoke('google-places-geocode', {
         body: {
@@ -54,14 +62,17 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
       }
 
       if (data.success && data.address) {
+        // Cache the address for 24 hours
+        localStorage.setItem(cacheKey, data.address);
+        console.log('✅ Cached address:', data.address);
         return data.address;
       } else {
         throw new Error(data.error || 'Failed to get address');
       }
     } catch (error) {
       console.error('Error getting address from Google Places:', error);
-      // Fallback to coordinate display
-      return `Near ${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`;
+      // Better fallback message - don't show raw coordinates
+      return 'Location detected (address unavailable)';
     }
   };
 
@@ -106,14 +117,14 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
   const updateLocation = useCallback(async (position: GeolocationPosition) => {
     const { latitude, longitude, accuracy } = position.coords;
     
-    // Update location immediately for fast response
+    // Update location immediately for fast response with placeholder
     setLocation({
       latitude,
       longitude,
       accuracy,
       error: null,
       loading: false,
-      address: null, // Address will be updated asynchronously
+      address: 'Fetching address...', // Show placeholder instead of null
     });
 
     // Save to localStorage for real-time sync with other pages
@@ -126,6 +137,11 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
       setLocation(prev => ({ ...prev, address }));
     }).catch(error => {
       console.warn('Address lookup failed:', error);
+      // Set better fallback on error
+      setLocation(prev => ({ 
+        ...prev, 
+        address: 'Location detected (address unavailable)' 
+      }));
     });
     
     // Save to backend asynchronously (non-blocking)

@@ -60,7 +60,7 @@ const Earnings = () => {
   const { toast } = useToast();
 
   // Use React Query for live earnings tracking from order acceptance
-  const { data: earningsResponse, isLoading, refetch } = useQuery({
+  const { data: earningsResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['agent-live-earnings'],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -118,16 +118,12 @@ const Earnings = () => {
     };
   }, [refetch, toast]);
 
-  // Handle errors with toast
+  // Handle errors - remove toast, show error UI instead
   useEffect(() => {
-    if (!isLoading && !earningsResponse) {
-      toast({
-        title: "Error",
-        description: "Failed to load earnings data. Please try again.",
-        variant: "destructive"
-      });
+    if (error) {
+      console.error('❌ Error loading earnings:', error);
     }
-  }, [isLoading, earningsResponse, toast]);
+  }, [error]);
 
   const earningsData = {
     today: earningsResponse?.today || { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0 },
@@ -155,6 +151,31 @@ const Earnings = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="text-muted-foreground mt-2">Loading earnings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state with retry button
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+            <DollarSign className="w-8 h-8 text-destructive" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">Unable to Load Earnings</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : 'Failed to load earnings data'}
+            </p>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );

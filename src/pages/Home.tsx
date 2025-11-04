@@ -146,10 +146,23 @@ const Home = () => {
   const [agent, setAgent] = useState<{ id: string } | null>(null);
   const [isAgentInitialized, setIsAgentInitialized] = useState(false);
   
-  // Initialize agent immediately on mount
+  // Initialize agent immediately on mount - with sessionStorage cache
   useEffect(() => {
     const initAgent = async () => {
       try {
+        // Check sessionStorage first for faster navigation
+        const cachedAgentId = sessionStorage.getItem('agentId');
+        const cachedAgentName = sessionStorage.getItem('agentName');
+        
+        if (cachedAgentId && cachedAgentName) {
+          console.log('✅ Using cached agent data:', { id: cachedAgentId, name: cachedAgentName });
+          setAgent({ id: cachedAgentId });
+          setAgentName(cachedAgentName);
+          setIsAgentInitialized(true);
+          return;
+        }
+        
+        // If not cached, fetch from database
         const { data: { user } } = await supabase.auth.getUser();
         if (!user?.email) return;
 
@@ -161,9 +174,14 @@ const Home = () => {
           .maybeSingle();
 
         if (agentData) {
+          // Cache in sessionStorage for instant navigation
+          sessionStorage.setItem('agentId', agentData.id);
+          sessionStorage.setItem('agentName', agentData.name || '');
+          
           setAgent({ id: agentData.id });
           setAgentName(agentData.name || '');
           setIsAgentInitialized(true);
+          console.log('✅ Cached agent data for faster navigation');
         }
       } catch (error) {
         console.error('Error initializing agent:', error);
@@ -171,7 +189,7 @@ const Home = () => {
     };
 
     initAgent();
-  }, []);
+  }, []); // Empty deps - only run once
   
   // Use realtime orders as primary data source - only after agent is initialized
   const {
