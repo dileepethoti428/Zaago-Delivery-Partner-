@@ -1606,11 +1606,16 @@ const Home = () => {
   // Auto-update location when geolocation data is available
   useEffect(() => {
     if (location.address && location.address !== 'Fetching address...') {
-      setCurrentLocation(location.address);
+      // Format the address to show only key parts (city, state)
+      const addressParts = location.address.split(',').map(part => part.trim());
+      const shortAddress = addressParts.length > 2 
+        ? addressParts.slice(-3).join(', ') // Show last 3 parts (typically area, city, state)
+        : location.address;
+      setCurrentLocation(shortAddress);
     } else if (location.loading && location.latitude && location.longitude) {
       setCurrentLocation('Fetching address...');
     } else if (location.latitude && location.longitude) {
-      setCurrentLocation(`Near ${location.latitude.toFixed(4)}°N, ${location.longitude.toFixed(4)}°E`);
+      setCurrentLocation('Getting location...');
     }
     
     // Only refresh orders when location changes significantly (more than 500m)
