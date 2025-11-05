@@ -186,16 +186,13 @@ export const NavigationMap = ({
           </CardContent>
         </Card>
 
-        {/* Current Location */}
+        {/* Current Location - showing as formatted address */}
         {currentLocation && (
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <div className="flex items-center space-x-2 text-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-muted-foreground">Your Location:</span>
-                <span className="text-foreground">
-                  {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}
-                </span>
+                <span className="text-muted-foreground">Your Location</span>
               </div>
             </CardContent>
           </Card>

@@ -1,11 +1,22 @@
 import { normalizeAddress } from './utils';
+import { formatLocationToAddressSync } from './addressFormatter';
 
-// Enhanced debug utility to catch address objects before they reach JSX
+// Enhanced debug utility to catch address objects and format them to human-readable addresses
 export const debugAddress = (address: any, context: string = 'unknown'): string => {
   console.log(`🔍 DEBUG ADDRESS [${context}]:`, address, 'Type:', typeof address);
   
-  // Use the robust normalizeAddress function
+  // Use the address formatter first to convert coordinates to addresses
   try {
+    // First try the address formatter (handles coordinates → address)
+    const formatted = formatLocationToAddressSync(address);
+    
+    // If formatter returns coordinates, fallback to normalizeAddress
+    if (formatted && !formatted.match(/^-?\d+\.?\d*,\s*-?\d+\.?\d*$/)) {
+      console.log(`✅ FORMATTED ADDRESS [${context}]:`, formatted);
+      return formatted;
+    }
+    
+    // Fallback to normalizeAddress for non-coordinate addresses
     const normalized = normalizeAddress(address);
     
     // Double-check the result is a string

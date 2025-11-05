@@ -10,8 +10,13 @@ export function normalizeAddress(addressObj: any): string {
   // Always log the input for debugging
   console.log('🔧 normalizeAddress input:', addressObj, 'Type:', typeof addressObj);
   
-  // Return strings as-is
+  // Return strings as-is (unless they look like raw coordinates)
   if (typeof addressObj === 'string') {
+    const coordMatch = addressObj.match(/^-?\d+\.?\d*,\s*-?\d+\.?\d*$/);
+    // If it's raw coordinates, it will be handled by the address formatter
+    if (coordMatch) {
+      return addressObj.trim();
+    }
     return addressObj.trim() || 'Address not available';
   }
   
@@ -23,6 +28,16 @@ export function normalizeAddress(addressObj: any): string {
   // Handle objects
   if (typeof addressObj === 'object') {
     try {
+      // Check if object has coordinates - these will be handled by address formatter
+      if (addressObj.lat && addressObj.lng) {
+        // Return a placeholder that signals coordinates are present
+        return `${addressObj.lat},${addressObj.lng}`;
+      }
+      
+      if (addressObj.coordinates && addressObj.coordinates.lat && addressObj.coordinates.lng) {
+        return `${addressObj.coordinates.lat},${addressObj.coordinates.lng}`;
+      }
+      
       // Format 1: User delivery address format {full_address, city, state, pincode, ...}
       if (addressObj.full_address) {
         return String(addressObj.full_address).trim();
