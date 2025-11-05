@@ -9,11 +9,20 @@ const corsHeaders = {
 console.log("Get agent live earnings function started")
 
 serve(async (req) => {
+  console.log('🔔 REQUEST RECEIVED:', {
+    method: req.method,
+    url: req.url,
+    timestamp: new Date().toISOString(),
+    hasAuthHeader: !!req.headers.get('Authorization')
+  });
+
   if (req.method === 'OPTIONS') {
+    console.log('✅ Handling OPTIONS request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('⏱️ Starting request processing...');
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -49,7 +58,10 @@ serve(async (req) => {
       );
     }
 
+    console.log('✅ User authenticated:', user.email);
+
     // Get agent ID
+    console.log('⏱️ Fetching agent data for:', user.email);
     const { data: agentData, error: agentError } = await supabase
       .from('delivery_agents')
       .select('id')
@@ -58,6 +70,7 @@ serve(async (req) => {
       .single();
 
     if (agentError || !agentData) {
+      console.error('❌ Agent not found:', { email: user.email, error: agentError });
       return new Response(
         JSON.stringify({ error: 'Agent not found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
@@ -65,6 +78,7 @@ serve(async (req) => {
     }
 
     const agentId = agentData.id;
+    console.log('✅ Agent found:', agentId);
 
     // Calculate date ranges
     const now = new Date();
@@ -73,6 +87,7 @@ serve(async (req) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
     // Fetch all earnings tracking data
+    console.log('⏱️ Fetching earnings tracking data...');
     const { data: trackingData, error: trackingError } = await supabase
       .from('agent_earnings_tracking')
       .select('*')
@@ -81,12 +96,14 @@ serve(async (req) => {
       .order('accepted_at', { ascending: false });
 
     if (trackingError) {
-      console.error('Error fetching tracking data:', trackingError);
+      console.error('❌ Error fetching tracking data:', trackingError);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch earnings data' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
+
+    console.log('✅ Tracking data fetched:', { recordCount: trackingData?.length || 0 });
 
     // Calculate earnings for different periods
     const calculatePeriodEarnings = (startDate: string) => {
@@ -143,6 +160,8 @@ serve(async (req) => {
       is_peak_hour: tracking.is_peak_hour,
       payout_breakdown: tracking.payout_breakdown
     }));
+
+    console.log('✅ Returning earnings data successfully');
 
     return new Response(
       JSON.stringify({
