@@ -47,14 +47,34 @@ serve(async (req) => {
       throw new Error(`Invalid request status: ${paymentRequest.status}`);
     }
 
-    // Validate that the request hasn't expired
-    if (new Date(paymentRequest.expires_at) < new Date()) {
+    // Validate expiry and extend if too close (Razorpay requires at least 2 minutes future)
+    const now = new Date();
+    const expiresAt = new Date(paymentRequest.expires_at);
+    const minutesUntilExpiry = (expiresAt.getTime() - now.getTime()) / (1000 * 60);
+    
+    let finalExpiresAt = expiresAt;
+    
+    // If expired, fail the request
+    if (minutesUntilExpiry < 0) {
       console.error('❌ Payment request has expired');
       await supabaseClient
         .from('flexible_payment_requests')
         .update({ status: 'failed', error_message: 'Request expired' })
         .eq('id', request_id);
       throw new Error('Payment request has expired');
+    }
+    
+    // If expiry is less than 5 minutes away, extend it to 15 minutes from now
+    // Razorpay requires at least 2 minutes, but we add buffer for processing delays
+    if (minutesUntilExpiry < 5) {
+      console.log(`⚠️ Expiry too close (${minutesUntilExpiry.toFixed(1)} min), extending to 15 minutes from now`);
+      finalExpiresAt = new Date(now.getTime() + 15 * 60 * 1000);
+      
+      // Update the payment request with new expiry
+      await supabaseClient
+        .from('flexible_payment_requests')
+        .update({ expires_at: finalExpiresAt.toISOString() })
+        .eq('id', request_id);
     }
 
     console.log('✅ Found valid payment request:', paymentRequest);
@@ -100,7 +120,7 @@ serve(async (req) => {
         payment_amount: amountInPaise,
         description: `Wallet top-up for agent ${paymentRequest.agent_id}`,
         customer_id: paymentRequest.agent_id,
-        close_by: Math.floor(new Date(paymentRequest.expires_at).getTime() / 1000),
+        close_by: Math.floor(finalExpiresAt.getTime() / 1000),
       }),
     });
 
@@ -131,7 +151,7 @@ serve(async (req) => {
         qr_code_id: qrData.id,
         qr_code_url: qrData.image_url,
         status: 'pending',
-        expires_at: paymentRequest.expires_at,
+        expires_at: finalExpiresAt.toISOString(),
       })
       .select()
       .single();

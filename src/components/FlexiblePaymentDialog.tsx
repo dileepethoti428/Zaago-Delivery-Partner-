@@ -61,14 +61,19 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
     return () => clearInterval(interval);
   }, [expiresAt, status]);
 
-  // Poll payment request status (for QR generation)
+  // Poll payment request status (for QR generation) with fallback
   useEffect(() => {
     if (!requestId || status !== 'generating') return;
 
     console.log('🔍 Polling payment request:', requestId);
+    
+    let pollCount = 0;
+    const maxPollsBeforeFallback = 5; // Wait 5 seconds before fallback
 
     const pollRequest = async () => {
       try {
+        pollCount++;
+        
         const { data, error } = await supabase
           .from('flexible_payment_requests')
           .select('*')
@@ -80,7 +85,7 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
           return;
         }
 
-        console.log('📊 Request status:', data.status);
+        console.log(`📊 Request status (poll ${pollCount}):`, data.status);
 
         if (data.status === 'generated') {
           console.log('✅ QR generated!');
@@ -93,6 +98,37 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
           setStatus('failed');
           setErrorMessage(data.error_message || 'Failed to generate QR code');
           toast.error(data.error_message || 'Failed to generate QR code');
+        } else if (pollCount === maxPollsBeforeFallback && data.status === 'pending') {
+          // Trigger hasn't fired, call edge function directly as fallback
+          console.log('🔄 Trigger delay detected, calling edge function directly...');
+          
+          try {
+            const { data: fnData, error: fnError } = await supabase.functions.invoke(
+              'process-flexible-payment-request',
+              { body: { request_id: requestId } }
+            );
+
+            if (fnError) {
+              console.error('❌ Fallback call error:', fnError);
+              throw fnError;
+            }
+
+            console.log('✅ Fallback call successful:', fnData);
+            
+            // Success response from edge function
+            if (fnData?.success && fnData?.qr_url) {
+              setQrCodeUrl(fnData.qr_url);
+              setPaymentId(fnData.payment_id);
+              setStatus('pending');
+              setExpiresAt(data.expires_at); // Use updated expiry from DB
+              toast.success('QR code generated!');
+            }
+          } catch (err: any) {
+            console.error('❌ Fallback failed:', err);
+            setStatus('failed');
+            setErrorMessage(err.message || 'Failed to generate QR code');
+            toast.error(err.message || 'Failed to generate QR code');
+          }
         }
       } catch (error) {
         console.error('❌ Poll exception:', error);
