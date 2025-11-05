@@ -49,6 +49,8 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
     }
     
     try {
+      console.log('🌍 Fetching address for:', { lat, lng });
+      
       const { data, error } = await supabase.functions.invoke('google-places-geocode', {
         body: {
           lat: lat,
@@ -57,9 +59,12 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
       });
 
       if (error) {
-        console.error('Google Places geocoding error:', error);
+        console.error('❌ Supabase function error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
+      
+      console.log('📍 Geocode response:', data);
 
       if (data.success && data.address) {
         // Cache the address for 24 hours
@@ -70,9 +75,17 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
         throw new Error(data.error || 'Failed to get address');
       }
     } catch (error) {
-      console.error('Error getting address from Google Places:', error);
-      // Better fallback message - don't show raw coordinates
-      return 'Location detected (address unavailable)';
+      console.error('❌ Error getting address from Google Places:', error);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+      
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('Network error - check internet connection');
+        return 'Unable to fetch address (network error)';
+      }
+      
+      // Return cleaner fallback message
+      return `Location detected (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
     }
   };
 

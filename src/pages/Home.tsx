@@ -209,6 +209,7 @@ const Home = () => {
   const [notificationCount] = useState(3);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<string>('Tap to set location');
+  const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
   const [locationPickerTrigger, setLocationPickerTrigger] = useState<HTMLButtonElement | null>(null);
   const [ordersWithDistance, setOrdersWithDistance] = useState<Order[]>([]);
   const [acceptingOrders, setAcceptingOrders] = useState<Record<string, boolean>>({});
@@ -1284,12 +1285,20 @@ const Home = () => {
   // Auto-update location when geolocation data is available
   useEffect(() => {
     if (location.address && location.address !== 'Fetching address...') {
-      // Format the address to show only key parts (city, state)
-      const addressParts = location.address.split(',').map(part => part.trim());
-      const shortAddress = addressParts.length > 2 
-        ? addressParts.slice(-3).join(', ') // Show last 3 parts (typically area, city, state)
-        : location.address;
-      setCurrentLocation(shortAddress);
+      // Check if it's a coordinate fallback or actual address
+      if (location.address.includes('Location detected (') && location.address.includes(',')) {
+        // It's showing coordinates - show full message
+        setCurrentLocation(location.address);
+      } else if (location.address.includes('Unable to fetch address')) {
+        setCurrentLocation('Address unavailable');
+      } else {
+        // Format the address to show only key parts (city, state)
+        const addressParts = location.address.split(',').map(part => part.trim());
+        const shortAddress = addressParts.length > 2 
+          ? addressParts.slice(-3).join(', ') // Show last 3 parts (typically area, city, state)
+          : location.address;
+        setCurrentLocation(shortAddress);
+      }
     } else if (location.loading && location.latitude && location.longitude) {
       setCurrentLocation('Fetching address...');
     } else if (location.latitude && location.longitude) {
@@ -1667,6 +1676,21 @@ const Home = () => {
             <div className="flex items-center gap-1 text-xs text-gray-600">
               <MapPin className="w-3 h-3" />
               <span className="truncate max-w-[180px]">{currentLocation}</span>
+              {location.latitude && location.longitude && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsRefreshingLocation(true);
+                    location.refresh();
+                    setTimeout(() => setIsRefreshingLocation(false), 2000);
+                  }}
+                  className="ml-1 p-0.5 hover:bg-gray-100 rounded transition-colors"
+                  disabled={isRefreshingLocation}
+                  title="Refresh address"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshingLocation ? 'animate-spin' : ''}`} />
+                </button>
+              )}
             </div>
           </div>
           

@@ -30,7 +30,11 @@ serve(async (req) => {
   }
 
   try {
-    const { lat, lng, address, placeId } = await req.json();
+    console.log('📍 Geocode function called - Method:', req.method);
+    const body = await req.json();
+    console.log('📍 Request body:', JSON.stringify(body));
+    
+    const { lat, lng, address, placeId } = body;
     
     const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
     
@@ -84,10 +88,13 @@ serve(async (req) => {
       );
     }
 
+    console.log('📍 Calling Google API:', apiUrl);
     const response = await fetch(apiUrl);
     const data: GeocodeResponse = await response.json();
+    console.log('📍 Google API response status:', data.status);
 
     if (data.status !== 'OK') {
+      console.error('❌ Google API error:', data.status);
       return new Response(
         JSON.stringify({ 
           error: `Google Places API error: ${data.status}`,
@@ -101,6 +108,7 @@ serve(async (req) => {
     }
 
     const result = placeId ? (data as any).result : data.results[0];
+    console.log('📍 Result found:', result ? 'Yes' : 'No');
     
     if (!result) {
       return new Response(
@@ -115,18 +123,22 @@ serve(async (req) => {
       );
     }
 
+    const responseData = { 
+      success: true,
+      address: result.formatted_address,
+      coordinates: {
+        lat: result.geometry.location.lat,
+        lng: result.geometry.location.lng
+      },
+      place_id: result.place_id,
+      name: result.name,
+      types: result.types || []
+    };
+    
+    console.log('✅ Returning address:', result.formatted_address);
+    
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        address: result.formatted_address,
-        coordinates: {
-          lat: result.geometry.location.lat,
-          lng: result.geometry.location.lng
-        },
-        place_id: result.place_id,
-        name: result.name,
-        types: result.types || []
-      }),
+      JSON.stringify(responseData),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
