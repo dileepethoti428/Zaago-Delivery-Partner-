@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
-import { MapPin, Clock, IndianRupee, RefreshCw, PackageX, AlertCircle } from 'lucide-react';
+import { Clock, IndianRupee, RefreshCw, PackageX, AlertCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,19 +51,6 @@ export default function Home() {
     };
   }, []);
 
-  const headerNote = useMemo(() => {
-    if (permission === 'denied') {
-      return 'Location permission denied. Enable in browser settings.';
-    }
-    if (permission === 'unsupported') {
-      return 'Geolocation not supported on this device.';
-    }
-    if (!lastKnown) {
-      return 'Waiting for location...';
-    }
-    return `Showing orders within ≤ ${RADIUS_KM} km of your live location`;
-  }, [permission, lastKnown]);
-
   const handleRefresh = useCallback(() => {
     load();
   }, [load]);
@@ -73,20 +59,15 @@ export default function Home() {
     <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
       <AppShell>
         <div className="space-y-6 py-4">
-        {/* Location and Filter Header */}
+        {/* Location Header */}
+        <div>
+          <LocationChip />
+        </div>
+
+        {/* Orders List */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="secondary" className="gap-1 rounded-full">
-              <MapPin className="h-3 w-3" />
-              Live near you
-            </Badge>
-            <LocationChip />
-          </div>
-          
-          <p className="text-sm text-muted-foreground">{headerNote}</p>
-          
           <div className="flex items-center justify-between">
-            <DistanceBadge radiusKm={RADIUS_KM} />
+            <h2 className="text-lg font-semibold">Available Orders</h2>
             
             <Button 
               variant="ghost" 
@@ -98,11 +79,6 @@ export default function Home() {
               Refresh
             </Button>
           </div>
-        </div>
-
-        {/* Orders List */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Available Orders</h2>
           
           {/* Error State */}
           {error && (
