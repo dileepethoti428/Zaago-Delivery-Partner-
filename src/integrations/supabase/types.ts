@@ -5693,6 +5693,21 @@ export type Database = {
           revenue: number
         }[]
       }
+      get_pending_delivery_agents: {
+        Args: never
+        Returns: {
+          agent_documents: Json
+          agent_id: string
+          created_at: string
+          documents_verified: boolean
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+          phone: string
+          verification_status: string
+        }[]
+      }
       get_player_ids_by_type: {
         Args: { target_type: string }
         Returns: string[]
