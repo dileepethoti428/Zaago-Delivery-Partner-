@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +9,42 @@ import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
 import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { fetchAgentProfile } from '@/services/agentProfile';
+
+type AgentProfile = {
+  id: string;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  is_active: boolean;
+  verification_status: string | null;
+} | null;
 
 export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuthStore();
+  const [agentProfile, setAgentProfile] = useState<AgentProfile>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadAgentProfile() {
+      if (!user?.email) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const data = await fetchAgentProfile(user.email);
+        setAgentProfile(data);
+      } catch (err) {
+        console.error('Failed to load agent profile:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadAgentProfile();
+  }, [user?.email]);
 
   const handleLogout = async () => {
     await signOut();
@@ -34,30 +67,24 @@ export default function Profile() {
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xl">
-                  {profile?.full_name ? profile.full_name.split(' ').map(n => n[0]).join('') : 'DA'}
+                  {agentProfile?.name ? agentProfile.name.split(' ').map(n => n[0]).join('') : 'DA'}
                 </AvatarFallback>
               </Avatar>
               
               <div className="flex-1">
-                <h2 className="text-xl font-bold">{profile?.full_name || 'Delivery Agent'}</h2>
+                <h2 className="text-xl font-bold">{agentProfile?.name || user?.email || 'Delivery Agent'}</h2>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
                 <div className="mt-2">
-                  {profile?.approval_status === 'approved' && (
+                  {agentProfile?.is_active && (
                     <Badge className="gap-1" variant="default">
                       <CheckCircle className="h-3 w-3" />
-                      Approved
+                      Active
                     </Badge>
                   )}
-                  {profile?.approval_status === 'pending' && (
+                  {!agentProfile?.is_active && agentProfile && (
                     <Badge className="gap-1" variant="secondary">
                       <Clock className="h-3 w-3" />
-                      Pending Review
-                    </Badge>
-                  )}
-                  {profile?.approval_status === 'rejected' && (
-                    <Badge className="gap-1" variant="destructive">
-                      <XCircle className="h-3 w-3" />
-                      Rejected
+                      Inactive
                     </Badge>
                   )}
                 </div>

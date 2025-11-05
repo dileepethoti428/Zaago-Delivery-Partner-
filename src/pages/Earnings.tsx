@@ -1,29 +1,61 @@
+import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { IndianRupee, TrendingUp, Calendar } from 'lucide-react';
+import { IndianRupee, TrendingUp, Calendar, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-const earningsData = {
-  today: 850,
-  week: 5240,
-  month: 21850,
-};
-
-const recentOrders = [
-  { id: 'ZA-10340', date: '2024-01-15', distance: 4.2, payout: 85 },
-  { id: 'ZA-10339', date: '2024-01-15', distance: 8.5, payout: 105 },
-  { id: 'ZA-10338', date: '2024-01-14', distance: 6.1, payout: 95 },
-  { id: 'ZA-10337', date: '2024-01-14', distance: 12.3, payout: 145 },
-  { id: 'ZA-10336', date: '2024-01-13', distance: 3.8, payout: 75 },
-];
+import { useAuthStore } from '@/store/auth';
+import { fetchAgentProfile } from '@/services/agentProfile';
+import { fetchAgentEarnings, computeEarningsTotals } from '@/services/earnings';
 
 export default function Earnings() {
+  const { user } = useAuthStore();
+  const [earningsData, setEarningsData] = useState({ today: 0, week: 0, month: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadEarnings() {
+      if (!user?.email) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // First get agent profile to get agent_id
+        const agentProfile = await fetchAgentProfile(user.email);
+        
+        if (!agentProfile?.id) {
+          console.error('Agent profile not found');
+          setLoading(false);
+          return;
+        }
+
+        // Fetch earnings data
+        const earningsRows = await fetchAgentEarnings(agentProfile.id);
+        
+        // Compute totals
+        const totals = computeEarningsTotals(earningsRows);
+        setEarningsData(totals);
+      } catch (err) {
+        console.error('Failed to load earnings:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadEarnings();
+  }, [user?.email]);
   return (
     <AppShell>
       <div className="space-y-6 py-4">
         <h1 className="text-2xl font-bold">Earnings</h1>
 
-        <div className="grid gap-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -108,33 +140,8 @@ export default function Earnings() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <CardTitle className="text-base">Recent Deliveries</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentOrders.map((order, index) => (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50"
-                >
-                  <div>
-                    <p className="font-medium">{order.id}</p>
-                    <p className="text-sm text-muted-foreground">{order.date} • {order.distance} km</p>
-                  </div>
-                  <div className="flex items-center gap-1 font-bold text-green-600">
-                    <IndianRupee className="h-4 w-4" />
-                    {order.payout}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+          </>
+        )}
       </div>
     </AppShell>
   );
