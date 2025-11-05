@@ -9,6 +9,7 @@ export interface Order {
   etaMin: number;
   payout: number;
   status: 'new' | 'accepted' | 'picked' | 'delivered' | 'canceled';
+  updatedAt?: number;
 }
 
 export interface Agent {
@@ -24,6 +25,7 @@ interface AppState {
   setIsAuthed: (value: boolean) => void;
   setAgent: (agent: Agent | null) => void;
   setOrders: (orders: Order[]) => void;
+  updateOrderStatus: (orderId: string, status: Order['status']) => void;
   getOrderById: (id: string) => Order | undefined;
 }
 
@@ -110,5 +112,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsAuthed: (value) => set({ isAuthed: value }),
   setAgent: (agent) => set({ agent }),
   setOrders: (orders) => set({ orders }),
+  updateOrderStatus: (orderId, status) => {
+    set((state) => ({
+      orders: state.orders.map((order) =>
+        order.id === orderId
+          ? { ...order, status, updatedAt: Date.now() }
+          : order
+      ),
+    }));
+  },
   getOrderById: (id) => get().orders.find(order => order.id === id),
 }));
