@@ -45,10 +45,6 @@ serve(async (req) => {
       throw new Error('Payment ID is required');
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
     // Get payment record
     const { data: payment, error: paymentError } = await supabase
       .from('flexible_payments')
