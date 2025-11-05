@@ -59,28 +59,24 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
 
     const pollInterval = setInterval(async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
         const { data, error } = await supabase.functions.invoke('check-flexible-payment-status', {
-          body: { payment_id: paymentId },
-          headers: session?.access_token ? {
-            Authorization: `Bearer ${session.access_token}`
-          } : {}
+          body: { payment_id: paymentId }
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Status check error:', error);
+          return;
+        }
 
         if (data?.isPaid) {
           setIsPaid(true);
           toast.success("Payment received! ₹" + amount + " credited to your wallet.");
-          setTimeout(() => {
-            onOpenChange(false);
-          }, 3000);
+          setTimeout(() => onOpenChange(false), 3000);
         }
       } catch (error) {
         console.error('Error checking payment status:', error);
       }
-    }, 3000); // Poll every 3 seconds
+    }, 3000);
 
     return () => clearInterval(pollInterval);
   }, [paymentId, isPaid, amount, onOpenChange]);
@@ -94,85 +90,36 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
     }
 
     setLoading(true);
-    
-    // Set a timeout to catch hanging requests
-    const timeoutId = setTimeout(() => {
-      console.error('⏱️ Request timeout after 15 seconds');
-      toast.error("Request timeout. Please check your connection and try again.");
-      setLoading(false);
-    }, 15000);
 
     try {
-      // Validate session first
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('❌ Session error:', sessionError);
-        throw new Error('Authentication error. Please log in again.');
-      }
-      
-      if (!session?.access_token) {
-        throw new Error('No valid session. Please log in again.');
-      }
-
-      console.log('🔵 Generating flexible payment QR');
-      console.log('🔵 Agent ID:', agentId);
-      console.log('🔵 Amount:', amountNum);
-      console.log('🔵 Session valid:', !!session.access_token);
+      console.log('🔵 Generating flexible payment QR for amount:', amountNum);
 
       const { data, error } = await supabase.functions.invoke('generate-flexible-payment-qr', {
         body: { 
           agent_id: agentId, 
           amount: amountNum 
-        },
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
         }
       });
 
-      clearTimeout(timeoutId);
-
-      console.log('📡 Function response:', { data, error });
+      console.log('📡 Response:', { data, error });
 
       if (error) {
-        console.error('❌ Edge function error:', error);
+        console.error('❌ Error:', error);
         throw new Error(error.message || 'Failed to generate QR code');
       }
 
-      if (!data) {
-        throw new Error('No response from server');
-      }
-
-      if (data.success) {
+      if (data?.success) {
         console.log('✅ QR generated successfully');
         setQrCodeUrl(data.qr_code_url);
         setPaymentId(data.payment_id);
         setExpiresAt(data.expires_at);
-        toast.success("QR code generated successfully!");
+        toast.success("QR code generated! Show to customer.");
       } else {
-        console.error('❌ QR generation failed:', data);
-        throw new Error(data.error || "Failed to generate QR code");
+        throw new Error(data?.error || "Failed to generate QR code");
       }
     } catch (error: any) {
-      clearTimeout(timeoutId);
-      console.error('❌ Complete error object:', error);
-      
-      let errorMessage = "Failed to generate QR code. ";
-      
-      if (error.message) {
-        errorMessage += error.message;
-      } else if (error.status === 401) {
-        errorMessage += "Authentication failed. Please log in again.";
-      } else if (error.status >= 500) {
-        errorMessage += "Server error. Please try again later.";
-      } else if (!navigator.onLine) {
-        errorMessage += "No internet connection.";
-      } else {
-        errorMessage += "Please try again.";
-      }
-      
-      toast.error(errorMessage);
+      console.error('❌ Error:', error);
+      toast.error(error.message || "Failed to generate QR code. Please try again.");
     } finally {
       setLoading(false);
     }

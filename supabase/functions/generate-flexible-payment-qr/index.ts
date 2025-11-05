@@ -19,6 +19,36 @@ serve(async (req) => {
   console.log('📦 Processing POST request...');
 
   try {
+    // Manual JWT validation
+    const authHeader = req.headers.get('Authorization');
+    console.log('🔐 Auth header present:', !!authHeader);
+    
+    if (!authHeader) {
+      console.error('❌ No authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Verify JWT and get user
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      console.error('❌ Invalid token:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('✅ User authenticated:', user.email);
+
     const { agent_id, amount } = await req.json();
     console.log('📝 Request body:', { agent_id, amount });
 
@@ -38,9 +68,24 @@ serve(async (req) => {
       throw new Error('Razorpay credentials not configured');
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Verify agent exists and is active
+    const { data: agent, error: agentError } = await supabase
+      .from('delivery_agents')
+      .select('id, email, is_active')
+      .eq('id', agent_id)
+      .eq('email', user.email)
+      .eq('is_active', true)
+      .single();
+
+    if (agentError || !agent) {
+      console.error('❌ Agent not found or not active:', agentError);
+      return new Response(
+        JSON.stringify({ error: 'Agent not authorized' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('✅ Agent verified:', agent.email);
 
     // Generate unique customer name for tracking
     const customerName = `Agent-${agent_id.substring(0, 8)}-${Date.now()}`;

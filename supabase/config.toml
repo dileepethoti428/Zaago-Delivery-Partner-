@@ -70,10 +70,10 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.generate-flexible-payment-qr]
-verify_jwt = true
+verify_jwt = false
 
 [functions.check-flexible-payment-status]
-verify_jwt = true
+verify_jwt = false
 
 [functions.direct-complete-delivery]
 verify_jwt = true
