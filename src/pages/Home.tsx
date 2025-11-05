@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MapPin, Clock, IndianRupee, RefreshCw, PackageX } from 'lucide-react';
+import { MapPin, Clock, IndianRupee, RefreshCw, PackageX, AlertCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAppStore } from '@/store/app';
+import { useOrdersStore, startOrdersRealtime, stopOrdersRealtime } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
 import { annotateAndFilterOrders } from '@/utils/orders';
 import LocationChip from '@/components/location/LocationChip';
@@ -19,18 +19,21 @@ const RADIUS_KM = 15;
 
 export default function Home() {
   const navigate = useNavigate();
-  const allOrders = useAppStore((state) => state.orders);
+  const { orders, loading, error, load } = useOrdersStore();
   const { lastKnown, permission, startWatch, stopWatch } = useLocationStore();
-  const [visibleOrders, setVisibleOrders] = useState(allOrders);
+  const [visibleOrders, setVisibleOrders] = useState<any[]>([]);
 
-  // Start location watching when component mounts
+  // Load orders and start location watching when component mounts
   useEffect(() => {
+    load();
     startWatch();
+    startOrdersRealtime();
     
     return () => {
       stopWatch();
+      stopOrdersRealtime();
     };
-  }, [startWatch, stopWatch]);
+  }, [load, startWatch, stopWatch]);
 
   // Filter and sort orders by distance whenever location or orders change
   useEffect(() => {
@@ -40,12 +43,12 @@ export default function Home() {
     }
 
     const filtered = annotateAndFilterOrders(
-      allOrders,
+      orders,
       { lat: lastKnown.lat, lng: lastKnown.lng },
       RADIUS_KM
     );
     setVisibleOrders(filtered);
-  }, [allOrders, lastKnown]);
+  }, [orders, lastKnown]);
 
   const headerNote = useMemo(() => {
     if (permission === 'denied') {
@@ -61,14 +64,7 @@ export default function Home() {
   }, [permission, lastKnown]);
 
   const handleRefresh = () => {
-    if (lastKnown) {
-      const filtered = annotateAndFilterOrders(
-        allOrders,
-        { lat: lastKnown.lat, lng: lastKnown.lng },
-        RADIUS_KM
-      );
-      setVisibleOrders(filtered);
-    }
+    load();
   };
 
   return (
@@ -105,8 +101,31 @@ export default function Home() {
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">Available Orders</h2>
           
+          {/* Error State */}
+          {error && (
+            <Card className="rounded-2xl border-2 border-destructive/50">
+              <CardContent className="p-6 space-y-3 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-destructive" />
+                </div>
+                <div>
+                  <p className="font-medium">Failed to Load Orders</p>
+                  <p className="text-sm text-muted-foreground mt-1">{error}</p>
+                </div>
+                <Button 
+                  variant="secondary" 
+                  className="rounded-xl mt-2"
+                  onClick={handleRefresh}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Permission Denied State */}
-          {(permission === 'denied' || permission === 'unsupported') && (
+          {!error && (permission === 'denied' || permission === 'unsupported') && (
             <Card className="rounded-2xl border-2">
               <CardContent className="p-6 space-y-3 text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -122,20 +141,20 @@ export default function Home() {
             </Card>
           )}
 
-          {/* Loading State - No Location Fix Yet */}
-          {permission !== 'denied' && permission !== 'unsupported' && !lastKnown && (
+          {/* Loading State - No Location Fix Yet or Loading Orders */}
+          {!error && permission !== 'denied' && permission !== 'unsupported' && (!lastKnown || loading) && (
             <div className="space-y-3">
               <Skeleton className="h-32 w-full rounded-2xl" />
               <Skeleton className="h-32 w-full rounded-2xl" />
               <Skeleton className="h-32 w-full rounded-2xl" />
               <p className="text-sm text-center text-muted-foreground py-4">
-                Getting your location...
+                {!lastKnown ? 'Getting your location...' : 'Loading orders...'}
               </p>
             </div>
           )}
 
           {/* Empty State - No Orders in Range */}
-          {lastKnown && visibleOrders.length === 0 && (
+          {!error && !loading && lastKnown && visibleOrders.length === 0 && (
             <Card className="rounded-2xl border-2">
               <CardContent className="p-6 space-y-3 text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -160,7 +179,7 @@ export default function Home() {
           )}
 
           {/* Orders List */}
-          {lastKnown && visibleOrders.length > 0 && visibleOrders.map((order, index) => (
+          {!error && !loading && lastKnown && visibleOrders.length > 0 && visibleOrders.map((order, index) => (
             <AnimatedCard
               key={order.id}
               delay={index * 0.05}
