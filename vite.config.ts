@@ -32,25 +32,11 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      'react': path.resolve(__dirname, './node_modules/react'),
-      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
-      '@tanstack/react-query': path.resolve(__dirname, './node_modules/@tanstack/react-query'),
     },
-    dedupe: [
-      'react', 
-      'react-dom', 
-      'react-router-dom',
-      '@tanstack/react-query',
-    ],
+    dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
-    force: true, // TEMPORARY: Force rebuild to clear duplicate React cache
-    include: [
-      'react', 
-      'react-dom', 
-      'react-router-dom',
-      '@tanstack/react-query',
-    ],
+    include: ['react', 'react-dom', 'react-router-dom'],
     esbuildOptions: {
       jsx: 'automatic',
     },

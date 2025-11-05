@@ -9,6 +9,9 @@ declare global {
 
 export function OneSignalInit() {
   useEffect(() => {
+    // Guard: Only run in browser environment
+    if (typeof window === 'undefined') return;
+
     // Load OneSignal SDK
     const script = document.createElement('script');
     script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';

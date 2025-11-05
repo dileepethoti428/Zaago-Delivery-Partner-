@@ -1,9 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ThemeProvider } from "next-themes";
 import BottomNavigation from "@/components/BottomNavigation";
 import RequireAuth from "@/components/RequireAuth";
 import { Loader2 } from "lucide-react";
@@ -29,22 +25,9 @@ const Help = lazy(() => import("./pages/Help"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SellerDashboard = lazy(() => import("./pages/SellerDashboard"));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (was cacheTime)
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
-function AppContent() {
+function App() {
   return (
     <BrowserRouter>
-      <Toaster />
-      <Sonner />
       <OneSignalInit />
       <div className="min-h-screen bg-background relative">
         <Suspense fallback={
@@ -87,21 +70,6 @@ function AppContent() {
         <div className="pb-20" />
       </div>
     </BrowserRouter>
-  );
-}
-
-function App() {
-  return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="dark"
-      enableSystem
-      disableTransitionOnChange={false}
-    >
-      <QueryClientProvider client={queryClient}>
-        <AppContent />
-      </QueryClientProvider>
-    </ThemeProvider>
   );
 }
 

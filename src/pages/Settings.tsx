@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { useTheme } from "next-themes";
 import { 
   Bell, 
   Shield, 
@@ -23,7 +22,6 @@ import {
   ChevronRight,
   Volume2,
   Vibrate,
-  Moon,
   Globe,
   Truck,
   CreditCard,
@@ -31,7 +29,6 @@ import {
   Edit,
   Save,
   X,
-  Palette,
   MessageCircle,
   Play
 } from "lucide-react";
@@ -62,7 +59,6 @@ const getRingtoneDescription = (type: string) => {
 const Settings = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -499,14 +495,6 @@ const Settings = () => {
           color: "text-primary",
           enabled: settings.location_services,
           key: "location_services"
-        },
-        {
-          icon: Palette,
-          title: "Theme",
-          description: `${theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light'} theme`,
-          action: "theme",
-          color: "text-primary",
-          theme: theme
         }
       ]
     },
@@ -735,17 +723,6 @@ const Settings = () => {
                         <Play className="w-4 h-4 mr-1" />
                         Test
                       </Button>
-                    ) : item.action === "theme" ? (
-                      <Select value={theme} onValueChange={setTheme}>
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="light">Light</SelectItem>
-                          <SelectItem value="dark">Dark</SelectItem>
-                          <SelectItem value="system">System</SelectItem>
-                        </SelectContent>
-                      </Select>
                     ) : !isEditMode ? (
                       <ChevronRight 
                         className="w-5 h-5 text-muted-foreground" 
