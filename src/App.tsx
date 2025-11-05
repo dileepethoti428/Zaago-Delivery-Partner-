@@ -123,6 +123,9 @@ const AppContent = () => {
 
   return (
     <BrowserRouter>
+      <Toaster />
+      <Sonner />
+      <OneSignalInit />
       <div className="min-h-screen bg-background relative">
         <Suspense fallback={
           <div className="min-h-screen flex items-center justify-center">
@@ -175,9 +178,6 @@ const App = () => (
     disableTransitionOnChange={false}
   >
     <QueryClientProvider client={queryClient}>
-      <Toaster />
-      <Sonner />
-      <OneSignalInit />
       <AppContent />
     </QueryClientProvider>
   </ThemeProvider>
