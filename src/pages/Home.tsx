@@ -42,7 +42,6 @@ import { calculateRealTimeDistance, getAgentLocationFromStorage, extractCoordina
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import DeliveryTimer from "@/components/DeliveryTimer";
 import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
-import { FlexiblePaymentDialog } from "@/components/FlexiblePaymentDialog";
 import { OrderCard } from "@/components/OrderCard";
 
 // Lazy load heavy components
@@ -216,7 +215,6 @@ const Home = () => {
   const [isLoadingDistance, setIsLoadingDistance] = useState<boolean>(false);
   const [agentName, setAgentName] = useState<string>("");
   const [sortBy, setSortBy] = useState<'nearest' | 'newest' | 'highest'>('nearest');
-  const [showFlexiblePaymentDialog, setShowFlexiblePaymentDialog] = useState(false);
   const [recentNotifications, setRecentNotifications] = useState<Set<string>>(new Set());
   const notificationCooldownRef = useRef<Map<string, number>>(new Map());
   
@@ -1750,18 +1748,6 @@ const Home = () => {
             )}
           </Button>
 
-          {/* Payment QR */}
-          <Button
-            onClick={() => setShowFlexiblePaymentDialog(true)}
-            variant="outline"
-            className="h-12 rounded-lg border-blue-300 text-blue-700 hover:bg-blue-50 bg-white"
-          >
-            <div className="flex items-center">
-              <QrCode className="w-4 h-4 text-blue-700 mr-1" />
-              <span className="text-xs text-blue-700">Payment QR</span>
-            </div>
-          </Button>
-
         </div>
       </div>
 
@@ -1852,13 +1838,6 @@ const Home = () => {
           </div>
         </ScrollArea>
       </div>
-
-      {/* Flexible Payment Dialog */}
-      <FlexiblePaymentDialog
-        open={showFlexiblePaymentDialog}
-        onOpenChange={setShowFlexiblePaymentDialog}
-        agentId={agent?.id || ''}
-      />
 
       {/* Location Picker - Hidden trigger */}
       <Suspense fallback={<div />}>

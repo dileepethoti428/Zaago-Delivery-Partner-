@@ -69,15 +69,6 @@ verify_jwt = true
 [functions.check-payment-status]
 verify_jwt = true
 
-[functions.generate-flexible-payment-qr]
-verify_jwt = false
-
-[functions.check-flexible-payment-status]
-verify_jwt = false
-
-[functions.process-flexible-payment-request]
-verify_jwt = false
-
 [functions.direct-complete-delivery]
 verify_jwt = true
 
