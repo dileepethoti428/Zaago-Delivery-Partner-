@@ -32,11 +32,28 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      'react': path.resolve(__dirname, './node_modules/react'),
+      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
     },
     // Force single React instance to prevent "Cannot read properties of null" errors
-    dedupe: ['react', 'react-dom', 'react-router-dom', '@radix-ui/react-tooltip'],
+    dedupe: [
+      'react', 
+      'react-dom', 
+      'react-router-dom',
+      '@radix-ui/react-tooltip',
+      '@radix-ui/react-hover-card',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-popover',
+    ],
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', '@radix-ui/react-tooltip'],
+    include: [
+      'react', 
+      'react-dom', 
+      'react-router-dom',
+      '@radix-ui/react-tooltip',
+      '@radix-ui/react-hover-card',
+    ],
+    force: true,
   },
 }));
