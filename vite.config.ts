@@ -34,9 +34,9 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
     // Force single React instance to prevent "Cannot read properties of null" errors
-    dedupe: ['react', 'react-dom', '@radix-ui/react-tooltip'],
+    dedupe: ['react', 'react-dom', 'react-router-dom', '@radix-ui/react-tooltip'],
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', '@radix-ui/react-tooltip'],
+    include: ['react', 'react-dom', 'react-router-dom', '@radix-ui/react-tooltip'],
   },
 }));
