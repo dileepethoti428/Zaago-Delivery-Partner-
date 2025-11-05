@@ -8,11 +8,36 @@ interface RingtoneSettings {
 }
 
 export const useAudioNotification = (settings?: RingtoneSettings) => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  // Safe refs with try-catch to prevent React instance errors
+  let audioRef: React.MutableRefObject<HTMLAudioElement | null>;
+  let audioContextRef: React.MutableRefObject<AudioContext | null>;
+  let sourceNodeRef: React.MutableRefObject<MediaElementAudioSourceNode | null>;
+  let gainNodeRef: React.MutableRefObject<GainNode | null>;
+  let timeoutsRef: React.MutableRefObject<NodeJS.Timeout[]>;
+
+  try {
+    audioRef = useRef<HTMLAudioElement | null>(null);
+    audioContextRef = useRef<AudioContext | null>(null);
+    sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+    gainNodeRef = useRef<GainNode | null>(null);
+    timeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  } catch (error) {
+    console.error('⚠️ React hook error (multiple instances detected):', error);
+    // Return safe fallback that won't crash the app
+    return {
+      playNotificationSound: async () => {
+        try {
+          const audio = new Audio('/iphone-6-original-ringtone.mp3');
+          audio.volume = 0.8;
+          await audio.play();
+        } catch (e) {
+          console.error('Fallback audio failed:', e);
+        }
+      },
+      testRingtone: () => console.warn('Test ringtone unavailable'),
+      stopRingtone: () => console.warn('Stop ringtone unavailable')
+    };
+  }
 
   const playRingtone = useCallback(async () => {
     console.log('🔊 playRingtone called');

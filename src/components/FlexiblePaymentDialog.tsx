@@ -94,51 +94,85 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
     }
 
     setLoading(true);
+    
+    // Set a timeout to catch hanging requests
+    const timeoutId = setTimeout(() => {
+      console.error('⏱️ Request timeout after 15 seconds');
+      toast.error("Request timeout. Please check your connection and try again.");
+      setLoading(false);
+    }, 15000);
+
     try {
       // Validate session first
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error("Session expired. Please log in again.");
-        setLoading(false);
-        return;
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('❌ Session error:', sessionError);
+        throw new Error('Authentication error. Please log in again.');
+      }
+      
+      if (!session?.access_token) {
+        throw new Error('No valid session. Please log in again.');
       }
 
-      console.log('🔵 Generating flexible payment QR for agent:', agentId, 'amount:', amountNum);
+      console.log('🔵 Generating flexible payment QR');
+      console.log('🔵 Agent ID:', agentId);
+      console.log('🔵 Amount:', amountNum);
+      console.log('🔵 Session valid:', !!session.access_token);
 
       const { data, error } = await supabase.functions.invoke('generate-flexible-payment-qr', {
-        body: { agent_id: agentId, amount: amountNum },
+        body: { 
+          agent_id: agentId, 
+          amount: amountNum 
+        },
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
         }
       });
 
+      clearTimeout(timeoutId);
+
+      console.log('📡 Function response:', { data, error });
+
       if (error) {
-        console.error('❌ Function invocation error:', {
-          message: error.message,
-          details: error
-        });
-        throw error;
+        console.error('❌ Edge function error:', error);
+        throw new Error(error.message || 'Failed to generate QR code');
       }
 
-      if (data?.success) {
-        console.log('✅ QR generated successfully:', data);
+      if (!data) {
+        throw new Error('No response from server');
+      }
+
+      if (data.success) {
+        console.log('✅ QR generated successfully');
         setQrCodeUrl(data.qr_code_url);
         setPaymentId(data.payment_id);
         setExpiresAt(data.expires_at);
         toast.success("QR code generated successfully!");
       } else {
         console.error('❌ QR generation failed:', data);
-        throw new Error(data?.error || "Failed to generate QR code");
+        throw new Error(data.error || "Failed to generate QR code");
       }
     } catch (error: any) {
-      console.error('❌ Error generating QR:', error);
-      console.error('Error details:', {
-        message: error.message,
-        status: error.status,
-        statusText: error.statusText,
-        response: error
-      });
-      toast.error(error.message || "Failed to generate QR code. Please try again.");
+      clearTimeout(timeoutId);
+      console.error('❌ Complete error object:', error);
+      
+      let errorMessage = "Failed to generate QR code. ";
+      
+      if (error.message) {
+        errorMessage += error.message;
+      } else if (error.status === 401) {
+        errorMessage += "Authentication failed. Please log in again.";
+      } else if (error.status >= 500) {
+        errorMessage += "Server error. Please try again later.";
+      } else if (!navigator.onLine) {
+        errorMessage += "No internet connection.";
+      } else {
+        errorMessage += "Please try again.";
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
