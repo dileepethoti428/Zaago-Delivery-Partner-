@@ -43,7 +43,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const AppContent = () => {
+const App = () => {
   const { requestPermission, hasPermission } = useNotificationPermission();
   const [agentSettings, setAgentSettings] = useState<RingtoneSettings>({
     enabled: true,
@@ -170,7 +170,7 @@ const AppContent = () => {
   );
 };
 
-const App = () => (
+const AppWrapper = () => (
   <ThemeProvider
     attribute="class"
     defaultTheme="dark"
@@ -178,9 +178,9 @@ const App = () => (
     disableTransitionOnChange={false}
   >
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <App />
     </QueryClientProvider>
   </ThemeProvider>
 );
 
-export default App;
+export default AppWrapper;
