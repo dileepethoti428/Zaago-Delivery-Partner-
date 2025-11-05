@@ -790,13 +790,6 @@ const Home = () => {
           return newSet;
         });
       }, 60000); // 60 seconds
-      
-      // Show toast notification
-      toast({
-        title: "🚨 Order Packed & Ready!",
-        description: `Order from ${orderData.customer_name || 'customer'} has been packed by seller`,
-        duration: 5000,
-      });
     }
   };
 
@@ -1712,13 +1705,6 @@ const Home = () => {
             
             // Ringtone disabled - showing visual notification only
             console.log('📢 [BROADCAST] Showing notification for packed order (audio disabled)');
-              
-            // Show urgent toast
-            toast({
-              title: "🚨 ORDER PACKED & READY!",
-              description: `Order from ${notificationData.customer_name || 'customer'} is packed and ready for pickup`,
-              duration: 8000,
-            });
             
             // Immediate refresh for agent assignment notifications
             debouncedRefresh('urgent-notification-agent-assignment', true);
