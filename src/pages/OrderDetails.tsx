@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +10,7 @@ import { openGoogleMapsAddress } from '@/utils/maps';
 import { updateOrderStatus as updateOrderStatusService } from '@/services/updateOrderStatus';
 import { toast } from '@/hooks/use-toast';
 import { MapPin, Clock, IndianRupee, ExternalLink, ArrowLeft, CheckCircle, XCircle, Package } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import type { ZaagoOrder } from '@/services/orders';
 
 export default function OrderDetails() {
@@ -119,12 +120,14 @@ export default function OrderDetails() {
   };
 
   return (
-    <AppShell showTabBar={false}>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="space-y-6 py-4"
-      >
+    <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
+      <AppShell showTabBar={false}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          className="space-y-6 py-4"
+        >
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -343,5 +346,6 @@ export default function OrderDetails() {
         </motion.div>
       </motion.div>
     </AppShell>
+    </motion.div>
   );
 }

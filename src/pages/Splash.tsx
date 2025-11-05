@@ -39,20 +39,19 @@ export default function Splash() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5">
       <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
+        initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
         className="flex flex-col items-center gap-4"
       >
         <motion.div
           animate={{
-            scale: [1, 1.1, 1],
-            rotate: [0, 5, -5, 0],
+            scale: [1, 1.05, 1],
           }}
           transition={{
             duration: 2,
             repeat: Infinity,
-            repeatType: 'reverse',
+            ease: "easeInOut",
           }}
           className="p-6 bg-primary rounded-3xl shadow-2xl"
         >
@@ -60,18 +59,18 @@ export default function Splash() {
         </motion.div>
         
         <motion.h1
-          initial={{ y: 20, opacity: 0 }}
+          initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.15, duration: 0.18, ease: "easeOut" }}
           className="text-3xl font-bold text-primary"
         >
           Zaago
         </motion.h1>
         
         <motion.p
-          initial={{ y: 20, opacity: 0 }}
+          initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.25, duration: 0.18, ease: "easeOut" }}
           className="text-muted-foreground"
         >
           Delivery Agent

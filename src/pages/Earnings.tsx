@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { pageTransition, pageTransitionConfig } from '@/animation/variants';
+import { useNavigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { IndianRupee, TrendingUp, Calendar, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion as m } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
 import { fetchAgentProfile } from '@/services/agentProfile';
 import { fetchAgentEarnings, computeEarningsTotals } from '@/services/earnings';
@@ -45,7 +48,8 @@ export default function Earnings() {
     loadEarnings();
   }, [user?.email]);
   return (
-    <AppShell>
+    <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
+      <AppShell>
       <div className="space-y-6 py-4">
         <h1 className="text-2xl font-bold">Earnings</h1>
 
@@ -56,10 +60,10 @@ export default function Earnings() {
         ) : (
           <>
             <div className="grid gap-4">
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0 }}
+            transition={{ delay: 0, ease: [0.4, 0, 0.2, 1] }}
           >
             <Card className="rounded-2xl border-2 bg-gradient-to-br from-primary/10 to-primary/5">
               <CardHeader className="pb-3">
@@ -75,13 +79,13 @@ export default function Earnings() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </m.div>
 
           <div className="grid grid-cols-2 gap-4">
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+              transition={{ delay: 0.1, ease: [0.4, 0, 0.2, 1] }}
             >
               <Card className="rounded-2xl">
                 <CardHeader className="pb-3">
@@ -94,12 +98,12 @@ export default function Earnings() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </m.div>
 
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+              transition={{ delay: 0.2, ease: [0.4, 0, 0.2, 1] }}
             >
               <Card className="rounded-2xl">
                 <CardHeader className="pb-3">
@@ -112,7 +116,7 @@ export default function Earnings() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </m.div>
           </div>
         </div>
 
@@ -127,11 +131,11 @@ export default function Earnings() {
             <div className="h-32 bg-gradient-to-r from-primary/10 via-primary/20 to-primary/10 rounded-xl flex items-end justify-center p-4">
               <div className="flex items-end gap-2 h-full w-full max-w-xs">
                 {[40, 65, 45, 80, 60, 90, 70].map((height, i) => (
-                  <motion.div
+                  <m.div
                     key={i}
                     initial={{ height: 0 }}
                     animate={{ height: `${height}%` }}
-                    transition={{ delay: i * 0.1, duration: 0.5 }}
+                    transition={{ delay: i * 0.1, duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
                     className="flex-1 bg-primary rounded-t"
                   />
                 ))}
@@ -139,10 +143,10 @@ export default function Earnings() {
             </div>
           </CardContent>
         </Card>
-
           </>
         )}
       </div>
     </AppShell>
+    </motion.div>
   );
 }

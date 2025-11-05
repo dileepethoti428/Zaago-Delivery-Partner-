@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { MapPin, Clock, IndianRupee, RefreshCw, PackageX, AlertCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
@@ -68,8 +69,9 @@ export default function Home() {
   };
 
   return (
-    <AppShell>
-      <div className="space-y-6 py-4">
+    <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
+      <AppShell>
+        <div className="space-y-6 py-4">
         {/* Location and Filter Header */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
@@ -234,5 +236,6 @@ export default function Home() {
         </div>
       </div>
     </AppShell>
+    </motion.div>
   );
 }

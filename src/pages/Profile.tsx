@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
 import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion as m } from 'framer-motion';
 import { fetchAgentProfile } from '@/services/agentProfile';
 
 type AgentProfile = {
@@ -58,7 +60,8 @@ export default function Profile() {
   ];
 
   return (
-    <AppShell>
+    <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
+      <AppShell>
       <div className="space-y-6 py-4">
         <h1 className="text-2xl font-bold">Profile</h1>
 
@@ -109,18 +112,18 @@ export default function Profile() {
             {menuItems.map((item, index) => {
               const Icon = item.icon;
               return (
-                <motion.button
+                <m.button
                   key={item.label}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
+                  transition={{ delay: index * 0.05, ease: [0.4, 0, 0.2, 1] }}
                   onClick={item.action}
                   className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-muted/50 transition-colors"
                 >
                   <Icon className="h-5 w-5 text-primary" />
                   <span className="flex-1 text-left font-medium">{item.label}</span>
                   <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                </motion.button>
+                </m.button>
               );
             })}
           </CardContent>
@@ -136,5 +139,6 @@ export default function Profile() {
         </Button>
       </div>
     </AppShell>
+    </motion.div>
   );
 }
