@@ -1,5 +1,5 @@
 // Service Worker for background sync and caching
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `zaago-cache-${CACHE_VERSION}`;
 const API_CACHE = `zaago-api-cache-${CACHE_VERSION}`;
 const BACKGROUND_SYNC_TAG = 'background-sync';
