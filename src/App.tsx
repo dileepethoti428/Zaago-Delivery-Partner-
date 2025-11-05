@@ -44,7 +44,8 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  const { requestPermission, hasPermission } = useNotificationPermission();
+  // TEMPORARILY DISABLED: useNotificationPermission to fix React useState error
+  // const { requestPermission, hasPermission } = useNotificationPermission();
   const [agentSettings, setAgentSettings] = useState<RingtoneSettings>({
     enabled: true,
     volume: 0.8,
@@ -93,15 +94,15 @@ function AppContent() {
     loadAgentSettings();
   }, []);
 
-  // Request notification permission on first load
-  useEffect(() => {
-    if (!hasPermission) {
-      const timer = setTimeout(() => {
-        requestPermission();
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasPermission, requestPermission]);
+  // TEMPORARILY DISABLED: Request notification permission on first load
+  // useEffect(() => {
+  //   if (!hasPermission) {
+  //     const timer = setTimeout(() => {
+  //       requestPermission();
+  //     }, 3000);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [hasPermission, requestPermission]);
 
   // Listen for service worker messages to play audio
   useEffect(() => {
