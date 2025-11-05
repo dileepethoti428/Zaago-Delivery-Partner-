@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -6,9 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import BottomNavigation from "@/components/BottomNavigation";
 import RequireAuth from "@/components/RequireAuth";
-import { useNotificationPermission } from "@/hooks/useNotificationPermission";
-import { useAudioNotification, RingtoneSettings } from "@/hooks/useAudioNotification";
-import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { OneSignalInit } from "@/components/OneSignalInit";
 
@@ -44,82 +41,6 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  // TEMPORARILY DISABLED: useNotificationPermission to fix React useState error
-  // const { requestPermission, hasPermission } = useNotificationPermission();
-  const [agentSettings, setAgentSettings] = useState<RingtoneSettings>({
-    enabled: true,
-    volume: 0.8,
-    type: 'iphone-6-ringtone',
-    frequency: 'double',
-  });
-
-  const { playNotificationSound } = useAudioNotification(agentSettings);
-
-  // Load agent settings from database
-  useEffect(() => {
-    const loadAgentSettings = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: agent } = await supabase
-          .from('delivery_agents')
-          .select('id')
-          .eq('email', user.email)
-          .eq('is_active', true)
-          .single();
-
-        if (!agent) return;
-
-        const { data: settings } = await supabase
-          .from('agent_settings')
-          .select('*')
-          .eq('agent_id', agent.id)
-          .single();
-
-        if (settings) {
-          setAgentSettings({
-            enabled: settings.ringtone_enabled ?? true,
-            volume: settings.ringtone_volume ?? 0.8,
-            type: settings.ringtone_type ?? 'iphone-6-ringtone',
-            frequency: settings.notification_frequency ?? 'double',
-          });
-          console.log('✅ Loaded agent audio settings:', settings);
-        }
-      } catch (error) {
-        console.error('❌ Error loading agent settings:', error);
-      }
-    };
-
-    loadAgentSettings();
-  }, []);
-
-  // TEMPORARILY DISABLED: Request notification permission on first load
-  // useEffect(() => {
-  //   if (!hasPermission) {
-  //     const timer = setTimeout(() => {
-  //       requestPermission();
-  //     }, 3000);
-  //     return () => clearTimeout(timer);
-  //   }
-  // }, [hasPermission, requestPermission]);
-
-  // Listen for service worker messages to play audio
-  useEffect(() => {
-    const handleServiceWorkerMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'PLAY_NOTIFICATION_AUDIO') {
-        console.log('🔊 Received audio play request from service worker');
-        playNotificationSound();
-      }
-    };
-
-    navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
-
-    return () => {
-      navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
-    };
-  }, [playNotificationSound]);
-
   return (
     <BrowserRouter>
       <Toaster />
