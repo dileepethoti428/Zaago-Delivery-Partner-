@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { MapPin, Navigation, Map, Search } from "lucide-react";
+import { MapPin, Navigation, Search, Crosshair, ChevronRight } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -162,88 +162,126 @@ export const LocationPicker = ({ children, onLocationSelected }: LocationPickerP
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <div onClick={() => setOpen(true)} className="cursor-pointer">
         {children}
-      </DialogTrigger>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-md mx-auto">
-        <DialogHeader>
-          <DialogTitle>Select Location</DialogTitle>
-          <DialogDescription>
-            Choose how you want to set your location
-          </DialogDescription>
-        </DialogHeader>
+      </div>
+      
+      <SheetContent 
+        side="bottom" 
+        className="h-[85vh] p-0 rounded-t-3xl border-t-0 flex flex-col"
+      >
+        <SheetHeader className="px-5 pt-6 pb-4 border-b border-border/50">
+          <SheetTitle className="text-xl font-bold text-left">Select Location</SheetTitle>
+          <SheetDescription className="text-left text-sm">
+            Search or use your current location
+          </SheetDescription>
+        </SheetHeader>
         
-        <div className="space-y-4">
-          <Button
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* Use Current Location Button - Blinkit Style */}
+          <button
             onClick={handleUseCurrentLocation}
             disabled={isGettingLocation}
-            className="w-full justify-start h-auto p-3"
-            variant="outline"
+            className="w-full p-4 bg-gradient-to-r from-primary/5 to-primary/10 hover:from-primary/10 hover:to-primary/15 border border-primary/20 rounded-xl transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <div className="flex items-center gap-2 min-w-0 w-full">
-              <div className="p-2 bg-primary/10 rounded-lg flex-shrink-0">
-                <Navigation className="w-4 h-4 text-primary" />
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-primary rounded-lg flex-shrink-0">
+                <Crosshair className="w-5 h-5 text-primary-foreground" />
               </div>
-              <div className="text-left min-w-0 flex-1 overflow-hidden">
-                <div className="font-medium text-sm">Use Current Location</div>
-                <div className="text-xs text-muted-foreground line-clamp-1">
+              <div className="text-left min-w-0 flex-1">
+                <div className="font-semibold text-base text-foreground">
+                  {isGettingLocation ? "Getting location..." : "Use Current Location"}
+                </div>
+                <div className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
                   {location.loading 
-                    ? "Getting location..." 
+                    ? "Detecting..." 
                     : location.address 
                       ? location.address 
-                      : "Detect your current position"
+                      : "Enable GPS for instant delivery"
                   }
                 </div>
               </div>
+              {!isGettingLocation && (
+                <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+              )}
             </div>
-          </Button>
+          </button>
 
+          {/* Search Box - Blinkit Style */}
           <div className="relative">
-            <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
-                placeholder="Search for places..."
+                placeholder="Search for area, street name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 disabled={isSearching}
-                className="flex-1 text-sm min-w-0"
+                className="pl-12 pr-4 h-14 text-base border-2 border-border/50 rounded-xl focus:border-primary transition-colors"
               />
             </div>
             
+            {/* Search Results */}
             {predictions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
-                {predictions.map((prediction) => (
-                  <button
-                    key={prediction.place_id}
-                    onClick={() => selectPlace(prediction)}
-                    disabled={isGettingLocation}
-                    className="w-full px-3 py-2 text-left hover:bg-muted transition-colors border-b last:border-b-0"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0 overflow-hidden">
-                        <div className="font-medium text-sm line-clamp-1">
-                          {prediction.main_text}
+              <div className="mt-3 space-y-1">
+                <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Search Results
+                </div>
+                <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                  {predictions.map((prediction) => (
+                    <button
+                      key={prediction.place_id}
+                      onClick={() => selectPlace(prediction)}
+                      disabled={isGettingLocation}
+                      className="w-full p-4 text-left hover:bg-secondary/50 rounded-xl transition-all duration-150 border border-transparent hover:border-border/30 active:scale-[0.98] disabled:opacity-50"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-secondary rounded-lg flex-shrink-0 mt-0.5">
+                          <MapPin className="w-4 h-4 text-muted-foreground" />
                         </div>
-                        <div className="text-xs text-muted-foreground line-clamp-1">
-                          {prediction.secondary_text}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-base text-foreground line-clamp-1">
+                            {prediction.main_text}
+                          </div>
+                          <div className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                            {prediction.secondary_text}
+                          </div>
                         </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1.5" />
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             
+            {/* Loading State */}
             {isSearching && (
-              <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg p-4">
-                <div className="text-sm text-muted-foreground">Searching...</div>
+              <div className="mt-3 p-8 text-center">
+                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  <span>Searching nearby...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {searchQuery && !isSearching && predictions.length === 0 && (
+              <div className="mt-8 text-center px-4 py-8">
+                <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <div className="text-base font-medium text-foreground mb-2">
+                  No locations found
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Try searching with different keywords
+                </div>
               </div>
             )}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 };

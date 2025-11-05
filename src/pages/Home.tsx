@@ -34,7 +34,8 @@ import {
   MapPinOff,
   Trophy,
   BarChart3,
-  ChevronDown
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { normalizeAddress } from "@/lib/utils";
 import { debugAddress } from "@/lib/debugAddress";
@@ -1658,11 +1659,22 @@ const Home = () => {
       {/* Header with Greeting */}
       <div className="bg-white px-4 py-3 border-b border-gray-100">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex-1 min-w-0">
+          <div 
+            className="flex-1 min-w-0 cursor-pointer group"
+            onClick={() => setShowLocationPicker(true)}
+          >
             <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
-            <div className="flex items-center text-xs text-gray-500 mt-1 cursor-pointer hover:text-gray-700 transition-colors" onClick={() => setShowLocationPicker(true)}>
-              <MapPin className="w-3 h-3 mr-1 text-red-500 flex-shrink-0" />
-              <span className="truncate max-w-[150px] sm:max-w-[280px]">{currentLocation}</span>
+            <div className="flex items-center text-xs mt-1.5 bg-gray-50 group-hover:bg-gray-100 rounded-lg px-2 py-1.5 transition-colors border border-gray-200 group-hover:border-gray-300">
+              <div className="p-1 bg-red-500 rounded-full mr-2 flex-shrink-0 animate-pulse">
+                <MapPin className="w-2.5 h-2.5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Delivery Location</div>
+                <div className="text-sm font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-[280px]">
+                  {currentLocation}
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 flex-shrink-0 ml-1 transition-colors" />
             </div>
           </div>
           
