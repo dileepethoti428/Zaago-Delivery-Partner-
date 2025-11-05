@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
+import { useAuthStore } from "@/store/auth";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -13,10 +15,22 @@ const queryClient = new QueryClient({
   },
 });
 
+function AuthInitializer({ children }: { children: React.ReactNode }) {
+  const initialize = useAuthStore((state) => state.initialize);
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  return <>{children}</>;
+}
+
 export default function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <AuthInitializer>
+        {children}
+      </AuthInitializer>
       <Toaster />
       <SonnerToaster 
         position="top-center"

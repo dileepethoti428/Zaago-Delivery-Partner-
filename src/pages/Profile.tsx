@@ -4,17 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
-import { useAppStore } from '@/store/app';
-import { LogOut, User, DollarSign, HelpCircle, ChevronRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { useAuthStore } from '@/store/auth';
+import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { agent, setIsAuthed, setAgent } = useAppStore();
+  const { user, profile, signOut } = useAuthStore();
 
-  const handleLogout = () => {
-    setIsAuthed(false);
-    setAgent(null);
+  const handleLogout = async () => {
+    await signOut();
     navigate('/login');
   };
 
@@ -34,13 +34,33 @@ export default function Profile() {
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xl">
-                  {agent?.name.split(' ').map(n => n[0]).join('')}
+                  {profile?.full_name ? profile.full_name.split(' ').map(n => n[0]).join('') : 'DA'}
                 </AvatarFallback>
               </Avatar>
               
               <div className="flex-1">
-                <h2 className="text-xl font-bold">{agent?.name}</h2>
-                <p className="text-sm text-muted-foreground">{agent?.email}</p>
+                <h2 className="text-xl font-bold">{profile?.full_name || 'Delivery Agent'}</h2>
+                <p className="text-sm text-muted-foreground">{user?.email}</p>
+                <div className="mt-2">
+                  {profile?.approval_status === 'approved' && (
+                    <Badge className="gap-1" variant="default">
+                      <CheckCircle className="h-3 w-3" />
+                      Approved
+                    </Badge>
+                  )}
+                  {profile?.approval_status === 'pending' && (
+                    <Badge className="gap-1" variant="secondary">
+                      <Clock className="h-3 w-3" />
+                      Pending Review
+                    </Badge>
+                  )}
+                  {profile?.approval_status === 'rejected' && (
+                    <Badge className="gap-1" variant="destructive">
+                      <XCircle className="h-3 w-3" />
+                      Rejected
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
 

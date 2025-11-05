@@ -1,27 +1,144 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Truck } from 'lucide-react';
+import { Truck, Loader2 } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAppStore } from '@/store/app';
+import { useAuthStore } from '@/store/auth';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
+import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from '@/utils/validation';
+
+type Mode = 'login' | 'signup' | 'reset';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setIsAuthed, setAgent } = useAppStore();
-  const [email, setEmail] = useState('agent@zaago.com');
-  const [password, setPassword] = useState('password');
+  const { session, profile, fetchProfile } = useAuthStore();
+  const [mode, setMode] = useState<Mode>('login');
+  const [loading, setLoading] = useState(false);
 
-  const handleSignIn = () => {
-    setIsAuthed(true);
-    setAgent({
-      id: 'agent-001',
-      name: 'John Doe',
-      email: email,
+  const loginForm = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
+  const signupForm = useForm<SignupFormData>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { email: '', password: '', confirmPassword: '' },
+  });
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (session && profile) {
+      if (!profile.documents_submitted) {
+        navigate('/upload-documents');
+      } else if (profile.approval_status === 'pending') {
+        navigate('/pending-approval');
+      } else if (profile.approval_status === 'rejected') {
+        navigate('/rejected');
+      } else if (profile.approval_status === 'approved') {
+        navigate('/home');
+      }
+    }
+  }, [session, profile, navigate]);
+
+  const handleLogin = async (data: LoginFormData) => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
     });
-    navigate('/home');
+
+    if (error) {
+      toast({
+        title: 'Login failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+      setLoading(false);
+    } else {
+      await fetchProfile();
+      // Navigation handled by useEffect
+    }
+  };
+
+  const handleSignup = async (data: SignupFormData) => {
+    setLoading(true);
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
+    });
+
+    if (error) {
+      toast({
+        title: 'Signup failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (authData.user) {
+      // Create profile
+      const { error: profileError } = await supabase.from('profiles').insert({
+        user_id: authData.user.id,
+        approval_status: 'pending',
+        documents_submitted: false,
+      });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+      }
+
+      toast({
+        title: 'Account created',
+        description: 'Please upload your documents to continue',
+      });
+
+      await fetchProfile();
+      navigate('/upload-documents');
+    }
+    setLoading(false);
+  };
+
+  const handleResetPassword = async () => {
+    const email = loginForm.getValues('email');
+    if (!email) {
+      toast({
+        title: 'Email required',
+        description: 'Please enter your email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+
+    if (error) {
+      toast({
+        title: 'Reset failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Check your email',
+        description: 'Password reset link has been sent',
+      });
+      setMode('login');
+    }
+    setLoading(false);
   };
 
   return (
@@ -41,49 +158,171 @@ export default function Login() {
 
         <Card className="rounded-2xl shadow-xl border-0 bg-card/50 backdrop-blur">
           <CardHeader>
-            <CardTitle>Welcome back</CardTitle>
-            <CardDescription>Sign in to your delivery agent account</CardDescription>
+            <CardTitle>
+              {mode === 'login' && 'Welcome back'}
+              {mode === 'signup' && 'Create account'}
+              {mode === 'reset' && 'Reset password'}
+            </CardTitle>
+            <CardDescription>
+              {mode === 'login' && 'Sign in to your delivery agent account'}
+              {mode === 'signup' && 'Join as a delivery agent'}
+              {mode === 'reset' && 'Enter your email to receive a reset link'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="agent@zaago.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="rounded-xl"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="rounded-xl"
-              />
-            </div>
+            {mode === 'login' && (
+              <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="agent@zaago.com"
+                    className="rounded-xl"
+                    {...loginForm.register('email')}
+                  />
+                  {loginForm.formState.errors.email && (
+                    <p className="text-sm text-destructive">{loginForm.formState.errors.email.message}</p>
+                  )}
+                </div>
 
-            <Button 
-              onClick={handleSignIn}
-              className="w-full rounded-xl h-11 text-base font-medium"
-            >
-              Sign in
-            </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    className="rounded-xl"
+                    {...loginForm.register('password')}
+                  />
+                  {loginForm.formState.errors.password && (
+                    <p className="text-sm text-destructive">{loginForm.formState.errors.password.message}</p>
+                  )}
+                </div>
 
-            <div className="flex justify-between text-sm">
-              <button className="text-primary hover:underline">
-                Forgot password?
-              </button>
-              <button className="text-primary hover:underline">
-                Create account
-              </button>
-            </div>
+                <Button
+                  type="submit"
+                  className="w-full rounded-xl h-11 text-base font-medium"
+                  disabled={loading}
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign in'}
+                </Button>
+
+                <div className="flex justify-between text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setMode('reset')}
+                    className="text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('signup')}
+                    className="text-primary hover:underline"
+                  >
+                    Create account
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {mode === 'signup' && (
+              <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="agent@zaago.com"
+                    className="rounded-xl"
+                    {...signupForm.register('email')}
+                  />
+                  {signupForm.formState.errors.email && (
+                    <p className="text-sm text-destructive">{signupForm.formState.errors.email.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    placeholder="••••••••"
+                    className="rounded-xl"
+                    {...signupForm.register('password')}
+                  />
+                  {signupForm.formState.errors.password && (
+                    <p className="text-sm text-destructive">{signupForm.formState.errors.password.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm Password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="••••••••"
+                    className="rounded-xl"
+                    {...signupForm.register('confirmPassword')}
+                  />
+                  {signupForm.formState.errors.confirmPassword && (
+                    <p className="text-sm text-destructive">{signupForm.formState.errors.confirmPassword.message}</p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full rounded-xl h-11 text-base font-medium"
+                  disabled={loading}
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create account'}
+                </Button>
+
+                <div className="text-center text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-primary hover:underline"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {mode === 'reset' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email">Email</Label>
+                  <Input
+                    id="reset-email"
+                    type="email"
+                    placeholder="agent@zaago.com"
+                    className="rounded-xl"
+                    {...loginForm.register('email')}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleResetPassword}
+                  className="w-full rounded-xl h-11 text-base font-medium"
+                  disabled={loading}
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send reset link'}
+                </Button>
+
+                <div className="text-center text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setMode('login')}
+                    className="text-primary hover:underline"
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>

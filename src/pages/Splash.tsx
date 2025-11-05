@@ -2,19 +2,39 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Truck } from 'lucide-react';
-import { useAppStore } from '@/store/app';
+import { useAuthStore } from '@/store/auth';
 
 export default function Splash() {
   const navigate = useNavigate();
-  const isAuthed = useAppStore((state) => state.isAuthed);
+  const { session, profile, loading, initialize } = useAuthStore();
 
   useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  useEffect(() => {
+    if (loading) return;
+
     const timer = setTimeout(() => {
-      navigate(isAuthed ? '/home' : '/login');
+      if (!session) {
+        navigate('/login');
+        return;
+      }
+
+      // User is authenticated, check profile status
+      if (!profile || !profile.documents_submitted) {
+        navigate('/upload-documents');
+      } else if (profile.approval_status === 'pending') {
+        navigate('/pending-approval');
+      } else if (profile.approval_status === 'rejected') {
+        navigate('/rejected');
+      } else if (profile.approval_status === 'approved') {
+        navigate('/home');
+      }
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [isAuthed, navigate]);
+  }, [session, profile, loading, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5">

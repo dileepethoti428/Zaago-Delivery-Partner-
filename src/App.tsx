@@ -6,6 +6,11 @@ import Home from './pages/Home';
 import OrderDetails from './pages/OrderDetails';
 import Earnings from './pages/Earnings';
 import Profile from './pages/Profile';
+import UploadDocuments from './pages/UploadDocuments';
+import PendingApproval from './pages/PendingApproval';
+import Rejected from './pages/Rejected';
+import { RequireAuth } from './components/auth/RequireAuth';
+import { RequireApproval } from './components/auth/RequireApproval';
 
 function App() {
   return (
@@ -15,10 +20,21 @@ function App() {
           <Route path="/" element={<Navigate to="/splash" replace />} />
           <Route path="/splash" element={<Splash />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/home" element={<Home />} />
-          <Route path="/order/:id" element={<OrderDetails />} />
-          <Route path="/earnings" element={<Earnings />} />
-          <Route path="/profile" element={<Profile />} />
+          
+          {/* Auth-required routes */}
+          <Route element={<RequireAuth />}>
+            <Route path="/upload-documents" element={<UploadDocuments />} />
+            <Route path="/pending-approval" element={<PendingApproval />} />
+            <Route path="/rejected" element={<Rejected />} />
+            
+            {/* Approval-required routes */}
+            <Route element={<RequireApproval />}>
+              <Route path="/home" element={<Home />} />
+              <Route path="/order/:id" element={<OrderDetails />} />
+              <Route path="/earnings" element={<Earnings />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+          </Route>
         </Routes>
       </AnimatePresence>
     </BrowserRouter>
