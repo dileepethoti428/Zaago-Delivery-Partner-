@@ -1251,6 +1251,12 @@ const Home = () => {
       // Filter out delivered orders
       if (order.status === 'delivered') return false;
       
+      // Filter out orders beyond 15km radius
+      if (order.distance_km !== undefined && order.distance_km > 15) {
+        console.log(`❌ Filtering out order ${order.id} - ${order.distance_km.toFixed(2)}km away (>15km)`);
+        return false;
+      }
+      
       // Filter out expired immediate deliveries (more than 2 hours old)
       if (order.delivery_type === 'immediate' && order.order_placed_at) {
         const now = new Date();
@@ -1398,9 +1404,19 @@ const Home = () => {
       
       if (ordersNeedingDistance.length > 0) {
         calculateOrderDistances(orders).then(async (updatedOrders) => {
-          // Calculate accurate payouts using backend for updated distances
+          // Filter out orders beyond 15km BEFORE updating state
+          const nearbyOrders = updatedOrders.filter(order => {
+            if (order.distance_km === undefined) return true; // Keep if distance unknown
+            if (order.distance_km > 15) {
+              console.log(`❌ Filtering order ${order.id} - ${order.distance_km.toFixed(2)}km away (>15km)`);
+              return false;
+            }
+            return true;
+          });
+          
+          // Calculate accurate payouts using backend for nearby orders only
           const ordersWithPayouts = await Promise.all(
-            updatedOrders.map(async (order) => {
+            nearbyOrders.map(async (order) => {
               const backendPayout = await updatePayoutFromBackend(order.distance_km || 2.5, order.id);
               return {
                 ...order,
@@ -1527,6 +1543,25 @@ const Home = () => {
       isMounted = false;
     };
   }, [realtimeOrders]);
+
+  // Show loading if location not yet available
+  if (!location.latitude || !location.longitude || location.loading) {
+    return (
+      <div className="flex flex-col h-screen bg-gradient-to-b from-gray-50 to-white">
+        <div className="p-4">
+          <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-2"></div>
+          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-gray-600 font-medium">Detecting your location...</p>
+            <p className="text-sm text-gray-400 mt-2">This helps us show nearby orders</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoadingRealtime) {
     return (
@@ -1779,14 +1814,19 @@ const Home = () => {
                 <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-200 flex items-center justify-center">
                   <PackageOpen className="w-10 h-10 text-gray-400" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No orders available</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No orders within 15km</h3>
                 <p className="text-gray-500 mb-4">
-                  No delivery requests available within 15km radius
+                  Orders will appear here when customers place orders near your location
                 </p>
+                {location.latitude && location.longitude && (
+                  <p className="text-gray-400 text-xs mt-2">
+                    📍 Showing orders within 15km of your current location
+                  </p>
+                )}
                 {!isOnline && (
                   <Button
                     onClick={() => setIsOnline(true)}
-                    className="bg-green-500 hover:bg-green-600 text-white"
+                    className="bg-green-500 hover:bg-green-600 text-white mt-4"
                   >
                     <Zap className="w-4 h-4 mr-2" />
                     Go Online
