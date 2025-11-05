@@ -21,13 +21,15 @@ serve(async (req) => {
 
     const { request_id } = await req.json();
     
+    // Validate request_id
     if (!request_id) {
+      console.error('❌ Missing request_id');
       throw new Error('request_id is required');
     }
 
     console.log('📋 Request ID:', request_id);
 
-    // Get the payment request
+    // Get the payment request with validation
     const { data: paymentRequest, error: fetchError } = await supabaseClient
       .from('flexible_payment_requests')
       .select('*')
@@ -39,7 +41,23 @@ serve(async (req) => {
       throw new Error('Payment request not found');
     }
 
-    console.log('✅ Found payment request:', paymentRequest);
+    // Validate request status (only process pending requests)
+    if (paymentRequest.status !== 'pending') {
+      console.error('❌ Invalid request status:', paymentRequest.status);
+      throw new Error(`Invalid request status: ${paymentRequest.status}`);
+    }
+
+    // Validate that the request hasn't expired
+    if (new Date(paymentRequest.expires_at) < new Date()) {
+      console.error('❌ Payment request has expired');
+      await supabaseClient
+        .from('flexible_payment_requests')
+        .update({ status: 'failed', error_message: 'Request expired' })
+        .eq('id', request_id);
+      throw new Error('Payment request has expired');
+    }
+
+    console.log('✅ Found valid payment request:', paymentRequest);
 
     // Update status to generating
     await supabaseClient
