@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import DeliveryTimer from "@/components/DeliveryTimer";
 import { OfflineCompletionsQueue } from "@/components/OfflineCompletionsQueue";
 import { FlexiblePaymentDialog } from "@/components/FlexiblePaymentDialog";
+import { OrderCard } from "@/components/OrderCard";
 
 // Lazy load heavy components
 const LocationPicker = lazy(() => import("@/components/LocationPicker").then(m => ({ default: m.LocationPicker })));
@@ -1241,7 +1242,7 @@ const Home = () => {
   };
 
   // Pull to refresh functionality
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     if (isRefreshing) return; // Prevent multiple clicks
     
     setIsRefreshing(true);
@@ -1261,10 +1262,10 @@ const Home = () => {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [realtimeRefresh]);
 
-  // Accept order
-  const handleAcceptOrder = async (orderId: string) => {
+  // Accept order - Memoized event handler
+  const handleAcceptOrder = useCallback(async (orderId: string) => {
     setAcceptingOrders(prev => ({ ...prev, [orderId]: true }));
     
     try {
@@ -1310,7 +1311,7 @@ const Home = () => {
     } finally {
       setAcceptingOrders(prev => ({ ...prev, [orderId]: false }));
     }
-  };
+  }, [agent?.id, toast, navigate]);
 
   // Test function to trigger emergency modal with sample data
   const handleTestNewOrder = async () => {
@@ -1419,7 +1420,7 @@ const Home = () => {
   };
 
   // Reject order
-  const handleRejectOrder = async (orderId: string) => {
+  const handleRejectOrder = useCallback(async (orderId: string) => {
     setRejectingOrders(prev => ({ ...prev, [orderId]: true }));
     
     try {
@@ -1497,16 +1498,13 @@ const Home = () => {
     } finally {
       setRejectingOrders(prev => ({ ...prev, [orderId]: false }));
     }
-  };
+  }, [toast]);
 
-  // Sort orders based on selected criteria - all data comes from backend calculations
-  const getSortedOrders = (orders: Order[]) => {
+  // Memoized sort function - only recalculates when orders or sortBy changes
+  const sortedOrders = useMemo(() => {
     if (!orders || orders.length === 0) {
-      console.log('🎯 No orders to sort');
       return [];
     }
-
-    console.log(`🎯 Sorting ${orders.length} orders by: ${sortBy}`);
     
     return [...orders].sort((a, b) => {
       switch (sortBy) {
@@ -1515,89 +1513,55 @@ const Home = () => {
           const distA = Number(a.agent_to_shop_distance ?? a.total_distance ?? a.distance_km ?? 999);
           const distB = Number(b.agent_to_shop_distance ?? b.total_distance ?? b.distance_km ?? 999);
           
-          // Validation check
-          if (isNaN(distA) || isNaN(distB)) {
-            console.warn(`⚠️ Invalid distance values: A=${distA}, B=${distB}`);
-            return 0;
-          }
-          
-          console.log(`  📍 Order ${a.id.slice(0, 8)}: ${distA.toFixed(2)}km vs ${b.id.slice(0, 8)}: ${distB.toFixed(2)}km`);
+          if (isNaN(distA) || isNaN(distB)) return 0;
           return distA - distB;
         }
         case 'newest': {
-          // Sort by order creation time from backend (newest first)
           const timeA = new Date(a.created_at).getTime();
           const timeB = new Date(b.created_at).getTime();
           
-          // Validation check
-          if (isNaN(timeA) || isNaN(timeB)) {
-            console.warn(`⚠️ Invalid date values: A=${a.created_at}, B=${b.created_at}`);
-            return 0;
-          }
-          
-          console.log(`  🕐 Order ${a.id.slice(0, 8)}: ${new Date(a.created_at).toLocaleTimeString()} vs ${b.id.slice(0, 8)}: ${new Date(b.created_at).toLocaleTimeString()}`);
+          if (isNaN(timeA) || isNaN(timeB)) return 0;
           return timeB - timeA;
         }
         case 'highest': {
-          // Sort by agent payout calculated from backend (highest first)
           const payoutA = Number(a.agent_payout ?? calculateAgentPayout(a.distance_km || 2.5));
           const payoutB = Number(b.agent_payout ?? calculateAgentPayout(b.distance_km || 2.5));
           
-          // Validation check
-          if (isNaN(payoutA) || isNaN(payoutB)) {
-            console.warn(`⚠️ Invalid payout values: A=${payoutA}, B=${payoutB}`);
-            return 0;
-          }
-          
-          console.log(`  💰 Order ${a.id.slice(0, 8)}: ₹${payoutA.toFixed(2)} vs ${b.id.slice(0, 8)}: ₹${payoutB.toFixed(2)}`);
+          if (isNaN(payoutA) || isNaN(payoutB)) return 0;
           return payoutB - payoutA;
         }
         default:
           return 0;
       }
     });
-  };
+  }, [orders, sortBy]);
 
-  // Force re-sort when sortBy changes
-  useEffect(() => {
-    console.log(`🔄 Sort criteria changed to: ${sortBy}`);
-    if (orders.length > 0) {
-      const sorted = getSortedOrders(orders);
-      console.log(`✅ Orders re-sorted: ${sorted.length} orders`);
-      // Trigger re-render by updating state if needed
-      setOrders(prev => {
-        const prevIds = prev.map(o => o.id).join(',');
-        const sortedIds = sorted.map(o => o.id).join(',');
-        // Only update if order actually changed
-        if (prevIds !== sortedIds) {
-          console.log('📊 Order sequence changed, updating state');
-          return sorted;
-        }
-        return prev;
-      });
-    }
-  }, [sortBy]);
-
-  const availableOrders = getSortedOrders(orders.filter(order => {
-    // Filter out delivered orders
-    if (order.status === 'delivered') return false;
-    
-    // Filter out expired immediate deliveries (more than 2 hours old)
-    if (order.delivery_type === 'immediate' && order.order_placed_at) {
-      const now = new Date();
-      const orderTime = new Date(order.order_placed_at);
-      const hoursSinceOrder = (now.getTime() - orderTime.getTime()) / (1000 * 60 * 60);
+  // Memoized available orders - only recalculates when sortedOrders change
+  const availableOrders = useMemo(() => {
+    return sortedOrders.filter(order => {
+      // Filter out delivered orders
+      if (order.status === 'delivered') return false;
       
-      // Only show immediate orders that are less than 2 hours old
-      if (hoursSinceOrder > 2) {
-        console.log(`⏰ Filtering out expired immediate order ${order.id} (${hoursSinceOrder.toFixed(1)} hours old)`);
-        return false;
+      // Filter out expired immediate deliveries (more than 2 hours old)
+      if (order.delivery_type === 'immediate' && order.order_placed_at) {
+        const now = new Date();
+        const orderTime = new Date(order.order_placed_at);
+        const hoursSinceOrder = (now.getTime() - orderTime.getTime()) / (1000 * 60 * 60);
+        
+        // Only show immediate orders that are less than 2 hours old
+        if (hoursSinceOrder > 2) {
+          return false;
+        }
       }
-    }
-    
-    return true;
-  }));
-  const assignedOrders = availableOrders.filter(order => order.status === 'assigned');
+      
+      return true;
+    });
+  }, [sortedOrders]);
+
+  // Memoized assigned orders
+  const assignedOrders = useMemo(() => {
+    return availableOrders.filter(order => order.status === 'assigned');
+  }, [availableOrders]);
 
   // Track previous location to prevent unnecessary refreshes
   const [lastLocationRefresh, setLastLocationRefresh] = useState<{lat: number, lng: number} | null>(null);
@@ -1639,11 +1603,10 @@ const Home = () => {
         }
       }
       
-      // Recalculate distances when location changes significantly (more than 100m)
+      // Recalculate distances when location changes significantly (more than 200m for better performance)
       if (orders.length > 0) {
         if (!lastDistanceCalculation) {
           setLastDistanceCalculation(currentPos);
-          console.log('🎯 Initial location set, calculating distances...');
           calculateOrderDistances(orders).then(setOrders);
         } else {
           const distanceChange = Math.sqrt(
@@ -1651,10 +1614,9 @@ const Home = () => {
             Math.pow(currentPos.lng - lastDistanceCalculation.lng, 2)
           ) * 111000; // Rough conversion to meters
           
-          // Recalculate distances if moved more than 100 meters
-          if (distanceChange > 100) {
+          // Recalculate distances if moved more than 200 meters (reduced frequency)
+          if (distanceChange > 200) {
             setLastDistanceCalculation(currentPos);
-            console.log('📍 Location changed significantly, recalculating distances...');
             calculateOrderDistances(orders).then(setOrders);
           }
         }
@@ -1740,7 +1702,6 @@ const Home = () => {
       );
       
       if (ordersNeedingDistance.length > 0) {
-        console.log(`🔄 ${ordersNeedingDistance.length} orders need distance calculation...`);
         calculateOrderDistances(orders).then(async (updatedOrders) => {
           // Calculate accurate payouts using backend for updated distances
           const ordersWithPayouts = await Promise.all(
@@ -1767,8 +1728,7 @@ const Home = () => {
     const updateDistancesAndPayouts = async () => {
       if (!isMounted) return;
       
-      console.log('🔄 Updating real-time distances and payouts...');
-      const updatedOrders = await calculateOrderDistances(orders.slice(0, 20)); // Only top 20 orders
+      const updatedOrders = await calculateOrderDistances(orders.slice(0, 15)); // Only top 15 orders for performance
       
       if (!isMounted) return;
       
@@ -1785,8 +1745,16 @@ const Home = () => {
       
       if (!isMounted) return;
       
-      // Only update orders that were recalculated
-      setOrders(ordersWithUpdatedPayouts);
+      // Only update if data actually changed
+      setOrders(prev => {
+        const hasChanges = ordersWithUpdatedPayouts.some((newOrder, idx) => {
+          const oldOrder = prev[idx];
+          return !oldOrder || 
+            oldOrder.distance_km !== newOrder.distance_km || 
+            oldOrder.agent_payout !== newOrder.agent_payout;
+        });
+        return hasChanges ? ordersWithUpdatedPayouts : prev;
+      });
     };
 
     // Initial calculation
@@ -1811,7 +1779,6 @@ const Home = () => {
     const autoRefreshInterval = setInterval(async () => {
       if (!isMounted || document.hidden || !isOnline) return;
       
-      console.log('📊 Auto-refreshing orders (60-second interval)...');
       setIsAutoRefreshing(true);
       try {
         await realtimeRefresh();
@@ -1851,11 +1818,9 @@ const Home = () => {
       const currentOrderIds = orders.map(o => o.id).sort().join(',');
       
       if (newOrderIds === currentOrderIds) {
-        console.log('📊 Orders unchanged, skipping recalculation');
-        return;
+        return; // No change
       }
       
-      console.log('📊 Processing new realtime orders');
       const processed = await calculateOrderDistances(realtimeOrders);
       if (isMounted) {
         setOrders(processed);
@@ -2136,226 +2101,18 @@ const Home = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {availableOrders.map((order, index) => {
-                  return (
-                     <div 
-                       key={order.id} 
-                       className={`bg-white rounded-2xl p-4 border border-gray-200 ${
-                         order.status === 'assigned' ? 'border-green-200 bg-green-50' : ''
-                       }`}
-                     >
-                        {/* Order Header */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h3 className="font-semibold text-gray-900 text-lg">{order.customer_name}</h3>
-                            <p className="text-sm text-gray-500">
-                              {order.seller_name || 'Restaurant'} • Order #{order.id.substring(0, 8)}...
-                            </p>
-                          </div>
-                               {/* Pickup Location */}
-                             {order.status === 'assigned' && (
-                                 <div 
-                                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors min-h-[36px] w-[140px] justify-center"
-                                onClick={async () => {
-                                  if (order.pickup_location) {
-                                    const { lat, lng } = order.pickup_location;
-                                    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-                                    window.open(googleMapsUrl, '_blank');
-                                  } else if (order.pickup_address) {
-                                     const safePickupAddress = normalizeAddress(order.pickup_address);
-                                     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(safePickupAddress)}&travelmode=driving`;
-                                    window.open(googleMapsUrl, '_blank');
-                                  } else {
-                                    // Try to fetch seller location if missing
-                                    try {
-                                      if (order.items && order.items.length > 0) {
-                                        const sellerId = order.items[0].seller_id;
-                                        
-                                        if (sellerId) {
-                                          const { data: sellerData } = await supabase
-                                            .from('sellers')
-                                            .select('name, phone, latitude, longitude, address, business_name')
-                                            .eq('user_id', sellerId)
-                                            .single();
-                                          
-                                          if (sellerData && sellerData.latitude && sellerData.longitude) {
-                                            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${sellerData.latitude},${sellerData.longitude}&travelmode=driving`;
-                                            window.open(googleMapsUrl, '_blank');
-                                            return;
-                                          }
-                                        }
-                                      }
-                                    } catch (error) {
-                                      console.error('Error fetching seller location:', error);
-                                    }
-                                    
-                                    toast({
-                                      title: "Pickup Location Issue",
-                                      description: "Unable to get pickup location. Please contact support or check seller details.",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                               >
-                                 <MapPin className="w-4 h-4 mr-2" />
-                                 <div className="flex items-center">
-                                   <span className="text-sm font-medium">Pick Up</span>
-                                 </div>
-                              </div>
-                            )}
-                        </div>
-
-                         {/* Delivery Timer */}
-                         <div className="mb-4">
-                                <DeliveryTimer
-                                    deliveryType={(order as any).calculated_delivery_type || (order.subscription_id ? 'subscription' : (order.delivery_time_slot && order.delivery_time_slot.includes('-') ? 'scheduled' : 'immediate'))}
-                                    orderPlacedAt={new Date((order as any).original_created_at || order.created_at)}
-                                    deliveryTimeSlot={order.delivery_time_slot}
-                                    deliverySlots={parseDeliverySlots(order)}
-                                    paymentStatus={order.payment_status}
-                                    subscriptionId={order.subscription_id}
-                                    immediateTimingConfig={(order as any).immediate_timing_config}
-                                 />
-                         </div>
-
-                        {/* Address */}
-                        <div className="flex items-start mb-4">
-                          <MapPin className="w-4 h-4 text-green-500 mt-1 mr-2 flex-shrink-0" />
-                          <div className="flex-1">
-                               <div 
-                                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium flex items-center cursor-pointer transition-colors min-h-[36px] w-[140px] justify-center"
-                                 onClick={() => {
-                                   const address = debugAddress(order.address, `order-${order.id}-maps`);
-                                   const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
-                                   window.open(googleMapsUrl, '_blank');
-                                 }}
-                               >
-                                 <MapPin className="w-4 h-4 mr-2" />
-                                 <span className="text-sm font-medium">Delivery Address</span>
-                               </div>
-                          </div>
-                        </div>
-
-                        {/* Order Stats */}
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-4">
-                            <div className="flex items-center">
-                              <Navigation className="w-4 h-4 text-green-500 mr-1" />
-                              <span className="text-sm font-medium text-gray-700 flex items-center" title="Real-time delivery distance from shop to customer">
-                                {isLoadingDistance ? (
-                                  <div className="flex items-center">
-                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                    <span className="text-xs text-gray-500">Updating...</span>
-                                  </div>
-                                ) : (
-                                    <div className="flex items-center">
-                                      <span>{`${order.agent_to_shop_distance ? order.agent_to_shop_distance.toFixed(1) : '2.0'} km away`}</span>
-                                      <div className="w-2 h-2 bg-green-400 rounded-full ml-2 animate-pulse" title="Real-time tracking"></div>
-                                    </div>
-                                )}
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <span className="text-sm text-gray-600">
-                                {order.estimated_time_minutes ? `${order.estimated_time_minutes} min` : '5 min'}
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <Package className="w-4 h-4 text-gray-500 mr-1" />
-                              <span className="text-sm text-gray-600">
-                                {Array.isArray(order.items) ? order.items.length : 1} products
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <IndianRupee className="w-4 h-4 text-gray-900 mr-1" />
-                              <span className="text-sm font-medium text-gray-900">
-                                ₹{order.total}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Agent Payout */}
-                        <div className="bg-green-50 p-3 rounded-lg mb-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <IndianRupee className="w-4 h-4 text-green-600 mr-1" />
-                              <span className="text-sm text-green-800">Agent payout: </span>
-                              <span className="text-sm font-bold text-green-800" title="Real-time payout based on current distance">
-                                ₹{calculateAgentPayout(order.distance_km || 2.5)}
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <span className="text-xs text-green-700 font-medium flex items-center">
-                                {isLoadingDistance ? (
-                                  <div className="flex items-center">
-                                    <Loader2 className="w-2 h-2 animate-spin mr-1" />
-                                    <span>Updating...</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center">
-                                    {order.distance_km && (
-                                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full ml-1 animate-pulse" title="Real-time tracking"></div>
-                                    )}
-                                  </div>
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        {order.status === 'assigned' || order.status === 'out_for_delivery' ? (
-                          <Button 
-                            onClick={() => navigate(`/delivery-details/${order.id}`)}
-                            className="w-full bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium flex items-center justify-center"
-                          >
-                            <Settings className="w-4 h-4 mr-2" />
-                            Manage Delivery
-                          </Button>
-                        ) : (
-                          <div className="flex space-x-3">
-                            <Button 
-                              onClick={() => handleAcceptOrder(order.id)}
-                              className="flex-1 bg-green-500 hover:bg-green-600 text-white h-12 rounded-lg font-medium"
-                              disabled={acceptingOrders[order.id]}
-                            >
-                              {acceptingOrders[order.id] ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Accepting...
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Accept
-                                </>
-                              )}
-                            </Button>
-                            
-                            <Button 
-                              variant="outline"
-                              onClick={() => handleRejectOrder(order.id)}
-                              className="flex-1 border-gray-300 text-gray-700 hover:bg-white hover:border-gray-400 h-12 rounded-lg font-medium bg-white"
-                              disabled={rejectingOrders[order.id]}
-                            >
-                              {rejectingOrders[order.id] ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Rejecting...
-                                </>
-                              ) : (
-                                <>
-                                  <X className="w-4 h-4 mr-2" />
-                                  Reject
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        )}
-                     </div>
-                  );
-                })}
+                {availableOrders.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    isLoadingDistance={isLoadingDistance}
+                    acceptingOrders={acceptingOrders}
+                    rejectingOrders={rejectingOrders}
+                    onAccept={handleAcceptOrder}
+                    onReject={handleRejectOrder}
+                    calculateAgentPayout={calculateAgentPayout}
+                  />
+                ))}
               </div>
             )}
           </div>
