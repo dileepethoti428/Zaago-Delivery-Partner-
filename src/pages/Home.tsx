@@ -12,8 +12,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrdersStore, startOrdersRealtime, stopOrdersRealtime } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
-import { annotateAndFilterOrders } from '@/utils/orders';
+import { getDistanceKm } from '@/utils/geo';
 import LocationChip from '@/components/location/LocationChip';
+import type { GeoPoint } from '@/utils/coords';
 
 const RADIUS_KM = 15;
 
@@ -29,14 +30,34 @@ export default function Home() {
   const startWatch = useLocationStore((state) => state.startWatch);
   const stopWatch = useLocationStore((state) => state.stopWatch);
 
-  // Memoize visible orders - only recompute when orders or location changes
-  const visibleOrders = useMemo(() => {
-    if (!lastKnown) return [];
-    return annotateAndFilterOrders(
-      orders,
-      { lat: lastKnown.lat, lng: lastKnown.lng },
-      RADIUS_KM
-    );
+  // Split orders into nearby (with coords) and unknown (without coords)
+  const { nearbyOrders, unknownOrders } = useMemo(() => {
+    if (!lastKnown) return { nearbyOrders: [], unknownOrders: [] };
+
+    const nearby: Array<typeof orders[0] & { distanceKm: number }> = [];
+    const unknown: typeof orders = [];
+
+    orders.forEach(order => {
+      if (order.pickupCoord) {
+        const distanceKm = Number(
+          getDistanceKm(
+            { lat: lastKnown.lat, lng: lastKnown.lng } as GeoPoint,
+            order.pickupCoord as GeoPoint
+          ).toFixed(2)
+        );
+        
+        if (distanceKm <= RADIUS_KM) {
+          nearby.push({ ...order, distanceKm });
+        }
+      } else {
+        unknown.push(order);
+      }
+    });
+
+    // Sort nearby by distance
+    nearby.sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return { nearbyOrders: nearby, unknownOrders: unknown };
   }, [orders, lastKnown]);
 
   // Load orders and start location watching when component mounts
@@ -133,16 +154,16 @@ export default function Home() {
           )}
 
           {/* Empty State - No Orders in Range */}
-          {!error && !loading && lastKnown && visibleOrders.length === 0 && (
+          {!error && !loading && lastKnown && nearbyOrders.length === 0 && unknownOrders.length === 0 && (
             <Card className="rounded-2xl border-2">
               <CardContent className="p-6 space-y-3 text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                   <PackageX className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium">No Nearby Orders</p>
+                  <p className="font-medium">No Orders Available</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    There are no orders within {RADIUS_KM} km of your location right now. Check back soon!
+                    There are no orders available right now. Check back soon!
                   </p>
                 </div>
                 <Button 
@@ -157,8 +178,14 @@ export default function Home() {
             </Card>
           )}
 
-          {/* Orders List */}
-          {!error && !loading && lastKnown && visibleOrders.length > 0 && visibleOrders.map((order, index) => (
+          {/* Nearby Orders List */}
+          {!error && !loading && lastKnown && nearbyOrders.length > 0 && (
+            <>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-medium text-muted-foreground">Nearby Orders</h3>
+                <DistanceBadge radiusKm={RADIUS_KM} />
+              </div>
+              {nearbyOrders.map((order, index) => (
             <AnimatedCard
               key={order.id}
               delay={index * 0.05}
@@ -209,7 +236,69 @@ export default function Home() {
                 </div>
               </CardContent>
             </AnimatedCard>
-          ))}
+              ))}
+            </>
+          )}
+
+          {/* Orders with Unknown Location */}
+          {!error && !loading && lastKnown && unknownOrders.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 mt-6">
+                <h3 className="text-base font-medium text-muted-foreground">Orders with Unknown Location</h3>
+              </div>
+              {unknownOrders.map((order, index) => (
+            <AnimatedCard
+              key={order.id}
+              delay={(nearbyOrders.length + index) * 0.05}
+              onClick={() => navigate(`/order/${order.id}`)}
+              className="rounded-2xl border-2 hover:border-primary/50 transition-colors cursor-pointer"
+            >
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-lg">{order.id}</h3>
+                      <StatusPill status={order.status} />
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {order.etaMin} min
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-green-100 rounded-xl"
+                  >
+                    <IndianRupee className="h-4 w-4 text-green-700" />
+                    <span className="font-bold text-green-700">{order.payout}</span>
+                  </motion.div>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-start gap-2">
+                    <div className="mt-0.5 h-2 w-2 rounded-full bg-blue-500" />
+                    <div>
+                      <p className="font-medium">Pickup</p>
+                      <p className="text-muted-foreground">{order.pickup}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-2">
+                    <div className="mt-0.5 h-2 w-2 rounded-full bg-green-500" />
+                    <div>
+                      <p className="font-medium">Drop</p>
+                      <p className="text-muted-foreground">{order.drop}</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </AnimatedCard>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </AppShell>
