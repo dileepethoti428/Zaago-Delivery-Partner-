@@ -46,7 +46,6 @@ import { FlexiblePaymentDialog } from "@/components/FlexiblePaymentDialog";
 
 // Lazy load heavy components
 const LocationPicker = lazy(() => import("@/components/LocationPicker").then(m => ({ default: m.LocationPicker })));
-const EmergencyOrderModal = lazy(() => import("@/components/EmergencyOrderModal").then(m => ({ default: m.EmergencyOrderModal })));
 
 // Get greeting based on current time
 const getGreeting = () => {
@@ -223,10 +222,6 @@ const Home = () => {
   // Refresh debouncing state
   const [isRealTimeRefreshing, setIsRealTimeRefreshing] = useState(false);
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Emergency modal state
-  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
-  const [emergencyOrderData, setEmergencyOrderData] = useState<Order | null>(null);
   
   // Track rejected orders to prevent them from reappearing
   const [rejectedOrderIds, setRejectedOrderIds] = useState<Set<string>>(() => {
@@ -460,18 +455,14 @@ const Home = () => {
         
         const assignedOrderId = payload.payload?.order_id;
         
-        // If the emergency modal is showing this order, close it immediately
-        if (emergencyOrderData && emergencyOrderData.id === assignedOrderId) {
-          console.log('🚫 [ORDER-ASSIGNED] Closing emergency modal - order was accepted by another agent');
-          setEmergencyOrderData(null);
-          stopRingtone();
-          
-          toast({
-            title: "Order Accepted",
-            description: "This order was accepted by another agent",
-            duration: 3000,
-          });
-        }
+        // Stop ringtone if order was accepted by another agent
+        stopRingtone();
+        
+        toast({
+          title: "Order Accepted",
+          description: "This order was accepted by another agent",
+          duration: 3000,
+        });
         
         // Remove from recent notifications
         setRecentNotifications(prev => {
@@ -553,7 +544,7 @@ const Home = () => {
       console.log('📡 [REALTIME] Cleaning up realtime listeners');
       supabase.removeChannel(channel);
     };
-  }, [emergencyOrderData, toast, stopRingtone, playNotificationSound]);
+  }, [toast, stopRingtone, playNotificationSound]);
 
   // Polling fallback to ensure we never miss packed orders (Rapido-style reliability)
   useEffect(() => {
@@ -601,12 +592,9 @@ const Home = () => {
               continue;
             }
             
-            // Only show if no emergency modal is currently displayed
-            if (!emergencyOrderData) {
-              console.log('🆕 [POLLING] Found new packed order:', order.id);
-              handlePackedStatusNotification(order);
-              break; // Show one at a time
-            }
+            console.log('🆕 [POLLING] Found new packed order:', order.id);
+            handlePackedStatusNotification(order);
+            break; // Show one at a time
           }
         }
       } catch (error) {
@@ -621,7 +609,7 @@ const Home = () => {
     pollForPackedOrders();
 
     return () => clearInterval(pollInterval);
-  }, [emergencyOrderData, recentNotifications, rejectedOrderIds]);
+  }, [recentNotifications, rejectedOrderIds]);
 
   // Check if order should trigger immediate packed status notification
   const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
@@ -788,11 +776,11 @@ const Home = () => {
     // NO AUDIO HERE - audio is handled by urgent_notification broadcast from backend
     console.log('📝 [PACKED-NOTIFICATION] Order packed, audio delegated to broadcast listener');
     
-    // ALWAYS show emergency modal for packed orders (Rapido-style)
+    // Show toast notification for packed orders
     if (!isDuplicateModal) {
-      console.log('🚨 [PACKED-NOTIFICATION] SHOWING EMERGENCY MODAL');
+      console.log('🚨 [PACKED-NOTIFICATION] Showing toast notification');
       
-      // Track modal shown
+      // Track notification shown
       setRecentNotifications(prev => new Set(prev).add(modalKey));
       
       setTimeout(() => {
@@ -802,29 +790,6 @@ const Home = () => {
           return newSet;
         });
       }, 60000); // 60 seconds
-      
-      setEmergencyOrderData({
-        id: orderData.id,
-        customer_name: orderData.customer_name || 'Customer',
-        customer_phone: orderData.customer_phone || 'N/A',
-        address: normalizeAddress(orderData.address),
-        original_address: orderData.address,
-        items: orderData.items || [],
-        total: orderData.total || 0,
-        status: orderData.status,
-        delivery_date: orderData.delivery_date || new Date().toISOString(),
-        delivery_time_slot: orderData.delivery_time_slot,
-        created_at: orderData.created_at || new Date().toISOString(),
-        payment_status: orderData.payment_status || 'pending',
-        pickup_address: orderData.pickup_address,
-        seller_name: orderData.seller_name,
-        seller_phone: orderData.seller_phone,
-        distance_km: orderData.distance_km,
-        agent_payout: orderData.agent_payout,
-        estimated_time_minutes: orderData.estimated_time_minutes
-      });
-      setShowEmergencyModal(true);
-      console.log('✅ [PACKED-NOTIFICATION] Modal should now be visible');
       
       // Show toast notification
       toast({
@@ -1354,105 +1319,6 @@ const Home = () => {
     }
   };
 
-  // Emergency modal handlers
-  const handleEmergencyAcceptOrder = async (orderId: string) => {
-    console.log('🎯 [EMERGENCY-ACCEPT] Accepting order:', orderId);
-    
-    // Immediately close modal and clear data to prevent re-showing
-    setShowEmergencyModal(false);
-    setEmergencyOrderData(null);
-    stopRingtone();
-    
-    // Mark as accepted to prevent any future notifications
-    setRecentNotifications(prev => {
-      const newSet = new Set(prev);
-      newSet.add(`modal-${orderId}`);
-      newSet.add(`audio-${orderId}`);
-      newSet.add(`accepted-${orderId}`);
-      return newSet;
-    });
-    
-    // Accept the order
-    await handleAcceptOrder(orderId);
-    
-    console.log('✅ [EMERGENCY-ACCEPT] Order accepted and modal closed');
-  };
-
-  const handleEmergencyRejectOrder = async (orderId: string) => {
-    console.log('🚫 [EMERGENCY-REJECT] Rejecting order:', orderId);
-    
-    // Immediately close modal and clear data
-    setShowEmergencyModal(false);
-    setEmergencyOrderData(null);
-    stopRingtone();
-    
-    // Mark as rejected to prevent any future notifications
-    setRecentNotifications(prev => {
-      const newSet = new Set(prev);
-      newSet.add(`modal-${orderId}`);
-      newSet.add(`audio-${orderId}`);
-      newSet.add(`rejected-${orderId}`);
-      return newSet;
-    });
-    
-    // Reject the order using existing reject handler
-    await handleRejectOrder(orderId);
-    
-    console.log('✅ [EMERGENCY-REJECT] Order rejected and modal closed');
-  };
-
-  const handleStopAlarm = () => {
-    console.log('🔇 [EMERGENCY-STOP] Stopping alarm for order');
-    stopRingtone();
-    setShowEmergencyModal(false);
-    
-    // Mark as dismissed to prevent immediate re-showing
-    if (emergencyOrderData) {
-      setRecentNotifications(prev => {
-        const newSet = new Set(prev);
-        newSet.add(`modal-${emergencyOrderData.id}`);
-        return newSet;
-      });
-      
-      // Clear after 2 minutes to allow re-showing if still not accepted
-      setTimeout(() => {
-        setRecentNotifications(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(`modal-${emergencyOrderData.id}`);
-          return newSet;
-        });
-      }, 120000);
-    }
-    
-    setEmergencyOrderData(null);
-  };
-
-  const handleCloseEmergencyModal = () => {
-    console.log('❌ [EMERGENCY-CLOSE] Closing modal for order');
-    stopRingtone();
-    setShowEmergencyModal(false);
-    
-    // Mark as dismissed to prevent immediate re-showing
-    if (emergencyOrderData) {
-      setRecentNotifications(prev => {
-        const newSet = new Set(prev);
-        newSet.add(`modal-${emergencyOrderData.id}`);
-        return newSet;
-      });
-      
-      // Clear after 2 minutes to allow re-showing if still not accepted
-      setTimeout(() => {
-        setRecentNotifications(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(`modal-${emergencyOrderData.id}`);
-          return newSet;
-        });
-      }, 120000);
-    }
-    
-    setEmergencyOrderData(null);
-  };
-
   // Test function to trigger emergency modal with sample data
   const handleTestNewOrder = async () => {
     console.log('🚀 TEST BUTTON CLICKED! Starting handleTestNewOrder function');
@@ -1476,9 +1342,6 @@ const Home = () => {
     };
     
     console.log('🔊 Test button clicked - attempting to play sound');
-    
-    setEmergencyOrderData(testOrderData);
-    setShowEmergencyModal(true);
     
     // Play emergency sound with explicit settings
     console.log('🔊 About to test full backend notification flow...');
@@ -1629,12 +1492,8 @@ const Home = () => {
       // Remove from current orders list
       setOrders(prev => prev.filter(order => order.id !== orderId));
       
-      // Close emergency modal if it's showing this order
-      if (emergencyOrderData?.id === orderId) {
-        setShowEmergencyModal(false);
-        setEmergencyOrderData(null);
-        stopRingtone();
-      }
+      // Stop ringtone if playing
+      stopRingtone();
     } catch (error) {
       console.error('Error rejecting order:', error);
       toast({
@@ -2535,18 +2394,6 @@ const Home = () => {
             style={{ display: 'none' }}
           />
         </LocationPicker>
-      </Suspense>
-
-      {/* Emergency Order Modal */}
-      <Suspense fallback={<div />}>
-        <EmergencyOrderModal
-          isOpen={showEmergencyModal}
-          orderData={emergencyOrderData}
-          onClose={handleCloseEmergencyModal}
-          onAccept={handleEmergencyAcceptOrder}
-          onReject={handleEmergencyRejectOrder}
-          onStopAlarm={handleStopAlarm}
-        />
       </Suspense>
     </div>
   );
