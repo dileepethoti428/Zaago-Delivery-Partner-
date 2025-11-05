@@ -343,106 +343,28 @@ const Home = () => {
 
   // Check if a new order should trigger immediate notification (on INSERT)
   const shouldPlayImmediateNotificationForOrder = (orderData: any): boolean => {
-    console.log('🔔 Checking immediate notification for new order:', orderData.id, 'Status:', orderData.status, 'Agent ID:', orderData.agent_id);
-    
-    // Don't play for orders already assigned to an agent
-    if (orderData.agent_id) {
-      console.log('⚠️ Skipping notification - order already assigned to agent');
-      return false;
-    }
-    
-    // Check cooldown to prevent duplicate audio (2 second cooldown)
-    const notifKey = `immediate-${orderData.id}`;
-    const lastPlayed = notificationCooldownRef.current.get(notifKey);
-    const now = Date.now();
-    
-    if (lastPlayed && (now - lastPlayed) < 2000) {
-      console.log('⚠️ Skipping - within 2s cooldown for order:', orderData.id);
-      return false;
-    }
-    
-    // Don't play duplicate notifications for the same order
-    if (recentNotifications.has(notifKey)) {
-      console.log('⚠️ Skipping duplicate immediate notification for order:', orderData.id);
-      return false;
-    }
-    
-    // Update cooldown
-    notificationCooldownRef.current.set(notifKey, now);
-    
-    console.log('✅ Playing immediate notification for new order:', orderData.id);
-    return true;
+    // Notifications disabled - orders appear silently in list
+    return false;
   };
 
   // Check if a new order should trigger availability notification (when status changes to packed)
   const shouldPlayAvailabilityNotificationForOrder = (orderData: any): boolean => {
-    console.log('🔔 Checking availability notification for order:', orderData.id, 'Status:', orderData.status, 'Agent ID:', orderData.agent_id);
-    
-    // Only play for orders that are packed and available to accept (no agent assigned)
-    if (orderData.status !== 'packed' || orderData.agent_id) {
-      console.log('⚠️ Skipping availability notification - not packed or already assigned');
-      return false;
-    }
-    
-    // Check cooldown to prevent duplicate audio (2 second cooldown)
-    const notifKey = `availability-${orderData.id}`;
-    const lastPlayed = notificationCooldownRef.current.get(notifKey);
-    const now = Date.now();
-    
-    if (lastPlayed && (now - lastPlayed) < 2000) {
-      console.log('⚠️ Skipping - within 2s cooldown for order:', orderData.id);
-      return false;
-    }
-    
-    // Don't play duplicate notifications for the same order
-    if (recentNotifications.has(notifKey)) {
-      console.log('⚠️ Skipping duplicate availability notification for order:', orderData.id);
-      return false;
-    }
-    
-    // Update cooldown
-    notificationCooldownRef.current.set(notifKey, now);
-    
-    console.log('✅ Playing availability notification for order:', orderData.id);
-    return true;
+    // Notifications disabled - orders appear silently in list
+    return false;
   };
 
   // Centralized notification deduplication - prevents audio collision
   const lastNotificationRef = useRef<Map<string, number>>(new Map());
   
   const shouldPlayNotification = (orderId: string, notificationType: string): boolean => {
-    const notifKey = `${notificationType}-${orderId}`;
-    const now = Date.now();
-    const lastPlayed = lastNotificationRef.current.get(notifKey) || 0;
-    
-    // 3-second deduplication window to prevent collision
-    if (now - lastPlayed < 3000) {
-      console.log(`⚠️ [DEDUP] Skipping duplicate ${notificationType} notification for order ${orderId} (played ${now - lastPlayed}ms ago)`);
-      return false;
-    }
-    
-    lastNotificationRef.current.set(notifKey, now);
-    console.log(`✅ [DEDUP] Allowing ${notificationType} notification for order ${orderId}`);
-    return true;
+    // Notifications disabled - orders appear silently in list
+    return false;
   };
 
   // Check if order should trigger pickup notification for all agents
   const shouldPlayPickupNotificationForOrder = async (orderData: any): Promise<boolean> => {
-    // Only play for orders that just changed to 'packed' status
-    if (orderData.status !== 'packed') {
-      return false;
-    }
-    
-    console.log('🔔 Checking pickup notification for order:', orderData.id, 'Status:', orderData.status, 'Agent ID:', orderData.agent_id);
-    
-    // Don't play duplicate notifications for the same order
-    if (recentNotifications.has(`pickup-${orderData.id}`)) {
-      console.log('⚠️ Skipping duplicate pickup notification for order:', orderData.id);
-      return false;
-    }
-    
-    console.log('✅ Playing pickup notification for order:', orderData.id);
-    return true;
+    // Notifications disabled - orders appear silently in list
+    return false;
   };
 
   // Listen for order assignment events to close emergency modal AND urgent notifications
@@ -522,22 +444,8 @@ const Home = () => {
           }
         }
 
-        // CRITICAL: NO AUDIO HERE - audio handled by main broadcast listener only
-        console.log('📝 [URGENT-NOTIFICATION-EARLY] Notification received, audio will be played by main listener');
-
-        // Show browser notification if permitted
-        if (notificationData.trigger_push && Notification.permission === 'granted') {
-          new Notification(notificationData.title || 'New Order', {
-            body: notificationData.message || 'You have a new order',
-            icon: '/zaago-logo-favicon.png',
-            badge: '/zaago-delivery-favicon.png',
-            tag: `order-${orderId}`,
-            requireInteraction: true,
-            data: notificationData
-          });
-        }
-
-        console.log('✅ [URGENT-NOTIFICATION-EARLY] Notification processed (audio delegated to main listener)');
+        // Notifications disabled - orders appear silently in list
+        console.log('📝 [URGENT-NOTIFICATION] Notification received, no popup shown');
       })
       .subscribe();
     
@@ -552,128 +460,12 @@ const Home = () => {
 
   // Check if order should trigger immediate packed status notification
   const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
-    console.log('📦 [PACKED-CHECK] Order:', orderData.id, 'Status:', orderData.status, 'Agent:', orderData.agent_id);
-    
-    // CRITICAL: Only show for orders that are packed AND have no agent assigned
-    if (orderData.status !== 'packed') {
-      console.log('⚠️ [PACKED-CHECK] Skipping - not packed status');
-      return false;
-    }
-    
-    // CRITICAL: Don't show for orders that already have an agent assigned
-    if (orderData.agent_id) {
-      console.log('⚠️ [PACKED-CHECK] Skipping - order already has agent:', orderData.agent_id);
-      return false;
-    }
-    
-    // CRITICAL: Only show fresh orders (packed/updated within last 24 hours)
-    const orderUpdatedAt = new Date(orderData.updated_at || orderData.created_at);
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
-    if (orderUpdatedAt < twentyFourHoursAgo) {
-      console.log('⚠️ [PACKED-CHECK] Skipping - order too old:', {
-        orderId: orderData.id,
-        updatedAt: orderUpdatedAt.toISOString(),
-        age: Math.floor((Date.now() - orderUpdatedAt.getTime()) / (1000 * 60 * 60)) + ' hours'
-      });
-      return false;
-    }
-    
-    console.log('✅ [PACKED-CHECK] Will show notification - packed, no agent, and fresh order');
-    return true;
+    // Notifications disabled - orders appear silently in list
+    return false;
   };
 
-  // Handle immediate notification for new orders (INSERT event)
-  const handleImmediateOrderNotification = (orderData: any) => {
-    console.log('🚨 Processing immediate notification for new order:', orderData.id);
-    
-    if (!shouldPlayImmediateNotificationForOrder(orderData)) {
-      return;
-    }
-
-    // Add to recent notifications to prevent duplicates
-    setRecentNotifications(prev => new Set(prev).add(`immediate-${orderData.id}`));
-    
-    // Remove from recent notifications after 15 seconds (shorter for immediate alerts)
-    setTimeout(() => {
-      setRecentNotifications(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(`immediate-${orderData.id}`);
-        return newSet;
-      });
-    }, 15000);
-
-    // Ringtone disabled - showing visual notification only
-    console.log('📢 Showing immediate notification for new order (audio disabled)');
-    
-    // Show immediate toast notification with different styling
-    toast({
-      title: "🚨 New Order Incoming!",
-      description: `Order from ${orderData.customer_name || 'customer'} is being prepared`,
-      duration: 5000,
-    });
-  };
-
-  // Handle availability notification for orders ready for pickup
-  const handleAvailabilityOrderNotification = (orderData: any) => {
-    console.log('📦 Processing availability notification for order:', orderData.id);
-    
-    if (!shouldPlayAvailabilityNotificationForOrder(orderData)) {
-      return;
-    }
-
-    // Add to recent notifications to prevent duplicates
-    setRecentNotifications(prev => new Set(prev).add(`availability-${orderData.id}`));
-    
-    // Remove from recent notifications after 30 seconds
-    setTimeout(() => {
-      setRecentNotifications(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(`availability-${orderData.id}`);
-        return newSet;
-      });
-    }, 30000);
-
-    // Ringtone disabled - showing visual notification only
-    console.log('📢 Showing availability notification (audio disabled)');
-    
-    // Show availability toast notification
-    toast({
-      title: "📦 Order Ready for Pickup!",
-      description: `Order from ${orderData.customer_name || 'customer'} is packed and ready`,
-      duration: 4000,
-    });
-  };
-
-  // Handle pickup ready notification for agent's accepted orders
-  const handlePickupReadyNotification = async (orderData: any, oldOrderData: any) => {
-    // Only notify if status changed from something else to 'packed'
-    if (oldOrderData.status === 'packed' || !(await shouldPlayPickupNotificationForOrder(orderData))) {
-      return;
-    }
-
-    // Add to recent notifications to prevent duplicates
-    setRecentNotifications(prev => new Set(prev).add(`pickup-${orderData.id}`));
-    
-    // Remove from recent notifications after 30 seconds
-    setTimeout(() => {
-      setRecentNotifications(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(`pickup-${orderData.id}`);
-        return newSet;
-      });
-    }, 30000);
-
-    // Ringtone disabled - showing visual notification only
-    console.log('📢 Showing packed order notification (audio disabled)');
-    
-    // Show toast notification
-    toast({
-      title: "📦 New Order Ready for Pickup!",
-      description: `Order from ${orderData.customer_name || 'customer'} is packed and available for pickup`,
-      duration: 5000,
-    });
-  };
+  // Notifications disabled - all handlers removed
+  // Orders appear silently in the list without any popups or toasts
 
   // Handle immediate packed status notification (for any order changing to packed)
   const handlePackedStatusNotification = (orderData: any) => {
@@ -712,24 +504,8 @@ const Home = () => {
     const audioKey = `audio-${orderData.id}`;
     const isDuplicateAudio = recentNotifications.has(audioKey);
     
-    // NO AUDIO HERE - audio is handled by urgent_notification broadcast from backend
-    console.log('📝 [PACKED-NOTIFICATION] Order packed, audio delegated to broadcast listener');
-    
-    // Show toast notification for packed orders
-    if (!isDuplicateModal) {
-      console.log('🚨 [PACKED-NOTIFICATION] Showing toast notification');
-      
-      // Track notification shown
-      setRecentNotifications(prev => new Set(prev).add(modalKey));
-      
-      setTimeout(() => {
-        setRecentNotifications(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(modalKey);
-          return newSet;
-        });
-      }, 60000); // 60 seconds
-    }
+    // Notifications disabled - orders appear silently in list
+    console.log('📝 [PACKED-NOTIFICATION] Order packed, no notification shown');
   };
 
   // REMOVED: fetchAgentName - using cached agent data from initialization instead
@@ -1587,24 +1363,8 @@ const Home = () => {
           if (notificationData && notificationData.notification_type === 'order_packed') {
             console.log('🔊 [BROADCAST-AUDIO] Processing packed order notification');
             
-            // If trigger_push flag is set, show browser notification
-            if (notificationData.trigger_push && 'Notification' in window && Notification.permission === 'granted') {
-              console.log('📱 Showing browser notification');
-              try {
-                new Notification(notificationData.title || '🚨 Order Packed & Ready!', {
-                  body: notificationData.message || 'A new order is ready for pickup',
-                  icon: '/zaago-logo-favicon.png',
-                  badge: '/zaago-logo-favicon.png',
-                  tag: `order-${notificationData.order_id}`,
-                  requireInteraction: true,
-                });
-              } catch (notifError) {
-                console.error('Error showing notification:', notifError);
-              }
-            }
-            
-            // Ringtone disabled - showing visual notification only
-            console.log('📢 [BROADCAST] Showing notification for packed order (audio disabled)');
+            // Notifications disabled - orders appear silently in list
+            console.log('📝 [BROADCAST] Order packed, no notification shown');
             
             // Immediate refresh for agent assignment notifications
             debouncedRefresh('urgent-notification-agent-assignment', true);
