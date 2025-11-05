@@ -1,9 +1,9 @@
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { useEffect, useState, lazy, Suspense } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
 import RequireAuth from "@/components/RequireAuth";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
