@@ -33,5 +33,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Force single React instance to prevent "Cannot read properties of null" errors
+    dedupe: ['react', 'react-dom'],
   },
 }));
