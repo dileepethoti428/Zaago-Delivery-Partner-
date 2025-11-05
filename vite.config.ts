@@ -34,12 +34,14 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
       'react': path.resolve(__dirname, './node_modules/react'),
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
+      '@tanstack/react-query': path.resolve(__dirname, './node_modules/@tanstack/react-query'),
     },
     // Force single React instance to prevent "Cannot read properties of null" errors
     dedupe: [
       'react', 
       'react-dom', 
       'react-router-dom',
+      '@tanstack/react-query',
       '@radix-ui/react-tooltip',
       '@radix-ui/react-hover-card',
       '@radix-ui/react-dialog',
@@ -51,17 +53,15 @@ export default defineConfig(({ mode }) => ({
       'react', 
       'react-dom', 
       'react-router-dom',
+      '@tanstack/react-query',
       '@radix-ui/react-tooltip',
       '@radix-ui/react-hover-card',
       '@radix-ui/react-dialog',
       '@radix-ui/react-popover',
     ],
-    force: true,
     esbuildOptions: {
       // Ensure all JSX is handled by the same React instance
       jsx: 'automatic',
     },
   },
-  // Clear all caches on startup to prevent React duplication
-  cacheDir: '.vite-' + Date.now(),
 }));
