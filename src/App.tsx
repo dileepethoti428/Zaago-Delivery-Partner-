@@ -4,6 +4,7 @@ import Splash from './pages/Splash';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import OrderDetails from './pages/OrderDetails';
+import DeliveryHistory from './pages/DeliveryHistory';
 import Earnings from './pages/Earnings';
 import Profile from './pages/Profile';
 import UploadDocuments from './pages/UploadDocuments';
@@ -30,6 +31,7 @@ function App() {
             {/* Approval-required routes */}
             <Route element={<RequireApproval />}>
               <Route path="/home" element={<Home />} />
+              <Route path="/history" element={<DeliveryHistory />} />
               <Route path="/order/:id" element={<OrderDetails />} />
               <Route path="/earnings" element={<Earnings />} />
               <Route path="/profile" element={<Profile />} />
