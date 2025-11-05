@@ -1,22 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { MapPin, Clock, IndianRupee, RefreshCw, PackageX } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAppStore } from '@/store/app';
 import { useLocationStore } from '@/store/location';
+import { annotateAndFilterOrders } from '@/utils/orders';
 import LocationChip from '@/components/location/LocationChip';
-import { MapPin, Clock, IndianRupee, RefreshCw } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+
+const RADIUS_KM = 15;
 
 export default function Home() {
   const navigate = useNavigate();
-  const orders = useAppStore((state) => state.orders);
-  const { startWatch, stopWatch } = useLocationStore();
+  const allOrders = useAppStore((state) => state.orders);
+  const { lastKnown, permission, startWatch, stopWatch } = useLocationStore();
+  const [visibleOrders, setVisibleOrders] = useState(allOrders);
 
   // Start location watching when component mounts
   useEffect(() => {
@@ -27,9 +32,49 @@ export default function Home() {
     };
   }, [startWatch, stopWatch]);
 
+  // Filter and sort orders by distance whenever location or orders change
+  useEffect(() => {
+    if (!lastKnown) {
+      setVisibleOrders([]);
+      return;
+    }
+
+    const filtered = annotateAndFilterOrders(
+      allOrders,
+      { lat: lastKnown.lat, lng: lastKnown.lng },
+      RADIUS_KM
+    );
+    setVisibleOrders(filtered);
+  }, [allOrders, lastKnown]);
+
+  const headerNote = useMemo(() => {
+    if (permission === 'denied') {
+      return 'Location permission denied. Enable in browser settings.';
+    }
+    if (permission === 'unsupported') {
+      return 'Geolocation not supported on this device.';
+    }
+    if (!lastKnown) {
+      return 'Waiting for location...';
+    }
+    return `Showing orders within ≤ ${RADIUS_KM} km of your live location`;
+  }, [permission, lastKnown]);
+
+  const handleRefresh = () => {
+    if (lastKnown) {
+      const filtered = annotateAndFilterOrders(
+        allOrders,
+        { lat: lastKnown.lat, lng: lastKnown.lng },
+        RADIUS_KM
+      );
+      setVisibleOrders(filtered);
+    }
+  };
+
   return (
     <AppShell>
       <div className="space-y-6 py-4">
+        {/* Location and Filter Header */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="secondary" className="gap-1 rounded-full">
@@ -39,31 +84,88 @@ export default function Home() {
             <LocationChip />
           </div>
           
-          <p className="text-sm text-muted-foreground">
-            Showing orders within <span className="font-medium text-foreground">≤ 15 km</span> of your live location
-          </p>
+          <p className="text-sm text-muted-foreground">{headerNote}</p>
           
           <div className="flex items-center justify-between">
-            <Badge className="gap-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20">
-              ≤ 15 km
-            </Badge>
+            <DistanceBadge radiusKm={RADIUS_KM} />
             
-            <Button variant="ghost" size="sm" className="gap-2 rounded-xl">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="gap-2 rounded-xl"
+              onClick={handleRefresh}
+            >
               <RefreshCw className="h-4 w-4" />
               Refresh
             </Button>
           </div>
         </div>
 
+        {/* Orders List */}
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">Available Orders</h2>
           
-          {orders.map((order, index) => (
+          {/* Permission Denied State */}
+          {(permission === 'denied' || permission === 'unsupported') && (
+            <Card className="rounded-2xl border-2">
+              <CardContent className="p-6 space-y-3 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <PackageX className="h-6 w-6 text-destructive" />
+                </div>
+                <div>
+                  <p className="font-medium">Location Access Required</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    We need your location to show nearby orders. Please enable location access in your browser settings.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Loading State - No Location Fix Yet */}
+          {permission !== 'denied' && permission !== 'unsupported' && !lastKnown && (
+            <div className="space-y-3">
+              <Skeleton className="h-32 w-full rounded-2xl" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
+              <p className="text-sm text-center text-muted-foreground py-4">
+                Getting your location...
+              </p>
+            </div>
+          )}
+
+          {/* Empty State - No Orders in Range */}
+          {lastKnown && visibleOrders.length === 0 && (
+            <Card className="rounded-2xl border-2">
+              <CardContent className="p-6 space-y-3 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <PackageX className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium">No Nearby Orders</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    There are no orders within {RADIUS_KM} km of your location right now. Check back soon!
+                  </p>
+                </div>
+                <Button 
+                  variant="secondary" 
+                  className="rounded-xl mt-2"
+                  onClick={handleRefresh}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Orders
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Orders List */}
+          {lastKnown && visibleOrders.length > 0 && visibleOrders.map((order, index) => (
             <AnimatedCard
               key={order.id}
               delay={index * 0.05}
               onClick={() => navigate(`/order/${order.id}`)}
-              className="rounded-2xl border-2 hover:border-primary/50 transition-colors"
+              className="rounded-2xl border-2 hover:border-primary/50 transition-colors cursor-pointer"
             >
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between">
