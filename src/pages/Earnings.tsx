@@ -121,7 +121,13 @@ const Earnings = () => {
   // Handle errors - remove toast, show error UI instead
   useEffect(() => {
     if (error) {
-      console.error('❌ Error loading earnings:', error);
+      console.error('❌ Error loading earnings:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        type: typeof error,
+        details: JSON.stringify(error, null, 2)
+      });
     }
   }, [error]);
 
@@ -169,6 +175,11 @@ const Earnings = () => {
             <p className="text-sm text-muted-foreground mb-4">
               {error instanceof Error ? error.message : 'Failed to load earnings data'}
             </p>
+            {error instanceof Error && (error.message.includes('JWT') || error.message.includes('auth')) && (
+              <p className="text-xs text-muted-foreground mt-2 bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">
+                Authentication issue detected. Please try logging out and back in.
+              </p>
+            )}
           </div>
           <button
             onClick={() => refetch()}
