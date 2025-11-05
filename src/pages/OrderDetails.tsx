@@ -4,17 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
-import { useAppStore } from '@/store/app';
+import { useOrdersStore } from '@/store/orders';
 import { openGoogleMapsAddress } from '@/utils/maps';
+import { updateOrderStatus as updateOrderStatusService } from '@/services/updateOrderStatus';
 import { toast } from '@/hooks/use-toast';
 import { MapPin, Clock, IndianRupee, ExternalLink, ArrowLeft, CheckCircle, XCircle, Package } from 'lucide-react';
 import { motion } from 'framer-motion';
+import type { ZaagoOrder } from '@/services/orders';
 
 export default function OrderDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const order = useAppStore((state) => state.getOrderById(id || ''));
-  const updateOrderStatus = useAppStore((state) => state.updateOrderStatus);
+  const { orders, getOrderById, updateOrderStatus } = useOrdersStore();
+  const order = getOrderById(id || '');
 
   if (!order) {
     return (
@@ -27,44 +29,62 @@ export default function OrderDetails() {
     );
   }
 
+  const handleStatusUpdate = async (newStatus: ZaagoOrder['status'], successMessage: string) => {
+    if (!order) return;
+    
+    // Take snapshot for rollback
+    const prevOrders = [...orders];
+    
+    try {
+      // Optimistic update
+      updateOrderStatus(order.id, newStatus);
+      
+      // Call Supabase
+      await updateOrderStatusService(order.id, newStatus);
+      
+      toast({
+        title: 'Success',
+        description: successMessage,
+      });
+    } catch (err: any) {
+      // Rollback on error
+      orders.forEach((o, idx) => {
+        if (prevOrders[idx]) {
+          updateOrderStatus(o.id, prevOrders[idx].status);
+        }
+      });
+      
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: err?.message || 'Failed to update order status.',
+      });
+    }
+  };
+
   const handleAccept = () => {
-    if (order.status !== 'new') return;
-    updateOrderStatus(order.id, 'accepted');
-    toast({
-      title: 'Order Accepted ✅',
-      description: `You've accepted order ${order.id}`,
-    });
+    if (order?.status !== 'new' && order?.status !== 'open') return;
+    handleStatusUpdate('accepted', `Order ${order.id} accepted ✅`);
   };
 
   const handlePickedUp = () => {
-    if (order.status !== 'accepted') return;
-    updateOrderStatus(order.id, 'picked');
-    toast({
-      title: 'Order Picked Up 📦',
-      description: `Order ${order.id} marked as picked up`,
-    });
+    if (order?.status !== 'accepted') return;
+    handleStatusUpdate('picked_up', `Order ${order.id} marked as picked up 📦`);
   };
 
   const handleDelivered = () => {
-    if (order.status !== 'picked') return;
-    updateOrderStatus(order.id, 'delivered');
-    toast({
-      title: 'Order Delivered ✅',
-      description: `Order ${order.id} has been delivered successfully`,
-    });
+    if (order?.status !== 'picked_up') return;
+    handleStatusUpdate('delivered', `Order ${order.id} delivered successfully ✅`);
   };
 
   const handleCancel = () => {
-    if (order.status === 'delivered' || order.status === 'canceled') return;
-    updateOrderStatus(order.id, 'canceled');
-    toast({
-      title: 'Order Canceled ❌',
-      description: `Order ${order.id} has been canceled`,
-      variant: 'destructive',
-    });
+    if (order?.status === 'delivered' || order?.status === 'cancelled') return;
+    handleStatusUpdate('cancelled', `Order ${order.id} has been cancelled`);
   };
 
   const getTimelineStatus = (step: string) => {
+    if (!order) return 'pending';
+    
     const statusMap: Record<string, number> = {
       'Created': 0,
       'Accepted': 1,
@@ -74,16 +94,19 @@ export default function OrderDetails() {
 
     const currentStatusIndex: Record<string, number> = {
       'new': 0,
+      'open': 0,
       'accepted': 1,
       'picked': 2,
+      'picked_up': 2,
       'delivered': 3,
       'canceled': 0,
+      'cancelled': 0,
     };
 
     const stepIndex = statusMap[step];
-    const orderIndex = currentStatusIndex[order.status];
+    const orderIndex = currentStatusIndex[order.status] ?? 0;
 
-    if (order.status === 'canceled' && step === 'Created') {
+    if ((order.status === 'canceled' || order.status === 'cancelled') && step === 'Created') {
       return 'canceled';
     }
     if (stepIndex <= orderIndex) {
@@ -277,7 +300,7 @@ export default function OrderDetails() {
             <Button
               className="w-full rounded-xl h-12 text-base font-medium"
               onClick={handleAccept}
-              disabled={order.status !== 'new'}
+              disabled={order.status !== 'new' && order.status !== 'open'}
             >
               <CheckCircle className="h-5 w-5 mr-2" />
               Accept Order
@@ -299,7 +322,7 @@ export default function OrderDetails() {
             <Button
               className="w-full rounded-xl h-12 text-base font-medium"
               onClick={handleDelivered}
-              disabled={order.status !== 'picked'}
+              disabled={order.status !== 'picked_up'}
             >
               <CheckCircle className="h-5 w-5 mr-2" />
               Mark as Delivered
@@ -311,7 +334,7 @@ export default function OrderDetails() {
               variant="destructive"
               className="w-full rounded-xl h-12 text-base font-medium"
               onClick={handleCancel}
-              disabled={order.status === 'delivered' || order.status === 'canceled'}
+              disabled={order.status === 'delivered' || order.status === 'cancelled'}
             >
               <XCircle className="h-5 w-5 mr-2" />
               Cancel Order

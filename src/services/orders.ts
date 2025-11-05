@@ -20,14 +20,15 @@ export type ZaagoOrder = {
   pickupCoord: GeoPoint | null;
   etaMin: number;
   payout: number;
-  status: 'new' | 'open' | 'accepted' | 'picked' | 'delivered' | 'canceled' | string;
+  status: 'new' | 'open' | 'accepted' | 'picked' | 'picked_up' | 'delivered' | 'canceled' | 'cancelled' | string;
   updatedAt?: number;
+  distanceKm?: number;
 };
 
 function coerceStatus(s?: string | null): ZaagoOrder['status'] {
   if (!s) return 'new';
   const v = s.toLowerCase();
-  if (['new', 'open', 'accepted', 'picked', 'delivered', 'canceled'].includes(v)) return v as any;
+  if (['new', 'open', 'accepted', 'picked', 'picked_up', 'delivered', 'canceled', 'cancelled'].includes(v)) return v as any;
   return v;
 }
 
