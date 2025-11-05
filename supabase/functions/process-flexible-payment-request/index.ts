@@ -119,7 +119,9 @@ serve(async (req) => {
         fixed_amount: true,
         payment_amount: amountInPaise,
         description: `Wallet top-up for agent ${paymentRequest.agent_id}`,
-        customer_id: paymentRequest.agent_id,
+        notes: {
+          agent_id: paymentRequest.agent_id
+        },
         close_by: Math.floor(finalExpiresAt.getTime() / 1000),
       }),
     });
