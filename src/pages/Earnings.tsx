@@ -63,10 +63,19 @@ const Earnings = () => {
   const { data: earningsResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['agent-live-earnings'],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
+      // Force session refresh to get fresh token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.error('❌ Session error:', sessionError);
+        throw new Error('Not authenticated - please log in again');
       }
+
+      console.log('🔐 Making request with token:', {
+        hasSession: !!session,
+        tokenLength: session.access_token?.length,
+        expiresAt: session.expires_at
+      });
 
       const { data, error } = await supabase.functions.invoke('get-agent-live-earnings', {
         headers: {
@@ -74,14 +83,12 @@ const Earnings = () => {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Edge function error:', error);
+        throw error;
+      }
       
-      console.log('✅ Live earnings data loaded:', {
-        today_pending: data?.data?.today?.pending,
-        today_confirmed: data?.data?.today?.confirmed,
-        live_payout: data?.data?.live_payout
-      });
-
+      console.log('✅ Live earnings data loaded:', data);
       return data?.data;
     },
     staleTime: 10000, // Cache for 10 seconds (more real-time)
@@ -89,6 +96,21 @@ const Earnings = () => {
     retry: 3,
     refetchInterval: 30000, // Auto-refresh every 30 seconds for live updates
   });
+
+  // Check session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Session Expired",
+          description: "Please log in again",
+          variant: "destructive"
+        });
+      }
+    };
+    checkSession();
+  }, [toast]);
 
   // Listen for order completion and cancellation events to refresh earnings
   useEffect(() => {
