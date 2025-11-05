@@ -48,10 +48,10 @@ serve(async (req) => {
         agent_id: null
       }
     } else {
-      // First, get the order details from database
+      // First, get the order details from database (including location data)
       const { data: dbOrder, error: orderError } = await supabase
         .from('orders')
-        .select('id, customer_name, total, status, agent_id')
+        .select('id, customer_name, total, status, agent_id, pickup_address, pickup_location, delivery_address_id')
         .eq('id', order_id)
         .single()
 
@@ -67,6 +67,30 @@ serve(async (req) => {
       }
       
       order = dbOrder
+      
+      // Validate location data exists before allowing packing
+      const hasPickupLocation = order.pickup_address || order.pickup_location
+      const hasDeliveryAddress = order.delivery_address_id
+      
+      if (!hasPickupLocation || !hasDeliveryAddress) {
+        console.error('❌ Order missing location data:', {
+          has_pickup: !!hasPickupLocation,
+          has_delivery: !!hasDeliveryAddress
+        })
+        return new Response(
+          JSON.stringify({ 
+            error: 'Cannot mark as packed: Order is missing required location data',
+            details: {
+              missing_pickup: !hasPickupLocation,
+              missing_delivery: !hasDeliveryAddress
+            }
+          }),
+          { 
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
     }
 
     console.log('📋 Order details:', order)
