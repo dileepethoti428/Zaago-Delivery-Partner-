@@ -59,8 +59,13 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
 
     const pollInterval = setInterval(async () => {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
         const { data, error } = await supabase.functions.invoke('check-flexible-payment-status', {
-          body: { payment_id: paymentId }
+          body: { payment_id: paymentId },
+          headers: session?.access_token ? {
+            Authorization: `Bearer ${session.access_token}`
+          } : {}
         });
 
         if (error) throw error;
