@@ -9,16 +9,47 @@ const corsHeaders = {
 console.log("Get agent live earnings function started")
 
 serve(async (req) => {
-  console.log('🔔 REQUEST RECEIVED:', {
+  // Log ALL incoming requests with full details
+  const requestLog = {
     method: req.method,
     url: req.url,
     timestamp: new Date().toISOString(),
-    hasAuthHeader: !!req.headers.get('Authorization')
-  });
+    headers: {
+      authorization: req.headers.get('Authorization') ? 'Bearer ***' : 'Missing',
+      contentType: req.headers.get('Content-Type'),
+      apikey: req.headers.get('apikey') ? '***' : 'Missing'
+    }
+  };
+  
+  console.log('🔔 INCOMING REQUEST:', JSON.stringify(requestLog, null, 2));
+
+  // Try to read body for POST requests
+  if (req.method === 'POST') {
+    try {
+      const bodyText = await req.text();
+      console.log('📦 REQUEST BODY:', bodyText || 'Empty body');
+      // Create a new request with the same body since we consumed it
+      req = new Request(req.url, {
+        method: req.method,
+        headers: req.headers,
+        body: bodyText || null
+      });
+    } catch (e) {
+      console.log('⚠️ Could not read request body:', e);
+    }
+  }
 
   if (req.method === 'OPTIONS') {
-    console.log('✅ Handling OPTIONS request');
+    console.log('✅ Handling OPTIONS preflight request');
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== 'POST') {
+    console.log('❌ Method not allowed:', req.method);
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 405 }
+    );
   }
 
   try {
@@ -161,27 +192,45 @@ serve(async (req) => {
       payout_breakdown: tracking.payout_breakdown
     }));
 
-    console.log('✅ Returning earnings data successfully');
+    const responseData = {
+      success: true,
+      data: {
+        today: todayEarnings,
+        week: weekEarnings,
+        month: monthEarnings,
+        recent_earnings: recentEarnings,
+        live_payout: todayEarnings.pending,
+        deliveries_in_progress: todayEarnings.in_progress
+      }
+    };
+
+    console.log('✅ Returning earnings data successfully:', {
+      todayTotal: todayEarnings.total,
+      weekTotal: weekEarnings.total,
+      monthTotal: monthEarnings.total,
+      recentCount: recentEarnings.length
+    });
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          today: todayEarnings,
-          week: weekEarnings,
-          month: monthEarnings,
-          recent_earnings: recentEarnings,
-          live_payout: todayEarnings.pending,
-          deliveries_in_progress: todayEarnings.in_progress
-        }
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify(responseData),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
     );
 
   } catch (error) {
-    console.error('Error in get-agent-live-earnings:', error);
+    console.error('❌ FATAL ERROR in get-agent-live-earnings:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      type: error?.constructor?.name
+    });
+    
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
