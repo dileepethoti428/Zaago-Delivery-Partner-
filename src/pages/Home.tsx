@@ -1288,7 +1288,9 @@ const Home = () => {
     } else if (location.loading && location.latitude && location.longitude) {
       setCurrentLocation('Fetching address...');
     } else if (location.latitude && location.longitude) {
-      setCurrentLocation('Getting location...');
+      setCurrentLocation('Location detected');
+    } else {
+      setCurrentLocation('Tap to set location');
     }
     
     // Only refresh orders when location changes significantly (more than 500m)
