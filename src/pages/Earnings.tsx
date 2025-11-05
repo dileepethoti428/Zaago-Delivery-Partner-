@@ -77,14 +77,40 @@ const Earnings = () => {
         expiresAt: session.expires_at
       });
 
-      const { data, error } = await supabase.functions.invoke('get-agent-live-earnings', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      // Create timeout promise (10 seconds)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout - please try again')), 10000)
+      );
+
+      const result = await Promise.race([
+        supabase.functions.invoke('get-agent-live-earnings', {
+          body: {}, // Required for POST request
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }),
+        timeoutPromise
+      ]) as any;
+
+      const { data, error } = result;
 
       if (error) {
-        console.error('❌ Edge function error:', error);
+        console.error('❌ Edge function error:', {
+          error,
+          message: error.message,
+          status: error.status,
+          context: error.context,
+          stack: error.stack
+        });
+        
+        // Provide specific error messages
+        if (error.message?.includes('timeout')) {
+          throw new Error('Request timed out. Please check your connection and try again.');
+        }
+        if (error.message?.includes('network')) {
+          throw new Error('Network error. Please check your internet connection.');
+        }
+        
         throw error;
       }
       
@@ -93,7 +119,15 @@ const Earnings = () => {
     },
     staleTime: 10000, // Cache for 10 seconds (more real-time)
     gcTime: 2 * 60 * 1000, // Keep in cache for 2 minutes
-    retry: 3,
+    retry: (failureCount, error) => {
+      // Don't retry auth errors
+      if (error instanceof Error && (error.message?.includes('auth') || error.message?.includes('Unauthorized'))) {
+        return false;
+      }
+      // Retry network errors up to 2 times
+      return failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
     refetchInterval: 30000, // Auto-refresh every 30 seconds for live updates
   });
 
