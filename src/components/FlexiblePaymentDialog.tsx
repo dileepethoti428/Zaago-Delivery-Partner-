@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { QrCode, Loader2, CheckCircle, Clock, AlertCircle, Wallet } from "lucide-react";
+import { QrCode, Loader2, CheckCircle, Clock, AlertCircle, Wallet, Zap, XCircle } from "lucide-react";
 
 interface FlexiblePaymentDialogProps {
   open: boolean;
@@ -13,36 +13,37 @@ interface FlexiblePaymentDialogProps {
   agentId: string;
 }
 
+type PaymentStatus = 'idle' | 'creating' | 'generating' | 'pending' | 'paid' | 'expired' | 'failed';
+
 export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexiblePaymentDialogProps) => {
   const [amount, setAmount] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<PaymentStatus>('idle');
+  const [requestId, setRequestId] = useState<string | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [paymentId, setPaymentId] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
-  const [isPaid, setIsPaid] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [isExpired, setIsExpired] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [pollingError, setPollingError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
       setAmount("");
+      setStatus('idle');
+      setRequestId(null);
       setQrCodeUrl("");
       setPaymentId("");
       setExpiresAt("");
-      setIsPaid(false);
       setTimeLeft(0);
-      setIsExpired(false);
       setWalletBalance(null);
-      setPollingError(false);
+      setErrorMessage(null);
     }
   }, [open]);
 
   // Countdown timer
   useEffect(() => {
-    if (!expiresAt || isPaid) return;
+    if (!expiresAt || status === 'paid' || status === 'expired') return;
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
@@ -50,81 +51,128 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
       const remaining = Math.max(0, Math.floor((expiry - now) / 1000));
       setTimeLeft(remaining);
 
-      if (remaining === 0 && !isExpired) {
-        setIsExpired(true);
+      if (remaining === 0 && status === 'pending') {
+        setStatus('expired');
         clearInterval(interval);
-        toast.error("QR code expired", {
-          description: "Please generate a new QR code"
-        });
+        toast.error("QR code expired");
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [expiresAt, isPaid, isExpired]);
+  }, [expiresAt, status]);
 
-  // Poll for payment status
+  // Poll payment request status (for QR generation)
   useEffect(() => {
-    if (!paymentId || isPaid || isExpired) return;
+    if (!requestId || status !== 'generating') return;
 
-    let pollCount = 0;
-    const maxPolls = 600; // 30 minutes at 3s intervals
+    console.log('🔍 Polling payment request:', requestId);
 
-    const pollInterval = setInterval(async () => {
-      pollCount++;
-      
-      if (pollCount > maxPolls) {
-        console.log('⏱️ Max polling attempts reached');
-        clearInterval(pollInterval);
-        return;
-      }
-
+    const pollRequest = async () => {
       try {
-        console.log(`🔄 Polling payment status (${pollCount}/${maxPolls})`);
+        const { data, error } = await supabase
+          .from('flexible_payment_requests')
+          .select('*')
+          .eq('id', requestId)
+          .single();
+
+        if (error) {
+          console.error('❌ Poll error:', error);
+          return;
+        }
+
+        console.log('📊 Request status:', data.status);
+
+        if (data.status === 'generated') {
+          console.log('✅ QR generated!');
+          setStatus('pending');
+          setQrCodeUrl(data.qr_url);
+          setPaymentId(data.payment_id);
+          setExpiresAt(data.expires_at);
+        } else if (data.status === 'failed') {
+          console.error('❌ QR generation failed:', data.error_message);
+          setStatus('failed');
+          setErrorMessage(data.error_message || 'Failed to generate QR code');
+          toast.error(data.error_message || 'Failed to generate QR code');
+        }
+      } catch (error) {
+        console.error('❌ Poll exception:', error);
+      }
+    };
+
+    // Poll every second
+    const interval = setInterval(pollRequest, 1000);
+    
+    // Timeout after 30 seconds
+    const timeout = setTimeout(() => {
+      if (status === 'generating') {
+        setStatus('failed');
+        setErrorMessage('QR generation timed out');
+        toast.error('QR generation took too long. Please try again.');
+      }
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [requestId, status]);
+
+  // Poll payment status (for payment confirmation)
+  useEffect(() => {
+    if (!paymentId || status !== 'pending') return;
+
+    console.log('💳 Starting payment polling for:', paymentId);
+    let pollCount = 0;
+    const maxPolls = 600;
+
+    const pollPayment = async () => {
+      try {
+        pollCount++;
+        console.log(`Polling ${pollCount}/${maxPolls}`);
         
         const { data, error } = await supabase.functions.invoke('check-flexible-payment-status', {
           body: { payment_id: paymentId }
         });
 
         if (error) {
-          console.error('❌ Status check error:', error);
-          setPollingError(true);
+          console.error('❌ Payment check error:', error);
           return;
         }
 
-        // Clear any previous errors
-        if (pollingError) {
-          setPollingError(false);
-        }
+        console.log('💰 Payment status:', data?.status);
 
         if (data?.success && data?.isPaid) {
           console.log('✅ Payment confirmed!');
-          setIsPaid(true);
+          setStatus('paid');
           setWalletBalance(data.wallet_balance);
-          clearInterval(pollInterval);
-          
           toast.success("Payment Received!", {
-            description: `₹${amount} credited to your wallet`,
-            duration: 5000
+            description: `₹${amount} credited to your wallet`
           });
-
-          // Auto-close after 4 seconds
-          setTimeout(() => {
-            onOpenChange(false);
-          }, 4000);
+          
+          setTimeout(() => onOpenChange(false), 4000);
         } else if (data?.status === 'expired') {
-          console.log('⏱️ Payment expired');
-          setIsExpired(true);
-          clearInterval(pollInterval);
+          setStatus('expired');
           toast.error("QR code expired");
         }
       } catch (error) {
-        console.error('❌ Error checking payment:', error);
-        setPollingError(true);
+        console.error('❌ Payment poll error:', error);
       }
+    };
+
+    const initialTimer = setTimeout(pollPayment, 3000);
+    const interval = setInterval(() => {
+      if (pollCount >= maxPolls) {
+        clearInterval(interval);
+        return;
+      }
+      pollPayment();
     }, 3000);
 
-    return () => clearInterval(pollInterval);
-  }, [paymentId, isPaid, isExpired, amount, onOpenChange, pollingError]);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [paymentId, status, amount, onOpenChange]);
 
   const handleGenerateQR = async () => {
     const amountNum = parseFloat(amount);
@@ -144,46 +192,51 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
       return;
     }
 
-    setLoading(true);
-    setPollingError(false);
+    setStatus('creating');
+    setErrorMessage(null);
+    console.log('💳 Creating payment request for ₹', amountNum);
 
     try {
-      console.log('🔵 Generating flexible payment QR:', { agentId, amount: amountNum });
+      // Insert into flexible_payment_requests table
+      const expiryTime = new Date();
+      expiryTime.setMinutes(expiryTime.getMinutes() + 15);
 
-      const { data, error } = await supabase.functions.invoke('generate-flexible-payment-qr', {
-        body: { 
-          agent_id: agentId, 
-          amount: amountNum 
+      const { data, error } = await supabase
+        .from('flexible_payment_requests')
+        .insert({
+          agent_id: agentId,
+          amount: amountNum,
+          expires_at: expiryTime.toISOString(),
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Failed to create request:', error);
+        throw error;
+      }
+
+      console.log('✅ Payment request created:', data.id);
+      setRequestId(data.id);
+      setStatus('generating');
+
+      // Trigger processing via edge function (fire and forget)
+      console.log('🚀 Triggering QR generation...');
+      supabase.functions.invoke('process-flexible-payment-request', {
+        body: { request_id: data.id }
+      }).then(({ error: processError }) => {
+        if (processError) {
+          console.error('❌ Processing trigger failed:', processError);
         }
       });
 
-      if (error) {
-        console.error('❌ Function error:', error);
-        throw new Error(error.message || 'Failed to generate QR code');
-      }
-
-      if (!data?.success) {
-        console.error('❌ API error:', data);
-        throw new Error(data?.error || 'Failed to generate QR code');
-      }
-
-      console.log('✅ QR code generated:', data);
-      
-      setQrCodeUrl(data.qr_code_url);
-      setPaymentId(data.payment_id);
-      setExpiresAt(data.expires_at);
-      
-      toast.success("QR Code Ready", {
-        description: "Show this QR code to your customer"
-      });
-      
+      toast.success("Generating QR code...");
     } catch (error: any) {
-      console.error('❌ Generation error:', error);
-      toast.error("Failed to generate QR", {
-        description: error.message || "Please try again"
-      });
-    } finally {
-      setLoading(false);
+      console.error('❌ Failed to create request:', error);
+      setStatus('failed');
+      setErrorMessage(error.message);
+      toast.error(error.message || "Failed to create payment request");
     }
   };
 
@@ -192,10 +245,10 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
     setPaymentId("");
     setExpiresAt("");
     setAmount("");
-    setIsPaid(false);
-    setIsExpired(false);
+    setStatus('idle');
+    setRequestId(null);
     setWalletBalance(null);
-    setPollingError(false);
+    setErrorMessage(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -209,16 +262,16 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-primary" />
-            Flexible Payment QR
+            <Zap className="w-5 h-5 text-primary" />
+            Add Money to Wallet
           </DialogTitle>
           <DialogDescription>
-            Generate a QR code for customers to pay any amount via UPI
+            Generate a UPI QR code to add money instantly
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {!qrCodeUrl ? (
+          {status === 'idle' || status === 'creating' ? (
             <>
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount (₹10 - ₹50,000)</Label>
@@ -231,34 +284,53 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
                   min="10"
                   max="50000"
                   step="1"
-                  disabled={loading}
+                  disabled={status === 'creating'}
                   className="text-lg"
                 />
               </div>
 
               <Button 
                 onClick={handleGenerateQR} 
-                disabled={loading || !amount}
+                disabled={status === 'creating' || !amount}
                 className="w-full"
                 size="lg"
               >
-                {loading ? (
+                {status === 'creating' ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating...
+                    Creating Request...
                   </>
                 ) : (
                   <>
-                    <QrCode className="w-4 h-4 mr-2" />
+                    <Zap className="w-4 h-4 mr-2" />
                     Generate QR Code
                   </>
                 )}
               </Button>
             </>
+          ) : status === 'generating' ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <Loader2 className="h-16 w-16 animate-spin text-primary" />
+              <div className="text-center space-y-2">
+                <p className="text-lg font-semibold">Generating QR Code...</p>
+                <p className="text-sm text-muted-foreground">This will only take a moment</p>
+              </div>
+            </div>
+          ) : status === 'failed' ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <XCircle className="h-16 w-16 text-destructive" />
+              <div className="text-center space-y-2">
+                <p className="text-lg font-semibold text-destructive">Failed to Generate QR</p>
+                <p className="text-sm text-muted-foreground">{errorMessage}</p>
+              </div>
+              <Button onClick={handleReset} variant="outline" className="mt-4">
+                Try Again
+              </Button>
+            </div>
           ) : (
             <div className="space-y-4">
               {/* Payment Status */}
-              {isPaid ? (
+              {status === 'paid' ? (
                 <div className="bg-green-50 dark:bg-green-950/20 border-2 border-green-500 rounded-lg p-4 text-center space-y-2">
                   <CheckCircle className="w-12 h-12 text-green-600 mx-auto" />
                   <div>
@@ -276,7 +348,7 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
                     )}
                   </div>
                 </div>
-              ) : isExpired ? (
+              ) : status === 'expired' ? (
                 <div className="bg-red-50 dark:bg-red-950/20 border-2 border-red-500 rounded-lg p-4 text-center space-y-2">
                   <AlertCircle className="w-12 h-12 text-red-600 mx-auto" />
                   <div>
@@ -339,13 +411,6 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
                     Waiting for payment...
                   </div>
-
-                  {/* Polling Error */}
-                  {pollingError && (
-                    <div className="text-center text-xs text-amber-600 dark:text-amber-400">
-                      Having trouble checking status. Payment will still be processed if successful.
-                    </div>
-                  )}
                 </>
               )}
 
@@ -355,7 +420,7 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
                 variant="outline"
                 className="w-full"
               >
-                {isPaid || isExpired ? 'Create New QR' : 'Cancel & Create New'}
+                {status === 'paid' || status === 'expired' ? 'Create New QR' : 'Cancel & Create New'}
               </Button>
             </div>
           )}

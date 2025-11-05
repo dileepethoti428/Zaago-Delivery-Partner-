@@ -1942,6 +1942,53 @@ export type Database = {
           },
         ]
       }
+      flexible_payment_requests: {
+        Row: {
+          agent_id: string
+          amount: number
+          created_at: string
+          error_message: string | null
+          expires_at: string
+          id: string
+          payment_id: string | null
+          qr_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          amount: number
+          created_at?: string
+          error_message?: string | null
+          expires_at: string
+          id?: string
+          payment_id?: string | null
+          qr_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          amount?: number
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          payment_id?: string | null
+          qr_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flexible_payment_requests_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flexible_payments: {
         Row: {
           agent_id: string
@@ -5573,7 +5620,7 @@ export type Database = {
       }
       get_dashboard_stats: { Args: never; Returns: Json }
       get_delivery_agent_analytics: {
-        Args: { time_period?: string }
+        Args: { time_period: string }
         Returns: {
           agent_email: string
           agent_id: string
