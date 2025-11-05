@@ -221,15 +221,8 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
       setRequestId(data.id);
       setStatus('generating');
 
-      // Trigger processing via edge function (fire and forget)
-      console.log('🚀 Triggering QR generation...');
-      supabase.functions.invoke('process-flexible-payment-request', {
-        body: { request_id: data.id }
-      }).then(({ error: processError }) => {
-        if (processError) {
-          console.error('❌ Processing trigger failed:', processError);
-        }
-      });
+      // Database trigger will automatically process the request
+      console.log('🔄 Database trigger will process request:', data.id);
 
       toast.success("Generating QR code...");
     } catch (error: any) {
