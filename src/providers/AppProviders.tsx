@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
 import { useAuthStore } from "@/store/auth";
+import { useLocationStore } from "@/store/location";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,11 +17,16 @@ const queryClient = new QueryClient({
 });
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
-  const initialize = useAuthStore((state) => state.initialize);
+  const initAuth = useAuthStore((state) => state.initialize);
+  const initLocation = useLocationStore((state) => state.init);
 
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    // Initialize authentication
+    initAuth();
+    
+    // Initialize location services
+    initLocation();
+  }, [initAuth, initLocation]);
 
   return <>{children}</>;
 }

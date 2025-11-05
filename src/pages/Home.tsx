@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
@@ -6,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CardContent } from '@/components/ui/card';
 import { useAppStore } from '@/store/app';
+import { useLocationStore } from '@/store/location';
+import LocationChip from '@/components/location/LocationChip';
 import { MapPin, Clock, IndianRupee, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -13,18 +16,32 @@ import { motion } from 'framer-motion';
 export default function Home() {
   const navigate = useNavigate();
   const orders = useAppStore((state) => state.orders);
+  const { startWatch, stopWatch } = useLocationStore();
+
+  // Start location watching when component mounts
+  useEffect(() => {
+    startWatch();
+    
+    return () => {
+      stopWatch();
+    };
+  }, [startWatch, stopWatch]);
 
   return (
     <AppShell>
       <div className="space-y-6 py-4">
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="secondary" className="gap-1 rounded-full">
               <MapPin className="h-3 w-3" />
               Live near you
             </Badge>
-            <span className="text-sm text-muted-foreground">Obtaining location...</span>
+            <LocationChip />
           </div>
+          
+          <p className="text-sm text-muted-foreground">
+            Showing orders within <span className="font-medium text-foreground">≤ 15 km</span> of your live location
+          </p>
           
           <div className="flex items-center justify-between">
             <Badge className="gap-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20">
