@@ -55,11 +55,22 @@ export default function Login() {
     });
 
     if (error) {
-      toast({
-        title: 'Login failed',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Provide helpful error messages based on error type
+      const isInvalidCredentials = error.message.toLowerCase().includes('invalid');
+      
+      if (isInvalidCredentials) {
+        toast({
+          title: 'Login failed',
+          description: 'Invalid email or password. If you don\'t have an account, please create one first.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Login failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
       setLoading(false);
     } else {
       await fetchProfile();

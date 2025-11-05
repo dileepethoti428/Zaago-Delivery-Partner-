@@ -1,13 +1,24 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Upload, FileText, Camera, Loader2 } from 'lucide-react';
+import { Upload, FileText, Camera, Loader2, LogOut } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useAuthStore } from '@/store/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -15,9 +26,14 @@ import { documentUploadSchema, type DocumentUploadFormData } from '@/utils/valid
 
 export default function UploadDocuments() {
   const navigate = useNavigate();
-  const { user, fetchProfile } = useAuthStore();
+  const { user, fetchProfile, signOut } = useAuthStore();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   const form = useForm<DocumentUploadFormData>({
     resolver: zodResolver(documentUploadSchema),
@@ -156,10 +172,33 @@ export default function UploadDocuments() {
       >
         <Card className="rounded-2xl shadow-xl border-0 bg-card/50 backdrop-blur">
           <CardHeader>
-            <CardTitle className="text-2xl">Upload Documents</CardTitle>
-            <CardDescription>
-              Submit your documents to become a Zaago delivery agent
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl">Upload Documents</CardTitle>
+                <CardDescription>
+                  Submit your documents to become a Zaago delivery agent
+                </CardDescription>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="rounded-xl">
+                    <LogOut className="h-5 w-5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Exit Document Upload?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to logout? Any unsaved progress will be lost.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleLogout}>Logout</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
