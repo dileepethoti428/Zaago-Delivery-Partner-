@@ -43,7 +43,7 @@ const queryClient = new QueryClient({
   },
 });
 
-function App() {
+function AppContent() {
   const { requestPermission, hasPermission } = useNotificationPermission();
   const [agentSettings, setAgentSettings] = useState<RingtoneSettings>({
     enabled: true,
@@ -93,7 +93,6 @@ function App() {
     loadAgentSettings();
   }, []);
 
-
   // Request notification permission on first load
   useEffect(() => {
     if (!hasPermission) {
@@ -120,7 +119,56 @@ function App() {
     };
   }, [playNotificationSound]);
 
+  return (
+    <BrowserRouter>
+      <Toaster />
+      <Sonner />
+      <OneSignalInit />
+      <div className="min-h-screen bg-background relative">
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        }>
+          <Routes>
+            {/* Splash and Authentication */}
+            <Route path="/" element={<Splash />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/pending-approval" element={<PendingApproval />} />
+            
+            {/* Main App Routes */}
+            <Route path="/home" element={<RequireAuth><Home /></RequireAuth>} />
+            <Route path="/seller-dashboard" element={<RequireAuth><SellerDashboard /></RequireAuth>} />
+            <Route path="/my-deliveries" element={<RequireAuth><MyDeliveries /></RequireAuth>} />
+            <Route path="/history" element={<RequireAuth><History /></RequireAuth>} />
+            <Route path="/tracking" element={<RequireAuth><Tracking /></RequireAuth>} />
+            <Route path="/delivery-details/:orderId" element={<RequireAuth><DeliveryDetails /></RequireAuth>} />
+            <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+            <Route path="/earnings" element={<RequireAuth><Earnings /></RequireAuth>} />
+            <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
+            <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+            <Route path="/privacy-security" element={<RequireAuth><PrivacySecurity /></RequireAuth>} />
+            <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />
 
+            {/* Redirect old index route */}
+            <Route path="/index" element={<Navigate to="/home" replace />} />
+            
+            {/* Catch-all route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+        
+        {/* Bottom Navigation */}
+        <BottomNavigation />
+        
+        {/* Bottom padding for navigation */}
+        <div className="pb-20" />
+      </div>
+    </BrowserRouter>
+  );
+}
+
+function App() {
   return (
     <ThemeProvider
       attribute="class"
@@ -129,51 +177,7 @@ function App() {
       disableTransitionOnChange={false}
     >
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <Toaster />
-          <Sonner />
-          <OneSignalInit />
-          <div className="min-h-screen bg-background relative">
-            <Suspense fallback={
-              <div className="min-h-screen flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              </div>
-            }>
-              <Routes>
-                {/* Splash and Authentication */}
-                <Route path="/" element={<Splash />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/pending-approval" element={<PendingApproval />} />
-                
-                {/* Main App Routes */}
-                <Route path="/home" element={<RequireAuth><Home /></RequireAuth>} />
-                <Route path="/seller-dashboard" element={<RequireAuth><SellerDashboard /></RequireAuth>} />
-                <Route path="/my-deliveries" element={<RequireAuth><MyDeliveries /></RequireAuth>} />
-                <Route path="/history" element={<RequireAuth><History /></RequireAuth>} />
-                <Route path="/tracking" element={<RequireAuth><Tracking /></RequireAuth>} />
-                <Route path="/delivery-details/:orderId" element={<RequireAuth><DeliveryDetails /></RequireAuth>} />
-                <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
-                <Route path="/earnings" element={<RequireAuth><Earnings /></RequireAuth>} />
-                <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
-                <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-                <Route path="/privacy-security" element={<RequireAuth><PrivacySecurity /></RequireAuth>} />
-                <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />
-
-                {/* Redirect old index route */}
-                <Route path="/index" element={<Navigate to="/home" replace />} />
-                
-                {/* Catch-all route */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-            
-            {/* Bottom Navigation */}
-            <BottomNavigation />
-            
-            {/* Bottom padding for navigation */}
-            <div className="pb-20" />
-          </div>
-        </BrowserRouter>
+        <AppContent />
       </QueryClientProvider>
     </ThemeProvider>
   );
