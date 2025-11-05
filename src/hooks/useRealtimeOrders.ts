@@ -60,9 +60,7 @@ export const useRealtimeOrders = (agentId: string | null) => {
           const newOrder = payload.new as any;
           console.log('📦 Real-time new order:', newOrder?.id, 'status:', newOrder?.status);
           
-          // Invalidate cache on realtime update
-          queryClient.invalidateQueries({ queryKey: ['orders'] });
-          queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+          // Removed invalidateQueries - using optimistic updates only to prevent double fetches
           
           // If order is delivered, remove it from available orders
           if (newOrder?.status === 'delivered') {
@@ -140,9 +138,7 @@ export const useRealtimeOrders = (agentId: string | null) => {
           const updatedOrder = payload.new as any;
           console.log('📦 Real-time order update:', updatedOrder?.id, 'status:', updatedOrder?.status);
           
-          // Invalidate cache on realtime update
-          queryClient.invalidateQueries({ queryKey: ['orders'] });
-          queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+          // Removed invalidateQueries - using optimistic updates only to prevent double fetches
           
           // Update existing order in cache
           queryClient.setQueryData(

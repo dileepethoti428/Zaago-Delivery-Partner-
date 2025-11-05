@@ -53,26 +53,23 @@ const MyDeliveries = () => {
     try {
       setLoading(true);
       
-      // First get agent info
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: agent, error: agentError } = await supabase
-        .from('delivery_agents')
-        .select('id')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .single();
-
-      if (agentError || !agent) {
-        throw new Error('Agent not found');
+      // Use cached agent from sessionStorage to avoid duplicate API call
+      const cachedAgentId = sessionStorage.getItem('agentId');
+      
+      if (!cachedAgentId) {
+        toast({
+          title: "Error",
+          description: "Agent information not available",
+          variant: "destructive"
+        });
+        return;
       }
 
-      // Get assigned orders
+      // Get assigned orders using cached agent ID
       const { data: assignedOrders, error: ordersError } = await supabase
         .from('orders')
         .select('*')
-        .eq('agent_id', agent.id)
+        .eq('agent_id', cachedAgentId)
         .eq('status', 'assigned')
         .order('created_at', { ascending: false });
 

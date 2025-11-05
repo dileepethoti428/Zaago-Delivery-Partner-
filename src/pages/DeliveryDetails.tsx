@@ -83,22 +83,9 @@ const DeliveryDetails = () => {
   }, [order]);
 
 
-  // Real-time distance updates - recalculate every 10 seconds for faster updates
-  useEffect(() => {
-    if (!order) return;
-    
-    const updateDistance = () => {
-      calculateDistanceAndPayout();
-    };
-    
-    // Initial calculation
-    updateDistance();
-    
-    // Fast real-time updates every 10 seconds
-    const interval = setInterval(updateDistance, 10000);
-    
-    return () => clearInterval(interval);
-  }, [order?.id]);
+  // REMOVED: Constant 10-second distance recalculation
+  // This was causing 36 API calls per hour even when agent wasn't moving
+  // Distance is already calculated on order load and updates handled by geolocation changes
 
   const calculateDistanceAndPayout = async () => {
     console.log('🧮 Starting fast distance calculation for order:', order?.id);
@@ -359,21 +346,10 @@ const DeliveryDetails = () => {
     if (!order) return;
     setIsCancelling(true);
     try {
-      // Get current user and then find agent ID
-      const {
-        data: user
-      } = await supabase.auth.getUser();
-      if (!user.user?.email) {
-        throw new Error('User not authenticated');
-      }
-
-      // Get agent ID from delivery_agents table
-      const {
-        data: agentData,
-        error: agentError
-      } = await supabase.from('delivery_agents').select('id').eq('email', user.user.email).eq('is_active', true).single();
-      if (agentError || !agentData?.id) {
-        throw new Error('Agent not found or not active');
+      // Use cached agent ID to avoid duplicate API call
+      const cachedAgentId = sessionStorage.getItem('agentId');
+      if (!cachedAgentId) {
+        throw new Error('Agent information not available');
       }
       const {
         data,
@@ -381,7 +357,7 @@ const DeliveryDetails = () => {
       } = await supabase.functions.invoke('cancel-delivery', {
         body: {
           order_id: order.id,
-          agent_id: agentData.id,
+          agent_id: cachedAgentId,
           cancellation_reason: 'Agent cancelled delivery'
         }
       });
@@ -443,25 +419,16 @@ const DeliveryDetails = () => {
         };
         setOrder(updatedOrder);
         
-        // Optimistically remove from available orders cache
-        const { data: user } = await supabase.auth.getUser();
-        if (user.user?.email) {
-          const { data: agentData } = await supabase
-            .from('delivery_agents')
-            .select('id')
-            .eq('email', user.user.email)
-            .eq('is_active', true)
-            .maybeSingle();
-          
-          if (agentData?.id) {
-            queryClient.setQueryData(
-              queryKeys.availableOrders(agentData.id, { lat: 0, lng: 0 }),
-              (oldData: any) => {
-                if (!oldData) return oldData;
-                return oldData.filter((o: any) => o.id !== order.id);
-              }
-            );
-          }
+        // Optimistically remove from available orders cache using cached agent ID
+        const cachedAgentId = sessionStorage.getItem('agentId');
+        if (cachedAgentId) {
+          queryClient.setQueryData(
+            queryKeys.availableOrders(cachedAgentId, { lat: 0, lng: 0 }),
+            (oldData: any) => {
+              if (!oldData) return oldData;
+              return oldData.filter((o: any) => o.id !== order.id);
+            }
+          );
         }
         
         // Invalidate all relevant queries for immediate UI refresh

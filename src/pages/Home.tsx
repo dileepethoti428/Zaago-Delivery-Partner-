@@ -547,70 +547,8 @@ const Home = () => {
     };
   }, [toast, stopRingtone, playNotificationSound]);
 
-  // Polling fallback to ensure we never miss packed orders (Rapido-style reliability)
-  useEffect(() => {
-    const pollForPackedOrders = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user?.email) return;
-
-        // Only fetch orders packed/updated in the last 24 hours to avoid stale data
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-        const { data: packedOrders, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('status', 'packed')
-          .is('agent_id', null) // CRITICAL: Only get orders without agent
-          .gte('updated_at', twentyFourHoursAgo) // CRITICAL: Only fresh orders
-          .order('created_at', { ascending: false })
-          .limit(3);
-
-        if (error) throw error;
-
-        if (packedOrders && packedOrders.length > 0) {
-          console.log('🔍 [POLLING] Found', packedOrders.length, 'unassigned packed orders');
-          
-          // Check if we have a new packed order we haven't shown modal for
-          for (const order of packedOrders) {
-            // Double check agent_id is null (safety check)
-            if (order.agent_id) {
-              console.log('⚠️ [POLLING] Skipping order with agent:', order.id);
-              continue;
-            }
-            
-            // Skip rejected orders
-            if (rejectedOrderIds.has(order.id)) {
-              console.log('🚫 [POLLING] Skipping rejected order:', order.id);
-              continue;
-            }
-            
-            const modalKey = `modal-${order.id}`;
-            const acceptedKey = `accepted-${order.id}`;
-            
-            // Skip if already shown or accepted
-            if (recentNotifications.has(modalKey) || recentNotifications.has(acceptedKey)) {
-              continue;
-            }
-            
-            console.log('🆕 [POLLING] Found new packed order:', order.id);
-            handlePackedStatusNotification(order);
-            break; // Show one at a time
-          }
-        }
-      } catch (error) {
-        console.error('[POLLING] Error:', error);
-      }
-    };
-
-    // Poll every 10 seconds as fallback
-    const pollInterval = setInterval(pollForPackedOrders, 10000);
-    
-    // Initial poll
-    pollForPackedOrders();
-
-    return () => clearInterval(pollInterval);
-  }, [recentNotifications, rejectedOrderIds]);
+  // REMOVED: Polling fallback - real-time WebSocket subscriptions handle all updates
+  // This was causing 360 duplicate API calls per hour for data already received via WebSocket
 
   // Check if order should trigger immediate packed status notification
   const shouldPlayPackedStatusNotificationForOrder = (orderData: any): boolean => {
@@ -794,26 +732,8 @@ const Home = () => {
     }
   };
 
-  // Fetch agent name
-  const fetchAgentName = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return;
-
-      const { data: agent } = await supabase
-        .from('delivery_agents')
-        .select('name')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (agent?.name) {
-        setAgentName(agent.name);
-      }
-    } catch (error) {
-      console.error('Error fetching agent name:', error);
-    }
-  };
+  // REMOVED: fetchAgentName - using cached agent data from initialization instead
+  // This eliminates duplicate API call for data we already have
 
   // Calculate real-time distances for all orders (shop to customer + agent to shop)
   const calculateOrderDistances = async (ordersList: Order[]) => {
@@ -884,9 +804,22 @@ const Home = () => {
                 }
               });
 
-              if (!error && data?.success && typeof data?.distance_km === 'number') {
-                agentToShopDistance = data.distance_km;
-                console.log(`📏 Backend agent-to-shop distance for ${order.id}: ${agentToShopDistance} km`);
+              if (!error && data?.success) {
+                agentToShopDistance = data.distance_km || 2.0;
+                // Use payout from this same call - no need to fetch again later
+                const agentPayout = data.payout_amount || 0;
+                console.log(`📏 Backend calculated - Distance: ${agentToShopDistance} km, Payout: ₹${agentPayout}`);
+                
+                return {
+                  ...order,
+                  distance_km: distanceResult.distance_km,
+                  eta_mins: distanceResult.eta_mins,
+                  agent_to_shop_distance: agentToShopDistance,
+                  total_distance: agentToShopDistance + distanceResult.distance_km,
+                  agent_payout: agentPayout, // Set payout here from same API call
+                  distance_source: distanceResult.source,
+                  backend_calculated: true
+                };
               } else {
                 console.warn(`⚠️ Backend distance calculation failed for ${order.id}:`, error || data);
               }
@@ -895,7 +828,7 @@ const Home = () => {
             }
           }
 
-          console.log('✅ Distances calculated:', {
+          console.log('✅ Distances calculated (fallback):', {
             orderId: order.id,
             pickup: pickupCoords,
             customer: customerCoords,
@@ -1719,9 +1652,41 @@ const Home = () => {
     }
   }, [orders.length, location.latitude, location.longitude]); // Trigger when new orders are loaded or location is available
 
-  // Real-time distance and payout updates - recalculate every 10 minutes only when location changes significantly
+  // Real-time distance and payout updates with location threshold to prevent constant recalculation
+  const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  
   useEffect(() => {
     if (orders.length === 0 || !location.latitude || !location.longitude) return;
+    
+    // Calculate distance moved since last update
+    const hasMovedSignificantly = (() => {
+      if (!lastLocationRef.current) return true; // First time, always update
+      
+      const lastLat = lastLocationRef.current.lat;
+      const lastLng = lastLocationRef.current.lng;
+      const currentLat = location.latitude;
+      const currentLng = location.longitude;
+      
+      // Haversine formula for distance in meters
+      const R = 6371000; // Earth radius in meters
+      const dLat = (currentLat - lastLat) * Math.PI / 180;
+      const dLng = (currentLng - lastLng) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lastLat * Math.PI / 180) * Math.cos(currentLat * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c; // Distance in meters
+      
+      return distance > 100; // Only recalculate if moved >100 meters
+    })();
+    
+    if (!hasMovedSignificantly) {
+      console.log('⏭️ Location changed but <100m - skipping distance recalculation');
+      return;
+    }
+    
+    console.log('📍 Significant location change detected (>100m) - recalculating distances');
+    lastLocationRef.current = { lat: location.latitude, lng: location.longitude };
     
     let isMounted = true;
     
@@ -1732,35 +1697,25 @@ const Home = () => {
       
       if (!isMounted) return;
       
-      // Recalculate payouts using backend for updated orders
-      const ordersWithUpdatedPayouts = await Promise.all(
-        updatedOrders.map(async (order) => {
-          const backendPayout = await updatePayoutFromBackend(order.distance_km || 2.5, order.id);
-          return {
-            ...order,
-            agent_payout: backendPayout
-          };
-        })
-      );
+      // Payout already set in calculateOrderDistances - no need to recalculate
+      // This removes 15 duplicate API calls every time location changes
       
       if (!isMounted) return;
       
-      // Only update if data actually changed
+      // Only update if distance data actually changed
       setOrders(prev => {
-        const hasChanges = ordersWithUpdatedPayouts.some((newOrder, idx) => {
+        const hasChanges = updatedOrders.some((newOrder, idx) => {
           const oldOrder = prev[idx];
-          return !oldOrder || 
-            oldOrder.distance_km !== newOrder.distance_km || 
-            oldOrder.agent_payout !== newOrder.agent_payout;
+          return !oldOrder || oldOrder.distance_km !== newOrder.distance_km;
         });
-        return hasChanges ? ordersWithUpdatedPayouts : prev;
+        return hasChanges ? updatedOrders : prev;
       });
     };
 
     // Initial calculation
     updateDistancesAndPayouts();
     
-    // Reduce frequency to 10 minutes
+    // Reduce frequency to 10 minutes (only as backup, location threshold is primary control)
     const interval = setInterval(updateDistancesAndPayouts, 600000);
     
     return () => {
@@ -1769,31 +1724,8 @@ const Home = () => {
     };
   }, [location.latitude, location.longitude]);
 
-  // Single auto-refresh interval - 60 seconds (reduced from 30)
-  useEffect(() => {
-    if (!realtimeRefresh || !isOnline) return;
-    
-    let isMounted = true;
-    
-    // Single consolidated auto-refresh
-    const autoRefreshInterval = setInterval(async () => {
-      if (!isMounted || document.hidden || !isOnline) return;
-      
-      setIsAutoRefreshing(true);
-      try {
-        await realtimeRefresh();
-      } finally {
-        if (isMounted) {
-          setTimeout(() => setIsAutoRefreshing(false), 300);
-        }
-      }
-    }, 60000); // Single 60-second interval
-    
-    return () => {
-      isMounted = false;
-      clearInterval(autoRefreshInterval);
-    };
-  }, [isOnline, realtimeRefresh]);
+  // REMOVED: Auto-refresh interval - real-time WebSocket subscriptions handle all updates
+  // This was causing 60 duplicate API calls per hour for data already received via WebSocket
 
   // Trigger location picker when showLocationPicker changes
   useEffect(() => {

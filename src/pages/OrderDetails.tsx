@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,6 +58,7 @@ interface OrderData {
 const OrderDetails = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('id');
   
@@ -86,21 +88,36 @@ const OrderDetails = () => {
       try {
         setIsLoading(true);
         
-        // Fetch order details
-        const { data: order, error: orderError } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('id', orderId)
-          .single();
+        // Check React Query cache first (order might already be loaded from Home page)
+        const cachedAgentId = sessionStorage.getItem('agentId');
+        const cachedOrders = cachedAgentId ? queryClient.getQueryData(
+          ['available-orders', cachedAgentId, { lat: 0, lng: 0 }]
+        ) as any[] : null;
+        
+        const cachedOrder = cachedOrders?.find((o: any) => o.id === orderId);
+        
+        // Use cached order if available, otherwise fetch from database
+        let order;
+        if (cachedOrder) {
+          console.log('✅ Using cached order data, skipping database fetch');
+          order = cachedOrder;
+        } else {
+          const { data: fetchedOrder, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .single();
 
-        if (orderError || !order) {
-          toast({
-            title: "Error",
-            description: "Order not found",
-            variant: "destructive"
-          });
-          navigate('/home');
-          return;
+          if (orderError || !fetchedOrder) {
+            toast({
+              title: "Error",
+              description: "Order not found",
+              variant: "destructive"
+            });
+            navigate('/home');
+            return;
+          }
+          order = fetchedOrder;
         }
 
         // Get customer rating from delivery_agent_ratings if order is completed
