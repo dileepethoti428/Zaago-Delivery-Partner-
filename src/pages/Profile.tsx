@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth';
 import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { fetchAgentProfile } from '@/services/agentProfile';
+import { cache } from '@/utils/cache';
 
 type AgentProfile = {
   id: string;
@@ -24,7 +25,8 @@ type AgentProfile = {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, profile, signOut } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
+  const signOut = useAuthStore((state) => state.signOut);
   const [agentProfile, setAgentProfile] = useState<AgentProfile>(null);
   const [loading, setLoading] = useState(true);
 
@@ -34,9 +36,17 @@ export default function Profile() {
         setLoading(false);
         return;
       }
+
+      // Load from cache first
+      const cached = cache.get<AgentProfile>('PROFILE');
+      if (cached) {
+        setAgentProfile(cached);
+        setLoading(true);
+      }
       
       try {
         const data = await fetchAgentProfile(user.email);
+        cache.set('PROFILE', data);
         setAgentProfile(data);
       } catch (err) {
         console.error('Failed to load agent profile:', err);

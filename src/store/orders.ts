@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { ZaagoOrder } from '@/services/orders';
 import { fetchOpenOrders } from '@/services/orders';
 import { supabase } from '@/integrations/supabase/client';
+import { cache } from '@/utils/cache';
 
 type OrdersState = {
   loading: boolean;
@@ -18,13 +19,19 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   orders: [],
   
   async load() {
-    set({ loading: true, error: null });
+    const cached = cache.get<ZaagoOrder[]>('ORDERS');
+    if (cached) {
+      set({ orders: cached, loading: true });
+    } else {
+      set({ loading: true, error: null });
+    }
+    
     try {
       const rows = await fetchOpenOrders();
-      // Filter to show only new/open orders
       const filtered = rows.filter(r => 
         ['new', 'open'].includes((r.status ?? '').toLowerCase())
       );
+      cache.set('ORDERS', filtered);
       set({ orders: filtered, loading: false });
     } catch (e: any) {
       set({ error: e?.message ?? 'Failed to load orders', loading: false });
@@ -46,6 +53,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
 
 // Initialize realtime subscription
 let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+let debounceTimer: NodeJS.Timeout | null = null;
 
 export function startOrdersRealtime() {
   if (realtimeChannel) return;
@@ -56,8 +64,11 @@ export function startOrdersRealtime() {
       'postgres_changes',
       { event: '*', schema: 'public', table: 'orders' },
       () => {
-        // Reload orders when any change happens
-        useOrdersStore.getState().load();
+        // Debounce reload to avoid excessive refreshes
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          useOrdersStore.getState().load();
+        }, 400);
       }
     )
     .subscribe();
@@ -67,5 +78,9 @@ export function stopOrdersRealtime() {
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel);
     realtimeChannel = null;
+  }
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
   }
 }

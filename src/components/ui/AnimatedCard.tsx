@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
-import { ComponentProps } from 'react';
+import { ComponentProps, memo } from 'react';
 import { cn } from '@/lib/utils';
 import { cardItem, tapScale } from '@/animation/variants';
 
@@ -8,7 +8,7 @@ interface AnimatedCardProps extends ComponentProps<typeof Card> {
   delay?: number;
 }
 
-export function AnimatedCard({ delay = 0, className, children, ...props }: AnimatedCardProps) {
+export const AnimatedCard = memo(function AnimatedCard({ delay = 0, className, children, ...props }: AnimatedCardProps) {
   const variants = cardItem(delay);
   
   return (
@@ -23,4 +23,4 @@ export function AnimatedCard({ delay = 0, className, children, ...props }: Anima
       </Card>
     </motion.div>
   );
-}
+});

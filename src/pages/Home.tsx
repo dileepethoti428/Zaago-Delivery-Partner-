@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
@@ -20,9 +20,25 @@ const RADIUS_KM = 15;
 
 export default function Home() {
   const navigate = useNavigate();
-  const { orders, loading, error, load } = useOrdersStore();
-  const { lastKnown, permission, startWatch, stopWatch } = useLocationStore();
-  const [visibleOrders, setVisibleOrders] = useState<any[]>([]);
+  const orders = useOrdersStore((state) => state.orders);
+  const loading = useOrdersStore((state) => state.loading);
+  const error = useOrdersStore((state) => state.error);
+  const load = useOrdersStore((state) => state.load);
+  
+  const lastKnown = useLocationStore((state) => state.lastKnown);
+  const permission = useLocationStore((state) => state.permission);
+  const startWatch = useLocationStore((state) => state.startWatch);
+  const stopWatch = useLocationStore((state) => state.stopWatch);
+
+  // Memoize visible orders - only recompute when orders or location changes
+  const visibleOrders = useMemo(() => {
+    if (!lastKnown) return [];
+    return annotateAndFilterOrders(
+      orders,
+      { lat: lastKnown.lat, lng: lastKnown.lng },
+      RADIUS_KM
+    );
+  }, [orders, lastKnown]);
 
   // Load orders and start location watching when component mounts
   useEffect(() => {
@@ -34,22 +50,7 @@ export default function Home() {
       stopWatch();
       stopOrdersRealtime();
     };
-  }, [load, startWatch, stopWatch]);
-
-  // Filter and sort orders by distance whenever location or orders change
-  useEffect(() => {
-    if (!lastKnown) {
-      setVisibleOrders([]);
-      return;
-    }
-
-    const filtered = annotateAndFilterOrders(
-      orders,
-      { lat: lastKnown.lat, lng: lastKnown.lng },
-      RADIUS_KM
-    );
-    setVisibleOrders(filtered);
-  }, [orders, lastKnown]);
+  }, []);
 
   const headerNote = useMemo(() => {
     if (permission === 'denied') {
@@ -64,9 +65,9 @@ export default function Home() {
     return `Showing orders within ≤ ${RADIUS_KM} km of your live location`;
   }, [permission, lastKnown]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     load();
-  };
+  }, [load]);
 
   return (
     <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">

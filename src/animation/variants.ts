@@ -5,7 +5,7 @@ export const pageTransition = {
 };
 
 export const pageTransitionConfig = {
-  duration: 0.18,
+  duration: 0.14,
   ease: [0.4, 0, 0.2, 1] as const,
 };
 
@@ -17,7 +17,7 @@ export const cardItem = (delay = 0) => ({
   },
   transition: {
     delay,
-    duration: 0.15,
+    duration: 0.12,
     ease: [0.4, 0, 0.2, 1] as const,
   },
 });

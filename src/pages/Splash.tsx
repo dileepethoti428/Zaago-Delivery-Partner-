@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Truck } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { cache } from '@/utils/cache';
 
 export default function Splash() {
   const navigate = useNavigate();
   const { session, profile, loading, initialize } = useAuthStore();
+  const hasCache = cache.hasCache();
 
   useEffect(() => {
     initialize();
@@ -15,6 +17,7 @@ export default function Splash() {
   useEffect(() => {
     if (loading) return;
 
+    const delay = hasCache ? 200 : 1500;
     const timer = setTimeout(() => {
       if (!session) {
         navigate('/login');
@@ -31,10 +34,10 @@ export default function Splash() {
       } else if (profile.approval_status === 'approved') {
         navigate('/home');
       }
-    }, 1500);
+    }, delay);
 
     return () => clearTimeout(timer);
-  }, [session, profile, loading, navigate]);
+  }, [session, profile, loading, navigate, hasCache]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5">

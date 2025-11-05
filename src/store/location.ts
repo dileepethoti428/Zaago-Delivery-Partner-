@@ -25,7 +25,7 @@ export type LocationState = {
 };
 
 const STORAGE_KEY = 'zaago_last_loc';
-const UPDATE_THROTTLE_MS = 10000; // 10 seconds
+const UPDATE_THROTTLE_MS = 15000; // 15 seconds
 const LABEL_DEBOUNCE_MS = 20000; // 20 seconds
 
 let watchId: number | null = null;

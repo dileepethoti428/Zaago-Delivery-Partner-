@@ -9,9 +9,10 @@ import { motion as m } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
 import { fetchAgentProfile } from '@/services/agentProfile';
 import { fetchAgentEarnings, computeEarningsTotals } from '@/services/earnings';
+import { cache } from '@/utils/cache';
 
 export default function Earnings() {
-  const { user } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
   const [earningsData, setEarningsData] = useState({ today: 0, week: 0, month: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -22,21 +23,25 @@ export default function Earnings() {
         return;
       }
 
+      // Load from cache first
+      const cached = cache.get<{ today: number; week: number; month: number }>('EARNINGS');
+      if (cached) {
+        setEarningsData(cached);
+        setLoading(true);
+      }
+
       try {
-        // First get agent profile to get agent_id
         const agentProfile = await fetchAgentProfile(user.email);
         
         if (!agentProfile?.id) {
-          console.error('Agent profile not found');
           setLoading(false);
           return;
         }
 
-        // Fetch earnings data
         const earningsRows = await fetchAgentEarnings(agentProfile.id);
-        
-        // Compute totals
         const totals = computeEarningsTotals(earningsRows);
+        
+        cache.set('EARNINGS', totals);
         setEarningsData(totals);
       } catch (err) {
         console.error('Failed to load earnings:', err);
