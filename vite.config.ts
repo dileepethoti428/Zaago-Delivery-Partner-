@@ -3,8 +3,6 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// HARD CACHE CLEAR TRIGGER - 2025-11-05 08:12:30 - Force complete rebuild
-// This comment change forces Vite to invalidate all cached dependencies
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -38,7 +36,7 @@ export default defineConfig(({ mode }) => ({
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
       '@tanstack/react-query': path.resolve(__dirname, './node_modules/@tanstack/react-query'),
     },
-    // Force single React instance to prevent "Cannot read properties of null" errors
+    // Force single React instance to prevent duplicate React errors
     dedupe: [
       'react', 
       'react-dom', 
@@ -51,7 +49,6 @@ export default defineConfig(({ mode }) => ({
     ],
   },
   optimizeDeps: {
-    force: true, // Force re-optimization to clear any cached issues
     include: [
       'react', 
       'react-dom', 
@@ -66,5 +63,4 @@ export default defineConfig(({ mode }) => ({
       jsx: 'automatic',
     },
   },
-  cacheDir: '.vite-cache-' + Date.now(), // New cache directory to force clean rebuild
 }));
