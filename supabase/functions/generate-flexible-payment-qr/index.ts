@@ -7,12 +7,20 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('🔵 Flexible Payment QR function called');
+  console.log('Method:', req.method);
+  console.log('Headers:', Object.fromEntries(req.headers.entries()));
+
   if (req.method === 'OPTIONS') {
+    console.log('✅ CORS preflight handled');
     return new Response(null, { headers: corsHeaders });
   }
 
+  console.log('📦 Processing POST request...');
+
   try {
     const { agent_id, amount } = await req.json();
+    console.log('📝 Request body:', { agent_id, amount });
 
     if (!agent_id || !amount) {
       throw new Error('Agent ID and amount are required');

@@ -90,23 +90,50 @@ export const FlexiblePaymentDialog = ({ open, onOpenChange, agentId }: FlexibleP
 
     setLoading(true);
     try {
+      // Validate session first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Session expired. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔵 Generating flexible payment QR for agent:', agentId, 'amount:', amountNum);
+
       const { data, error } = await supabase.functions.invoke('generate-flexible-payment-qr', {
-        body: { agent_id: agentId, amount: amountNum }
+        body: { agent_id: agentId, amount: amountNum },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Function invocation error:', {
+          message: error.message,
+          details: error
+        });
+        throw error;
+      }
 
       if (data?.success) {
+        console.log('✅ QR generated successfully:', data);
         setQrCodeUrl(data.qr_code_url);
         setPaymentId(data.payment_id);
         setExpiresAt(data.expires_at);
         toast.success("QR code generated successfully!");
       } else {
+        console.error('❌ QR generation failed:', data);
         throw new Error(data?.error || "Failed to generate QR code");
       }
     } catch (error: any) {
-      console.error('Error generating QR:', error);
-      toast.error(error.message || "Failed to generate QR code");
+      console.error('❌ Error generating QR:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.status,
+        statusText: error.statusText,
+        response: error
+      });
+      toast.error(error.message || "Failed to generate QR code. Please try again.");
     } finally {
       setLoading(false);
     }
