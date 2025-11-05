@@ -53,7 +53,15 @@ export default defineConfig(({ mode }) => ({
       'react-router-dom',
       '@radix-ui/react-tooltip',
       '@radix-ui/react-hover-card',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-popover',
     ],
     force: true,
+    esbuildOptions: {
+      // Ensure all JSX is handled by the same React instance
+      jsx: 'automatic',
+    },
   },
+  // Clear all caches on startup to prevent React duplication
+  cacheDir: '.vite-' + Date.now(),
 }));
