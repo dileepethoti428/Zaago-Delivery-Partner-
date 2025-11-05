@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// Force cache rebuild by updating config timestamp
+// Force cache rebuild - Updated: 2025-11-05 07:30
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -13,13 +13,16 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        // Simplified chunking - let Vite auto-chunk to prevent React duplication
         manualChunks: undefined,
       },
     },
     minify: 'esbuild',
     chunkSizeWarningLimit: 500,
     sourcemap: false,
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
   },
   preview: {
     port: 8080,
@@ -60,8 +63,8 @@ export default defineConfig(({ mode }) => ({
       '@radix-ui/react-dialog',
       '@radix-ui/react-popover',
     ],
+    force: true,
     esbuildOptions: {
-      // Ensure all JSX is handled by the same React instance
       jsx: 'automatic',
     },
   },
