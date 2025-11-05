@@ -1664,17 +1664,9 @@ const Home = () => {
             onClick={() => setShowLocationPicker(true)}
           >
             <h1 className="text-xl font-bold text-gray-900">Zaago Delivery Agent</h1>
-            <div className="flex items-center text-xs mt-1.5 bg-gray-50 group-hover:bg-gray-100 rounded-lg px-2 py-1.5 transition-colors border border-gray-200 group-hover:border-gray-300">
-              <div className="p-1 bg-red-500 rounded-full mr-2 flex-shrink-0 animate-pulse">
-                <MapPin className="w-2.5 h-2.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Delivery Location</div>
-                <div className="text-sm font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-[280px]">
-                  {currentLocation}
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 flex-shrink-0 ml-1 transition-colors" />
+            <div className="flex items-center gap-1 text-xs text-gray-600">
+              <MapPin className="w-3 h-3" />
+              <span className="truncate max-w-[180px]">{currentLocation}</span>
             </div>
           </div>
           
