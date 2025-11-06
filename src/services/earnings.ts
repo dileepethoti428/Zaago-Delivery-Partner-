@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// Earnings data service
 export interface LiveEarningsData {
   today: {
     pending: number;
