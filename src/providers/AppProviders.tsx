@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
   },
 });
 
-function AuthInitializer({ children }: { children: React.ReactNode }) {
+function AuthInitializer({ children }: { children: ReactNode }) {
   const initAuth = useAuthStore((state) => state.initialize);
   const initLocation = useLocationStore((state) => state.init);
 
@@ -31,7 +31,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export default function AppProviders({ children }: { children: React.ReactNode }) {
+export default function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthInitializer>
