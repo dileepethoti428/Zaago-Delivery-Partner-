@@ -114,12 +114,22 @@ export default function Home() {
 
   const handleReject = async (orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    if (!profile?.user_id) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'User profile not found',
+      });
+      return;
+    }
+    
     setProcessingOrder(orderId);
     try {
-      await rejectOrder(orderId);
+      await rejectOrder(orderId, profile.user_id);
       toast({
         title: 'Order Rejected',
-        description: 'Order has been rejected',
+        description: 'You will not see this order again',
       });
     } catch (error: any) {
       toast({

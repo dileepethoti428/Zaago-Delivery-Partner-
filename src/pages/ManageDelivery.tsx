@@ -8,6 +8,7 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { toast } from '@/hooks/use-toast';
 import { getOrderDetails, type OrderDetails } from '@/services/orderDetails';
 import { openGoogleMapsAddress } from '@/utils/maps';
+import { useAuthStore } from '@/store/auth';
 import { 
   ArrowLeft, 
   Phone, 
@@ -29,6 +30,7 @@ import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 export default function ManageDelivery() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const profile = useAuthStore((state) => state.profile);
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -57,6 +59,51 @@ export default function ManageDelivery() {
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
+  };
+
+  const handleCancel = async () => {
+    if (!order || !profile?.user_id) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'User profile not found',
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Are you sure you want to cancel this delivery? It will be released back to other agents.'
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data, error } = await supabase.functions.invoke('cancel-delivery', {
+        body: {
+          order_id: order.id,
+          agent_id: profile.user_id,
+          cancellation_reason: 'Agent cancelled from manage delivery page'
+        },
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || 'Failed to cancel delivery');
+      }
+
+      toast({
+        title: 'Delivery Cancelled',
+        description: 'Order has been cancelled successfully',
+      });
+      
+      navigate('/home');
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error?.message || 'Failed to cancel delivery',
+      });
+    }
   };
 
   if (loading) {
@@ -291,6 +338,8 @@ export default function ManageDelivery() {
             <Button
               variant="destructive"
               className="w-full rounded-xl h-12 text-base font-medium"
+              onClick={handleCancel}
+              disabled={!['assigned', 'picked_up'].includes(order.status)}
             >
               <XCircle className="h-5 w-5 mr-2" />
               Cancel Delivery

@@ -13,7 +13,7 @@ type OrdersState = {
   updateOrderStatus: (orderId: string, status: ZaagoOrder['status']) => void;
   getOrderById: (id: string) => ZaagoOrder | undefined;
   acceptOrder: (orderId: string, agentId: string) => Promise<void>;
-  rejectOrder: (orderId: string) => Promise<void>;
+  rejectOrder: (orderId: string, agentId: string) => Promise<void>;
 };
 
 export const useOrdersStore = create<OrdersState>((set, get) => ({
@@ -93,7 +93,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     }
   },
 
-  rejectOrder: async (orderId) => {
+  rejectOrder: async (orderId, agentId) => {
     const { rejectOrder: rejectOrderService } = await import('@/services/acceptOrder');
     
     // Optimistic update - remove from view
@@ -102,7 +102,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     }));
 
     try {
-      await rejectOrderService(orderId);
+      await rejectOrderService(orderId, agentId);
     } catch (error: any) {
       // Reload orders on error
       await get().load();
