@@ -126,10 +126,6 @@ export default function ManageDelivery() {
                 <span className="text-sm text-muted-foreground">Payment Status</span>
                 <StatusPill status={order.payment_status} />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Delivery Charge</span>
-                <span className="font-medium">₹{order.delivery_charge}</span>
-              </div>
               {order.subscription_id && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Order Type</span>
@@ -168,24 +164,18 @@ export default function ManageDelivery() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Delivery Address</p>
-                <p className="text-sm mb-2">{order.customer.address}</p>
-                <p className="text-xs text-muted-foreground">
-                  {order.customer.city}, {order.customer.state} - {order.customer.pincode}
-                </p>
-                {order.customer.landmark && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Landmark: {order.customer.landmark}
-                  </p>
+                <p className="text-sm mb-2">{order.customer.address || 'Not available'}</p>
+                {order.customer.address && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openGoogleMapsAddress(order.customer.address)}
+                    className="gap-2 rounded-xl w-full mt-2"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Open in Maps
+                  </Button>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openGoogleMapsAddress(order.customer.address)}
-                  className="gap-2 rounded-xl w-full mt-2"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Open in Maps
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -256,11 +246,9 @@ export default function ManageDelivery() {
               <div className="pt-3 border-t-2 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">₹{order.total_amount - order.delivery_charge}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Delivery Charge</span>
-                  <span className="font-medium">₹{order.delivery_charge}</span>
+                  <span className="font-medium">
+                    ₹{order.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t">
                   <span className="font-bold">Total Amount</span>
