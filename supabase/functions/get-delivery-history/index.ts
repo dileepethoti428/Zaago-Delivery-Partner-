@@ -39,15 +39,15 @@ Deno.serve(async (req) => {
 
     // Get agent profile
     const { data: profile, error: profileError } = await supabase
-      .from('agent_profiles')
+      .from('delivery_agents')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('email', user.email)
       .single();
 
     if (profileError || !profile) {
-      console.error('Agent profile not found:', profileError);
+      console.error('Delivery agent not found:', profileError);
       return new Response(
-        JSON.stringify({ error: 'Agent profile not found' }),
+        JSON.stringify({ error: 'Delivery agent not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
