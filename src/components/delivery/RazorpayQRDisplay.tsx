@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, X, Loader2 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface RazorpayQRDisplayProps {
@@ -22,6 +23,14 @@ export function RazorpayQRDisplay({
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success'>('pending');
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [qrSize, setQrSize] = useState(320);
+
+  useEffect(() => {
+    const calc = () => setQrSize(Math.min(360, Math.max(280, Math.floor(window.innerWidth * 0.8))));
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, []);
 
   useEffect(() => {
     if (!open || !qrData?.qr_id) return;
@@ -134,11 +143,22 @@ export function RazorpayQRDisplay({
               {/* QR Code */}
               <div className="flex justify-center">
                 <div className="p-6 bg-white dark:bg-gray-800 rounded-xl border-4 border-gray-200 dark:border-gray-700">
-                  <img 
-                    src={qrData.image_url} 
-                    alt="Payment QR Code"
-                    className="w-72 h-72 sm:w-80 sm:h-80"
-                  />
+                  {qrData.qr_string ? (
+                    <QRCodeSVG
+                      value={qrData.qr_string}
+                      size={qrSize}
+                      bgColor="#FFFFFF"
+                      fgColor="#000000"
+                      level="H"
+                    />
+                  ) : (
+                    <img 
+                      src={qrData.image_url} 
+                      alt="Payment QR Code"
+                      className="w-72 h-72 sm:w-80 sm:h-80"
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                  )}
                 </div>
               </div>
 
