@@ -144,6 +144,35 @@ Deno.serve(async (req) => {
 
     console.log('✅ Delivery history created successfully');
 
+    // Insert into agent_earnings_tracking for earnings display
+    const { error: earningsError } = await supabaseAdmin
+      .from('agent_earnings_tracking')
+      .insert({
+        agent_id: agent.id,
+        order_id: orderId,
+        order_status: 'delivered',
+        expected_payout: 25.00,
+        actual_payout: 25.00,
+        payout_status: 'confirmed',
+        accepted_at: order.accepted_at || currentTime,
+        completed_at: currentTime,
+        payment_method: normalizedPayment,
+        distance_km: order.distance_km || 2.5,
+        is_peak_hour: false,
+        payout_breakdown: {
+          base_pay: 27,
+          distance_pay: 11,
+          peak_bonus: 0,
+          platform_fee: 13
+        }
+      });
+
+    if (earningsError) {
+      console.error('❌ Earnings tracking insert failed:', earningsError);
+    } else {
+      console.log('✅ Earnings tracked successfully');
+    }
+
     // 2. Update order status using admin client
     const { error: orderError } = await supabaseAdmin
       .from('orders')
