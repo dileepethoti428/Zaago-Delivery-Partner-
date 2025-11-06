@@ -242,7 +242,7 @@ serve(async (req) => {
         pickup_location: pickupLocation,
         pickup_address: pickupAddress
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error) {

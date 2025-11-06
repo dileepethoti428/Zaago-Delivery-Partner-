@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
 import { useOrdersStore } from '@/store/orders';
+import { useAuthStore } from '@/store/auth';
 import { openGoogleMapsAddress } from '@/utils/maps';
 import { updateOrderStatus as updateOrderStatusService } from '@/services/updateOrderStatus';
 import { toast } from '@/hooks/use-toast';
@@ -16,7 +17,8 @@ import type { ZaagoOrder } from '@/services/orders';
 export default function OrderDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { orders, getOrderById, updateOrderStatus } = useOrdersStore();
+  const { orders, getOrderById, updateOrderStatus, acceptOrder: storeAcceptOrder } = useOrdersStore();
+  const { user } = useAuthStore();
   const order = getOrderById(id || '');
 
   if (!order) {
@@ -63,9 +65,36 @@ export default function OrderDetails() {
     }
   };
 
-  const handleAccept = () => {
-    if (order?.status !== 'new' && order?.status !== 'open') return;
-    handleStatusUpdate('accepted', `Order ${order.id} accepted ✅`);
+  const handleAccept = async () => {
+    if (!order) return;
+    if (order.status !== 'new' && order.status !== 'open' && order.status !== 'packed') return;
+    
+    // Validate order_id
+    if (!order.id) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Order ID missing',
+      });
+      return;
+    }
+
+    // Validate agent_id
+    if (!user?.id) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'User not authenticated',
+      });
+      return;
+    }
+
+    try {
+      await storeAcceptOrder(order.id, user.id);
+    } catch (error: any) {
+      // Error handling is done in the store
+      console.error('Accept order failed:', error);
+    }
   };
 
   const handlePickedUp = () => {

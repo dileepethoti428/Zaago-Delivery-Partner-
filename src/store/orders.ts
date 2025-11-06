@@ -3,6 +3,7 @@ import type { ZaagoOrder } from '@/services/orders';
 import { fetchOpenOrders } from '@/services/orders';
 import { supabase } from '@/integrations/supabase/client';
 import { cache } from '@/utils/cache';
+import { toast } from '@/hooks/use-toast';
 
 type OrdersState = {
   loading: boolean;
@@ -55,6 +56,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   acceptOrder: async (orderId, agentId) => {
     const { acceptOrder: acceptOrderService } = await import('@/services/acceptOrder');
     
+    // Store previous state for rollback
+    const previousOrders = get().orders;
+    
     // Optimistic update
     set((state) => ({
       orders: state.orders.map((order) =>
@@ -66,15 +70,25 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
 
     try {
       await acceptOrderService(orderId, agentId);
+      
+      // Show success toast
+      toast({
+        title: 'Success',
+        description: 'Order accepted successfully',
+      });
     } catch (error: any) {
+      console.error('❌ Accept order failed:', error);
+      
       // Rollback on error
-      set((state) => ({
-        orders: state.orders.map((order) =>
-          order.id === orderId
-            ? { ...order, status: 'packed' as ZaagoOrder['status'] }
-            : order
-        ),
-      }));
+      set({ orders: previousOrders });
+      
+      // Show error toast
+      toast({
+        variant: 'destructive',
+        title: 'Order accept failed',
+        description: error?.message || 'Order accept failed, please try again',
+      });
+      
       throw error;
     }
   },
