@@ -12,6 +12,7 @@ export type DbOrderRow = {
   pickup_location?: any | null;
   delivery_address_id?: string | null;
   customer_name?: string | null;
+  created_at?: string | null;
   delivery_addresses?: { 
     id: string; 
     coordinates?: any | null; 
@@ -31,6 +32,7 @@ export type ZaagoOrder = {
   updatedAt?: number;
   distanceKm?: number;
   customerName?: string;
+  createdAt?: number;
 };
 
 function coerceStatus(s?: string | null): ZaagoOrder['status'] {
@@ -78,7 +80,45 @@ function toZaagoOrder(row: DbOrderRow): ZaagoOrder {
     status: coerceStatus(row.status),
     distanceKm: distanceKm > 0 ? distanceKm : undefined,
     customerName: row.customer_name ?? undefined,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
   };
+}
+
+export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[]> {
+  if (!agentId) return [];
+
+  console.log('📤 Fetching available orders for agent:', agentId);
+
+  const { data, error } = await supabase.functions.invoke('get-available-orders', {
+    body: { agent_id: agentId },
+  });
+
+  if (error) {
+    console.error('❌ Error fetching available orders:', error);
+    throw new Error(error.message || 'Failed to fetch available orders');
+  }
+
+  if (!data?.success) {
+    console.error('❌ Failed to fetch available orders:', data);
+    throw new Error(data?.error || 'Failed to fetch available orders');
+  }
+
+  console.log('✅ Fetched available orders:', data.orders?.length || 0);
+
+  const orders = (data.orders || []).map((o: any) => ({
+    id: o.id,
+    pickup: o.pickup_address || o?.seller?.address_line || 'Pickup',
+    drop: o.delivery_address?.full_address || o.delivery_address?.address_line || 'Delivery address',
+    pickupCoord: parsePoint(o.pickup_location || o?.seller?.coordinates) || null,
+    etaMin: o.estimated_delivery_time ? Math.round(o.estimated_delivery_time) : 12,
+    payout: o.agent_payout ? Math.round(o.agent_payout) : 30,
+    status: o.status || 'open',
+    distanceKm: typeof o.distance_km === 'number' ? Number(o.distance_km.toFixed(2)) : undefined,
+    customerName: o.customer_name || undefined,
+    createdAt: o.created_at ? new Date(o.created_at).getTime() : Date.now(),
+  })) as ZaagoOrder[];
+
+  return orders;
 }
 
 export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
@@ -91,6 +131,7 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
         pickup_address, pickup_location,
         delivery_address_id,
         customer_name,
+        created_at,
         delivery_addresses:delivery_address_id ( 
           id, coordinates, full_address, address_line 
         )
@@ -103,7 +144,7 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
     console.warn('Join query failed, falling back to simple query:', joinError);
     const { data, error } = await supabase
       .from('orders')
-      .select('id, status, total, address, pickup_address, pickup_location, customer_name');
+      .select('id, status, total, address, pickup_address, pickup_location, customer_name, created_at');
 
     if (error) throw error;
     return ((data ?? []) as unknown as DbOrderRow[]).map(toZaagoOrder);

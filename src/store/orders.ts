@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ZaagoOrder } from '@/services/orders';
-import { fetchOpenOrders } from '@/services/orders';
+import { fetchOpenOrders, fetchAvailableOrders } from '@/services/orders';
 import { supabase } from '@/integrations/supabase/client';
 import { cache } from '@/utils/cache';
 import { toast } from '@/hooks/use-toast';
@@ -9,7 +9,8 @@ type OrdersState = {
   loading: boolean;
   error: string | null;
   orders: ZaagoOrder[];
-  load: () => Promise<void>;
+  lastAgentId?: string;
+  load: (agentId?: string) => Promise<void>;
   updateOrderStatus: (orderId: string, status: ZaagoOrder['status']) => void;
   getOrderById: (id: string) => ZaagoOrder | undefined;
   acceptOrder: (orderId: string, agentId: string) => Promise<void>;
@@ -20,8 +21,13 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   loading: false,
   error: null,
   orders: [],
+  lastAgentId: undefined,
   
-  async load() {
+  async load(agentId?: string) {
+    if (agentId) {
+      set({ lastAgentId: agentId });
+    }
+
     const cached = cache.get<ZaagoOrder[]>('ORDERS');
     if (cached) {
       set({ orders: cached, loading: true });
@@ -30,7 +36,10 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     }
     
     try {
-      const rows = await fetchOpenOrders();
+      const rows = agentId 
+        ? await fetchAvailableOrders(agentId)
+        : await fetchOpenOrders();
+        
       const filtered = rows.filter(r => 
         ['new', 'open', 'packed', 'assigned', 'picked_up'].includes((r.status ?? '').toLowerCase())
       );
@@ -127,7 +136,8 @@ export function startOrdersRealtime() {
         // Debounce reload to avoid excessive refreshes
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-          useOrdersStore.getState().load();
+          const { lastAgentId } = useOrdersStore.getState();
+          useOrdersStore.getState().load(lastAgentId);
         }, 400);
       }
     )
