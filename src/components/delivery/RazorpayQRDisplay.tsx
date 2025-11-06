@@ -23,14 +23,28 @@ export function RazorpayQRDisplay({
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success'>('pending');
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
-  const [qrSize, setQrSize] = useState(320);
+  const [qrSize, setQrSize] = useState(360);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fsQrSize, setFsQrSize] = useState(512);
 
   useEffect(() => {
-    const calc = () => setQrSize(Math.min(360, Math.max(280, Math.floor(window.innerWidth * 0.8))));
+    const calc = () => setQrSize(Math.min(420, Math.max(300, Math.floor(window.innerWidth * 0.82))));
     calc();
     window.addEventListener('resize', calc);
     return () => window.removeEventListener('resize', calc);
   }, []);
+
+  useEffect(() => {
+    const calcFs = () => {
+      const size = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.9);
+      setFsQrSize(Math.min(768, Math.max(360, size)));
+    };
+    if (isFullscreen) {
+      calcFs();
+      window.addEventListener('resize', calcFs);
+      return () => window.removeEventListener('resize', calcFs);
+    }
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (!open || !qrData?.qr_id) return;
@@ -102,7 +116,8 @@ export function RazorpayQRDisplay({
   if (!qrData) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
+    <>
+      <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-lg md:max-w-xl rounded-3xl p-0 max-h-screen overflow-y-auto">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 rounded-t-3xl">
@@ -144,23 +159,32 @@ export function RazorpayQRDisplay({
               <div className="flex justify-center">
                 <div className="p-6 bg-white dark:bg-gray-800 rounded-xl border-4 border-gray-200 dark:border-gray-700">
                   {qrData.qr_string ? (
-                    <QRCodeSVG
-                      value={qrData.qr_string}
-                      size={qrSize}
-                      bgColor="#FFFFFF"
-                      fgColor="#000000"
-                      level="H"
-                    />
+                    <div
+                      className="cursor-zoom-in"
+                      onClick={() => setIsFullscreen(true)}
+                      aria-label="Open fullscreen QR"
+                    >
+                      <QRCodeSVG
+                        value={qrData.qr_string}
+                        size={qrSize}
+                        bgColor="#FFFFFF"
+                        fgColor="#000000"
+                        level="H"
+                        includeMargin
+                      />
+                    </div>
                   ) : (
                     <img 
                       src={qrData.image_url} 
                       alt="Payment QR Code"
-                      className="w-72 h-72 sm:w-80 sm:h-80"
+                      className="w-72 h-72 sm:w-80 sm:h-80 cursor-zoom-in"
                       style={{ imageRendering: 'pixelated' }}
+                      onClick={() => setIsFullscreen(true)}
                     />
                   )}
                 </div>
               </div>
+              <div className="text-center -mt-2 text-xs text-muted-foreground">Tap QR to enlarge</div>
 
               {/* Instructions */}
               <div className="text-center space-y-2">
@@ -213,5 +237,29 @@ export function RazorpayQRDisplay({
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={isFullscreen} onOpenChange={(o) => setIsFullscreen(o)}>
+      <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white">
+        <div className="w-full h-full flex items-center justify-center bg-white">
+          {qrData?.qr_string ? (
+            <QRCodeSVG
+              value={qrData.qr_string}
+              size={fsQrSize}
+              bgColor="#FFFFFF"
+              fgColor="#000000"
+              level="H"
+              includeMargin
+            />
+          ) : (
+            <img
+              src={qrData?.image_url}
+              alt="Payment QR Code"
+              style={{ width: fsQrSize, height: fsQrSize }}
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
