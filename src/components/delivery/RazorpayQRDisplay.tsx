@@ -94,7 +94,7 @@ export function RazorpayQRDisplay({
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-md rounded-3xl p-0">
+      <DialogContent className="sm:max-w-lg md:max-w-xl rounded-3xl p-0 max-h-screen overflow-y-auto">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 rounded-t-3xl">
           <div className="flex items-center justify-between mb-2">
@@ -118,7 +118,7 @@ export function RazorpayQRDisplay({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {paymentStatus === 'success' ? (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
               <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -133,18 +133,18 @@ export function RazorpayQRDisplay({
             <>
               {/* QR Code */}
               <div className="flex justify-center">
-                <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border-4 border-gray-200 dark:border-gray-700">
+                <div className="p-6 bg-white dark:bg-gray-800 rounded-xl border-4 border-gray-200 dark:border-gray-700">
                   <img 
                     src={qrData.image_url} 
                     alt="Payment QR Code"
-                    className="w-56 h-56"
+                    className="w-72 h-72 sm:w-80 sm:h-80"
                   />
                 </div>
               </div>
 
               {/* Instructions */}
               <div className="text-center space-y-2">
-                <p className="text-sm font-medium">SCAN & PAY WITH ANY UPI APP</p>
+                <p className="text-sm font-semibold">SCAN & PAY WITH ANY UPI APP</p>
                 <div className="flex justify-center gap-4 items-center">
                   <div className="text-xs text-muted-foreground">Google Pay</div>
                   <div className="text-xs text-muted-foreground">PhonePe</div>
