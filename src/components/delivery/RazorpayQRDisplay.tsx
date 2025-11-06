@@ -157,7 +157,11 @@ export function RazorpayQRDisplay({
             <>
               {/* QR Code */}
               <div className="flex justify-center">
-                <div className="p-6 bg-white dark:bg-gray-800 rounded-xl border-4 border-gray-200 dark:border-gray-700">
+                <div className="p-6 bg-white rounded-xl border-4 border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <span className="text-sm font-bold tracking-wide">BHIM</span>
+                    <span className="text-sm font-bold tracking-wide">UPI</span>
+                  </div>
                   {qrData.qr_string ? (
                     <div
                       className="cursor-zoom-in"
@@ -177,25 +181,17 @@ export function RazorpayQRDisplay({
                     <img 
                       src={qrData.image_url} 
                       alt="Payment QR Code"
-                      className="w-72 h-72 sm:w-80 sm:h-80 cursor-zoom-in"
-                      style={{ imageRendering: 'pixelated' }}
+                      className="cursor-zoom-in"
+                      style={{ width: qrSize, height: qrSize, imageRendering: 'pixelated' }}
                       onClick={() => setIsFullscreen(true)}
                     />
                   )}
+                  <div className="mt-3 text-center text-sm font-semibold text-foreground">SCAN & PAY WITH ANY UPI APP</div>
                 </div>
               </div>
               <div className="text-center -mt-2 text-xs text-muted-foreground">Tap QR to enlarge</div>
 
-              {/* Instructions */}
-              <div className="text-center space-y-2">
-                <p className="text-sm font-semibold">SCAN & PAY WITH ANY UPI APP</p>
-                <div className="flex justify-center gap-4 items-center">
-                  <div className="text-xs text-muted-foreground">Google Pay</div>
-                  <div className="text-xs text-muted-foreground">PhonePe</div>
-                  <div className="text-xs text-muted-foreground">Paytm</div>
-                  <div className="text-xs text-muted-foreground">BHIM</div>
-                </div>
-              </div>
+              {/* Instructions removed to keep QR only */}
 
               {/* Organization Info */}
               <div className="text-center border-t pt-4">
