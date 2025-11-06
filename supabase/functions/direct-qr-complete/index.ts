@@ -150,14 +150,13 @@ Deno.serve(async (req) => {
       .insert({
         agent_id: agent.id,
         order_id: orderId,
-        order_status: 'delivered',
         expected_payout: 25.00,
         actual_payout: 25.00,
         payout_status: 'confirmed',
         accepted_at: order.accepted_at || currentTime,
         completed_at: currentTime,
         payment_method: normalizedPayment,
-        distance_km: order.distance_km || 2.5,
+        distance_km: 2.5,
         is_peak_hour: false,
         payout_breakdown: {
           base_pay: 27,
