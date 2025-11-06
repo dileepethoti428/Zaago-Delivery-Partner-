@@ -28,7 +28,7 @@ export function RazorpayQRDisplay({
   const [fsQrSize, setFsQrSize] = useState(512);
 
   useEffect(() => {
-    const calc = () => setQrSize(Math.min(420, Math.max(300, Math.floor(window.innerWidth * 0.82))));
+    const calc = () => setQrSize(Math.min(560, Math.max(360, Math.floor(window.innerWidth * 0.94))));
     calc();
     window.addEventListener('resize', calc);
     return () => window.removeEventListener('resize', calc);
@@ -36,8 +36,8 @@ export function RazorpayQRDisplay({
 
   useEffect(() => {
     const calcFs = () => {
-      const size = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.9);
-      setFsQrSize(Math.min(768, Math.max(360, size)));
+      const size = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.96);
+      setFsQrSize(Math.min(860, Math.max(420, size)));
     };
     if (isFullscreen) {
       calcFs();
@@ -118,124 +118,81 @@ export function RazorpayQRDisplay({
   return (
     <>
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-lg md:max-w-xl rounded-3xl p-0 max-h-screen overflow-y-auto">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 rounded-t-3xl">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Powered by</span>
-              <span className="font-bold text-lg">Razorpay</span>
+      <DialogContent className="sm:max-w-lg md:max-w-xl rounded-2xl p-0 max-h-screen overflow-y-auto">
+        {paymentStatus === 'success' ? (
+          <div className="flex flex-col items-center justify-center py-12 px-6 space-y-4">
+            <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
             </div>
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-green-600 dark:text-green-400">Payment Received!</h3>
+              <p className="text-muted-foreground">Completing delivery...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="px-5 pt-6 pb-5">
             <Button
               variant="ghost"
               size="icon"
               onClick={handleClose}
-              className="h-8 w-8 rounded-full hover:bg-white/20 text-white"
+              className="absolute right-4 top-4 h-8 w-8 rounded-full opacity-70 hover:opacity-100"
             >
               <X className="h-5 w-5" />
             </Button>
-          </div>
-          <div className="flex gap-3 items-center justify-center">
-            <span className="text-xs bg-white/20 px-2 py-1 rounded">BHIM UPI</span>
-            <span className="text-xs bg-white/20 px-2 py-1 rounded">UPI</span>
-          </div>
-        </div>
 
-        {/* Content */}
-        <div className="p-4 sm:p-6 space-y-4">
-          {paymentStatus === 'success' ? (
-            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-green-600 dark:text-green-400">Payment Received!</h3>
-                <p className="text-muted-foreground">Completing delivery...</p>
+            <div className="flex items-center justify-between mb-4 px-1">
+              <span className="text-lg sm:text-xl font-bold tracking-wide text-foreground">BHIM</span>
+              <span className="text-lg sm:text-xl font-bold tracking-wide text-foreground">UPI</span>
+            </div>
+
+            <div className="flex justify-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+                {qrData.qr_string ? (
+                  <QRCodeSVG
+                    value={qrData.qr_string}
+                    size={qrSize}
+                    bgColor="#FFFFFF"
+                    fgColor="#000000"
+                    level="H"
+                    includeMargin
+                    style={{ display: 'block', shapeRendering: 'crispEdges', cursor: 'zoom-in' }}
+                    onClick={() => setIsFullscreen(true)}
+                  />
+                ) : (
+                  <img
+                    src={qrData.image_url}
+                    alt="Payment QR Code"
+                    style={{ width: qrSize, height: qrSize, imageRendering: 'pixelated', cursor: 'zoom-in' }}
+                    onClick={() => setIsFullscreen(true)}
+                  />
+                )}
               </div>
             </div>
-          ) : (
-            <>
-              {/* QR Code */}
-              <div className="flex justify-center">
-                <div className="p-6 bg-white rounded-xl border-4 border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-3 px-1">
-                    <span className="text-sm font-bold tracking-wide">BHIM</span>
-                    <span className="text-sm font-bold tracking-wide">UPI</span>
-                  </div>
-                  {qrData.qr_string ? (
-                    <div
-                      className="cursor-zoom-in"
-                      onClick={() => setIsFullscreen(true)}
-                      aria-label="Open fullscreen QR"
-                    >
-                      <QRCodeSVG
-                        value={qrData.qr_string}
-                        size={qrSize}
-                        bgColor="#FFFFFF"
-                        fgColor="#000000"
-                        level="H"
-                        includeMargin
-                      />
-                    </div>
-                  ) : (
-                    <img 
-                      src={qrData.image_url} 
-                      alt="Payment QR Code"
-                      className="cursor-zoom-in"
-                      style={{ width: qrSize, height: qrSize, imageRendering: 'pixelated' }}
-                      onClick={() => setIsFullscreen(true)}
-                    />
-                  )}
-                  <div className="mt-3 text-center text-sm font-semibold text-foreground">SCAN & PAY WITH ANY UPI APP</div>
-                </div>
+
+            <div className="mt-4 text-center text-sm font-semibold text-foreground">
+              SCAN & PAY WITH ANY UPI APP
+            </div>
+            <div className="text-center mt-1 text-xs text-muted-foreground">Tap QR to enlarge</div>
+
+            {paymentStatus === 'checking' && (
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Checking payment...</span>
               </div>
-              <div className="text-center -mt-2 text-xs text-muted-foreground">Tap QR to enlarge</div>
+            )}
 
-              {/* Instructions removed to keep QR only */}
-
-              {/* Organization Info */}
-              <div className="text-center border-t pt-4">
-                <p className="text-xs text-muted-foreground mb-1">Pay to</p>
-                <p className="font-bold">ZAAGO PRIVATE ORGANIZATION</p>
+            {timeLeft === 0 && (
+              <div className="mt-4 bg-destructive/10 text-destructive p-3 rounded-lg text-center text-sm">
+                QR code expired. Please try again.
               </div>
-
-              {/* Amount */}
-              <div className="bg-primary/10 dark:bg-primary/20 rounded-xl p-4 text-center">
-                <p className="text-sm text-muted-foreground mb-1">Amount to Pay</p>
-                <p className="text-3xl font-bold text-primary">₹{orderAmount}</p>
-              </div>
-
-              {/* Timer and Status */}
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  {paymentStatus === 'checking' && (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span className="text-muted-foreground">Checking payment...</span>
-                    </>
-                  )}
-                  {paymentStatus === 'pending' && (
-                    <span className="text-muted-foreground">Waiting for payment...</span>
-                  )}
-                </div>
-                <div className="font-mono font-bold">
-                  {formatTime(timeLeft)}
-                </div>
-              </div>
-
-              {timeLeft === 0 && (
-                <div className="bg-destructive/10 text-destructive p-3 rounded-xl text-center text-sm">
-                  QR code expired. Please try again.
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
 
     <Dialog open={isFullscreen} onOpenChange={(o) => setIsFullscreen(o)}>
-      <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white">
+      <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white border-0">
         <div className="w-full h-full flex items-center justify-center bg-white">
           {qrData?.qr_string ? (
             <QRCodeSVG
@@ -245,12 +202,13 @@ export function RazorpayQRDisplay({
               fgColor="#000000"
               level="H"
               includeMargin
+              style={{ display: 'block', shapeRendering: 'crispEdges' }}
             />
           ) : (
             <img
               src={qrData?.image_url}
               alt="Payment QR Code"
-              style={{ width: fsQrSize, height: fsQrSize }}
+              style={{ width: fsQrSize, height: fsQrSize, imageRendering: 'pixelated' }}
             />
           )}
         </div>
