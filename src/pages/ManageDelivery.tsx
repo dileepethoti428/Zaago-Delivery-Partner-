@@ -97,20 +97,40 @@ export default function ManageDelivery() {
   const generateAndShowQR = async () => {
     if (!order) return;
 
+    // Calculate effective total with fallback to items sum
+    const itemsTotal = order.items.reduce((sum: number, item: any) => 
+      sum + (item.price * item.quantity), 0
+    );
+    const amountToPay = (order.total_amount && order.total_amount > 0) 
+      ? order.total_amount 
+      : itemsTotal;
+
+    // Validate amount
+    if (amountToPay <= 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Invalid order amount. Cannot generate QR code.',
+      });
+      return;
+    }
+
     setIsGeneratingQR(true);
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
+      console.log('Generating QR for amount:', amountToPay);
+      
       const { data, error } = await supabase.functions.invoke('generate-payment-qr', {
         body: {
           order_id: order.id,
-          amount: order.total_amount,
+          amount: amountToPay,
           customer_name: order.customer.name
         }
       });
 
       if (error || !data?.success) {
-        console.error('QR Generation Error:', { error, data });
+        console.error('QR Generation Error:', { error, data, amountToPay });
         throw new Error(data?.error || error?.message || 'Failed to generate QR code');
       }
 
@@ -119,7 +139,7 @@ export default function ManageDelivery() {
         qr_id: data.qr_code_id,        // Map qr_code_id -> qr_id
         image_url: data.qr_code_url,   // Map qr_code_url -> image_url
         qr_string: data.qr_string,
-        amount: data.amount,
+        amount: data.amount || amountToPay,
         expires_at: data.expires_at
       };
 
@@ -335,18 +355,33 @@ export default function ManageDelivery() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Delivery Address</p>
-                <p className="text-sm mb-2">{order.customer.address || 'Not available'}</p>
-                {order.customer.address && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openGoogleMapsAddress(order.customer.address)}
-                    className="gap-2 rounded-xl w-full mt-2"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Open in Maps
-                  </Button>
-                )}
+                {(() => {
+                  // Build display address with fallback chain
+                  const displayAddress = order.customer.address || 
+                    [order.customer.landmark, order.customer.city, order.customer.state, order.customer.pincode]
+                      .filter(Boolean)
+                      .join(', ') || 
+                    'Not available';
+                  
+                  const hasValidAddress = displayAddress !== 'Not available';
+                  
+                  return (
+                    <>
+                      <p className="text-sm mb-2">{displayAddress}</p>
+                      {hasValidAddress && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openGoogleMapsAddress(displayAddress)}
+                          className="gap-2 rounded-xl w-full mt-2"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Open in Maps
+                        </Button>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -414,17 +449,24 @@ export default function ManageDelivery() {
                   <p className="font-medium">₹{item.price * item.quantity}</p>
                 </div>
               ))}
-              <div className="pt-3 border-t-2 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">
-                    ₹{order.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="font-bold">Total Amount</span>
-                  <span className="font-bold text-lg text-primary">₹{order.total_amount}</span>
-                </div>
+              <div className="pt-3 border-t-2">
+                {(() => {
+                  const itemsTotal = order.items.reduce((sum: number, item: any) => 
+                    sum + (item.price * item.quantity), 0
+                  );
+                  const effectiveTotal = (order.total_amount && order.total_amount > 0) 
+                    ? order.total_amount 
+                    : itemsTotal;
+                  
+                  return (
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold">Total Amount</span>
+                      <span className="font-bold text-lg text-primary">
+                        ₹{effectiveTotal.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -454,12 +496,17 @@ export default function ManageDelivery() {
               <Button
                 className="rounded-xl h-12 text-base font-medium"
                 onClick={handleMarkAsDelivered}
-                disabled={!['assigned', 'picked_up'].includes(order.status) || isCompleting}
+                disabled={!['assigned', 'picked_up'].includes(order.status) || isCompleting || isGeneratingQR}
               >
                 {isCompleting ? (
                   <>
                     <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                     Completing...
+                  </>
+                ) : isGeneratingQR ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Generating QR...
                   </>
                 ) : (
                   <>
@@ -494,7 +541,7 @@ export default function ManageDelivery() {
           open={showQRDialog}
           onClose={() => setShowQRDialog(false)}
           qrData={qrData}
-          orderAmount={order.total_amount}
+          orderAmount={qrData?.amount ?? order.total_amount}
           onPaymentComplete={handleQRPaymentComplete}
         />
       </AppShell>
