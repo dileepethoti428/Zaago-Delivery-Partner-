@@ -2,6 +2,7 @@ const CACHE_KEYS = {
   ORDERS: 'zaago_cache_orders',
   PROFILE: 'zaago_cache_profile',
   EARNINGS: 'zaago_cache_earnings',
+  LIVE_EARNINGS: 'zaago_cache_live_earnings',
 } as const;
 
 export const cache = {

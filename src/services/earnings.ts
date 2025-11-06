@@ -1,5 +1,60 @@
 import { supabase } from '@/integrations/supabase/client';
 
+export interface LiveEarningsData {
+  today: {
+    pending: number;
+    confirmed: number;
+    total: number;
+    deliveries: number;
+    in_progress: number;
+    cancelled: number;
+    total_orders: number;
+  };
+  week: {
+    pending: number;
+    confirmed: number;
+    total: number;
+    deliveries: number;
+    in_progress: number;
+    cancelled: number;
+    total_orders: number;
+  };
+  month: {
+    pending: number;
+    confirmed: number;
+    total: number;
+    deliveries: number;
+    in_progress: number;
+    cancelled: number;
+    total_orders: number;
+  };
+  recent_earnings: any[];
+  live_payout: number;
+  deliveries_in_progress: number;
+}
+
+export async function fetchLiveEarnings(): Promise<LiveEarningsData> {
+  const { data, error } = await supabase.functions.invoke('get-agent-live-earnings', {
+    method: 'POST'
+  });
+
+  if (error) {
+    console.error('Error fetching live earnings:', error);
+    throw error;
+  }
+
+  if (!data?.success) {
+    throw new Error(data?.error || 'Failed to fetch earnings');
+  }
+
+  return data.data;
+}
+
+export function formatCurrency(amount: number | null | undefined): string {
+  if (!amount || amount === 0) return '—';
+  return `₹${amount.toLocaleString('en-IN')}`;
+}
+
 export async function fetchAgentEarnings(agentId: string) {
   const { data, error } = await supabase
     .from('agent_earnings_tracking')
