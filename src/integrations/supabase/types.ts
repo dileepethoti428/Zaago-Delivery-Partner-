@@ -2650,13 +2650,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "orders_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_agents"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "orders_assigned_agent_id_fkey"
             columns: ["assigned_agent_id"]
             isOneToOne: false
@@ -4951,13 +4944,6 @@ export type Database = {
           user_id: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "orders_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_agents"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "orders_delivery_address_id_fkey"
             columns: ["delivery_address_id"]
