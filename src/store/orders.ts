@@ -32,7 +32,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     try {
       const rows = await fetchOpenOrders();
       const filtered = rows.filter(r => 
-        ['new', 'open', 'packed'].includes((r.status ?? '').toLowerCase())
+        ['new', 'open', 'packed', 'assigned'].includes((r.status ?? '').toLowerCase())
       );
       cache.set('ORDERS', filtered);
       set({ orders: filtered, loading: false });
