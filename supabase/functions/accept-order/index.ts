@@ -63,9 +63,8 @@ serve(async (req) => {
         items
       `)
       .eq('id', order_id)
-      .is('agent_id', null) // CRITICAL: Only get orders without an agent
-      .in('status', ['open', 'new', 'packed']) // Accept open, new, or packed orders
-      .neq('status', 'delivered') // Don't accept delivered orders
+      .is('agent_id', null) // Only orders without an agent
+      .in('status', ['accepted']) // Acceptable pre-assignment status
       .single();
 
     if (orderError || !orderData) {
