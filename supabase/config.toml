@@ -27,6 +27,9 @@ verify_jwt = true
 [functions.direct-qr-complete]
 verify_jwt = true
 
+[functions.complete-delivery-v2]
+verify_jwt = true
+
 [functions.unified-complete-delivery]
 verify_jwt = true
 
@@ -36,11 +39,11 @@ verify_jwt = true
 [functions.check-payment-status]
 verify_jwt = true
 
-[functions.complete-delivery-v2]
-verify_jwt = true
-
 [functions.google-places-geocode]
 verify_jwt = false
+
+[functions.accept-order]
+verify_jwt = true
 
 [functions.get-order-details]
 verify_jwt = true
