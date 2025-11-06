@@ -39,6 +39,7 @@ export default function ManageDelivery() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [qrData, setQRData] = useState<any>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -96,6 +97,7 @@ export default function ManageDelivery() {
   const generateAndShowQR = async () => {
     if (!order) return;
 
+    setIsGeneratingQR(true);
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
@@ -108,17 +110,30 @@ export default function ManageDelivery() {
       });
 
       if (error || !data?.success) {
-        throw new Error(data?.error || 'Failed to generate QR code');
+        console.error('QR Generation Error:', { error, data });
+        throw new Error(data?.error || error?.message || 'Failed to generate QR code');
       }
 
-      setQRData(data);
+      // Transform field names to match component expectations
+      const transformedData = {
+        qr_id: data.qr_code_id,        // Map qr_code_id -> qr_id
+        image_url: data.qr_code_url,   // Map qr_code_url -> image_url
+        qr_string: data.qr_string,
+        amount: data.amount,
+        expires_at: data.expires_at
+      };
+
+      setQRData(transformedData);
       setShowQRDialog(true);
     } catch (error: any) {
+      console.error('Failed to generate QR:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
         description: error?.message || 'Failed to generate payment QR',
       });
+    } finally {
+      setIsGeneratingQR(false);
     }
   };
 
