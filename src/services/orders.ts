@@ -11,6 +11,7 @@ export type DbOrderRow = {
   pickup_address?: string | null;
   pickup_location?: any | null;
   delivery_address_id?: string | null;
+  customer_name?: string | null;
   delivery_addresses?: { 
     id: string; 
     coordinates?: any | null; 
@@ -29,6 +30,7 @@ export type ZaagoOrder = {
   status: 'new' | 'open' | 'accepted' | 'picked' | 'picked_up' | 'delivered' | 'canceled' | 'cancelled' | string;
   updatedAt?: number;
   distanceKm?: number;
+  customerName?: string;
 };
 
 function coerceStatus(s?: string | null): ZaagoOrder['status'] {
@@ -75,6 +77,7 @@ function toZaagoOrder(row: DbOrderRow): ZaagoOrder {
     payout,
     status: coerceStatus(row.status),
     distanceKm: distanceKm > 0 ? distanceKm : undefined,
+    customerName: row.customer_name ?? undefined,
   };
 }
 
@@ -87,6 +90,7 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
         id, status, total, address, 
         pickup_address, pickup_location,
         delivery_address_id,
+        customer_name,
         delivery_addresses:delivery_address_id ( 
           id, coordinates, full_address, address_line 
         )
@@ -99,7 +103,7 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
     console.warn('Join query failed, falling back to simple query:', joinError);
     const { data, error } = await supabase
       .from('orders')
-      .select('id, status, total, address, pickup_address, pickup_location');
+      .select('id, status, total, address, pickup_address, pickup_location, customer_name');
 
     if (error) throw error;
     return ((data ?? []) as unknown as DbOrderRow[]).map(toZaagoOrder);

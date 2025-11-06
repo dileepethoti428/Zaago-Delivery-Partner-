@@ -260,7 +260,7 @@ export default function Home() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-lg">{order.id}</h3>
+                      <h3 className="font-bold text-lg">{order.customerName || order.id}</h3>
                       <StatusPill status={order.status} />
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -360,7 +360,7 @@ export default function Home() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-lg">{order.id}</h3>
+                      <h3 className="font-bold text-lg">{order.customerName || order.id}</h3>
                       <StatusPill status={order.status} />
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
