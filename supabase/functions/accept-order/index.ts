@@ -64,7 +64,7 @@ serve(async (req) => {
       `)
       .eq('id', order_id)
       .is('agent_id', null) // Only orders without an agent
-      .in('status', ['accepted']) // Acceptable pre-assignment status
+      .in('status', ['accepted', 'packed']) // Accept pre-assignment statuses
       .single();
 
     if (orderError || !orderData) {
