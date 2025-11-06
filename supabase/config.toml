@@ -9,33 +9,6 @@ verify_jwt = true
 [functions.get-delivery-history]
 verify_jwt = true
 
-[functions.simple-complete-delivery]
-verify_jwt = true
-
-[functions.bypass-complete-delivery]
-verify_jwt = true
-
-[functions.safe-complete-delivery]
-verify_jwt = true
-
-[functions.nuclear-complete-delivery]
-verify_jwt = true
-
-[functions.bulletproof-complete-delivery]
-verify_jwt = true
-
-[functions.sync-order-status]
-verify_jwt = true
-
-[functions.reconcile-order-completions]
-verify_jwt = true
-
-[functions.ultimate-complete-delivery]
-verify_jwt = true
-
-[functions.simple-delivery-complete]
-verify_jwt = true
-
 [functions.agent-autopay-monitor]
 verify_jwt = false
 
@@ -54,15 +27,6 @@ verify_jwt = true
 [functions.direct-qr-complete]
 verify_jwt = true
 
-[functions.complete-delivery]
-verify_jwt = true
-
-[functions.complete-delivery-final]
-verify_jwt = true
-
-[functions.force-complete-delivery]
-verify_jwt = true
-
 [functions.unified-complete-delivery]
 verify_jwt = true
 
@@ -72,13 +36,7 @@ verify_jwt = true
 [functions.check-payment-status]
 verify_jwt = true
 
-[functions.direct-complete-delivery]
-verify_jwt = true
-
 [functions.complete-delivery-v2]
-verify_jwt = true
-
-[functions.complete-delivery-instant]
 verify_jwt = true
 
 [functions.google-places-geocode]
