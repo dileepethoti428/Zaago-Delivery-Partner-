@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { IndianRupee, TrendingUp, Calendar, Loader2, Package } from 'lucide-react';
+import { IndianRupee, Calendar, Loader2, Package } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
 import { fetchLiveEarnings, formatCurrency } from '@/services/earnings';
@@ -269,30 +269,6 @@ export default function Earnings() {
               </Card>
             </m.div>
 
-            {/* Performance Chart */}
-            <Card className="rounded-2xl">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Performance Chart
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-32 bg-gradient-to-r from-primary/10 via-primary/20 to-primary/10 rounded-xl flex items-end justify-center p-4">
-                  <div className="flex items-end gap-2 h-full w-full max-w-xs">
-                    {[40, 65, 45, 80, 60, 90, 70].map((height, i) => (
-                      <m.div
-                        key={i}
-                        initial={{ height: 0 }}
-                        animate={{ height: `${height}%` }}
-                        transition={{ delay: i * 0.1, duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
-                        className="flex-1 bg-primary rounded-t"
-                      />
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </>
         )}
       </div>
