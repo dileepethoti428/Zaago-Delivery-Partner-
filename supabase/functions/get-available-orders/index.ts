@@ -139,8 +139,9 @@ serve(async (req) => {
       console.log('Automatically reassigned stale orders older than 30 minutes');
     }
 
-    // Get available orders - show only new, unassigned 'packed' orders
-    // Exclude orders that are delivered, completed, or have a completion record
+    // Get two types of orders:
+    // 1. Available orders (packed, unassigned) - for agent to accept
+    // 2. Agent's own active orders (assigned/picked_up by this agent) - to track their deliveries
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -150,8 +151,7 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .eq('status', 'packed')
-      .is('agent_id', null)
+      .or(`and(status.eq.packed,agent_id.is.null),and(status.in.(assigned,picked_up),agent_id.eq.${agent_id})`)
       .order('created_at', { ascending: true }); // Show oldest orders first
 
     // Filter out any orders that have been completed
@@ -202,19 +202,24 @@ serve(async (req) => {
     
     console.log(`Agent ${agent_id} has ${rejections?.length || 0} rejected orders`);
 
-    // Double-check: filter out any orders that somehow have an agent_id (safety check)
+    // Filter: Keep available orders (agent_id=null) OR orders assigned to current agent
     // Also exclude orders that have been completed (are in delivery_completions)
     let availableOrders = orders?.filter(order => 
-      order.agent_id === null && 
-      order.status === 'packed' && 
+      ((order.agent_id === null && order.status === 'packed') || 
+       (order.agent_id === agent_id && ['assigned', 'picked_up'].includes(order.status))) &&
       !completedIds.has(order.id)
     ) || [];
     
     console.log(`After safety filter (excluding ${completedIds.size} completed orders): ${availableOrders.length} orders remain`);
     
-    // Filter out rejected orders and orders from restaurant/business sellers
+    // Filter out rejected orders (only applies to available orders, not assigned ones)
     const rejectedOrderIds = rejections?.map(r => r.order_id) || [];
-    let filteredOrders = availableOrders.filter(order => !rejectedOrderIds.includes(order.id));
+    let filteredOrders = availableOrders.filter(order => {
+      // Don't filter out orders already assigned to this agent
+      if (order.agent_id === agent_id) return true;
+      // Filter out rejected available orders
+      return !rejectedOrderIds.includes(order.id);
+    });
     
     if (rejectedOrderIds.length > 0) {
       console.log(`Filtered out ${rejectedOrderIds.length} rejected orders for agent ${agent_id}`);
