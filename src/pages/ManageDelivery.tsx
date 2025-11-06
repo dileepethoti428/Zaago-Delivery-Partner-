@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
+import { PaymentMethodDialog } from '@/components/delivery/PaymentMethodDialog';
+import { RazorpayQRDisplay } from '@/components/delivery/RazorpayQRDisplay';
 
 export default function ManageDelivery() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +35,10 @@ export default function ManageDelivery() {
   const profile = useAuthStore((state) => state.profile);
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showQRDialog, setShowQRDialog] = useState(false);
+  const [qrData, setQRData] = useState<any>(null);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -59,6 +65,109 @@ export default function ManageDelivery() {
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
+  };
+
+  const handleMarkAsDelivered = async () => {
+    if (!order) return;
+
+    // Step 1: Check if already paid
+    if (order.payment_status === 'paid' || order.payment_method?.toUpperCase() === 'ONLINE') {
+      // Complete directly
+      await completeDelivery('ONLINE');
+      return;
+    }
+
+    // Step 2: Show payment method selection dialog
+    setShowPaymentDialog(true);
+  };
+
+  const handlePaymentMethodSelect = async (method: 'COD' | 'ONLINE') => {
+    setShowPaymentDialog(false);
+    
+    if (method === 'COD') {
+      // Complete with COD
+      await completeDelivery('COD');
+    } else {
+      // Generate QR and show dialog
+      await generateAndShowQR();
+    }
+  };
+
+  const generateAndShowQR = async () => {
+    if (!order) return;
+
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { data, error } = await supabase.functions.invoke('generate-payment-qr', {
+        body: {
+          order_id: order.id,
+          amount: order.total_amount,
+          customer_name: order.customer.name
+        }
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || 'Failed to generate QR code');
+      }
+
+      setQRData(data);
+      setShowQRDialog(true);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error?.message || 'Failed to generate payment QR',
+      });
+    }
+  };
+
+  const completeDelivery = async (paymentMethod: 'COD' | 'ONLINE') => {
+    if (!order) return;
+
+    setIsCompleting(true);
+    
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+        body: {
+          order_id: order.id,
+          payment_method: paymentMethod,
+        }
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || 'Failed to complete delivery');
+      }
+
+      // Show success message based on payment method
+      const successMessage = paymentMethod === 'COD' 
+        ? 'Product delivered successfully - COD ✓'
+        : 'Product delivered successfully - Paid Online ✓';
+      
+      toast({
+        title: 'Delivery Completed!',
+        description: successMessage,
+      });
+      
+      // Navigate back after a short delay
+      setTimeout(() => navigate('/home'), 1500);
+      
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error?.message || 'Failed to complete delivery',
+      });
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  const handleQRPaymentComplete = async () => {
+    setShowQRDialog(false);
+    await completeDelivery('ONLINE');
   };
 
   const handleCancel = async () => {
@@ -329,10 +438,20 @@ export default function ManageDelivery() {
               </Button>
               <Button
                 className="rounded-xl h-12 text-base font-medium"
-                disabled={!['assigned', 'picked_up'].includes(order.status)}
+                onClick={handleMarkAsDelivered}
+                disabled={!['assigned', 'picked_up'].includes(order.status) || isCompleting}
               >
-                <CheckCircle className="h-5 w-5 mr-2" />
-                Mark as Delivered
+                {isCompleting ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Completing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Mark as Delivered
+                  </>
+                )}
               </Button>
             </div>
             <Button
@@ -346,6 +465,23 @@ export default function ManageDelivery() {
             </Button>
           </div>
         </div>
+
+        {/* Payment Method Selection Dialog */}
+        <PaymentMethodDialog
+          open={showPaymentDialog}
+          onClose={() => setShowPaymentDialog(false)}
+          onSelectMethod={handlePaymentMethodSelect}
+          amount={order.total_amount}
+        />
+
+        {/* Razorpay QR Code Display */}
+        <RazorpayQRDisplay
+          open={showQRDialog}
+          onClose={() => setShowQRDialog(false)}
+          qrData={qrData}
+          orderAmount={order.total_amount}
+          onPaymentComplete={handleQRPaymentComplete}
+        />
       </AppShell>
     </motion.div>
   );
