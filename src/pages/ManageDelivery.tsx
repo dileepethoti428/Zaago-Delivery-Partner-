@@ -20,8 +20,10 @@ import {
   User,
   Store,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Navigation
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 
 export default function ManageDelivery() {
@@ -55,16 +57,6 @@ export default function ManageDelivery() {
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
-  };
-
-  const handleCopyOTP = () => {
-    if (order?.delivery_otp) {
-      navigator.clipboard.writeText(order.delivery_otp);
-      toast({
-        title: 'OTP Copied',
-        description: 'Delivery OTP copied to clipboard',
-      });
-    }
   };
 
   if (loading) {
@@ -117,7 +109,7 @@ export default function ManageDelivery() {
             </div>
           </div>
 
-          {/* Delivery Status & OTP */}
+          {/* Delivery Information */}
           <Card className="rounded-2xl border-2 bg-primary/5">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -134,20 +126,16 @@ export default function ManageDelivery() {
                 <span className="text-sm text-muted-foreground">Payment Status</span>
                 <StatusPill status={order.payment_status} />
               </div>
-              {order.delivery_otp && (
-                <div className="flex items-center justify-between p-3 bg-background rounded-xl border-2 border-dashed">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Delivery OTP</p>
-                    <p className="text-2xl font-bold tracking-wider">{order.delivery_otp}</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleCopyOTP}
-                    className="rounded-xl"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Delivery Charge</span>
+                <span className="font-medium">₹{order.delivery_charge}</span>
+              </div>
+              {order.subscription_id && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Order Type</span>
+                  <Badge variant="secondary" className="rounded-lg">
+                    Subscription Order
+                  </Badge>
                 </div>
               )}
             </CardContent>
@@ -265,9 +253,19 @@ export default function ManageDelivery() {
                   <p className="font-medium">₹{item.price * item.quantity}</p>
                 </div>
               ))}
-              <div className="flex justify-between items-center pt-3 border-t-2">
-                <span className="font-bold">Total Amount</span>
-                <span className="font-bold text-lg text-primary">₹{order.total_amount}</span>
+              <div className="pt-3 border-t-2 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">₹{order.total_amount - order.delivery_charge}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Delivery Charge</span>
+                  <span className="font-medium">₹{order.delivery_charge}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="font-bold">Total Amount</span>
+                  <span className="font-bold text-lg text-primary">₹{order.total_amount}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -285,20 +283,23 @@ export default function ManageDelivery() {
 
           {/* Action Buttons */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t-2 space-y-3">
-            <Button
-              className="w-full rounded-xl h-12 text-base font-medium"
-              disabled={order.status !== 'assigned'}
-            >
-              <Package className="h-5 w-5 mr-2" />
-              Mark as Picked Up
-            </Button>
-            <Button
-              className="w-full rounded-xl h-12 text-base font-medium"
-              disabled={order.status !== 'picked_up'}
-            >
-              <CheckCircle className="h-5 w-5 mr-2" />
-              Complete Delivery
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="default"
+                className="rounded-xl h-12 text-base font-medium"
+                onClick={() => openGoogleMapsAddress(order.customer.address)}
+              >
+                <Navigation className="h-5 w-5 mr-2" />
+                Navigate to Customer
+              </Button>
+              <Button
+                className="rounded-xl h-12 text-base font-medium"
+                disabled={!['assigned', 'picked_up'].includes(order.status)}
+              >
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Mark as Delivered
+              </Button>
+            </div>
             <Button
               variant="destructive"
               className="w-full rounded-xl h-12 text-base font-medium"

@@ -77,6 +77,7 @@ serve(async (req) => {
         special_instructions: orderData.special_instructions,
         delivery_otp: orderData.delivery_otp,
         otp_expiry: orderData.otp_expiry,
+        subscription_id: orderData.subscription_id,
         created_at: orderData.created_at,
         accepted_at: orderData.accepted_at,
         delivered_at: orderData.delivered_at,
