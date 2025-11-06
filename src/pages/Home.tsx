@@ -41,11 +41,12 @@ export default function Home() {
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
 
-  // Filter and sort nearby orders (15km only)
-  const nearbyOrders = useMemo(() => {
-    if (!lastKnown) return [];
+  // Split orders into nearby (within 15km) and all others
+  const { nearbyOrders, otherOrders } = useMemo(() => {
+    if (!lastKnown) return { nearbyOrders: [], otherOrders: orders };
 
     const nearby: Array<typeof orders[0] & { distanceKm: number }> = [];
+    const others: typeof orders = [];
 
     orders.forEach(order => {
       if (order.pickupCoord) {
@@ -58,18 +59,29 @@ export default function Home() {
         
         if (distanceKm <= RADIUS_KM) {
           nearby.push({ ...order, distanceKm });
+        } else {
+          others.push(order);
         }
+      } else {
+        others.push(order);
       }
     });
 
-    // Sort based on selected sort option
+    // Sort nearby based on selected sort option
     nearby.sort((a, b) => {
       if (sortBy === 'newest') return (b.createdAt ?? 0) - (a.createdAt ?? 0);
       if (sortBy === 'oldest') return (a.createdAt ?? 0) - (b.createdAt ?? 0);
       return a.distanceKm - b.distanceKm; // default distance
     });
 
-    return nearby;
+    // Sort others by newest/oldest if selected, otherwise by creation time
+    others.sort((a, b) => {
+      if (sortBy === 'newest') return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      if (sortBy === 'oldest') return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      return (b.createdAt ?? 0) - (a.createdAt ?? 0); // default newest
+    });
+
+    return { nearbyOrders: nearby, otherOrders: others };
   }, [orders, lastKnown, sortBy]);
 
   // Load orders and start location watching when component mounts
@@ -229,8 +241,8 @@ export default function Home() {
             </div>
           )}
 
-          {/* Empty State - No Orders in Range */}
-          {!error && !loading && lastKnown && nearbyOrders.length === 0 && (
+          {/* Empty State - No Orders */}
+          {!error && !loading && lastKnown && nearbyOrders.length === 0 && otherOrders.length === 0 && (
             <Card className="rounded-2xl border-2">
               <CardContent className="p-6 space-y-3 text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -372,6 +384,110 @@ export default function Home() {
                 ))}
               </div>
             </PullToRefresh>
+          )}
+
+          {/* Other Orders (Unknown Location or Outside Radius) */}
+          {!error && !loading && lastKnown && otherOrders.length > 0 && (
+            <div className="space-y-3 mt-6">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-medium text-muted-foreground">Other Orders</h3>
+              </div>
+              {otherOrders.map((order, index) => (
+                <AnimatedCard
+                  key={order.id}
+                  delay={(nearbyOrders.length + index) * 0.05}
+                  onClick={() => {
+                    if (order.status === 'packed' || order.status === 'assigned') return;
+                    navigate(`/order/${order.id}`);
+                  }}
+                  className="rounded-2xl border-2 hover:border-primary/50 transition-colors cursor-pointer"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-lg">{order.customerName || order.id}</h3>
+                          <StatusPill status={order.status} />
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {order.etaMin} min
+                          </div>
+                          {order.createdAt && (
+                            <span className="text-xs">
+                              {formatDistanceToNow(order.createdAt, { addSuffix: true })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-100 rounded-xl"
+                      >
+                        <IndianRupee className="h-4 w-4 text-green-700" />
+                        <span className="font-bold text-green-700">{order.payout}</span>
+                      </motion.div>
+                    </div>
+
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5 h-2 w-2 rounded-full bg-blue-500" />
+                        <div>
+                          <p className="font-medium">Pickup</p>
+                          <p className="text-muted-foreground">{order.pickup}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5 h-2 w-2 rounded-full bg-green-500" />
+                        <div>
+                          <p className="font-medium">Drop</p>
+                          <p className="text-muted-foreground">{order.drop}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons for Packed Orders */}
+                    {order.status === 'packed' && (
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          onClick={(e) => handleAccept(order.id, e)}
+                          disabled={processingOrder === order.id}
+                          className="flex-1 rounded-xl gap-2"
+                          size="sm"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Accept
+                        </Button>
+                        <Button
+                          onClick={(e) => handleReject(order.id, e)}
+                          disabled={processingOrder === order.id}
+                          variant="destructive"
+                          className="flex-1 rounded-xl gap-2"
+                          size="sm"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Manage Delivery Button for Assigned Orders */}
+                    {order.status === 'assigned' && (
+                      <Button
+                        onClick={(e) => handleManageDelivery(order.id, e)}
+                        className="w-full rounded-xl gap-2"
+                        size="sm"
+                      >
+                        Manage Delivery
+                      </Button>
+                    )}
+                  </CardContent>
+                </AnimatedCard>
+              ))}
+            </div>
           )}
         </div>
       </div>
