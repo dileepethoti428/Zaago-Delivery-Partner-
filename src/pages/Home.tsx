@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
-import { Clock, IndianRupee, RefreshCw, PackageX, AlertCircle } from 'lucide-react';
+import { Clock, IndianRupee, RefreshCw, PackageX, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
@@ -12,7 +12,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrdersStore, startOrdersRealtime, stopOrdersRealtime } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
+import { useAuthStore } from '@/store/auth';
 import { getDistanceKm } from '@/utils/geo';
+import { toast } from '@/hooks/use-toast';
 import LocationChip from '@/components/location/LocationChip';
 import type { GeoPoint } from '@/utils/coords';
 
@@ -24,11 +26,16 @@ export default function Home() {
   const loading = useOrdersStore((state) => state.loading);
   const error = useOrdersStore((state) => state.error);
   const load = useOrdersStore((state) => state.load);
+  const acceptOrder = useOrdersStore((state) => state.acceptOrder);
+  const rejectOrder = useOrdersStore((state) => state.rejectOrder);
+  const profile = useAuthStore((state) => state.profile);
   
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const permission = useLocationStore((state) => state.permission);
   const startWatch = useLocationStore((state) => state.startWatch);
   const stopWatch = useLocationStore((state) => state.stopWatch);
+
+  const [processingOrder, setProcessingOrder] = useState<string | null>(null);
 
   // Split orders into nearby (with coords) and unknown (without coords)
   const { nearbyOrders, unknownOrders } = useMemo(() => {
@@ -75,6 +82,60 @@ export default function Home() {
   const handleRefresh = useCallback(() => {
     load();
   }, [load]);
+
+  const handleAccept = async (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!profile?.user_id) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'User profile not found',
+      });
+      return;
+    }
+
+    setProcessingOrder(orderId);
+    try {
+      await acceptOrder(orderId, profile.user_id);
+      toast({
+        title: 'Success',
+        description: 'Order accepted successfully',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error?.message || 'Failed to accept order',
+      });
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
+  const handleReject = async (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setProcessingOrder(orderId);
+    try {
+      await rejectOrder(orderId);
+      toast({
+        title: 'Order Rejected',
+        description: 'Order has been rejected',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error?.message || 'Failed to reject order',
+      });
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
+  const handleManageDelivery = (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/manage-delivery/${orderId}`);
+  };
 
   return (
     <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
@@ -189,7 +250,10 @@ export default function Home() {
             <AnimatedCard
               key={order.id}
               delay={index * 0.05}
-              onClick={() => navigate(`/order/${order.id}`)}
+              onClick={() => {
+                if (order.status === 'packed' || order.status === 'assigned') return;
+                navigate(`/order/${order.id}`);
+              }}
               className="rounded-2xl border-2 hover:border-primary/50 transition-colors cursor-pointer"
             >
               <CardContent className="p-4 space-y-3">
@@ -234,6 +298,42 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+
+                {/* Action Buttons for Packed Orders */}
+                {order.status === 'packed' && (
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={(e) => handleAccept(order.id, e)}
+                      disabled={processingOrder === order.id}
+                      className="flex-1 rounded-xl gap-2"
+                      size="sm"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Accept
+                    </Button>
+                    <Button
+                      onClick={(e) => handleReject(order.id, e)}
+                      disabled={processingOrder === order.id}
+                      variant="destructive"
+                      className="flex-1 rounded-xl gap-2"
+                      size="sm"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Reject
+                    </Button>
+                  </div>
+                )}
+
+                {/* Manage Delivery Button for Assigned Orders */}
+                {order.status === 'assigned' && (
+                  <Button
+                    onClick={(e) => handleManageDelivery(order.id, e)}
+                    className="w-full rounded-xl gap-2"
+                    size="sm"
+                  >
+                    Manage Delivery
+                  </Button>
+                )}
               </CardContent>
             </AnimatedCard>
               ))}
@@ -250,7 +350,10 @@ export default function Home() {
             <AnimatedCard
               key={order.id}
               delay={(nearbyOrders.length + index) * 0.05}
-              onClick={() => navigate(`/order/${order.id}`)}
+              onClick={() => {
+                if (order.status === 'packed' || order.status === 'assigned') return;
+                navigate(`/order/${order.id}`);
+              }}
               className="rounded-2xl border-2 hover:border-primary/50 transition-colors cursor-pointer"
             >
               <CardContent className="p-4 space-y-3">
@@ -294,6 +397,42 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+
+                {/* Action Buttons for Packed Orders */}
+                {order.status === 'packed' && (
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={(e) => handleAccept(order.id, e)}
+                      disabled={processingOrder === order.id}
+                      className="flex-1 rounded-xl gap-2"
+                      size="sm"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Accept
+                    </Button>
+                    <Button
+                      onClick={(e) => handleReject(order.id, e)}
+                      disabled={processingOrder === order.id}
+                      variant="destructive"
+                      className="flex-1 rounded-xl gap-2"
+                      size="sm"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Reject
+                    </Button>
+                  </div>
+                )}
+
+                {/* Manage Delivery Button for Assigned Orders */}
+                {order.status === 'assigned' && (
+                  <Button
+                    onClick={(e) => handleManageDelivery(order.id, e)}
+                    className="w-full rounded-xl gap-2"
+                    size="sm"
+                  >
+                    Manage Delivery
+                  </Button>
+                )}
               </CardContent>
             </AnimatedCard>
               ))}

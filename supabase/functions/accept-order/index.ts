@@ -39,6 +39,7 @@ serve(async (req) => {
       `)
       .eq('id', order_id)
       .is('agent_id', null) // CRITICAL: Only get orders without an agent
+      .in('status', ['open', 'new', 'packed']) // Accept open, new, or packed orders
       .neq('status', 'delivered') // Don't accept delivered orders
       .single();
 

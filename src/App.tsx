@@ -4,6 +4,7 @@ import Splash from './pages/Splash';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import OrderDetails from './pages/OrderDetails';
+import ManageDelivery from './pages/ManageDelivery';
 import DeliveryHistory from './pages/DeliveryHistory';
 import Earnings from './pages/Earnings';
 import Profile from './pages/Profile';
@@ -33,6 +34,7 @@ function App() {
               <Route path="/home" element={<Home />} />
               <Route path="/history" element={<DeliveryHistory />} />
               <Route path="/order/:id" element={<OrderDetails />} />
+              <Route path="/manage-delivery/:id" element={<ManageDelivery />} />
               <Route path="/earnings" element={<Earnings />} />
               <Route path="/profile" element={<Profile />} />
             </Route>

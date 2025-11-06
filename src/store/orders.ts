@@ -11,6 +11,8 @@ type OrdersState = {
   load: () => Promise<void>;
   updateOrderStatus: (orderId: string, status: ZaagoOrder['status']) => void;
   getOrderById: (id: string) => ZaagoOrder | undefined;
+  acceptOrder: (orderId: string, agentId: string) => Promise<void>;
+  rejectOrder: (orderId: string) => Promise<void>;
 };
 
 export const useOrdersStore = create<OrdersState>((set, get) => ({
@@ -49,6 +51,50 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
   },
 
   getOrderById: (id) => get().orders.find(order => order.id === id),
+
+  acceptOrder: async (orderId, agentId) => {
+    const { acceptOrder: acceptOrderService } = await import('@/services/acceptOrder');
+    
+    // Optimistic update
+    set((state) => ({
+      orders: state.orders.map((order) =>
+        order.id === orderId
+          ? { ...order, status: 'assigned' as ZaagoOrder['status'], updatedAt: Date.now() }
+          : order
+      ),
+    }));
+
+    try {
+      await acceptOrderService(orderId, agentId);
+    } catch (error: any) {
+      // Rollback on error
+      set((state) => ({
+        orders: state.orders.map((order) =>
+          order.id === orderId
+            ? { ...order, status: 'packed' as ZaagoOrder['status'] }
+            : order
+        ),
+      }));
+      throw error;
+    }
+  },
+
+  rejectOrder: async (orderId) => {
+    const { rejectOrder: rejectOrderService } = await import('@/services/acceptOrder');
+    
+    // Optimistic update - remove from view
+    set((state) => ({
+      orders: state.orders.filter((order) => order.id !== orderId),
+    }));
+
+    try {
+      await rejectOrderService(orderId);
+    } catch (error: any) {
+      // Reload orders on error
+      await get().load();
+      throw error;
+    }
+  },
 }));
 
 // Initialize realtime subscription

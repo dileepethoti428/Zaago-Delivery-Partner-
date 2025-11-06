@@ -83,3 +83,6 @@ verify_jwt = true
 
 [functions.google-places-geocode]
 verify_jwt = false
+
+[functions.get-order-details]
+verify_jwt = true
