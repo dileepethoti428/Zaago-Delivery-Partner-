@@ -522,7 +522,7 @@ export default function ManageDelivery() {
             </div>
             <Button
               variant="destructive"
-              className="w-full rounded-xl h-12 text-base font-medium"
+              className="w-full rounded-xl h-12 text-sm font-medium"
               onClick={handleCancel}
               disabled={!['assigned', 'picked_up'].includes(order.status)}
             >
