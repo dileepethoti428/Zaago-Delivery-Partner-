@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { toast } from '@/hooks/use-toast';
 import { getOrderDetails, type OrderDetails } from '@/services/orderDetails';
-import { openGoogleMapsAddress } from '@/utils/maps';
+import { openGoogleMapsAddress, openGoogleMapsCoordinates } from '@/utils/maps';
 import { useAuthStore } from '@/store/auth';
 import { 
   ArrowLeft, 
@@ -40,6 +40,28 @@ export default function ManageDelivery() {
   const [qrData, setQRData] = useState<any>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
+
+  // Memoized calculations
+  const itemsTotal = useMemo(() => 
+    order?.items?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) ?? 0,
+    [order?.items]
+  );
+
+  const effectiveTotal = useMemo(() => 
+    (order?.total_amount && order.total_amount > 0) ? order.total_amount : itemsTotal,
+    [order?.total_amount, itemsTotal]
+  );
+
+  const displayAddress = useMemo(() => {
+    if (!order) return '';
+    return (
+      order.customer.address ||
+      [order.customer.landmark, order.customer.city, order.customer.state, order.customer.pincode]
+        .filter(Boolean)
+        .join(', ') ||
+      ''
+    );
+  }, [order]);
 
   useEffect(() => {
     if (!id) return;
@@ -97,13 +119,8 @@ export default function ManageDelivery() {
   const generateAndShowQR = async () => {
     if (!order) return;
 
-    // Calculate effective total with fallback to items sum
-    const itemsTotal = order.items.reduce((sum: number, item: any) => 
-      sum + (item.price * item.quantity), 0
-    );
-    const amountToPay = (order.total_amount && order.total_amount > 0) 
-      ? order.total_amount 
-      : itemsTotal;
+    // Use the memoized effectiveTotal
+    const amountToPay = effectiveTotal;
 
     // Validate amount
     if (amountToPay <= 0) {
@@ -355,33 +372,18 @@ export default function ManageDelivery() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Delivery Address</p>
-                {(() => {
-                  // Build display address with fallback chain
-                  const displayAddress = order.customer.address || 
-                    [order.customer.landmark, order.customer.city, order.customer.state, order.customer.pincode]
-                      .filter(Boolean)
-                      .join(', ') || 
-                    'Not available';
-                  
-                  const hasValidAddress = displayAddress !== 'Not available';
-                  
-                  return (
-                    <>
-                      <p className="text-sm mb-2">{displayAddress}</p>
-                      {hasValidAddress && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openGoogleMapsAddress(displayAddress)}
-                          className="gap-2 rounded-xl w-full mt-2"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          Open in Maps
-                        </Button>
-                      )}
-                    </>
-                  );
-                })()}
+                <p className="text-sm mb-2">{displayAddress || 'Not available'}</p>
+                {displayAddress && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openGoogleMapsAddress(displayAddress)}
+                    className="gap-2 rounded-xl w-full mt-2"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Open in Maps
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -450,23 +452,12 @@ export default function ManageDelivery() {
                 </div>
               ))}
               <div className="pt-3 border-t-2">
-                {(() => {
-                  const itemsTotal = order.items.reduce((sum: number, item: any) => 
-                    sum + (item.price * item.quantity), 0
-                  );
-                  const effectiveTotal = (order.total_amount && order.total_amount > 0) 
-                    ? order.total_amount 
-                    : itemsTotal;
-                  
-                  return (
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold">Total Amount</span>
-                      <span className="font-bold text-lg text-primary">
-                        ₹{effectiveTotal.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                  );
-                })()}
+                <div className="flex justify-between items-center">
+                  <span className="font-bold">Total Amount</span>
+                  <span className="font-bold text-lg text-primary">
+                    ₹{effectiveTotal.toLocaleString('en-IN')}
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -488,7 +479,20 @@ export default function ManageDelivery() {
               <Button
                 variant="default"
                 className="rounded-xl h-12 text-base font-medium"
-                onClick={() => openGoogleMapsAddress(order.customer.address)}
+                onClick={() => {
+                  const coords = order.customer.coordinates;
+                  if (coords?.lat && coords?.lng) {
+                    openGoogleMapsCoordinates(coords.lat, coords.lng);
+                  } else if (displayAddress) {
+                    openGoogleMapsAddress(displayAddress);
+                  } else {
+                    toast({
+                      variant: 'destructive',
+                      title: 'Error',
+                      description: 'Delivery address not available',
+                    });
+                  }
+                }}
               >
                 <Navigation className="h-5 w-5 mr-2" />
                 Navigate to Customer
@@ -533,7 +537,7 @@ export default function ManageDelivery() {
           open={showPaymentDialog}
           onClose={() => setShowPaymentDialog(false)}
           onSelectMethod={handlePaymentMethodSelect}
-          amount={order.total_amount}
+          amount={effectiveTotal}
         />
 
         {/* Razorpay QR Code Display */}
@@ -541,7 +545,7 @@ export default function ManageDelivery() {
           open={showQRDialog}
           onClose={() => setShowQRDialog(false)}
           qrData={qrData}
-          orderAmount={qrData?.amount ?? order.total_amount}
+          orderAmount={qrData?.amount ?? effectiveTotal}
           onPaymentComplete={handleQRPaymentComplete}
         />
       </AppShell>

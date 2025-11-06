@@ -36,12 +36,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get order details with delivery address
+    // Get order details with delivery address (explicit join)
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
       .select(`
         *,
-        delivery_addresses (
+        delivery_addresses:delivery_address_id (
+          id,
           full_address,
           city,
           state,
@@ -63,7 +64,11 @@ serve(async (req) => {
       );
     }
 
-    // Format the response
+    // Parse address JSON fallback if delivery_addresses is null
+    const addressJson = orderData.address ? (typeof orderData.address === 'string' ? JSON.parse(orderData.address) : orderData.address) : null;
+    const deliveryAddr = orderData.delivery_addresses;
+
+    // Format the response with robust fallbacks
     const response = {
       success: true,
       order: {
@@ -71,7 +76,7 @@ serve(async (req) => {
         status: orderData.status,
         payment_method: orderData.payment_method,
         payment_status: orderData.payment_status,
-        total_amount: orderData.total_amount,
+        total_amount: orderData.total || 0,
         delivery_charge: orderData.delivery_charge,
         items: orderData.items,
         special_instructions: orderData.special_instructions,
@@ -82,16 +87,16 @@ serve(async (req) => {
         accepted_at: orderData.accepted_at,
         delivered_at: orderData.delivered_at,
         
-        // Customer details
+        // Customer details with fallback chain
         customer: {
-          name: orderData.customer_name || orderData.delivery_addresses?.user_name,
-          phone: orderData.customer_phone || orderData.delivery_addresses?.phone,
-          address: orderData.delivery_addresses?.full_address,
-          city: orderData.delivery_addresses?.city,
-          state: orderData.delivery_addresses?.state,
-          pincode: orderData.delivery_addresses?.pincode,
-          landmark: orderData.delivery_addresses?.landmark,
-          coordinates: orderData.delivery_addresses?.coordinates
+          name: orderData.customer_name || deliveryAddr?.user_name || addressJson?.name || null,
+          phone: orderData.customer_phone || deliveryAddr?.phone || addressJson?.phone || null,
+          address: deliveryAddr?.full_address || addressJson?.full_address || addressJson?.address || null,
+          city: deliveryAddr?.city || addressJson?.city || null,
+          state: deliveryAddr?.state || addressJson?.state || null,
+          pincode: deliveryAddr?.pincode || addressJson?.pincode || null,
+          landmark: deliveryAddr?.landmark || addressJson?.landmark || null,
+          coordinates: deliveryAddr?.coordinates || addressJson?.coordinates || null
         },
         
         // Seller/Pickup details
