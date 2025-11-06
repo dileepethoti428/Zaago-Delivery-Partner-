@@ -381,7 +381,7 @@ export default function ManageDelivery() {
                     className="gap-2 rounded-xl w-full mt-2"
                   >
                     <ExternalLink className="h-4 w-4" />
-                    Open in Maps
+                    Delivery Address
                   </Button>
                 )}
               </div>
@@ -426,7 +426,7 @@ export default function ManageDelivery() {
                     className="gap-2 rounded-xl w-full"
                   >
                     <ExternalLink className="h-4 w-4" />
-                    Open in Maps
+                    Pick Up Address
                   </Button>
                 )}
               </div>
@@ -478,7 +478,7 @@ export default function ManageDelivery() {
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="default"
-                className="rounded-xl h-12 text-base font-medium"
+                className="rounded-xl h-12 text-sm font-medium"
                 onClick={() => {
                   const coords = order.customer.coordinates;
                   if (coords?.lat && coords?.lng) {
@@ -498,7 +498,7 @@ export default function ManageDelivery() {
                 Navigate to Customer
               </Button>
               <Button
-                className="rounded-xl h-12 text-base font-medium"
+                className="rounded-xl h-12 text-sm font-medium"
                 onClick={handleMarkAsDelivered}
                 disabled={!['assigned', 'picked_up'].includes(order.status) || isCompleting || isGeneratingQR}
               >
