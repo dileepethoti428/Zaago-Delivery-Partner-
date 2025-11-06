@@ -30,6 +30,31 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // VALIDATE: Agent exists and is active
+    const { data: agentData, error: agentError } = await supabase
+      .from('delivery_agents')
+      .select('id, is_active')
+      .eq('id', agent_id)
+      .single();
+
+    if (agentError || !agentData) {
+      console.error('❌ Agent not found:', agent_id, agentError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Agent not found or invalid' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    if (!agentData.is_active) {
+      console.error('❌ Agent is not active:', agent_id);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Agent is not active' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
+      );
+    }
+
+    console.log(`✅ Agent ${agent_id} validated successfully`);
+
     // ATOMIC CHECK: Verify order is still available before accepting
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
