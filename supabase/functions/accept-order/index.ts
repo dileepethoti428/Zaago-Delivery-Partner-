@@ -34,7 +34,7 @@ serve(async (req) => {
     const { data: agentData, error: agentError } = await supabase
       .from('delivery_agents')
       .select('id, is_active')
-      .eq('id', agent_id)
+      .eq('agent_id', agent_id) // Query by auth user ID
       .single();
 
     if (agentError || !agentData) {
@@ -179,7 +179,7 @@ serve(async (req) => {
       .from('orders')
       .update({
         status: 'assigned',
-        agent_id: agent_id,
+        agent_id: agentData.id, // Use delivery agent's primary key
         accepted_at: acceptedAt,
         pickup_location: pickupLocation,
         pickup_address: pickupAddress,
@@ -203,7 +203,7 @@ serve(async (req) => {
     const { error: trackingError } = await supabase
       .from('agent_earnings_tracking')
       .insert({
-        agent_id: agent_id,
+        agent_id: agentData.id, // Use delivery agent's primary key
         order_id: order_id,
         accepted_at: acceptedAt,
         expected_payout: expectedPayout,
