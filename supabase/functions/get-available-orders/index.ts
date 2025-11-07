@@ -94,7 +94,7 @@ serve(async (req) => {
     );
 
     const { agent_id } = await req.json();
-    console.log('Getting available orders for agent:', agent_id);
+    console.log('Getting available orders for agent (auth user ID):', agent_id);
 
     if (!agent_id) {
       console.error('Missing agent_id');
@@ -106,6 +106,24 @@ serve(async (req) => {
         }
       );
     }
+
+    // Resolve agent's primary key from delivery_agents table
+    const { data: agentData, error: agentError } = await supabase
+      .from('delivery_agents')
+      .select('id')
+      .eq('agent_id', agent_id)
+      .single();
+
+    if (agentError || !agentData) {
+      console.error('Agent not found:', agent_id);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Agent not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    const deliveryAgentId = agentData.id;
+    console.log('Resolved delivery agent ID:', deliveryAgentId);
 
     // Get agent's current location
     const { data: agentLocation, error: locationError } = await supabase
@@ -130,7 +148,7 @@ serve(async (req) => {
       .update({ agent_id: null })
       .eq('status', 'packed')
       .not('agent_id', 'is', null)
-      .not('agent_id', 'eq', agent_id)
+      .not('agent_id', 'eq', deliveryAgentId)
       .lt('updated_at', thirtyMinutesAgo);
 
     if (reassignError) {
@@ -151,7 +169,7 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .or(`and(status.eq.packed,agent_id.is.null),and(status.in.(assigned,picked_up),agent_id.eq.${agent_id})`)
+      .or(`and(status.eq.packed,agent_id.is.null),and(status.in.(assigned,picked_up),agent_id.eq.${deliveryAgentId})`)
       .order('created_at', { ascending: true }); // Show oldest orders first
 
     // Filter out any orders that have been completed
@@ -180,7 +198,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Found ${orders?.length || 0} orders before filtering for agent:`, agent_id);
+    console.log(`Found ${orders?.length || 0} orders before filtering for agent ${deliveryAgentId} (auth: ${agent_id})`);
     console.log('Orders found:', orders?.map(o => ({ id: o.id, status: o.status, agent_id: o.agent_id })) || []);
 
     // Get delivery timings from database for consistent timing across frontend and backend
@@ -194,19 +212,19 @@ serve(async (req) => {
     const { data: rejections, error: rejectionError } = await supabase
       .from('agent_order_rejections')
       .select('order_id')
-      .eq('agent_id', agent_id);
+      .eq('agent_id', deliveryAgentId);
 
     if (rejectionError) {
       console.warn('Failed to fetch rejected orders:', rejectionError);
     }
     
-    console.log(`Agent ${agent_id} has ${rejections?.length || 0} rejected orders`);
+    console.log(`Agent ${deliveryAgentId} (auth: ${agent_id}) has ${rejections?.length || 0} rejected orders`);
 
     // Filter: Keep available orders (agent_id=null) OR orders assigned to current agent
     // Also exclude orders that have been completed (are in delivery_completions)
     let availableOrders = orders?.filter(order => 
       ((order.agent_id === null && order.status === 'packed') || 
-       (order.agent_id === agent_id && ['assigned', 'picked_up'].includes(order.status))) &&
+       (order.agent_id === deliveryAgentId && ['assigned', 'picked_up'].includes(order.status))) &&
       !completedIds.has(order.id)
     ) || [];
     
@@ -216,13 +234,13 @@ serve(async (req) => {
     const rejectedOrderIds = rejections?.map(r => r.order_id) || [];
     let filteredOrders = availableOrders.filter(order => {
       // Don't filter out orders already assigned to this agent
-      if (order.agent_id === agent_id) return true;
+      if (order.agent_id === deliveryAgentId) return true;
       // Filter out rejected available orders
       return !rejectedOrderIds.includes(order.id);
     });
     
     if (rejectedOrderIds.length > 0) {
-      console.log(`Filtered out ${rejectedOrderIds.length} rejected orders for agent ${agent_id}`);
+      console.log(`Filtered out ${rejectedOrderIds.length} rejected orders for agent ${deliveryAgentId}`);
     }
     
     // Filter out orders from sellers/restaurants - only exclude pure business sellers
@@ -633,7 +651,7 @@ serve(async (req) => {
       console.log('No agent location available, skipping distance filtering');
     }
 
-    console.log(`Found ${filteredOrders?.length || 0} available orders for agent:`, agent_id);
+    console.log(`Found ${filteredOrders?.length || 0} available orders for agent ${deliveryAgentId} (auth: ${agent_id})`);
     
     return new Response(
       JSON.stringify({ 
