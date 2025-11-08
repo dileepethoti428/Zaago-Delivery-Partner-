@@ -92,8 +92,8 @@ serve(async (req) => {
           result = qrResult;
         } else {
           console.log('⚠️ QR completion failed, trying manual method');
-          console.log('QR Error details:', JSON.stringify(qrError, null, 2));
-          console.log('QR Result:', JSON.stringify(qrResult, null, 2));
+          console.log('QR Error:', qrError);
+          console.log('QR Result:', qrResult);
         }
       } catch (qrErr) {
         console.log('⚠️ QR completion exception, trying manual method:', qrErr);
@@ -118,8 +118,8 @@ serve(async (req) => {
           result = manualResult;
         } else {
           console.log('⚠️ Manual completion failed, trying simple method');
-          console.log('Manual Error details:', JSON.stringify(manualError, null, 2));
-          console.log('Manual Result:', JSON.stringify(manualResult, null, 2));
+          console.log('Manual Error:', manualError?.message || manualError);
+          console.log('Manual Result:', manualResult);
         }
       } catch (manualErr) {
         console.log('⚠️ Manual completion exception, trying simple method:', manualErr);
@@ -144,16 +144,13 @@ serve(async (req) => {
           result = simpleResult;
         } else {
           console.error('❌ All completion methods failed');
-          console.error('Simple Error details:', JSON.stringify(simpleError, null, 2));
-          console.error('Simple Result:', JSON.stringify(simpleResult, null, 2));
+          console.error('Simple Error:', simpleError?.message || simpleError);
+          console.error('Simple Result:', simpleResult);
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'All delivery completion methods failed',
-              details: {
-                simple_error: simpleError,
-                simple_result: simpleResult
-              }
+              error: simpleError?.message || 'All delivery completion methods failed',
+              details: simpleError
             }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
