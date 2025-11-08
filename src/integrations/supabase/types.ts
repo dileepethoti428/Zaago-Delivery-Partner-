@@ -6327,7 +6327,7 @@ export type Database = {
               p_agent_id: string
               p_live_distance_km?: number
               p_order_id: string
-              p_payment_method?: string
+              p_payment_method: string
             }
             Returns: Json
           }
