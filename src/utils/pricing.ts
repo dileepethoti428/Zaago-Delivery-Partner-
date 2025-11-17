@@ -4,7 +4,11 @@
  * Peak surge: 15% (12-2pm, 7-10pm, weekends)
  * Agent gets: total - ₹13 platform fee
  */
+import { getCachedPayout, setCachedPayout } from './computationCache';
+
 export function calculateAgentPayout(distanceKm: number): number {
+  const cached = getCachedPayout(distanceKm);
+  if (cached !== null) return cached;
   const baseFare = 40;
   const additionalDistance = Math.max(0, distanceKm - 3);
   const perKmRate = 9;
@@ -21,8 +25,10 @@ export function calculateAgentPayout(distanceKm: number): number {
   
   const platformFee = 13;
   const agentPayout = subtotal + surge - platformFee;
+  const payout = Math.round(agentPayout * 100) / 100;
   
-  return Math.round(agentPayout * 100) / 100;
+  setCachedPayout(distanceKm, payout);
+  return payout;
 }
 
 /**

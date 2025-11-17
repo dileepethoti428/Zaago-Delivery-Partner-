@@ -5,93 +5,12 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { IndianRupee, Calendar, Loader2, Package } from 'lucide-react';
 import { motion as m } from 'framer-motion';
-import { useAuthStore } from '@/store/auth';
-import { fetchLiveEarnings, formatCurrency } from '@/services/earnings';
-import { cache } from '@/utils/cache';
-import { useToast } from '@/hooks/use-toast';
-
-interface EarningsState {
-  today: number;
-  week: number;
-  month: number;
-  todayDeliveries: number;
-  weekDeliveries: number;
-  monthDeliveries: number;
-  todayPending: number;
-  weekPending: number;
-  monthPending: number;
-  todayCancelled: number;
-  weekCancelled: number;
-  monthCancelled: number;
-}
+import { useEarnings } from '@/hooks/useEarnings';
+import { formatCurrency } from '@/services/earnings';
 
 export default function Earnings() {
-  const user = useAuthStore((state) => state.user);
-  const { toast } = useToast();
-  const [earningsData, setEarningsData] = useState<EarningsState>({
-    today: 0,
-    week: 0,
-    month: 0,
-    todayDeliveries: 0,
-    weekDeliveries: 0,
-    monthDeliveries: 0,
-    todayPending: 0,
-    weekPending: 0,
-    monthPending: 0,
-    todayCancelled: 0,
-    weekCancelled: 0,
-    monthCancelled: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const { data: earningsData, isLoading: loading } = useEarnings();
 
-  useEffect(() => {
-    async function loadEarnings() {
-      if (!user?.email) {
-        setLoading(false);
-        return;
-      }
-
-      // Load from cache first for instant display
-      const cached = cache.get<EarningsState>('LIVE_EARNINGS');
-      if (cached) {
-        setEarningsData(cached);
-        setLoading(true); // Show cached data while fetching fresh
-      }
-
-      try {
-        const liveData = await fetchLiveEarnings();
-        
-        const newData: EarningsState = {
-          today: liveData.today.total,
-          week: liveData.week.total,
-          month: liveData.month.total,
-          todayDeliveries: liveData.today.deliveries,
-          weekDeliveries: liveData.week.deliveries,
-          monthDeliveries: liveData.month.deliveries,
-          todayPending: liveData.today.in_progress,
-          weekPending: liveData.week.in_progress,
-          monthPending: liveData.month.in_progress,
-          todayCancelled: liveData.today.cancelled,
-          weekCancelled: liveData.week.cancelled,
-          monthCancelled: liveData.month.cancelled,
-        };
-        
-        cache.set('LIVE_EARNINGS', newData);
-        setEarningsData(newData);
-      } catch (err) {
-        console.error('Failed to load earnings:', err);
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Failed to load earnings data',
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadEarnings();
-  }, [user?.email, toast]);
   return (
     <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
       <AppShell>
@@ -122,7 +41,7 @@ export default function Earnings() {
                     <div className="flex items-center gap-2">
                       <IndianRupee className="h-6 w-6 text-primary" />
                       <span className="text-3xl font-bold">
-                        {formatCurrency(earningsData.today)}
+                        {formatCurrency(earningsData?.today.total || 0)}
                       </span>
                     </div>
                     
@@ -131,19 +50,19 @@ export default function Earnings() {
                       <div className="text-center">
                         <div className="text-xs text-muted-foreground">Completed</div>
                         <div className="text-lg font-semibold text-green-600">
-                          {earningsData.todayDeliveries}
+                          {earningsData?.today.deliveries || 0}
                         </div>
                       </div>
                       <div className="text-center">
                         <div className="text-xs text-muted-foreground">Pending</div>
                         <div className="text-lg font-semibold text-orange-600">
-                          {earningsData.todayPending}
+                          {earningsData?.today.in_progress || 0}
                         </div>
                       </div>
                       <div className="text-center">
                         <div className="text-xs text-muted-foreground">Cancelled</div>
                         <div className="text-lg font-semibold text-red-600">
-                          {earningsData.todayCancelled}
+                          {earningsData?.today.cancelled || 0}
                         </div>
                       </div>
                     </div>
@@ -167,21 +86,21 @@ export default function Earnings() {
                       <div className="flex items-center gap-1">
                         <IndianRupee className="h-5 w-5 text-primary" />
                         <span className="text-2xl font-bold">
-                          {formatCurrency(earningsData.week)}
+                          {formatCurrency(earningsData?.week.total || 0)}
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground space-y-1">
                         <div className="flex justify-between">
                           <span>Delivered:</span>
-                          <span className="font-medium text-foreground">{earningsData.weekDeliveries}</span>
+                          <span className="font-medium text-foreground">{earningsData?.week.deliveries || 0}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Pending:</span>
-                          <span className="font-medium text-orange-600">{earningsData.weekPending}</span>
+                          <span className="font-medium text-orange-600">{earningsData?.week.in_progress || 0}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Cancelled:</span>
-                          <span className="font-medium text-red-600">{earningsData.weekCancelled}</span>
+                          <span className="font-medium text-red-600">{earningsData?.week.cancelled || 0}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -202,21 +121,21 @@ export default function Earnings() {
                       <div className="flex items-center gap-1">
                         <IndianRupee className="h-5 w-5 text-primary" />
                         <span className="text-2xl font-bold">
-                          {formatCurrency(earningsData.month)}
+                          {formatCurrency(earningsData?.month.total || 0)}
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground space-y-1">
                         <div className="flex justify-between">
                           <span>Delivered:</span>
-                          <span className="font-medium text-foreground">{earningsData.monthDeliveries}</span>
+                          <span className="font-medium text-foreground">{earningsData?.month.deliveries || 0}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Pending:</span>
-                          <span className="font-medium text-orange-600">{earningsData.monthPending}</span>
+                          <span className="font-medium text-orange-600">{earningsData?.month.in_progress || 0}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Cancelled:</span>
-                          <span className="font-medium text-red-600">{earningsData.monthCancelled}</span>
+                          <span className="font-medium text-red-600">{earningsData?.month.cancelled || 0}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -242,7 +161,7 @@ export default function Earnings() {
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div>
                       <div className="text-2xl font-bold text-green-600">
-                        {earningsData.monthDeliveries}
+                        {earningsData?.month.deliveries || 0}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
                         Total Delivered
@@ -250,7 +169,7 @@ export default function Earnings() {
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-orange-600">
-                        {earningsData.monthPending}
+                        {earningsData?.month.in_progress || 0}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
                         In Progress
@@ -258,7 +177,7 @@ export default function Earnings() {
                     </div>
                     <div>
                       <div className="text-2xl font-bold text-red-600">
-                        {earningsData.monthCancelled}
+                        {earningsData?.month.cancelled || 0}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
                         Cancelled

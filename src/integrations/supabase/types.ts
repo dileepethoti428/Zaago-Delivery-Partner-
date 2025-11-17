@@ -4147,6 +4147,64 @@ export type Database = {
           },
         ]
       }
+      subscription_date_shifts: {
+        Row: {
+          created_at: string | null
+          days_extended: number | null
+          id: string
+          new_next_delivery: string
+          order_id: string | null
+          original_next_delivery: string
+          reason: string | null
+          shift_date: string
+          subscription_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          days_extended?: number | null
+          id?: string
+          new_next_delivery: string
+          order_id?: string | null
+          original_next_delivery: string
+          reason?: string | null
+          shift_date: string
+          subscription_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          days_extended?: number | null
+          id?: string
+          new_next_delivery?: string
+          order_id?: string | null
+          original_next_delivery?: string
+          reason?: string | null
+          shift_date?: string
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_date_shifts_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_date_shifts_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_date_shifts_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_delivery_schedules: {
         Row: {
           created_at: string
@@ -5365,6 +5423,10 @@ export type Database = {
       cancel_vacation_and_resume_subscription:
         | { Args: { p_vacation_id: string }; Returns: boolean }
         | { Args: { p_user_id?: string; p_vacation_id: string }; Returns: Json }
+      check_and_shift_unaccepted_subscription_orders: {
+        Args: never
+        Returns: Json
+      }
       check_cron_health: {
         Args: never
         Returns: {
@@ -5766,15 +5828,19 @@ export type Database = {
       get_pending_delivery_agents: {
         Args: never
         Returns: {
-          agent_documents: Json
+          aadhar_number: string
+          aadhar_verified: boolean
           agent_id: string
           created_at: string
-          documents_verified: boolean
+          dl_number: string
+          dl_verified: boolean
           email: string
-          id: string
+          full_name: string
           is_active: boolean
-          name: string
           phone: string
+          user_id: string
+          vehicle_number: string
+          vehicle_type: string
           verification_status: string
         }[]
       }
@@ -6188,7 +6254,15 @@ export type Database = {
       process_due_existing_subscriptions: { Args: never; Returns: number }
       process_due_subscriptions: { Args: never; Returns: number }
       process_subscriptions_update_dates_only: { Args: never; Returns: Json }
-      process_subscriptions_with_order_creation: { Args: never; Returns: Json }
+      process_subscriptions_with_order_creation:
+        | { Args: never; Returns: Json }
+        | {
+            Args: {
+              p_send_notifications?: boolean
+              p_target_delivery_date: string
+            }
+            Returns: Json
+          }
       qr_complete_delivery_v3:
         | {
             Args: {
