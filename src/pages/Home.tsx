@@ -11,27 +11,27 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useOrdersStore, startOrdersRealtime, stopOrdersRealtime } from '@/store/orders';
+import { useOrders, useAcceptOrder, useRejectOrder } from '@/hooks/useOrders';
 import { useLocationStore } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
+import { useProfile } from '@/hooks/useProfile';
 import { getDistanceKm } from '@/utils/geo';
 import { toast } from '@/hooks/use-toast';
 import LocationChip from '@/components/location/LocationChip';
 import type { GeoPoint } from '@/utils/coords';
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { formatDistanceToNow } from 'date-fns';
+import { startOrdersRealtime, stopOrdersRealtime } from '@/store/orders';
 
 const RADIUS_KM = 15;
 
 export default function Home() {
   const navigate = useNavigate();
-  const orders = useOrdersStore((state) => state.orders);
-  const loading = useOrdersStore((state) => state.loading);
-  const error = useOrdersStore((state) => state.error);
-  const load = useOrdersStore((state) => state.load);
-  const acceptOrder = useOrdersStore((state) => state.acceptOrder);
-  const rejectOrder = useOrdersStore((state) => state.rejectOrder);
-  const profile = useAuthStore((state) => state.profile);
+  const { user } = useAuthStore();
+  const { data: profile } = useProfile(user?.email);
+  const { data: orders = [], isLoading: loading, error, refetch } = useOrders(profile?.id);
+  const acceptOrderMutation = useAcceptOrder();
+  const rejectOrderMutation = useRejectOrder();
   
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const permission = useLocationStore((state) => state.permission);
@@ -84,9 +84,7 @@ export default function Home() {
     return { nearbyOrders: nearby, otherOrders: others };
   }, [orders, lastKnown, sortBy]);
 
-  // Load orders and start location watching when component mounts
   useEffect(() => {
-    load(profile?.user_id);
     startWatch();
     startOrdersRealtime();
     
@@ -94,15 +92,15 @@ export default function Home() {
       stopWatch();
       stopOrdersRealtime();
     };
-  }, [profile?.user_id]);
+  }, []);
 
   const handleRefresh = useCallback(async () => {
-    await load(profile?.user_id);
-  }, [load, profile?.user_id]);
+    await refetch();
+  }, [refetch]);
 
   const handleAccept = async (orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!profile?.user_id) {
+    if (!profile?.id) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -113,17 +111,9 @@ export default function Home() {
 
     setProcessingOrder(orderId);
     try {
-      await acceptOrder(orderId, profile.user_id);
-      toast({
-        title: 'Success',
-        description: 'Order accepted successfully',
-      });
+      await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.id });
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error?.message || 'Failed to accept order',
-      });
+      // Error handled by mutation
     } finally {
       setProcessingOrder(null);
     }
@@ -132,7 +122,7 @@ export default function Home() {
   const handleReject = async (orderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!profile?.user_id) {
+    if (!profile?.id) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -143,17 +133,9 @@ export default function Home() {
     
     setProcessingOrder(orderId);
     try {
-      await rejectOrder(orderId, profile.user_id);
-      toast({
-        title: 'Order Rejected',
-        description: 'You will not see this order again',
-      });
+      await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.id });
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error?.message || 'Failed to reject order',
-      });
+      // Error handled by mutation
     } finally {
       setProcessingOrder(null);
     }
@@ -189,7 +171,6 @@ export default function Home() {
             </Button>
           </div>
           
-          {/* Error State */}
           {error && (
             <Card className="rounded-2xl border-2 border-destructive/50">
               <CardContent className="p-6 space-y-3 text-center">
@@ -198,7 +179,7 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="font-medium">Failed to Load Orders</p>
-                  <p className="text-sm text-muted-foreground mt-1">{error}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{error?.message || 'Unknown error'}</p>
                 </div>
                 <Button 
                   variant="secondary" 

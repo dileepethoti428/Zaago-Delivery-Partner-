@@ -3,12 +3,17 @@ export type GeoPoint = {
   lng: number;
 };
 
+import { getCachedDistance, setCachedDistance } from './computationCache';
+
 /**
  * Calculate distance between two points using Haversine formula
  * Returns distance in kilometers
  */
 export function getDistanceKm(a: GeoPoint, b: GeoPoint): number {
-  const R = 6371; // Earth's radius in km
+  const cached = getCachedDistance(a.lat, a.lng, b.lat, b.lng);
+  if (cached !== null) return cached;
+
+  const R = 6371;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
   
@@ -19,7 +24,9 @@ export function getDistanceKm(a: GeoPoint, b: GeoPoint): number {
     Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
   const y = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   
-  return R * y;
+  const distance = R * y;
+  setCachedDistance(a.lat, a.lng, b.lat, b.lng, distance);
+  return distance;
 }
 
 function toRad(degrees: number): number {
