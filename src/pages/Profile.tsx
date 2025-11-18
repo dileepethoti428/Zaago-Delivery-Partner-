@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { AppShell } from '@/components/layout/AppShell';
@@ -11,52 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
 import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { motion as m } from 'framer-motion';
-import { fetchAgentProfile } from '@/services/agentProfile';
-import { cache } from '@/utils/cache';
-
-type AgentProfile = {
-  id: string;
-  name: string | null;
-  email: string;
-  phone: string | null;
-  is_active: boolean;
-  verification_status: string | null;
-} | null;
+import { useProfile } from '@/hooks/useProfile';
 
 export default function Profile() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
-  const [agentProfile, setAgentProfile] = useState<AgentProfile>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadAgentProfile() {
-      if (!user?.email) {
-        setLoading(false);
-        return;
-      }
-
-      // Load from cache first
-      const cached = cache.get<AgentProfile>('PROFILE');
-      if (cached) {
-        setAgentProfile(cached);
-        setLoading(true);
-      }
-      
-      try {
-        const data = await fetchAgentProfile(user.email);
-        cache.set('PROFILE', data);
-        setAgentProfile(data);
-      } catch (err) {
-        console.error('Failed to load agent profile:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadAgentProfile();
-  }, [user?.email]);
+  const { data: agentProfile, isLoading: loading } = useProfile(user?.email);
 
   const handleLogout = async () => {
     await signOut();
