@@ -41,48 +41,63 @@ export default function Home() {
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
 
-  // Split orders into nearby (within 15km) and all others
-  const { nearbyOrders, otherOrders } = useMemo(() => {
-    if (!lastKnown) return { nearbyOrders: [], otherOrders: orders };
+  const ordersWithDistance = useMemo(() => {
+    if (!lastKnown) return orders.map(order => ({ order, distanceKm: null }));
+    
+    return orders.map(order => {
+      if (!order.pickupCoord) {
+        return { order, distanceKm: null };
+      }
+      
+      const distanceKm = Number(
+        getDistanceKm(
+          { lat: lastKnown.lat, lng: lastKnown.lng } as GeoPoint,
+          order.pickupCoord as GeoPoint
+        ).toFixed(2)
+      );
+      
+      return { order, distanceKm };
+    });
+  }, [orders, lastKnown]);
 
+  const { nearbyOrders, otherOrders } = useMemo(() => {
     const nearby: Array<typeof orders[0] & { distanceKm: number }> = [];
     const others: typeof orders = [];
-
-    orders.forEach(order => {
-      if (order.pickupCoord) {
-        const distanceKm = Number(
-          getDistanceKm(
-            { lat: lastKnown.lat, lng: lastKnown.lng } as GeoPoint,
-            order.pickupCoord as GeoPoint
-          ).toFixed(2)
-        );
-        
-        if (distanceKm <= RADIUS_KM) {
-          nearby.push({ ...order, distanceKm });
-        } else {
-          others.push(order);
-        }
+    
+    ordersWithDistance.forEach(({ order, distanceKm }) => {
+      if (distanceKm !== null && distanceKm <= RADIUS_KM) {
+        nearby.push({ ...order, distanceKm });
       } else {
         others.push(order);
       }
     });
-
-    // Sort nearby based on selected sort option
-    nearby.sort((a, b) => {
-      if (sortBy === 'newest') return (b.createdAt ?? 0) - (a.createdAt ?? 0);
-      if (sortBy === 'oldest') return (a.createdAt ?? 0) - (b.createdAt ?? 0);
-      return a.distanceKm - b.distanceKm; // default distance
-    });
-
-    // Sort others by newest/oldest if selected, otherwise by creation time
-    others.sort((a, b) => {
-      if (sortBy === 'newest') return (b.createdAt ?? 0) - (a.createdAt ?? 0);
-      if (sortBy === 'oldest') return (a.createdAt ?? 0) - (b.createdAt ?? 0);
-      return (b.createdAt ?? 0) - (a.createdAt ?? 0); // default newest
-    });
-
+    
     return { nearbyOrders: nearby, otherOrders: others };
-  }, [orders, lastKnown, sortBy]);
+  }, [ordersWithDistance]);
+
+  const sortedNearbyOrders = useMemo(() => {
+    const sorted = [...nearbyOrders];
+    
+    sorted.sort((a, b) => {
+      if (sortBy === 'newest') return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      if (sortBy === 'oldest') return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      return a.distanceKm - b.distanceKm;
+    });
+    
+    return sorted;
+  }, [nearbyOrders, sortBy]);
+
+  const sortedOtherOrders = useMemo(() => {
+    const sorted = [...otherOrders];
+    
+    sorted.sort((a, b) => {
+      if (sortBy === 'newest') return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      if (sortBy === 'oldest') return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    });
+    
+    return sorted;
+  }, [otherOrders, sortBy]);
 
   useEffect(() => {
     startWatch();
@@ -98,53 +113,36 @@ export default function Home() {
     await refetch();
   }, [refetch]);
 
-  const handleAccept = async (orderId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!profile?.id) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'User profile not found',
-      });
-      return;
-    }
-
+  const handleAcceptOrder = useCallback(async (orderId: string) => {
+    if (!profile?.id || processingOrder) return;
     setProcessingOrder(orderId);
+    
     try {
       await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.id });
-    } catch (error: any) {
-      // Error handled by mutation
+      navigate(`/manage-delivery/${orderId}`);
     } finally {
       setProcessingOrder(null);
     }
-  };
+  }, [profile?.id, processingOrder, acceptOrderMutation, navigate]);
 
-  const handleReject = async (orderId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (!profile?.id) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'User profile not found',
-      });
-      return;
-    }
-    
+  const handleRejectOrder = useCallback(async (orderId: string) => {
+    if (!profile?.id || processingOrder) return;
     setProcessingOrder(orderId);
+    
     try {
       await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.id });
-    } catch (error: any) {
-      // Error handled by mutation
     } finally {
       setProcessingOrder(null);
     }
-  };
+  }, [profile?.id, processingOrder, rejectOrderMutation]);
 
-  const handleManageDelivery = (orderId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleViewOrder = useCallback((orderId: string) => {
+    navigate(`/order/${orderId}`);
+  }, [navigate]);
+
+  const handleManageDelivery = useCallback((orderId: string) => {
     navigate(`/manage-delivery/${orderId}`);
-  };
+  }, [navigate]);
 
   return (
     <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
@@ -267,7 +265,17 @@ export default function Home() {
                     </SelectContent>
                   </Select>
                 </div>
-                {nearbyOrders.map((order, index) => (
+                {sortedNearbyOrders.map((order, index) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    index={index}
+                    isProcessing={processingOrder === order.id}
+                    onAccept={handleAcceptOrder}
+                    onReject={handleRejectOrder}
+                    onView={handleViewOrder}
+                  />
+                ))}
                   <AnimatedCard
                     key={order.id}
                     delay={index * 0.05}

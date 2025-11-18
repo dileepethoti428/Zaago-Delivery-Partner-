@@ -1,30 +1,13 @@
-import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Package } from 'lucide-react';
-import { fetchDeliveryHistory, type DeliveryHistoryItem } from '@/services/deliveryHistory';
+import { useDeliveryHistory } from '@/hooks/useDeliveryHistory';
 import { DeliveryHistoryCard } from '@/components/delivery/DeliveryHistoryCard';
 
 export default function DeliveryHistory() {
-  const [history, setHistory] = useState<DeliveryHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadHistory();
-  }, []);
-
-  const loadHistory = async () => {
-    try {
-      setLoading(true);
-      const response = await fetchDeliveryHistory(50, 0);
-      setHistory(response.data);
-    } catch (error) {
-      console.error('Failed to load delivery history:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading: loading } = useDeliveryHistory(50, 0);
+  const history = data?.data || [];
 
   if (loading) {
     return (

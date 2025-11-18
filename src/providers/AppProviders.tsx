@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/auth";
 import { useLocationStore } from "@/store/location";
 import { advancedCache } from '@/utils/advancedCache';
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30 * 1000,

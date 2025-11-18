@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo, useMemo } from 'react';
 import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { formatDeliveryDate, formatDeliveryTime, type DeliveryHistoryItem } from '@/services/deliveryHistory';
+import { formatDeliveryAddress, formatPhoneNumber, parseDeliveryItems } from '@/utils/deliveryHelpers';
 import { useNavigate } from 'react-router-dom';
 
 interface DeliveryHistoryCardProps {
@@ -19,48 +20,27 @@ interface DeliveryHistoryCardProps {
   index: number;
 }
 
-export function DeliveryHistoryCard({ delivery, index }: DeliveryHistoryCardProps) {
+export const DeliveryHistoryCard = memo(function DeliveryHistoryCard({ 
+  delivery, 
+  index 
+}: DeliveryHistoryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const navigate = useNavigate();
 
-  // Parse address
-  const getAddressString = () => {
-    if (typeof delivery.delivery_address === 'string') {
-      return delivery.delivery_address;
-    }
-    if (delivery.delivery_address?.address) {
-      return delivery.delivery_address.address;
-    }
-    const addr = delivery.delivery_address;
-    if (addr?.addressLine1) {
-      return [
-        addr.addressLine1,
-        addr.addressLine2,
-        addr.city,
-        addr.state,
-        addr.pincode
-      ].filter(Boolean).join(', ');
-    }
-    return 'Delivery address';
-  };
-
-  // Parse items
-  const getItems = () => {
-    if (Array.isArray(delivery.items)) {
-      return delivery.items;
-    }
-    return [];
-  };
-
-  const items = getItems();
-  const addressString = getAddressString();
-
-  // Format phone number
-  const formatPhone = (phone: string | null) => {
-    if (!phone) return null;
-    if (phone.startsWith('+91')) return phone;
-    return `+91 ${phone}`;
-  };
+  const addressString = useMemo(
+    () => formatDeliveryAddress(delivery.delivery_address),
+    [delivery.delivery_address]
+  );
+  
+  const items = useMemo(
+    () => parseDeliveryItems(delivery.items),
+    [delivery.items]
+  );
+  
+  const formattedPhone = useMemo(
+    () => formatPhoneNumber(delivery.customer_phone),
+    [delivery.customer_phone]
+  );
 
   return (
     <AnimatedCard
@@ -83,14 +63,14 @@ export function DeliveryHistoryCard({ delivery, index }: DeliveryHistoryCardProp
                 <h3 className="font-semibold text-lg">
                   {delivery.customer_name || 'Customer'}
                 </h3>
-                {delivery.customer_phone && (
+                {formattedPhone && (
                   <a 
                     href={`tel:${delivery.customer_phone}`}
                     className="flex items-center gap-1.5 text-sm text-primary hover:underline mt-1"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Phone className="h-3.5 w-3.5" />
-                    {formatPhone(delivery.customer_phone)}
+                    {formattedPhone}
                   </a>
                 )}
               </div>
@@ -305,4 +285,11 @@ export function DeliveryHistoryCard({ delivery, index }: DeliveryHistoryCardProp
       </CardContent>
     </AnimatedCard>
   );
-}
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.delivery.id === nextProps.delivery.id &&
+    prevProps.delivery.payment_status === nextProps.delivery.payment_status &&
+    prevProps.index === nextProps.index
+  );
+});
+
