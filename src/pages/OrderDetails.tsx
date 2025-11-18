@@ -26,7 +26,7 @@ export default function OrderDetails() {
       <AppShell showTabBar={false}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <p className="text-muted-foreground">Order not found</p>
-          <Button onClick={() => navigate('/home')}>Back to Home</Button>
+          <Button onClick={() => navigate(-1)}>Back to Home</Button>
         </div>
       </AppShell>
     );
@@ -161,7 +161,7 @@ export default function OrderDetails() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/home')}
+            onClick={() => navigate(-1)}
             className="rounded-xl"
           >
             <ArrowLeft className="h-5 w-5" />
