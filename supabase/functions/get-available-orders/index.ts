@@ -116,8 +116,14 @@ serve(async (req) => {
 
     if (agentError || !agentData) {
       console.error('Agent not found:', agent_id);
+      console.error('Agent error details:', agentError);
       return new Response(
-        JSON.stringify({ success: false, error: 'Agent not found' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Agent profile not found. Please complete your registration.',
+          error_code: 'AGENT_NOT_FOUND',
+          agent_id: agent_id
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
     }
