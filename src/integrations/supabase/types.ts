@@ -3372,6 +3372,8 @@ export type Database = {
           name: string
           nutritional_info: Json | null
           price: number
+          product_lat: number | null
+          product_lng: number | null
           seller_id: string | null
           stock_quantity: number | null
           total_reviews: number | null
@@ -3395,6 +3397,8 @@ export type Database = {
           name: string
           nutritional_info?: Json | null
           price: number
+          product_lat?: number | null
+          product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
           total_reviews?: number | null
@@ -3418,6 +3422,8 @@ export type Database = {
           name?: string
           nutritional_info?: Json | null
           price?: number
+          product_lat?: number | null
+          product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
           total_reviews?: number | null

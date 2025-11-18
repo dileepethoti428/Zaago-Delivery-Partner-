@@ -29,8 +29,8 @@ const RADIUS_KM = 15;
 export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { data: profile } = useProfile(user?.email);
-  const { data: orders = [], isLoading: loading, error, refetch } = useOrders(profile?.id);
+  const { data: profile, isLoading: profileLoading } = useProfile(user?.email);
+  const { data: orders = [], isLoading: loading, error, refetch } = useOrders(profile?.agent_id);
   const acceptOrderMutation = useAcceptOrder();
   const rejectOrderMutation = useRejectOrder();
   
@@ -115,27 +115,27 @@ export default function Home() {
   }, [refetch]);
 
   const handleAcceptOrder = useCallback(async (orderId: string) => {
-    if (!profile?.id || processingOrder) return;
+    if (!profile?.agent_id || processingOrder) return;
     setProcessingOrder(orderId);
     
     try {
-      await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.id });
+      await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
       navigate(`/manage-delivery/${orderId}`);
     } finally {
       setProcessingOrder(null);
     }
-  }, [profile?.id, processingOrder, acceptOrderMutation, navigate]);
+  }, [profile?.agent_id, processingOrder, acceptOrderMutation, navigate]);
 
   const handleRejectOrder = useCallback(async (orderId: string) => {
-    if (!profile?.id || processingOrder) return;
+    if (!profile?.agent_id || processingOrder) return;
     setProcessingOrder(orderId);
     
     try {
-      await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.id });
+      await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
     } finally {
       setProcessingOrder(null);
     }
-  }, [profile?.id, processingOrder, rejectOrderMutation]);
+  }, [profile?.agent_id, processingOrder, rejectOrderMutation]);
 
   const handleViewOrder = useCallback((orderId: string) => {
     navigate(`/order/${orderId}`);
@@ -144,6 +144,45 @@ export default function Home() {
   const handleManageDelivery = useCallback((orderId: string) => {
     navigate(`/manage-delivery/${orderId}`);
   }, [navigate]);
+
+  // Show loading while profile loads
+  if (profileLoading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="space-y-3 text-center w-full max-w-sm px-4">
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
+            <p className="text-sm text-muted-foreground">Loading profile...</p>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Show error if profile doesn't exist
+  if (!profileLoading && !profile) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Card className="max-w-md mx-4">
+            <CardContent className="pt-6 space-y-4 text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold">Profile Not Found</h3>
+                <p className="text-sm text-muted-foreground">
+                  Your delivery agent profile is not set up. Please contact support or complete your registration.
+                </p>
+              </div>
+              <Button onClick={() => navigate('/upload-documents')} className="w-full">
+                Complete Registration
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
