@@ -77,7 +77,7 @@ export default function ManageDelivery() {
           title: 'Error',
           description: error?.message || 'Failed to load order details',
         });
-        navigate('/home');
+        navigate(-1);
       } finally {
         setLoading(false);
       }
@@ -203,8 +203,8 @@ export default function ManageDelivery() {
         description: successMessage,
       });
       
-      // Navigate back after a short delay
-      setTimeout(() => navigate('/home'), 1500);
+      // Navigate back after a short delay - use browser history for instant back
+      setTimeout(() => navigate(-1), 1500);
       
     } catch (error: any) {
       toast({
@@ -257,7 +257,7 @@ export default function ManageDelivery() {
         description: 'Order has been cancelled successfully',
       });
       
-      navigate('/home');
+      navigate(-1);
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -285,7 +285,7 @@ export default function ManageDelivery() {
       <AppShell showTabBar={false}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <p className="text-muted-foreground">Order not found</p>
-          <Button onClick={() => navigate('/home')}>Back to Home</Button>
+          <Button onClick={() => navigate(-1)}>Back to Home</Button>
         </div>
       </AppShell>
     );
@@ -306,7 +306,7 @@ export default function ManageDelivery() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/home')}
+              onClick={() => navigate(-1)}
               className="rounded-xl"
             >
               <ArrowLeft className="h-5 w-5" />
