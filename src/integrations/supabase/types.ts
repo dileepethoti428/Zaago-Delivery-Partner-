@@ -5502,6 +5502,10 @@ export type Database = {
           seller_id: string
         }[]
       }
+      calculate_simple_next_delivery_ist: {
+        Args: { p_subscription_id: string }
+        Returns: string
+      }
       calculate_vacation_credit: {
         Args: {
           p_end_date: string
@@ -5745,6 +5749,7 @@ export type Database = {
         Args: { order_items: Json }
         Returns: string[]
       }
+      fix_all_subscription_dates_ist: { Args: never; Returns: Json }
       fix_subscription_delivery_dates: { Args: never; Returns: Json }
       fix_uncategorized_products: { Args: never; Returns: Json }
       force_complete_delivery_bypass: {
@@ -6540,6 +6545,10 @@ export type Database = {
       update_subscription_next_delivery_dates: {
         Args: never
         Returns: undefined
+      }
+      update_subscription_next_delivery_ist: {
+        Args: { p_subscription_id: string }
+        Returns: Json
       }
       update_trending_products: { Args: never; Returns: undefined }
       upsert_delivery_agent: {
