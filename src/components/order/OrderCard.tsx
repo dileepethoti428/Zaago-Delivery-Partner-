@@ -57,18 +57,28 @@ export const OrderCard = memo(function OrderCard({
         <div className="space-y-3">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-mono text-xs text-muted-foreground">
-                  #{order.id.slice(0, 8)}
+              <div className="flex items-center gap-2 mb-3">
+                <span className="font-semibold text-base text-foreground">
+                  {order.customerName || 'Unknown Customer'}
                 </span>
                 <StatusPill status={order.status} />
               </div>
               
-              <div className="flex items-start gap-2 text-sm mb-2">
-                <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium">{order.pickup}</p>
-                  <p className="text-muted-foreground">→ {order.drop}</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start gap-2">
+                  <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-foreground">Pickup</p>
+                    <p className="text-muted-foreground">{order.pickup}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-2">
+                  <div className="h-2 w-2 rounded-full bg-green-500 shrink-0 mt-1.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-foreground">Drop</p>
+                    <p className="text-muted-foreground">{order.drop}</p>
+                  </div>
                 </div>
               </div>
             </div>
