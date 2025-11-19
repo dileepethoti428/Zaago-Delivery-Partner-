@@ -311,9 +311,11 @@ export default function Home() {
                     order={order}
                     index={index}
                     isProcessing={processingOrder === order.id}
+                    currentAgentId={profile?.id}
                     onAccept={handleAcceptOrder}
                     onReject={handleRejectOrder}
                     onView={handleViewOrder}
+                    onManage={handleManageDelivery}
                   />
                 ))}
               </div>
@@ -383,8 +385,23 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Action Buttons for Packed Orders */}
-                    {order.status === 'packed' && (
+                    {/* Action Buttons */}
+                    {order.agentId === profile?.id ? (
+                      // Order is assigned to current agent
+                      <div className="pt-2">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleManageDelivery(order.id);
+                          }}
+                          className="w-full rounded-xl gap-2"
+                          size="sm"
+                        >
+                          Manage Delivery
+                        </Button>
+                      </div>
+                    ) : (order.status === 'packed' || order.status === 'accepted') && !order.agentId ? (
+                      // Order is not assigned and available for acceptance
                       <div className="flex gap-2 pt-2">
                         <Button
                           onClick={(e) => {
@@ -412,21 +429,7 @@ export default function Home() {
                           Reject
                         </Button>
                       </div>
-                    )}
-
-                    {/* Manage Delivery Button for Assigned Orders */}
-                    {order.status === 'assigned' && (
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleManageDelivery(order.id);
-                        }}
-                        className="w-full rounded-xl gap-2"
-                        size="sm"
-                      >
-                        Manage Delivery
-                      </Button>
-                    )}
+                    ) : null}
                   </CardContent>
                 </AnimatedCard>
               ))}

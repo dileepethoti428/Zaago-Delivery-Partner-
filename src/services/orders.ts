@@ -33,6 +33,7 @@ export type ZaagoOrder = {
   distanceKm?: number;
   customerName?: string;
   createdAt?: number;
+  agentId?: string | null;
 };
 
 function coerceStatus(s?: string | null): ZaagoOrder['status'] {
@@ -105,18 +106,35 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
 
   console.log('✅ Fetched available orders:', data.orders?.length || 0);
 
-  const orders = (data.orders || []).map((o: any) => ({
-    id: o.id,
-    pickup: o.pickup_address || o?.seller?.address_line || 'Pickup',
-    drop: o.delivery_address?.full_address || o.delivery_address?.address_line || 'Delivery address',
-    pickupCoord: parsePoint(o.pickup_location || o?.seller?.coordinates) || null,
-    etaMin: o.estimated_delivery_time ? Math.round(o.estimated_delivery_time) : 12,
-    payout: o.agent_payout ? Math.round(o.agent_payout) : 30,
-    status: o.status || 'open',
-    distanceKm: typeof o.distance_km === 'number' ? Number(o.distance_km.toFixed(2)) : undefined,
-    customerName: o.customer_name || undefined,
-    createdAt: o.created_at ? new Date(o.created_at).getTime() : Date.now(),
-  })) as ZaagoOrder[];
+  const orders = (data.orders || []).map((o: any) => {
+    // Format drop address from address object
+    const dropAddress = (() => {
+      if (o.address?.addressLine1) {
+        const parts = [
+          o.address.addressLine1,
+          o.address.addressLine2,
+          o.address.city,
+          o.address.pincode
+        ].filter(Boolean);
+        return parts.join(', ');
+      }
+      return o.address?.full_address || 'Delivery location';
+    })();
+
+    return {
+      id: o.id,
+      pickup: o.pickup_address || o?.seller?.address_line || 'Pickup location',
+      drop: dropAddress,
+      pickupCoord: parsePoint(o.pickup_location || o?.seller?.coordinates) || null,
+      etaMin: o.estimated_delivery_time ? Math.round(o.estimated_delivery_time) : 12,
+      payout: o.agent_payout ? Math.round(o.agent_payout) : 30,
+      status: o.status || 'open',
+      distanceKm: typeof o.distance_km === 'number' ? Number(o.distance_km.toFixed(2)) : undefined,
+      customerName: o.customer_name || undefined,
+      createdAt: o.created_at ? new Date(o.created_at).getTime() : Date.now(),
+      agentId: o.agent_id || null,
+    };
+  }) as ZaagoOrder[];
 
   return orders;
 }
