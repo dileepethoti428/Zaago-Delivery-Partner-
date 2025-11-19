@@ -3376,6 +3376,7 @@ export type Database = {
           product_lng: number | null
           seller_id: string | null
           stock_quantity: number | null
+          total_ratings: number | null
           total_reviews: number | null
           type: string | null
           unit: string | null
@@ -3401,6 +3402,7 @@ export type Database = {
           product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
+          total_ratings?: number | null
           total_reviews?: number | null
           type?: string | null
           unit?: string | null
@@ -3426,6 +3428,7 @@ export type Database = {
           product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
+          total_ratings?: number | null
           total_reviews?: number | null
           type?: string | null
           unit?: string | null
@@ -4598,6 +4601,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      upi_transactions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          failure_reason: string | null
+          id: string
+          metadata: Json | null
+          order_id: string
+          razorpay_order_id: string
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          status: string | null
+          transaction_id: string
+          updated_at: string | null
+          upi_app: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          order_id: string
+          razorpay_order_id: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string | null
+          transaction_id: string
+          updated_at?: string | null
+          upi_app?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          order_id?: string
+          razorpay_order_id?: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string | null
+          transaction_id?: string
+          updated_at?: string | null
+          upi_app?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_devices: {
         Row: {
