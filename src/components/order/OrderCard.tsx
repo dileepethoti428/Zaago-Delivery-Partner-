@@ -11,18 +11,22 @@ interface OrderCardProps {
   order: ZaagoOrder & { distanceKm?: number };
   index: number;
   isProcessing: boolean;
+  currentAgentId?: string;
   onAccept: (orderId: string) => void;
   onReject: (orderId: string) => void;
   onView: (orderId: string) => void;
+  onManage?: (orderId: string) => void;
 }
 
 export const OrderCard = memo(function OrderCard({
   order,
   index,
   isProcessing,
+  currentAgentId,
   onAccept,
   onReject,
   onView,
+  onManage,
 }: OrderCardProps) {
   const handleAccept = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -37,6 +41,15 @@ export const OrderCard = memo(function OrderCard({
   const handleView = useCallback(() => {
     onView(order.id);
   }, [order.id, onView]);
+
+  const handleManage = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onManage) {
+      onManage(order.id);
+    }
+  }, [order.id, onManage]);
+
+  const isAssignedToCurrentAgent = order.agentId === currentAgentId;
 
   return (
     <AnimatedCard delay={index * 0.05} onClick={handleView}>
@@ -78,22 +91,34 @@ export const OrderCard = memo(function OrderCard({
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button
-              size="sm"
-              className="flex-1"
-              disabled={isProcessing}
-              onClick={handleAccept}
-            >
-              Accept
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isProcessing}
-              onClick={handleReject}
-            >
-              Reject
-            </Button>
+            {isAssignedToCurrentAgent ? (
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={handleManage}
+              >
+                Manage Delivery
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  disabled={isProcessing}
+                  onClick={handleAccept}
+                >
+                  Accept
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isProcessing}
+                  onClick={handleReject}
+                >
+                  Reject
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </CardContent>
@@ -104,7 +129,9 @@ export const OrderCard = memo(function OrderCard({
     prevProps.order.id === nextProps.order.id &&
     prevProps.order.status === nextProps.order.status &&
     prevProps.order.distanceKm === nextProps.order.distanceKm &&
+    prevProps.order.agentId === nextProps.order.agentId &&
     prevProps.isProcessing === nextProps.isProcessing &&
+    prevProps.currentAgentId === nextProps.currentAgentId &&
     prevProps.index === nextProps.index
   );
 });

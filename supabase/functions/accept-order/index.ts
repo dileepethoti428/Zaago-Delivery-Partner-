@@ -65,14 +65,27 @@ serve(async (req) => {
       .eq('id', order_id)
       .is('agent_id', null) // Only orders without an agent
       .in('status', ['accepted', 'packed']) // Accept pre-assignment statuses
-      .single();
+      .maybeSingle();
 
-    if (orderError || !orderData) {
-      console.error('Error fetching order:', orderError);
+    if (orderError) {
+      console.error('❌ Database error fetching order:', orderError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: orderData ? 'Order already assigned or delivered' : 'Order not found' 
+          error: 'Database error while fetching order',
+          error_code: 'DATABASE_ERROR'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    if (!orderData) {
+      console.error('❌ Order not available:', order_id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'This order is no longer available (already assigned or cancelled)',
+          error_code: 'ORDER_UNAVAILABLE'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
