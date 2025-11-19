@@ -6292,24 +6292,14 @@ export type Database = {
         Args: { tracking_id_input: string }
         Returns: Json
       }
-      manual_complete_delivery:
-        | {
-            Args: {
-              p_agent_id: string
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_agent_id: string
-              p_live_distance_km?: number
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
+      manual_complete_delivery: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
       manual_process_subscriptions: {
         Args: { p_processing_date?: string }
         Returns: Json
@@ -6478,24 +6468,14 @@ export type Database = {
         Args: { p_order_id: string; p_payment_method?: string }
         Returns: Json
       }
-      simple_mark_delivered:
-        | {
-            Args: {
-              p_agent_id: string
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_agent_id: string
-              p_live_distance_km?: number
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
+      simple_mark_delivered: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
       sync_special_offers_from_products: { Args: never; Returns: undefined }
       sync_user_player_id: {
         Args: { device_info?: Json; player_id: string; target_user_id: string }
