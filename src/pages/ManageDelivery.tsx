@@ -93,14 +93,16 @@ export default function ManageDelivery() {
   const handleMarkAsDelivered = async () => {
     if (!order) return;
 
-    // Step 1: Check if already paid
+    // Step 1: Check if already paid/prepaid - complete immediately
     if (order.payment_status === 'paid' || order.payment_method?.toUpperCase() === 'ONLINE') {
-      // Complete directly
+      toast({
+        title: 'Product delivered successfully',
+      });
       await completeDelivery('ONLINE');
       return;
     }
 
-    // Step 2: Show payment method selection dialog
+    // Step 2: Show payment method selection dialog for COD orders
     setShowPaymentDialog(true);
   };
 
@@ -108,10 +110,13 @@ export default function ManageDelivery() {
     setShowPaymentDialog(false);
     
     if (method === 'COD') {
-      // Complete with COD
+      // Complete with COD immediately
+      toast({
+        title: 'Product delivered successfully - COD',
+      });
       await completeDelivery('COD');
     } else {
-      // Generate QR and show dialog
+      // Generate QR but DO NOT mark as delivered yet - wait for payment
       await generateAndShowQR();
     }
   };
@@ -219,7 +224,54 @@ export default function ManageDelivery() {
 
   const handleQRPaymentComplete = async () => {
     setShowQRDialog(false);
-    await completeDelivery('ONLINE');
+    
+    try {
+      setIsCompleting(true);
+      
+      // Pass qr_id for server-side payment verification
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+        body: {
+          order_id: order?.id,
+          payment_method: 'ONLINE',
+          qr_code_data: qrData?.qr_string,
+          payment_id: qrData?.qr_id,
+        }
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || 'Payment completed but delivery marking failed');
+      }
+
+      toast({
+        title: 'Delivery Completed!',
+        description: 'Product delivered successfully - Paid Online ✓',
+      });
+      
+      setTimeout(() => navigate(-1), 1500);
+      
+    } catch (error: any) {
+      console.error('Delivery completion failed:', {
+        order_id: order?.id,
+        payment_method: 'ONLINE',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      toast({
+        variant: 'destructive',
+        title: 'Payment Completed, Delivery Failed',
+        description: error.message || 'Payment received but failed to mark delivered. Please retry or contact support.',
+        action: (
+          <Button variant="outline" size="sm" onClick={() => handleQRPaymentComplete()}>
+            Retry
+          </Button>
+        ),
+      });
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   const handleCancel = async () => {

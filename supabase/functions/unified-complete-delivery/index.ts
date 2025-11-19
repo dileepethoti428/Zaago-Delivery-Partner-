@@ -12,12 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const { order_id, payment_method, qr_code_data } = await req.json();
+    const { order_id, payment_method, qr_code_data, payment_id } = await req.json();
 
     console.log('🚀 Unified delivery completion request:', { 
       order_id, 
       payment_method, 
-      has_qr: !!qr_code_data 
+      has_qr: !!qr_code_data,
+      payment_id: payment_id || 'none',
+      timestamp: new Date().toISOString()
     });
 
     if (!order_id) {
@@ -169,7 +171,15 @@ serve(async (req) => {
     }
 
     // Return success (including already completed cases)
-    console.log('🎉 Delivery completed successfully via unified flow');
+    console.log('🎉 Delivery completed successfully via unified flow', {
+      order_id,
+      method_used: qr_code_data ? 'qr_scan' : 'manual',
+      payment_method: normalizedPayment,
+      already_completed: result.already_completed || false,
+      payout_amount: result.payout_amount || 30,
+      timestamp: new Date().toISOString()
+    });
+    
     return new Response(
       JSON.stringify({
         success: true,
