@@ -20,12 +20,13 @@ export function RazorpayQRDisplay({
   orderAmount,
   onPaymentComplete 
 }: RazorpayQRDisplayProps) {
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success'>('pending');
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success' | 'timeout'>('pending');
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [qrSize, setQrSize] = useState(360);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     const calc = () => setQrSize(Math.min(560, Math.max(360, Math.floor(window.innerWidth * 0.94))));
@@ -90,6 +91,8 @@ export function RazorpayQRDisplay({
         if (prev <= 1) {
           clearInterval(timerInterval);
           if (pollingInterval) clearInterval(pollingInterval);
+          setPaymentStatus('timeout');
+          setPaymentError('Payment timed out. Please choose another method or retry.');
           return 0;
         }
         return prev - 1;
@@ -181,9 +184,18 @@ export function RazorpayQRDisplay({
               </div>
             )}
 
-            {timeLeft === 0 && (
-              <div className="mt-4 bg-destructive/10 text-destructive p-3 rounded-lg text-center text-sm">
-                QR code expired. Please try again.
+            {(timeLeft === 0 || paymentStatus === 'timeout' || paymentError) && (
+              <div className="mt-4 space-y-3">
+                <div className="bg-destructive/10 text-destructive p-3 rounded-lg text-center text-sm">
+                  {paymentError || 'Payment timed out. QR code expired.'}
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={handleClose}
+                >
+                  Choose Different Method
+                </Button>
               </div>
             )}
           </div>
