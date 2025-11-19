@@ -2142,6 +2142,33 @@ export type Database = {
           },
         ]
       }
+      non_delivery_days: {
+        Row: {
+          created_at: string | null
+          date: string
+          description: string | null
+          id: string
+          reason: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          description?: string | null
+          id?: string
+          reason: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+          reason?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           admin_notifications: boolean
@@ -5401,6 +5428,10 @@ export type Database = {
         }
         Returns: Json
       }
+      calculate_country_delight_next_delivery: {
+        Args: { p_current_date?: string; p_subscription_id: string }
+        Returns: string
+      }
       calculate_delivery_payout: {
         Args: {
           p_agent_id?: string
@@ -6482,6 +6513,10 @@ export type Database = {
       }
       update_seller_order_status: {
         Args: { p_action: string; p_order_id: string; p_seller_user_id: string }
+        Returns: Json
+      }
+      update_subscription_next_delivery: {
+        Args: { p_subscription_id: string }
         Returns: Json
       }
       update_subscription_next_delivery_dates: {
