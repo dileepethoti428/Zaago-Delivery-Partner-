@@ -131,6 +131,7 @@ export type Database = {
           is_primary: boolean | null
           is_verified: boolean | null
           updated_at: string | null
+          upi_id: string | null
         }
         Insert: {
           account_holder_name: string
@@ -144,6 +145,7 @@ export type Database = {
           is_primary?: boolean | null
           is_verified?: boolean | null
           updated_at?: string | null
+          upi_id?: string | null
         }
         Update: {
           account_holder_name?: string
@@ -157,6 +159,7 @@ export type Database = {
           is_primary?: boolean | null
           is_verified?: boolean | null
           updated_at?: string | null
+          upi_id?: string | null
         }
         Relationships: [
           {
@@ -182,6 +185,7 @@ export type Database = {
           dl_number: string | null
           dl_verified: boolean | null
           id: string
+          kyc_status: string | null
           profile_photo_url: string | null
           rejection_reason: string | null
           updated_at: string | null
@@ -204,6 +208,7 @@ export type Database = {
           dl_number?: string | null
           dl_verified?: boolean | null
           id?: string
+          kyc_status?: string | null
           profile_photo_url?: string | null
           rejection_reason?: string | null
           updated_at?: string | null
@@ -226,6 +231,7 @@ export type Database = {
           dl_number?: string | null
           dl_verified?: boolean | null
           id?: string
+          kyc_status?: string | null
           profile_photo_url?: string | null
           rejection_reason?: string | null
           updated_at?: string | null
@@ -420,14 +426,21 @@ export type Database = {
       agent_settings: {
         Row: {
           agent_id: string
+          auto_accept_orders: boolean | null
           auto_logout: boolean | null
           created_at: string | null
+          dark_mode: boolean | null
           id: string
+          is_available: boolean | null
           language: string | null
           location_services: boolean | null
           notification_frequency: string | null
+          notify_earnings_updates: boolean | null
+          notify_new_orders: boolean | null
+          notify_promotions: boolean | null
           personal_info: Json | null
           preferred_areas: Json | null
+          preferred_language: string | null
           push_notifications: boolean | null
           ringtone_enabled: boolean | null
           ringtone_type: string | null
@@ -439,14 +452,21 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          auto_accept_orders?: boolean | null
           auto_logout?: boolean | null
           created_at?: string | null
+          dark_mode?: boolean | null
           id?: string
+          is_available?: boolean | null
           language?: string | null
           location_services?: boolean | null
           notification_frequency?: string | null
+          notify_earnings_updates?: boolean | null
+          notify_new_orders?: boolean | null
+          notify_promotions?: boolean | null
           personal_info?: Json | null
           preferred_areas?: Json | null
+          preferred_language?: string | null
           push_notifications?: boolean | null
           ringtone_enabled?: boolean | null
           ringtone_type?: string | null
@@ -458,14 +478,21 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          auto_accept_orders?: boolean | null
           auto_logout?: boolean | null
           created_at?: string | null
+          dark_mode?: boolean | null
           id?: string
+          is_available?: boolean | null
           language?: string | null
           location_services?: boolean | null
           notification_frequency?: string | null
+          notify_earnings_updates?: boolean | null
+          notify_new_orders?: boolean | null
+          notify_promotions?: boolean | null
           personal_info?: Json | null
           preferred_areas?: Json | null
+          preferred_language?: string | null
           push_notifications?: boolean | null
           ringtone_enabled?: boolean | null
           ringtone_type?: string | null
@@ -1433,6 +1460,8 @@ export type Database = {
           total_deliveries: number | null
           total_earnings: number | null
           updated_at: string | null
+          vehicle_number: string | null
+          vehicle_type: string | null
           verification_status: string | null
         }
         Insert: {
@@ -1457,6 +1486,8 @@ export type Database = {
           total_deliveries?: number | null
           total_earnings?: number | null
           updated_at?: string | null
+          vehicle_number?: string | null
+          vehicle_type?: string | null
           verification_status?: string | null
         }
         Update: {
@@ -1481,6 +1512,8 @@ export type Database = {
           total_deliveries?: number | null
           total_earnings?: number | null
           updated_at?: string | null
+          vehicle_number?: string | null
+          vehicle_type?: string | null
           verification_status?: string | null
         }
         Relationships: []

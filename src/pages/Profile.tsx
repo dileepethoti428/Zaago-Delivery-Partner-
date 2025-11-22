@@ -24,8 +24,8 @@ export default function Profile() {
   };
 
   const menuItems = [
-    { icon: User, label: 'Edit Profile', action: () => console.log('Edit profile') },
-    { icon: DollarSign, label: 'Payout Settings', action: () => console.log('Payout settings') },
+    { icon: User, label: 'Edit Profile', action: () => navigate('/settings') },
+    { icon: DollarSign, label: 'Payout Settings', action: () => navigate('/settings') },
     { icon: HelpCircle, label: 'Help & Support', action: () => console.log('Help') },
   ];
 
