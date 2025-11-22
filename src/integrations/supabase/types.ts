@@ -2584,8 +2584,63 @@ export type Database = {
           },
         ]
       }
+      order_visibility_logs: {
+        Row: {
+          acceptance_time: string | null
+          created_at: string | null
+          event_timestamp: string | null
+          event_type: string
+          id: string
+          metadata: Json | null
+          order_id: string
+          status_after: string | null
+          status_before: string | null
+          visible_until: string | null
+        }
+        Insert: {
+          acceptance_time?: string | null
+          created_at?: string | null
+          event_timestamp?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          order_id: string
+          status_after?: string | null
+          status_before?: string | null
+          visible_until?: string | null
+        }
+        Update: {
+          acceptance_time?: string | null
+          created_at?: string | null
+          event_timestamp?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          order_id?: string
+          status_after?: string | null
+          status_before?: string | null
+          visible_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_visibility_logs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_visibility_logs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
+          acceptance_window_expired: boolean | null
           accepted_at: string | null
           address: Json
           agent_id: string | null
@@ -2616,6 +2671,7 @@ export type Database = {
           pickup_address: string | null
           pickup_location: Json | null
           pickup_status: string | null
+          seller_accepted_at: string | null
           seller_latitude: number | null
           seller_longitude: number | null
           seller_name: string | null
@@ -2628,8 +2684,11 @@ export type Database = {
           tracking_id: string
           updated_at: string
           user_id: string | null
+          visible: boolean | null
+          visible_until: string | null
         }
         Insert: {
+          acceptance_window_expired?: boolean | null
           accepted_at?: string | null
           address: Json
           agent_id?: string | null
@@ -2660,6 +2719,7 @@ export type Database = {
           pickup_address?: string | null
           pickup_location?: Json | null
           pickup_status?: string | null
+          seller_accepted_at?: string | null
           seller_latitude?: number | null
           seller_longitude?: number | null
           seller_name?: string | null
@@ -2672,8 +2732,11 @@ export type Database = {
           tracking_id: string
           updated_at?: string
           user_id?: string | null
+          visible?: boolean | null
+          visible_until?: string | null
         }
         Update: {
+          acceptance_window_expired?: boolean | null
           accepted_at?: string | null
           address?: Json
           agent_id?: string | null
@@ -2704,6 +2767,7 @@ export type Database = {
           pickup_address?: string | null
           pickup_location?: Json | null
           pickup_status?: string | null
+          seller_accepted_at?: string | null
           seller_latitude?: number | null
           seller_longitude?: number | null
           seller_name?: string | null
@@ -2716,6 +2780,8 @@ export type Database = {
           tracking_id?: string
           updated_at?: string
           user_id?: string | null
+          visible?: boolean | null
+          visible_until?: string | null
         }
         Relationships: [
           {
@@ -3385,12 +3451,14 @@ export type Database = {
       products: {
         Row: {
           average_rating: number | null
+          base_price: number
           benefits: string[] | null
           category: string | null
           category_id: string | null
           created_at: string
           description: string | null
           discount_percentage: number | null
+          gst_percentage: number | null
           id: string
           image_url: string | null
           images: string[] | null
@@ -3403,6 +3471,7 @@ export type Database = {
           product_lng: number | null
           seller_id: string | null
           stock_quantity: number | null
+          tags: string[] | null
           total_ratings: number | null
           total_reviews: number | null
           type: string | null
@@ -3411,12 +3480,14 @@ export type Database = {
         }
         Insert: {
           average_rating?: number | null
+          base_price: number
           benefits?: string[] | null
           category?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
           discount_percentage?: number | null
+          gst_percentage?: number | null
           id?: string
           image_url?: string | null
           images?: string[] | null
@@ -3429,6 +3500,7 @@ export type Database = {
           product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
+          tags?: string[] | null
           total_ratings?: number | null
           total_reviews?: number | null
           type?: string | null
@@ -3437,12 +3509,14 @@ export type Database = {
         }
         Update: {
           average_rating?: number | null
+          base_price?: number
           benefits?: string[] | null
           category?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
           discount_percentage?: number | null
+          gst_percentage?: number | null
           id?: string
           image_url?: string | null
           images?: string[] | null
@@ -3455,6 +3529,7 @@ export type Database = {
           product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
+          tags?: string[] | null
           total_ratings?: number | null
           total_reviews?: number | null
           type?: string | null
@@ -5968,6 +6043,10 @@ export type Database = {
           subscriptions_processed: number
         }[]
       }
+      get_product_sales_count: {
+        Args: { product_uuid: string }
+        Returns: number
+      }
       get_product_special_offer: {
         Args: { p_product_id: string }
         Returns: {
@@ -6385,6 +6464,14 @@ export type Database = {
           }
       reconcile_completed_orders: { Args: never; Returns: Json }
       refresh_todays_best_deals: { Args: never; Returns: undefined }
+      regenerate_all_product_tags: {
+        Args: never
+        Returns: {
+          new_tags: string[]
+          product_id: string
+          product_name: string
+        }[]
+      }
       reject_delivery_agent: {
         Args: { p_admin_user_id: string; p_agent_id: string; p_reason?: string }
         Returns: Json
