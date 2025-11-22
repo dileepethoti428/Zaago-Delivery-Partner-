@@ -7,6 +7,7 @@ import ManageDelivery from '@/pages/ManageDelivery';
 import DeliveryHistory from '@/pages/DeliveryHistory';
 import Earnings from '@/pages/Earnings';
 import Profile from '@/pages/Profile';
+import Settings from '@/pages/Settings';
 import UploadDocuments from '@/pages/UploadDocuments';
 import PendingApproval from '@/pages/PendingApproval';
 import Rejected from '@/pages/Rejected';
@@ -71,6 +72,10 @@ export const router = createBrowserRouter([
           {
             path: '/profile',
             element: <Profile />,
+          },
+          {
+            path: '/settings',
+            element: <Settings />,
           },
         ],
       },
