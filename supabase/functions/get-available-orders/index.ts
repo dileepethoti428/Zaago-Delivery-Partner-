@@ -165,8 +165,7 @@ serve(async (req) => {
 
     // Get two types of orders:
     // 1. Available orders (packed, unassigned) - for agent to accept
-    // 2. Agent's own RECENT active orders (assigned/picked_up in last 48 hours) - to track their deliveries
-    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    // 2. Agent's own active orders (assigned/picked_up) - to track their deliveries until completion
     
     const { data: orders, error } = await supabase
       .from('orders')
@@ -177,7 +176,7 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .or(`and(status.eq.packed,agent_id.is.null),and(status.in.(assigned,picked_up),agent_id.eq.${deliveryAgentId},updated_at.gte.${twoDaysAgo})`)
+      .or(`and(status.eq.packed,agent_id.is.null),and(status.in.(assigned,picked_up),agent_id.eq.${deliveryAgentId})`)
       .order('created_at', { ascending: true }); // Show oldest orders first
 
     // Filter out any orders that have been completed
