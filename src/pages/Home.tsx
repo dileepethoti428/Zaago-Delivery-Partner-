@@ -102,13 +102,17 @@ export default function Home() {
 
   useEffect(() => {
     startWatch();
-    startOrdersRealtime();
+    
+    // Start realtime with current agent's internal ID for proper filtering
+    if (profile?.id) {
+      startOrdersRealtime(profile.id);
+    }
     
     return () => {
       stopWatch();
       stopOrdersRealtime();
     };
-  }, []);
+  }, [profile?.id]);
 
   const handleRefresh = useCallback(async () => {
     // Refresh location first to get fresh coordinates

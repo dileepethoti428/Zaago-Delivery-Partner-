@@ -144,35 +144,68 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
 
 // Initialize realtime subscription
 let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
-let debounceTimer: NodeJS.Timeout | null = null;
+let currentAgentIdForRealtime: string | null = null;
 
-export function startOrdersRealtime() {
+export function startOrdersRealtime(agentId?: string) {
+  // Store the agent ID for filtering
+  if (agentId) {
+    currentAgentIdForRealtime = agentId;
+  }
+  
   if (realtimeChannel) return;
+
+  console.log('📡 Starting orders realtime subscription for agent:', currentAgentIdForRealtime);
 
   realtimeChannel = supabase
     .channel('orders-realtime')
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'orders' },
-      () => {
-        // Debounce reload to avoid excessive refreshes
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-          const { lastAgentId } = useOrdersStore.getState();
-          useOrdersStore.getState().load(lastAgentId);
-        }, 400);
+      { event: 'UPDATE', schema: 'public', table: 'orders' },
+      (payload) => {
+        const updatedOrder = payload.new as any;
+        const orderId = updatedOrder.id;
+        const newStatus = updatedOrder.status;
+        const assignedAgentId = updatedOrder.agent_id;
+        
+        console.log('📡 Realtime UPDATE:', { orderId, newStatus, assignedAgentId, currentAgent: currentAgentIdForRealtime });
+        
+        // Rule: If order is assigned to someone else, REMOVE INSTANTLY
+        // No re-fetch, no polling - just remove from local state
+        if (assignedAgentId && assignedAgentId !== currentAgentIdForRealtime) {
+          console.log('🗑️ Order assigned to another agent - removing instantly');
+          useOrdersStore.setState((state) => ({
+            orders: state.orders.filter((o) => o.id !== orderId),
+          }));
+        }
+        
+        // If order status changed to something not available, remove it
+        if (newStatus && !['accepted', 'packed'].includes(newStatus) && !assignedAgentId) {
+          console.log('🗑️ Order status changed to unavailable - removing');
+          useOrdersStore.setState((state) => ({
+            orders: state.orders.filter((o) => o.id !== orderId),
+          }));
+        }
       }
     )
-    .subscribe();
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'orders' },
+      (payload) => {
+        // New order - could optionally add to list, but for now just log
+        console.log('📡 Realtime INSERT - new order available:', payload.new);
+        // User can refresh to see new orders
+      }
+    )
+    .subscribe((status) => {
+      console.log('📡 Realtime subscription status:', status);
+    });
 }
 
 export function stopOrdersRealtime() {
   if (realtimeChannel) {
+    console.log('📡 Stopping orders realtime subscription');
     supabase.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
+  currentAgentIdForRealtime = null;
 }
