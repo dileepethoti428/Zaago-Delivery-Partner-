@@ -21,6 +21,7 @@ export type LocationState = {
   init: () => Promise<void>;
   startWatch: () => Promise<void>;
   stopWatch: () => void;
+  refreshLocation: () => Promise<void>;
   refreshLabel: () => Promise<void>;
   reset: () => void;
 };
@@ -170,6 +171,54 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     }
 
     set({ isWatching: false });
+  },
+
+  refreshLocation: async () => {
+    if (!canUseGeolocation()) {
+      set({ error: 'Geolocation not supported', permission: 'unsupported' });
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location: LastKnownLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp,
+          };
+
+          set({ 
+            lastKnown: location,
+            permission: 'granted',
+            error: null,
+          });
+
+          // Persist to localStorage
+          try {
+            const data = {
+              location,
+              label: get().label,
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          } catch (error) {
+            console.error('Failed to save location to storage:', error);
+          }
+
+          // Trigger label refresh in background
+          get().refreshLabel();
+          
+          resolve();
+        },
+        (error) => {
+          console.error('Location refresh failed:', error);
+          set({ error: error.message });
+          resolve(); // Resolve anyway so orders can still be fetched
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
   },
 
   refreshLabel: async () => {
