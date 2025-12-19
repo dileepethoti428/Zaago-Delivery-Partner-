@@ -1,9 +1,13 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
+import { useAgentGuard } from '@/hooks/useAgentGuard';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export function RequireAuth() {
   const { session, loading } = useAuthStore();
+
+  // Run agent guard on every protected route
+  useAgentGuard();
 
   if (loading) {
     return (

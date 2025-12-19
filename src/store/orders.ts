@@ -4,6 +4,7 @@ import { fetchOpenOrders, fetchAvailableOrders } from '@/services/orders';
 import { supabase } from '@/integrations/supabase/client';
 import { cache } from '@/utils/cache';
 import { toast } from '@/hooks/use-toast';
+import { agentSession } from '@/utils/agentSession';
 
 type OrdersState = {
   loading: boolean;
@@ -29,9 +30,16 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       set({ lastAgentId: agentId });
     }
 
-    const cached = cache.get<ZaagoOrder[]>('ORDERS');
-    if (cached) {
-      set({ orders: cached, loading: true });
+    const currentAgentId = agentSession.getCurrentAgentId();
+    
+    // Only use cache if same agent
+    if (currentAgentId && agentId && currentAgentId === agentId) {
+      const cached = cache.getForAgent<ZaagoOrder[]>('ORDERS', currentAgentId);
+      if (cached) {
+        set({ orders: cached, loading: true });
+      } else {
+        set({ loading: true, error: null });
+      }
     } else {
       set({ loading: true, error: null });
     }
@@ -44,7 +52,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       const filtered = rows.filter(r => 
         ['new', 'open', 'packed', 'assigned', 'picked_up'].includes((r.status ?? '').toLowerCase())
       );
-      cache.set('ORDERS', filtered);
+      
+      // Save with agent ID if available
+      if (agentId) {
+        cache.setForAgent('ORDERS', filtered, agentId);
+      }
       set({ orders: filtered, loading: false });
     } catch (e: any) {
       set({ error: e?.message ?? 'Failed to load orders', loading: false });

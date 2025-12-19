@@ -13,6 +13,10 @@ import { useAuthStore } from '@/store/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from '@/utils/validation';
+import { agentSession } from '@/utils/agentSession';
+import { cache } from '@/utils/cache';
+import { advancedCache } from '@/utils/advancedCache';
+import { queryClient } from '@/providers/AppProviders';
 
 type Mode = 'login' | 'signup' | 'reset';
 
@@ -49,7 +53,7 @@ export default function Login() {
 
   const handleLogin = async (data: LoginFormData) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
       email: data.email,
       password: data.password,
     });
@@ -73,6 +77,24 @@ export default function Login() {
       }
       setLoading(false);
     } else {
+      // Get new user ID
+      const newUserId = authData.user?.id;
+      const previousAgentId = agentSession.getCurrentAgentId();
+
+      // Check if different agent is logging in
+      if (previousAgentId && previousAgentId !== newUserId) {
+        console.log('🔄 Different agent detected, clearing all caches...');
+        // Clear ALL previous agent data
+        cache.clearAll();
+        advancedCache.clear();
+        queryClient.clear();
+      }
+
+      // Store new agent ID
+      if (newUserId) {
+        agentSession.setCurrentAgentId(newUserId);
+      }
+
       await fetchProfile();
       // Navigation handled by useEffect
     }

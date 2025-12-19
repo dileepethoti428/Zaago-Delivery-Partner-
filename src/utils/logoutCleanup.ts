@@ -5,6 +5,7 @@ import { queryClient } from '@/providers/AppProviders';
 import { stopOrdersRealtime, useOrdersStore } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
 import { useAppStore } from '@/store/app';
+import { agentSession } from '@/utils/agentSession';
 
 // All known localStorage keys to clear on logout
 const STORAGE_KEYS_TO_CLEAR = [
@@ -51,8 +52,11 @@ export async function cleanupOnLogout(): Promise<void> {
 
   try {
     // 3. Clear all localStorage caches
-    cache.clear(); // Clears zaago_cache_* keys
+    cache.clearAll(); // Clears all zaago_cache_* keys (agent-aware)
     advancedCache.clear(); // Clears zaago_v2_* keys
+    
+    // Clear agent session tracking
+    agentSession.clearCurrentAgentId();
     
     // Clear additional specific keys
     STORAGE_KEYS_TO_CLEAR.forEach(key => {
