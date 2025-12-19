@@ -55,44 +55,6 @@ serve(async (req) => {
 
     console.log(`✅ Agent ${agent_id} validated successfully`);
 
-    // ATOMIC CHECK: Verify order is still available before accepting
-    const { data: orderData, error: orderError } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        items
-      `)
-      .eq('id', order_id)
-      .is('agent_id', null) // Only orders without an agent
-      .in('status', ['accepted', 'packed']) // Accept pre-assignment statuses
-      .maybeSingle();
-
-    if (orderError) {
-      console.error('❌ Database error fetching order:', orderError);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Database error while fetching order',
-          error_code: 'DATABASE_ERROR'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    if (!orderData) {
-      console.error('❌ Order not available:', order_id);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'This order is no longer available (already assigned or cancelled)',
-          error_code: 'ORDER_UNAVAILABLE'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
-      );
-    }
-    
-    console.log(`✅ Order ${order_id} is available for acceptance by agent ${agent_id}`);
-
     // Get payout configuration for earnings calculation
     const { data: payoutConfig } = await supabase
       .from('payout_config')
@@ -110,14 +72,72 @@ serve(async (req) => {
     const peakEnd = payoutConfig?.peak_hour_end || '12:00';
     const isPeakHour = currentTime >= peakStart && currentTime <= peakEnd;
 
-    // Get seller information for pickup location
+    // Calculate expected payout (estimated distance: 5km for now, will be updated on completion)
+    const estimatedDistance = 5;
+    const distancePay = estimatedDistance > baseDistanceKm ? 
+      (estimatedDistance - baseDistanceKm) * perKmRate : 0;
+    
+    const subtotal = basePay + distancePay;
+    const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
+    const platformFee = 13;
+    const expectedPayout = subtotal + surgeAmount - platformFee;
+    
+    const acceptedAt = new Date().toISOString();
+
+    // ============================================
+    // ATOMIC UPDATE: Only first agent wins
+    // This combines the check + update in ONE query
+    // If agent_id is already set, 0 rows are updated
+    // ============================================
+    const { data: updatedOrder, error: updateError } = await supabase
+      .from('orders')
+      .update({
+        status: 'assigned',
+        agent_id: agentData.id,
+        accepted_at: acceptedAt,
+        updated_at: acceptedAt
+      })
+      .eq('id', order_id)
+      .is('agent_id', null)  // CRITICAL: Only if not yet assigned
+      .in('status', ['accepted', 'packed'])  // Only if still available
+      .select(`*, items`)
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('❌ Database error updating order:', updateError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Database error while accepting order',
+          error_code: 'DATABASE_ERROR'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    // If no rows updated, order was already taken by another agent
+    if (!updatedOrder) {
+      console.error('❌ Order already accepted by another agent:', order_id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'This order has already been accepted by another agent',
+          error_code: 'ORDER_ALREADY_ACCEPTED'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+      );
+    }
+
+    console.log(`✅ Order ${order_id} atomically accepted by agent ${agent_id}`);
+
+    // Get seller information for pickup location (after successful acceptance)
     let pickupLocation = null;
     let pickupAddress = null;
     let sellerName = null;
     let sellerPhone = null;
 
-    if (orderData.items && orderData.items.length > 0) {
-      const sellerId = orderData.items[0].seller_id;
+    if (updatedOrder.items && updatedOrder.items.length > 0) {
+      const sellerId = updatedOrder.items[0].seller_id;
       
       if (sellerId) {
         const { data: sellerData, error: sellerError } = await supabase
@@ -139,7 +159,6 @@ serve(async (req) => {
               if (typeof sellerData.address === 'string') {
                 normalizedAddress = sellerData.address;
               } else if (typeof sellerData.address === 'object') {
-                // Handle jsonb address format
                 if (sellerData.address.full_address) {
                   normalizedAddress = sellerData.address.full_address;
                 } else if (sellerData.address.addressLine1) {
@@ -162,7 +181,6 @@ serve(async (req) => {
               }
             }
             
-            // Fallback to business name if address is still generic
             if (normalizedAddress === 'Pickup Location' && sellerData.business_name) {
               normalizedAddress = sellerData.business_name;
             }
@@ -175,39 +193,17 @@ serve(async (req) => {
       }
     }
 
-    // Calculate expected payout (estimated distance: 5km for now, will be updated on completion)
-    const estimatedDistance = 5; // Default estimate
-    const distancePay = estimatedDistance > baseDistanceKm ? 
-      (estimatedDistance - baseDistanceKm) * perKmRate : 0;
-    
-    const subtotal = basePay + distancePay;
-    const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
-    const platformFee = 13;
-    const expectedPayout = subtotal + surgeAmount - platformFee;
-    
-    const acceptedAt = new Date().toISOString();
-
-    // Update order status to assigned and save pickup location data
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({
-        status: 'assigned',
-        agent_id: agentData.id, // Use delivery agent's primary key
-        accepted_at: acceptedAt,
-        pickup_location: pickupLocation,
-        pickup_address: pickupAddress,
-        seller_name: sellerName,
-        seller_phone: sellerPhone,
-        updated_at: acceptedAt
-      })
-      .eq('id', order_id);
-
-    if (updateError) {
-      console.error('Error updating order:', updateError);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Failed to accept order' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
+    // Update pickup details in a separate query (non-critical)
+    if (pickupLocation || pickupAddress || sellerName || sellerPhone) {
+      await supabase
+        .from('orders')
+        .update({
+          pickup_location: pickupLocation,
+          pickup_address: pickupAddress,
+          seller_name: sellerName,
+          seller_phone: sellerPhone
+        })
+        .eq('id', order_id);
     }
 
     console.log(`Order ${order_id} successfully accepted by agent ${agent_id}`);
