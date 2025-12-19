@@ -1037,6 +1037,7 @@ export type Database = {
           image_url: string | null
           is_active: boolean
           name: string
+          seller_id: string | null
           sort_order: number | null
           updated_at: string
         }
@@ -1047,6 +1048,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           name: string
+          seller_id?: string | null
           sort_order?: number | null
           updated_at?: string
         }
@@ -1057,6 +1059,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           name?: string
+          seller_id?: string | null
           sort_order?: number | null
           updated_at?: string
         }
@@ -2698,6 +2701,7 @@ export type Database = {
           otp_verified: boolean | null
           otp_verified_at: string | null
           otp_verified_by: string | null
+          packed_at: string | null
           payment_id: string | null
           payment_method: string | null
           payment_status: string | null
@@ -2746,6 +2750,7 @@ export type Database = {
           otp_verified?: boolean | null
           otp_verified_at?: string | null
           otp_verified_by?: string | null
+          packed_at?: string | null
           payment_id?: string | null
           payment_method?: string | null
           payment_status?: string | null
@@ -2794,6 +2799,7 @@ export type Database = {
           otp_verified?: boolean | null
           otp_verified_at?: string | null
           otp_verified_by?: string | null
+          packed_at?: string | null
           payment_id?: string | null
           payment_method?: string | null
           payment_status?: string | null
@@ -3504,6 +3510,7 @@ export type Database = {
           product_lng: number | null
           seller_id: string | null
           stock_quantity: number | null
+          subcategory_id: string | null
           tags: string[] | null
           total_ratings: number | null
           total_reviews: number | null
@@ -3533,6 +3540,7 @@ export type Database = {
           product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
+          subcategory_id?: string | null
           tags?: string[] | null
           total_ratings?: number | null
           total_reviews?: number | null
@@ -3562,6 +3570,7 @@ export type Database = {
           product_lng?: number | null
           seller_id?: string | null
           stock_quantity?: number | null
+          subcategory_id?: string | null
           tags?: string[] | null
           total_ratings?: number | null
           total_reviews?: number | null
@@ -3582,6 +3591,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
             referencedColumns: ["id"]
           },
         ]
@@ -4218,6 +4234,50 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subcategories: {
+        Row: {
+          category_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          name: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          category_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          name: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          category_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          name?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcategories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
             referencedColumns: ["id"]
           },
         ]
@@ -5476,15 +5536,15 @@ export type Database = {
       activate_delivery_agent: { Args: { agent_email: string }; Returns: Json }
       apply_coupon:
         | {
+            Args: { p_coupon_code: string; p_order_total: number }
+            Returns: Json
+          }
+        | {
             Args: {
               p_coupon_code: string
               p_order_total: number
               p_user_id?: string
             }
-            Returns: Json
-          }
-        | {
-            Args: { p_coupon_code: string; p_order_total: number }
             Returns: Json
           }
       apply_targeted_coupon: {
@@ -5819,7 +5879,6 @@ export type Database = {
               p_end_date: string
               p_start_date: string
               p_subscription_id: string
-              p_user_id: string
             }
             Returns: Json
           }
@@ -5828,6 +5887,7 @@ export type Database = {
               p_end_date: string
               p_start_date: string
               p_subscription_id: string
+              p_user_id: string
             }
             Returns: Json
           }
@@ -6117,6 +6177,8 @@ export type Database = {
               range_km?: number
             }
             Returns: {
+              category_id: string
+              category_name: string
               discount_percentage: number
               discounted_price: number
               distance_km: number

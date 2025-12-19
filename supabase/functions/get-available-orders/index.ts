@@ -379,9 +379,9 @@ serve(async (req) => {
     
     filteredOrders = ordersWithSlots;
 
-    // Apply 15km radius filtering if agent location is available
+    // Apply 10km radius filtering if agent location is available
     if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
-      console.log('Applying 15km radius filter for agent location:', {
+      console.log('Applying 10km radius filter for agent location:', {
         lat: agentLocation.latitude,
         lng: agentLocation.longitude
       });
@@ -583,8 +583,8 @@ serve(async (req) => {
             
             console.log(`📊 Order ${order.id} - Agent→Shop: ${agentToShopDistance}km, Total: ${totalDistance}km`);
             
-            // Include orders within 15km radius
-            if (totalDistance <= 15) {
+            // Include orders within 10km radius
+            if (totalDistance <= 10) {
               // Calculate shop-to-customer distance for accurate payout with error handling
               let shopToCustomerDistance = totalDistance - agentToShopDistance;
               
@@ -638,7 +638,7 @@ serve(async (req) => {
                 });
               }
             } else {
-              console.log(`❌ Order ${order.id} too far: ${totalDistance}km > 15km`);
+              console.log(`❌ Order ${order.id} too far: ${totalDistance}km > 10km`);
             }
           } catch (distanceError) {
             console.warn(`Failed to calculate distance for order ${order.id}:`, distanceError);
@@ -653,7 +653,7 @@ serve(async (req) => {
       }
       
       filteredOrders = nearbyOrders;
-      console.log(`After 15km filtering: ${filteredOrders.length} orders remain`);
+      console.log(`After 10km filtering: ${filteredOrders.length} orders remain`);
     } else {
       console.log('No agent location available, skipping distance filtering');
     }

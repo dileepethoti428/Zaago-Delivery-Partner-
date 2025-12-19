@@ -9,7 +9,7 @@ import type { GeoPoint } from '@/utils/coords';
 export function annotateAndFilterOrders(
   orders: ZaagoOrder[],
   agent: GeoPoint | null,
-  radiusKm = 15
+  radiusKm = 10
 ): (ZaagoOrder & { distanceKm?: number })[] {
   if (!agent) return [];
 
