@@ -15,7 +15,7 @@ export default function Rejected() {
 
   const handleLogout = async () => {
     await signOut();
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   return (

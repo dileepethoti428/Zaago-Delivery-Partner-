@@ -15,6 +15,7 @@ type OrdersState = {
   getOrderById: (id: string) => ZaagoOrder | undefined;
   acceptOrder: (orderId: string, agentId: string) => Promise<void>;
   rejectOrder: (orderId: string, agentId: string) => Promise<void>;
+  reset: () => void;
 };
 
 export const useOrdersStore = create<OrdersState>((set, get) => ({
@@ -117,6 +118,15 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       await get().load();
       throw error;
     }
+  },
+
+  reset: () => {
+    set({
+      loading: false,
+      error: null,
+      orders: [],
+      lastAgentId: undefined,
+    });
   },
 }));
 

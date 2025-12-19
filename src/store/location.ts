@@ -22,6 +22,7 @@ export type LocationState = {
   startWatch: () => Promise<void>;
   stopWatch: () => void;
   refreshLabel: () => Promise<void>;
+  reset: () => void;
 };
 
 const STORAGE_KEY = 'zaago_last_loc';
@@ -196,5 +197,37 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         console.error('Failed to update label in storage:', error);
       }
     }
+  },
+
+  reset: () => {
+    // Stop any active watch
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+    
+    if (labelTimeoutId) {
+      clearTimeout(labelTimeoutId);
+      labelTimeoutId = null;
+    }
+    
+    // Reset module-level variables
+    lastUpdateTime = 0;
+    
+    // Clear location storage
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to remove location storage:', e);
+    }
+    
+    // Reset state
+    set({
+      permission: 'prompt',
+      lastKnown: null,
+      label: null,
+      isWatching: false,
+      error: null,
+    });
   },
 }));
