@@ -7,6 +7,7 @@ import { Toaster as SonnerToaster } from "sonner";
 import { useAuthStore } from "@/store/auth";
 import { useLocationStore } from "@/store/location";
 import { advancedCache } from '@/utils/advancedCache';
+import { agentSession } from '@/utils/agentSession';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,9 +24,21 @@ export const queryClient = new QueryClient({
 
 const persister = createSyncStoragePersister({
   storage: {
-    getItem: (key) => advancedCache.get(key),
-    setItem: (key, value) => advancedCache.set(key, value, 10 * 60 * 1000),
-    removeItem: (key) => advancedCache.delete(key),
+    getItem: (key) => {
+      const agentId = agentSession.getCurrentAgentId();
+      const fullKey = agentId ? `${key}_${agentId}` : key;
+      return advancedCache.get(fullKey);
+    },
+    setItem: (key, value) => {
+      const agentId = agentSession.getCurrentAgentId();
+      const fullKey = agentId ? `${key}_${agentId}` : key;
+      advancedCache.set(fullKey, value, 10 * 60 * 1000);
+    },
+    removeItem: (key) => {
+      const agentId = agentSession.getCurrentAgentId();
+      const fullKey = agentId ? `${key}_${agentId}` : key;
+      advancedCache.delete(fullKey);
+    },
   },
 });
 
