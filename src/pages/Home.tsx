@@ -111,6 +111,9 @@ export default function Home() {
   }, []);
 
   const handleRefresh = useCallback(async () => {
+    // Refresh location first to get fresh coordinates
+    await useLocationStore.getState().refreshLocation();
+    // Then refetch orders with updated location
     await refetch();
   }, [refetch]);
 
