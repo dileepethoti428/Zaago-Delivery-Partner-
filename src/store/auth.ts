@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { cleanupOnLogout } from '@/utils/logoutCleanup';
 
 interface Profile {
   user_id: string;
@@ -85,7 +86,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ session: null, user: null, profile: null });
+    // Run comprehensive cleanup (includes Supabase signOut)
+    await cleanupOnLogout();
+    // Reset auth store state
+    set({ session: null, user: null, profile: null, loading: false });
   },
 }));
