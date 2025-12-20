@@ -1274,6 +1274,9 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
+          latitude: number | null
+          location_id: number | null
+          longitude: number | null
           phone: string
           pincode: string | null
           seller_id: string
@@ -1287,6 +1290,9 @@ export type Database = {
           email?: string | null
           full_name: string
           id?: string
+          latitude?: number | null
+          location_id?: number | null
+          longitude?: number | null
           phone: string
           pincode?: string | null
           seller_id: string
@@ -1300,6 +1306,9 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          latitude?: number | null
+          location_id?: number | null
+          longitude?: number | null
           phone?: string
           pincode?: string | null
           seller_id?: string
@@ -1307,6 +1316,64 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      daily_orders: {
+        Row: {
+          assigned_agent_id: string | null
+          created_at: string | null
+          customer_id: string
+          date: string
+          id: string
+          location_id: number | null
+          quantity: number
+          status: string
+          subscription_id: string
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          created_at?: string | null
+          customer_id: string
+          date: string
+          id?: string
+          location_id?: number | null
+          quantity: number
+          status?: string
+          subscription_id: string
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          created_at?: string | null
+          customer_id?: string
+          date?: string
+          id?: string
+          location_id?: number | null
+          quantity?: number
+          status?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_orders_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_orders_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       daily_subscription_processing: {
         Row: {
@@ -1454,6 +1521,8 @@ export type Database = {
           is_online: boolean | null
           last_delivery_at: string | null
           last_status_change: string | null
+          location_id: number | null
+          max_capacity: number
           name: string
           onesignal_player_id: string | null
           performance_score: number | null
@@ -1480,6 +1549,8 @@ export type Database = {
           is_online?: boolean | null
           last_delivery_at?: string | null
           last_status_change?: string | null
+          location_id?: number | null
+          max_capacity?: number
           name: string
           onesignal_player_id?: string | null
           performance_score?: number | null
@@ -1506,6 +1577,8 @@ export type Database = {
           is_online?: boolean | null
           last_delivery_at?: string | null
           last_status_change?: string | null
+          location_id?: number | null
+          max_capacity?: number
           name?: string
           onesignal_player_id?: string | null
           performance_score?: number | null
@@ -4444,6 +4517,44 @@ export type Database = {
           },
         ]
       }
+      subscription_overrides: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          is_skip_day: boolean | null
+          override_quantity: number | null
+          subscription_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          is_skip_day?: boolean | null
+          override_quantity?: number | null
+          subscription_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_skip_day?: boolean | null
+          override_quantity?: number | null
+          subscription_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_overrides_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_vacation_periods: {
         Row: {
           created_at: string
@@ -4549,7 +4660,7 @@ export type Database = {
           available_credit: number | null
           created_at: string
           created_by: string | null
-          customer_id: string | null
+          customer_id: string
           delivery_address: Json | null
           delivery_days: string[] | null
           delivery_time: string | null
@@ -4557,6 +4668,7 @@ export type Database = {
           end_date: string | null
           id: string
           is_active: boolean
+          location_id: number | null
           next_delivery_date: string
           notification_advance_hours: number | null
           product_id: string
@@ -4564,6 +4676,7 @@ export type Database = {
           source: string | null
           special_instructions: string | null
           start_date: string
+          status: string
           subscription_type: string
           total_credit_earned: number | null
           updated_at: string
@@ -4575,7 +4688,7 @@ export type Database = {
           available_credit?: number | null
           created_at?: string
           created_by?: string | null
-          customer_id?: string | null
+          customer_id: string
           delivery_address?: Json | null
           delivery_days?: string[] | null
           delivery_time?: string | null
@@ -4583,6 +4696,7 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_active?: boolean
+          location_id?: number | null
           next_delivery_date: string
           notification_advance_hours?: number | null
           product_id: string
@@ -4590,6 +4704,7 @@ export type Database = {
           source?: string | null
           special_instructions?: string | null
           start_date?: string
+          status?: string
           subscription_type: string
           total_credit_earned?: number | null
           updated_at?: string
@@ -4601,7 +4716,7 @@ export type Database = {
           available_credit?: number | null
           created_at?: string
           created_by?: string | null
-          customer_id?: string | null
+          customer_id?: string
           delivery_address?: Json | null
           delivery_days?: string[] | null
           delivery_time?: string | null
@@ -4609,6 +4724,7 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_active?: boolean
+          location_id?: number | null
           next_delivery_date?: string
           notification_advance_hours?: number | null
           product_id?: string
@@ -4616,6 +4732,7 @@ export type Database = {
           source?: string | null
           special_instructions?: string | null
           start_date?: string
+          status?: string
           subscription_type?: string
           total_credit_earned?: number | null
           updated_at?: string
@@ -5576,6 +5693,11 @@ export type Database = {
         }
         Returns: Json
       }
+      assign_delivery_agents_for: {
+        Args: { p_date: string }
+        Returns: undefined
+      }
+      assign_delivery_agents_tomorrow: { Args: never; Returns: undefined }
       assign_order_to_agent: {
         Args: { p_agent_id: string; p_order_id: string }
         Returns: Json
@@ -5929,6 +6051,7 @@ export type Database = {
         }
         Returns: Json
       }
+      generate_daily_orders: { Args: never; Returns: undefined }
       generate_order_qr_code: {
         Args: { order_uuid: string }
         Returns: undefined
@@ -6499,6 +6622,19 @@ export type Database = {
         Returns: Json
       }
       populate_daily_deals_and_offers: { Args: never; Returns: Json }
+      preview_daily_orders: {
+        Args: { preview_date?: string }
+        Returns: {
+          customer_id: string
+          customer_name: string
+          location_id: number
+          order_date: string
+          product_id: string
+          quantity: number
+          subscription_id: string
+          subscription_type: string
+        }[]
+      }
       process_daily_subscriptions_with_notifications:
         | { Args: never; Returns: Json }
         | { Args: { p_scheduled_time?: string }; Returns: Json }
@@ -6557,6 +6693,7 @@ export type Database = {
             }
             Returns: Json
           }
+      reassign_absent_agents_today: { Args: never; Returns: undefined }
       reconcile_completed_orders: { Args: never; Returns: Json }
       refresh_todays_best_deals: { Args: never; Returns: undefined }
       regenerate_all_product_tags: {
