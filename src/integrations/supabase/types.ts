@@ -1521,7 +1521,7 @@ export type Database = {
           is_online: boolean | null
           last_delivery_at: string | null
           last_status_change: string | null
-          location_id: number | null
+          location_id: number
           max_capacity: number
           name: string
           onesignal_player_id: string | null
@@ -1549,7 +1549,7 @@ export type Database = {
           is_online?: boolean | null
           last_delivery_at?: string | null
           last_status_change?: string | null
-          location_id?: number | null
+          location_id: number
           max_capacity?: number
           name: string
           onesignal_player_id?: string | null
@@ -1577,7 +1577,7 @@ export type Database = {
           is_online?: boolean | null
           last_delivery_at?: string | null
           last_status_change?: string | null
-          location_id?: number | null
+          location_id?: number
           max_capacity?: number
           name?: string
           onesignal_player_id?: string | null
