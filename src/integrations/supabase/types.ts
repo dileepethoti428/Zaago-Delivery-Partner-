@@ -1520,6 +1520,7 @@ export type Database = {
           is_active: boolean | null
           is_online: boolean | null
           last_delivery_at: string | null
+          last_location_updated_at: string | null
           last_status_change: string | null
           latitude: number | null
           location_id: number | null
@@ -1550,6 +1551,7 @@ export type Database = {
           is_active?: boolean | null
           is_online?: boolean | null
           last_delivery_at?: string | null
+          last_location_updated_at?: string | null
           last_status_change?: string | null
           latitude?: number | null
           location_id?: number | null
@@ -1580,6 +1582,7 @@ export type Database = {
           is_active?: boolean | null
           is_online?: boolean | null
           last_delivery_at?: string | null
+          last_location_updated_at?: string | null
           last_status_change?: string | null
           latitude?: number | null
           location_id?: number | null
@@ -2762,6 +2765,7 @@ export type Database = {
           agent_notification_sent: boolean | null
           agent_notification_sent_at: string | null
           assigned_agent_id: string | null
+          assignment_type: string | null
           created_at: string
           customer_name: string | null
           customer_phone: string | null
@@ -2813,6 +2817,7 @@ export type Database = {
           agent_notification_sent?: boolean | null
           agent_notification_sent_at?: string | null
           assigned_agent_id?: string | null
+          assignment_type?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -2864,6 +2869,7 @@ export type Database = {
           agent_notification_sent?: boolean | null
           agent_notification_sent_at?: string | null
           assigned_agent_id?: string | null
+          assignment_type?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -4682,10 +4688,12 @@ export type Database = {
           end_date: string | null
           id: string
           is_active: boolean
+          last_assigned_agent_id: string | null
           location_id: number | null
           next_delivery_date: string
           notification_advance_hours: number | null
           payment_id: string | null
+          primary_agent_id: string | null
           product_id: string
           quantity: number
           source: string | null
@@ -4713,10 +4721,12 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_active?: boolean
+          last_assigned_agent_id?: string | null
           location_id?: number | null
           next_delivery_date: string
           notification_advance_hours?: number | null
           payment_id?: string | null
+          primary_agent_id?: string | null
           product_id: string
           quantity?: number
           source?: string | null
@@ -4744,10 +4754,12 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_active?: boolean
+          last_assigned_agent_id?: string | null
           location_id?: number | null
           next_delivery_date?: string
           notification_advance_hours?: number | null
           payment_id?: string | null
+          primary_agent_id?: string | null
           product_id?: string
           quantity?: number
           source?: string | null
@@ -4767,6 +4779,20 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_last_assigned_agent_id_fkey"
+            columns: ["last_assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_primary_agent_id_fkey"
+            columns: ["primary_agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
             referencedColumns: ["id"]
           },
           {
