@@ -17,6 +17,7 @@ import { agentSession } from '@/utils/agentSession';
 import { cache } from '@/utils/cache';
 import { advancedCache } from '@/utils/advancedCache';
 import { queryClient } from '@/providers/AppProviders';
+import { useLocationSync } from '@/hooks/useLocationSync';
 
 type Mode = 'login' | 'signup' | 'reset';
 
@@ -25,6 +26,7 @@ export default function Login() {
   const { session, profile, fetchProfile } = useAuthStore();
   const [mode, setMode] = useState<Mode>('login');
   const [loading, setLoading] = useState(false);
+  const { syncLocation } = useLocationSync();
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -96,6 +98,10 @@ export default function Login() {
       }
 
       await fetchProfile();
+      
+      // Sync location immediately after login
+      syncLocation();
+      
       // Navigation handled by useEffect
     }
   };
@@ -138,6 +144,10 @@ export default function Login() {
       });
 
       await fetchProfile();
+      
+      // Sync location immediately after signup
+      syncLocation();
+      
       navigate('/upload-documents');
     }
     setLoading(false);
