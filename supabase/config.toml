@@ -47,3 +47,6 @@ verify_jwt = true
 
 [functions.get-order-details]
 verify_jwt = true
+
+[functions.update-agent-location]
+verify_jwt = true
