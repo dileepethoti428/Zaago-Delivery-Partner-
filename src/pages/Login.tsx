@@ -17,16 +17,53 @@ import { agentSession } from '@/utils/agentSession';
 import { cache } from '@/utils/cache';
 import { advancedCache } from '@/utils/advancedCache';
 import { queryClient } from '@/providers/AppProviders';
-import { useLocationSync } from '@/hooks/useLocationSync';
 
 type Mode = 'login' | 'signup' | 'reset';
+
+// Helper function to sync location - called after login/signup
+async function syncLocationAfterAuth(accessToken: string) {
+  try {
+    if (!navigator.geolocation) {
+      console.warn('[Login] Geolocation not supported');
+      return;
+    }
+
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000,
+      });
+    });
+
+    const { latitude, longitude, accuracy, heading, speed } = position.coords;
+    console.log('[Login] Syncing location after auth:', { latitude, longitude });
+
+    const { error } = await supabase.functions.invoke('update-agent-location', {
+      body: {
+        latitude,
+        longitude,
+        accuracy,
+        heading: heading ?? undefined,
+        speed: speed ?? undefined,
+      },
+    });
+
+    if (error) {
+      console.error('[Login] Error syncing location:', error);
+    } else {
+      console.log('[Login] Location synced successfully after auth');
+    }
+  } catch (error) {
+    console.warn('[Login] Could not sync location:', error);
+  }
+}
 
 export default function Login() {
   const navigate = useNavigate();
   const { session, profile, fetchProfile } = useAuthStore();
   const [mode, setMode] = useState<Mode>('login');
   const [loading, setLoading] = useState(false);
-  const { syncLocation } = useLocationSync();
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -99,8 +136,8 @@ export default function Login() {
 
       await fetchProfile();
       
-      // Sync location immediately after login
-      syncLocation();
+      // Sync location immediately after login (non-blocking)
+      syncLocationAfterAuth(authData.session?.access_token || '');
       
       // Navigation handled by useEffect
     }
@@ -145,8 +182,8 @@ export default function Login() {
 
       await fetchProfile();
       
-      // Sync location immediately after signup
-      syncLocation();
+      // Sync location immediately after signup (non-blocking)
+      syncLocationAfterAuth(authData.session?.access_token || '');
       
       navigate('/upload-documents');
     }
