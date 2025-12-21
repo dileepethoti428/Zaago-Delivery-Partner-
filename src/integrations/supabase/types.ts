@@ -1521,7 +1521,9 @@ export type Database = {
           is_online: boolean | null
           last_delivery_at: string | null
           last_status_change: string | null
-          location_id: number
+          latitude: number | null
+          location_id: number | null
+          longitude: number | null
           max_capacity: number
           name: string
           onesignal_player_id: string | null
@@ -1549,7 +1551,9 @@ export type Database = {
           is_online?: boolean | null
           last_delivery_at?: string | null
           last_status_change?: string | null
-          location_id: number
+          latitude?: number | null
+          location_id?: number | null
+          longitude?: number | null
           max_capacity?: number
           name: string
           onesignal_player_id?: string | null
@@ -1577,7 +1581,9 @@ export type Database = {
           is_online?: boolean | null
           last_delivery_at?: string | null
           last_status_change?: string | null
-          location_id?: number
+          latitude?: number | null
+          location_id?: number | null
+          longitude?: number | null
           max_capacity?: number
           name?: string
           onesignal_player_id?: string | null
@@ -2763,6 +2769,8 @@ export type Database = {
           delivered_at: string | null
           delivery_address_id: string | null
           delivery_date: string | null
+          delivery_latitude: number | null
+          delivery_longitude: number | null
           delivery_otp: string | null
           delivery_time: string | null
           delivery_time_slot: string | null
@@ -2812,6 +2820,8 @@ export type Database = {
           delivered_at?: string | null
           delivery_address_id?: string | null
           delivery_date?: string | null
+          delivery_latitude?: number | null
+          delivery_longitude?: number | null
           delivery_otp?: string | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
@@ -2861,6 +2871,8 @@ export type Database = {
           delivered_at?: string | null
           delivery_address_id?: string | null
           delivery_date?: string | null
+          delivery_latitude?: number | null
+          delivery_longitude?: number | null
           delivery_otp?: string | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
@@ -4663,6 +4675,8 @@ export type Database = {
           customer_id: string
           delivery_address: Json | null
           delivery_days: string[] | null
+          delivery_latitude: number | null
+          delivery_longitude: number | null
           delivery_time: string | null
           delivery_time_slot: string | null
           end_date: string | null
@@ -4671,6 +4685,7 @@ export type Database = {
           location_id: number | null
           next_delivery_date: string
           notification_advance_hours: number | null
+          payment_id: string | null
           product_id: string
           quantity: number
           source: string | null
@@ -4691,6 +4706,8 @@ export type Database = {
           customer_id: string
           delivery_address?: Json | null
           delivery_days?: string[] | null
+          delivery_latitude?: number | null
+          delivery_longitude?: number | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
           end_date?: string | null
@@ -4699,6 +4716,7 @@ export type Database = {
           location_id?: number | null
           next_delivery_date: string
           notification_advance_hours?: number | null
+          payment_id?: string | null
           product_id: string
           quantity?: number
           source?: string | null
@@ -4719,6 +4737,8 @@ export type Database = {
           customer_id?: string
           delivery_address?: Json | null
           delivery_days?: string[] | null
+          delivery_latitude?: number | null
+          delivery_longitude?: number | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
           end_date?: string | null
@@ -4727,6 +4747,7 @@ export type Database = {
           location_id?: number | null
           next_delivery_date?: string
           notification_advance_hours?: number | null
+          payment_id?: string | null
           product_id?: string
           quantity?: number
           source?: string | null
@@ -6139,23 +6160,19 @@ export type Database = {
       }
       get_dashboard_stats: { Args: never; Returns: Json }
       get_delivery_agent_analytics: {
-        Args: { time_period: string }
+        Args: { time_period?: string }
         Returns: {
-          agent_email: string
           agent_id: string
           agent_name: string
           average_rating: number
-          completion_rate: number
-          deliveries_today: number
           is_active: boolean
           is_online: boolean
           last_delivery_at: string
-          period_label: string
           phone: string
-          successful_deliveries: number
           total_deliveries: number
           total_distance: number
           total_earnings: number
+          vehicle_type: string
         }[]
       }
       get_delivery_performance: {
@@ -6210,6 +6227,22 @@ export type Database = {
           delivered: number
           pending: number
           revenue: number
+        }[]
+      }
+      get_orders_with_agent_distance: {
+        Args: {
+          p_agent_latitude: number
+          p_agent_longitude: number
+          p_max_distance_km?: number
+        }
+        Returns: {
+          customer_name: string
+          delivery_address: Json
+          delivery_latitude: number
+          delivery_longitude: number
+          distance_km: number
+          order_id: string
+          status: string
         }[]
       }
       get_pending_delivery_agents: {
@@ -6734,6 +6767,7 @@ export type Database = {
         }
         Returns: Json
       }
+      reset_daily_agent_counters: { Args: never; Returns: undefined }
       reset_daily_delivery_counts: { Args: never; Returns: undefined }
       resolve_agent_email: { Args: { identifier: string }; Returns: string }
       resume_expired_vacations: { Args: never; Returns: Json }
