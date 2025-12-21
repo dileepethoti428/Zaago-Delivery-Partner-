@@ -4,11 +4,13 @@ import { motion } from 'framer-motion';
 import { Truck } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { cache } from '@/utils/cache';
+import { useLocationSync } from '@/hooks/useLocationSync';
 
 export default function Splash() {
   const navigate = useNavigate();
   const { session, profile, loading, initialize } = useAuthStore();
   const hasCache = cache.hasCache();
+  const { syncLocation } = useLocationSync();
 
   useEffect(() => {
     initialize();
@@ -24,6 +26,9 @@ export default function Splash() {
         return;
       }
 
+      // Sync location immediately when authenticated user opens app
+      syncLocation();
+
       // User is authenticated, check profile status
       if (!profile || !profile.documents_submitted) {
         navigate('/upload-documents');
@@ -37,7 +42,7 @@ export default function Splash() {
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [session, profile, loading, navigate, hasCache]);
+  }, [session, profile, loading, navigate, hasCache, syncLocation]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5">

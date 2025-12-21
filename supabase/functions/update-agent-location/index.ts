@@ -1,3 +1,6 @@
+// Edge function to update agent location - v2
+// Called when agent app opens, login, splash, foreground, or focus
+// Triggers re-deployment with updated timestamp
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 
 const corsHeaders = {
