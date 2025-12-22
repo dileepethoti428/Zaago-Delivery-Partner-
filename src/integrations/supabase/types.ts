@@ -6692,7 +6692,7 @@ export type Database = {
         Args: {
           p_agent_id: string
           p_order_id: string
-          p_payment_method: string
+          p_payment_method?: string
         }
         Returns: Json
       }
@@ -6773,6 +6773,15 @@ export type Database = {
               p_agent_id: string
               p_order_id: string
               p_payment_method: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_agent_id: string
+              p_order_id: string
+              p_payment_method?: string
+              p_qr_code_data?: string
             }
             Returns: Json
           }
@@ -6891,7 +6900,7 @@ export type Database = {
         Args: {
           p_agent_id: string
           p_order_id: string
-          p_payment_method: string
+          p_payment_method?: string
         }
         Returns: Json
       }
