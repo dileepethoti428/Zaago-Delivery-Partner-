@@ -2196,6 +2196,30 @@ export type Database = {
           },
         ]
       }
+      locations: {
+        Row: {
+          id: number
+          latitude: number
+          longitude: number
+          name: string
+          radius_km: number | null
+        }
+        Insert: {
+          id?: number
+          latitude: number
+          longitude: number
+          name: string
+          radius_km?: number | null
+        }
+        Update: {
+          id?: number
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius_km?: number | null
+        }
+        Relationships: []
+      }
       milk_transactions: {
         Row: {
           created_at: string
@@ -4689,7 +4713,7 @@ export type Database = {
           id: string
           is_active: boolean
           last_assigned_agent_id: string | null
-          location_id: number | null
+          location_id: number
           next_delivery_date: string
           notification_advance_hours: number | null
           payment_id: string | null
@@ -4722,7 +4746,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_assigned_agent_id?: string | null
-          location_id?: number | null
+          location_id: number
           next_delivery_date: string
           notification_advance_hours?: number | null
           payment_id?: string | null
@@ -4755,7 +4779,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_assigned_agent_id?: string | null
-          location_id?: number | null
+          location_id?: number
           next_delivery_date?: string
           notification_advance_hours?: number | null
           payment_id?: string | null
@@ -5584,6 +5608,19 @@ export type Database = {
           six_month_stats?: never
           week_stats?: never
           year_stats?: never
+        }
+        Relationships: []
+      }
+      system_health_check: {
+        Row: {
+          active_subscriptions: number | null
+          capacity_violations: number | null
+          offline_agents: number | null
+          online_agents: number | null
+          orders_for_today: number | null
+          orders_for_tomorrow: number | null
+          today: string | null
+          unassigned_orders_tomorrow: number | null
         }
         Relationships: []
       }

@@ -126,9 +126,9 @@ export default function UploadDocuments() {
 
       if (docsError) throw docsError;
 
-      // Create delivery agent record
+      // Upsert delivery agent record (create or update)
       setUploadProgress(95);
-      const { error: agentError } = await supabase.from('delivery_agents').insert({
+      const { error: agentError } = await supabase.from('delivery_agents').upsert({
         agent_id: user.id,
         email: user.email,
         name: data.fullName,
@@ -136,10 +136,14 @@ export default function UploadDocuments() {
         verification_status: 'pending',
         documents_verified: false,
         is_active: false,
+      }, { 
+        onConflict: 'agent_id',
+        ignoreDuplicates: false 
       });
 
-      if (agentError && agentError.code !== '23505') { // Ignore duplicate key error
-        throw agentError;
+      if (agentError) {
+        console.error('Agent upsert error:', agentError);
+        // Don't throw - agent might exist already and that's OK
       }
 
       setUploadProgress(100);

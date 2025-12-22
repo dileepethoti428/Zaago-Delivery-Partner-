@@ -20,8 +20,27 @@ import { queryClient } from '@/providers/AppProviders';
 
 type Mode = 'login' | 'signup' | 'reset';
 
+// Helper function to ensure agent exists in delivery_agents table
+async function ensureAgentExists() {
+  try {
+    console.log('[Login] Ensuring agent exists in delivery_agents...');
+    const { data, error } = await supabase.functions.invoke('ensure-agent-exists');
+    
+    if (error) {
+      console.error('[Login] Error ensuring agent exists:', error);
+      return false;
+    }
+    
+    console.log('[Login] Agent ensured:', data);
+    return true;
+  } catch (error) {
+    console.error('[Login] Failed to ensure agent exists:', error);
+    return false;
+  }
+}
+
 // Helper function to sync location - called after login/signup
-async function syncLocationAfterAuth(accessToken: string) {
+async function syncLocationAfterAuth() {
   try {
     if (!navigator.geolocation) {
       console.warn('[Login] Geolocation not supported');
@@ -136,8 +155,11 @@ export default function Login() {
 
       await fetchProfile();
       
+      // Ensure agent exists in delivery_agents table (non-blocking)
+      ensureAgentExists();
+      
       // Sync location immediately after login (non-blocking)
-      syncLocationAfterAuth(authData.session?.access_token || '');
+      syncLocationAfterAuth();
       
       // Navigation handled by useEffect
     }
@@ -182,8 +204,11 @@ export default function Login() {
 
       await fetchProfile();
       
+      // Ensure agent exists in delivery_agents table (non-blocking)
+      ensureAgentExists();
+      
       // Sync location immediately after signup (non-blocking)
-      syncLocationAfterAuth(authData.session?.access_token || '');
+      syncLocationAfterAuth();
       
       navigate('/upload-documents');
     }

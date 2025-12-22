@@ -50,3 +50,9 @@ verify_jwt = true
 
 [functions.update-agent-location]
 verify_jwt = true
+
+[functions.ensure-agent-exists]
+verify_jwt = true
+
+[functions.get-agent-settings]
+verify_jwt = true
