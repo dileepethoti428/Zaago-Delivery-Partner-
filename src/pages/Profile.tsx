@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
+import { useLocationStore } from '@/store/location';
 import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2 } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { useProfile } from '@/hooks/useProfile';
@@ -20,6 +21,7 @@ export default function Profile() {
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   const { data: agentProfile, isLoading: loading } = useProfile(user?.email);
+  const lastKnown = useLocationStore((state) => state.lastKnown);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
 
   const handleLogout = async () => {
@@ -31,54 +33,23 @@ export default function Profile() {
     setIsSavingLocation(true);
     
     try {
-      if (!navigator.geolocation) {
+      // Use already-tracked location from the store
+      if (!lastKnown) {
         toast({
-          title: "Location not supported",
-          description: "Your device doesn't support geolocation",
+          title: "No location available",
+          description: "Please enable location services and wait for GPS to update",
           variant: "destructive",
         });
         return;
       }
 
-      // Helper function to get position with configurable options
-      const getPosition = (highAccuracy: boolean, timeout: number): Promise<GeolocationPosition> => {
-        return new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: highAccuracy,
-            timeout: timeout,
-            maximumAge: 60000, // Allow cached position up to 1 minute old
-          });
-        });
-      };
-
-      let position: GeolocationPosition;
-      
-      try {
-        // First try: High accuracy with 20s timeout
-        console.log('[Profile] Trying high accuracy GPS...');
-        position = await getPosition(true, 20000);
-      } catch (highAccuracyError) {
-        console.log('[Profile] High accuracy failed, trying low accuracy...', highAccuracyError);
-        
-        // Fallback: Low accuracy (WiFi/cell) with 30s timeout
-        toast({
-          title: "Getting approximate location...",
-          description: "GPS is slow, using network location",
-        });
-        
-        position = await getPosition(false, 30000);
-      }
-
-      const { latitude, longitude, accuracy, heading, speed } = position.coords;
-      console.log('[Profile] Got location:', { latitude, longitude, accuracy });
+      console.log('[Profile] Using tracked location:', lastKnown);
 
       const { data, error } = await supabase.functions.invoke('update-agent-location', {
         body: {
-          latitude,
-          longitude,
-          accuracy: accuracy ?? undefined,
-          heading: heading ?? undefined,
-          speed: speed ?? undefined,
+          latitude: lastKnown.lat,
+          longitude: lastKnown.lng,
+          accuracy: lastKnown.accuracy ?? undefined,
         },
       });
 
@@ -93,37 +64,15 @@ export default function Profile() {
 
       toast({
         title: "Location saved successfully",
-        description: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`,
+        description: `Lat: ${lastKnown.lat.toFixed(4)}, Lng: ${lastKnown.lng.toFixed(4)}`,
       });
       
     } catch (error) {
-      if (error instanceof GeolocationPositionError) {
-        let message = "Unable to get location";
-        
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            message = "Location permission required. Please enable it in settings.";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            message = "Location unavailable. Please check your GPS.";
-            break;
-          case error.TIMEOUT:
-            message = "Location request timed out. Please move to an open area and try again.";
-            break;
-        }
-        
-        toast({
-          title: "Location error",
-          description: message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to save location",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save location",
+        variant: "destructive",
+      });
     } finally {
       setIsSavingLocation(false);
     }
