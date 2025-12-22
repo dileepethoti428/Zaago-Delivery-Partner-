@@ -40,15 +40,37 @@ export default function Profile() {
         return;
       }
 
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
+      // Helper function to get position with configurable options
+      const getPosition = (highAccuracy: boolean, timeout: number): Promise<GeolocationPosition> => {
+        return new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: highAccuracy,
+            timeout: timeout,
+            maximumAge: 60000, // Allow cached position up to 1 minute old
+          });
         });
-      });
+      };
+
+      let position: GeolocationPosition;
+      
+      try {
+        // First try: High accuracy with 20s timeout
+        console.log('[Profile] Trying high accuracy GPS...');
+        position = await getPosition(true, 20000);
+      } catch (highAccuracyError) {
+        console.log('[Profile] High accuracy failed, trying low accuracy...', highAccuracyError);
+        
+        // Fallback: Low accuracy (WiFi/cell) with 30s timeout
+        toast({
+          title: "Getting approximate location...",
+          description: "GPS is slow, using network location",
+        });
+        
+        position = await getPosition(false, 30000);
+      }
 
       const { latitude, longitude, accuracy, heading, speed } = position.coords;
+      console.log('[Profile] Got location:', { latitude, longitude, accuracy });
 
       const { data, error } = await supabase.functions.invoke('update-agent-location', {
         body: {
@@ -86,12 +108,12 @@ export default function Profile() {
             message = "Location unavailable. Please check your GPS.";
             break;
           case error.TIMEOUT:
-            message = "Location request timed out. Please try again.";
+            message = "Location request timed out. Please move to an open area and try again.";
             break;
         }
         
         toast({
-          title: "Location permission required",
+          title: "Location error",
           description: message,
           variant: "destructive",
         });
