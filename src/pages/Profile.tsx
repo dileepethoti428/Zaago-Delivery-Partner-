@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
@@ -8,19 +9,102 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
-import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2 } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { useProfile } from '@/hooks/useProfile';
+import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Profile() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   const { data: agentProfile, isLoading: loading } = useProfile(user?.email);
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
     navigate('/login', { replace: true });
+  };
+
+  const handleSaveLocation = async () => {
+    setIsSavingLocation(true);
+    
+    try {
+      if (!navigator.geolocation) {
+        toast({
+          title: "Location not supported",
+          description: "Your device doesn't support geolocation",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude, accuracy, heading, speed } = position.coords;
+
+      const { data, error } = await supabase.functions.invoke('update-agent-location', {
+        body: {
+          latitude,
+          longitude,
+          accuracy: accuracy ?? undefined,
+          heading: heading ?? undefined,
+          speed: speed ?? undefined,
+        },
+      });
+
+      if (error) {
+        toast({
+          title: "Failed to save location",
+          description: error.message || "Please try again",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Location saved successfully",
+        description: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`,
+      });
+      
+    } catch (error) {
+      if (error instanceof GeolocationPositionError) {
+        let message = "Unable to get location";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            message = "Location permission required. Please enable it in settings.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            message = "Location unavailable. Please check your GPS.";
+            break;
+          case error.TIMEOUT:
+            message = "Location request timed out. Please try again.";
+            break;
+        }
+        
+        toast({
+          title: "Location permission required",
+          description: message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to save location",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsSavingLocation(false);
+    }
   };
 
   const menuItems = [
@@ -73,6 +157,25 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
+
+        <Button
+          variant="default"
+          className="w-full rounded-xl h-12 gap-2"
+          onClick={handleSaveLocation}
+          disabled={isSavingLocation}
+        >
+          {isSavingLocation ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Saving Location...
+            </>
+          ) : (
+            <>
+              <MapPin className="h-5 w-5" />
+              Save My Location
+            </>
+          )}
+        </Button>
 
         <Card className="rounded-2xl">
           <CardHeader>
