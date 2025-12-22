@@ -42,15 +42,15 @@ serve(async (req) => {
       );
     }
 
-    // Create auth client with user's JWT for authentication
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
+    const token = authHeader.replace(/^Bearer\s+/i, '');
 
-    // Create service client for database operations
+    // Auth client (use ANON key) + pass JWT explicitly (Edge Functions have no persisted session)
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+
+    // Service client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
 
     if (authError || !user) {
       console.error('❌ Authentication failed:', authError);
