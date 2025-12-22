@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
         sound_alerts: true,
         vibration: true,
         ringtone_enabled: true,
-        ringtone_type: 'default',
+        ringtone_type: 'iphone-ringtone',
         ringtone_volume: 80,
       })
       .select()
