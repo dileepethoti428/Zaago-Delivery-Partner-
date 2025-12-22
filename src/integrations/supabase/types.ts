@@ -2800,6 +2800,7 @@ export type Database = {
           delivery_latitude: number | null
           delivery_longitude: number | null
           delivery_otp: string | null
+          delivery_payout: number | null
           delivery_time: string | null
           delivery_time_slot: string | null
           id: string
@@ -2852,6 +2853,7 @@ export type Database = {
           delivery_latitude?: number | null
           delivery_longitude?: number | null
           delivery_otp?: string | null
+          delivery_payout?: number | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
           id?: string
@@ -2904,6 +2906,7 @@ export type Database = {
           delivery_latitude?: number | null
           delivery_longitude?: number | null
           delivery_otp?: string | null
+          delivery_payout?: number | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
           id?: string
