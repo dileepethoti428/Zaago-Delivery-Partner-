@@ -6767,40 +6767,14 @@ export type Database = {
             }
             Returns: Json
           }
-      qr_complete_delivery_v3:
-        | {
-            Args: {
-              p_agent_id: string
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_agent_id: string
-              p_order_id: string
-              p_payment_method?: string
-              p_qr_code_data?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_agent_id: string
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_agent_id: string
-              p_payment_method?: string
-              p_qr_code_data: string
-            }
-            Returns: Json
-          }
+      qr_complete_delivery_v3: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
       reassign_absent_agents_today: { Args: never; Returns: undefined }
       reconcile_completed_orders: { Args: never; Returns: Json }
       refresh_todays_best_deals: { Args: never; Returns: undefined }
@@ -6896,16 +6870,14 @@ export type Database = {
         Args: { p_order_id: string; p_payment_method?: string }
         Returns: Json
       }
-      simple_mark_delivered:
-        | { Args: { p_agent_id: string; p_order_id: string }; Returns: Json }
-        | {
-            Args: {
-              p_agent_id: string
-              p_order_id: string
-              p_payment_method?: string
-            }
-            Returns: Json
-          }
+      simple_mark_delivered: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
       sync_special_offers_from_products: { Args: never; Returns: undefined }
       sync_user_player_id: {
         Args: { device_info?: Json; player_id: string; target_user_id: string }
