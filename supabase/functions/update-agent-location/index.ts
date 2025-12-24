@@ -1,7 +1,11 @@
-// Edge function to update agent location - v4 (crash-proof)
+// Edge function to update agent location - v5 (never-fail)
 // Purpose: Track LIVE delivery agent GPS location securely
-// Deployment timestamp: 2025-12-22
+// Deployment timestamp: 2025-12-24
 // 
+// CRITICAL DESIGN: This function NEVER returns 4xx/5xx for expected conditions
+// Expected conditions (agent not found, agent inactive, etc.) return 200 with success:false
+// This ensures the frontend never blocks on location sync failures
+//
 // This function:
 // 1. Validates environment variables safely (no non-null assertions)
 // 2. Validates JWT token and extracts user
@@ -27,7 +31,25 @@ interface LocationPayload {
   speed?: number;
 }
 
-// Helper to create consistent error responses (prevents crashes from thrown errors)
+// Helper for 200 OK responses with success:false (expected conditions - NOT errors)
+// These are "soft failures" that the frontend should handle gracefully
+function softFailResponse(reason: string, details?: string): Response {
+  console.warn(`[update-agent-location] Soft fail: ${reason}`, details || '');
+  return new Response(
+    JSON.stringify({ 
+      success: false,
+      reason,
+      details: details || undefined 
+    }),
+    { 
+      status: 200, // ALWAYS 200 for expected conditions
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    }
+  );
+}
+
+// Helper for actual errors (server misconfiguration, etc.)
+// Only used for true 5xx conditions that indicate bugs
 function errorResponse(message: string, status: number, details?: string): Response {
   console.error(`[update-agent-location] Error ${status}: ${message}`, details || '');
   return new Response(
@@ -88,24 +110,23 @@ Deno.serve(async (req) => {
 
   // ============================================
   // Step 3: SAFE Authorization header validation
-  // Check header exists and has correct format
+  // Return soft fail (200) for missing/invalid auth - this is expected
   // ============================================
   const authHeader = req.headers.get('Authorization');
   
   if (!authHeader) {
-    return errorResponse('Missing authorization header', 401);
+    return softFailResponse('missing_auth', 'No authorization header provided');
   }
 
   if (!authHeader.startsWith('Bearer ')) {
-    return errorResponse('Invalid authorization header format (must start with Bearer)', 401);
+    return softFailResponse('invalid_auth_format', 'Authorization header must start with Bearer');
   }
 
   console.log('[update-agent-location] ✓ Authorization header present and formatted correctly');
 
   // ============================================
   // Step 4: Validate JWT and extract user
-  // Use anon key client just for auth validation
-  // Wrapped in try/catch to prevent crashes
+  // Return soft fail (200) for invalid tokens - this is expected
   // ============================================
   let userId: string;
   
@@ -117,53 +138,53 @@ Deno.serve(async (req) => {
     const { data: authData, error: authError } = await supabaseAuth.auth.getUser();
     
     if (authError) {
-      console.error('[update-agent-location] JWT validation failed:', authError.message);
-      return errorResponse('Invalid or expired token', 401, authError.message);
+      console.warn('[update-agent-location] JWT validation failed:', authError.message);
+      return softFailResponse('invalid_token', authError.message);
     }
 
     if (!authData?.user) {
-      console.error('[update-agent-location] No user in auth response');
-      return errorResponse('No user found for token', 401);
+      console.warn('[update-agent-location] No user in auth response');
+      return softFailResponse('no_user', 'Token valid but no user found');
     }
 
     userId = authData.user.id;
     console.log(`[update-agent-location] ✓ Authenticated user: ${userId}`);
   } catch (authException) {
-    console.error('[update-agent-location] Auth exception:', authException);
-    return errorResponse('Authentication failed', 401, String(authException));
+    console.warn('[update-agent-location] Auth exception:', authException);
+    return softFailResponse('auth_exception', String(authException));
   }
 
   // ============================================
   // Step 5: SAFE JSON body parsing
-  // Wrapped in try/catch to handle malformed JSON
+  // Return soft fail (200) for bad JSON - this is expected
   // ============================================
   let payload: LocationPayload;
   
   try {
     payload = await req.json();
   } catch (parseError) {
-    console.error('[update-agent-location] JSON parse error:', parseError);
-    return errorResponse('Invalid JSON body', 400, String(parseError));
+    console.warn('[update-agent-location] JSON parse error:', parseError);
+    return softFailResponse('invalid_json', String(parseError));
   }
 
   const { latitude, longitude, accuracy, heading, speed } = payload;
   console.log(`[update-agent-location] Payload received: lat=${latitude}, lng=${longitude}, accuracy=${accuracy}, heading=${heading}, speed=${speed}`);
 
   // ============================================
-  // Step 6: Validate coordinates strictly
-  // Ensure they are valid numbers within range
+  // Step 6: Validate coordinates
+  // Return soft fail (200) for invalid coords - this is expected
   // ============================================
   if (typeof latitude !== 'number' || isNaN(latitude)) {
-    return errorResponse('Invalid latitude: must be a valid number', 400);
+    return softFailResponse('invalid_latitude', 'Latitude must be a valid number');
   }
   if (typeof longitude !== 'number' || isNaN(longitude)) {
-    return errorResponse('Invalid longitude: must be a valid number', 400);
+    return softFailResponse('invalid_longitude', 'Longitude must be a valid number');
   }
   if (latitude < -90 || latitude > 90) {
-    return errorResponse('Latitude out of range: must be between -90 and 90', 400);
+    return softFailResponse('latitude_out_of_range', 'Latitude must be between -90 and 90');
   }
   if (longitude < -180 || longitude > 180) {
-    return errorResponse('Longitude out of range: must be between -180 and 180', 400);
+    return softFailResponse('longitude_out_of_range', 'Longitude must be between -180 and 180');
   }
 
   console.log('[update-agent-location] ✓ Coordinates validated');
@@ -176,8 +197,7 @@ Deno.serve(async (req) => {
 
   // ============================================
   // Step 8: Lookup agent record
-  // agent_id column references auth.users.id
-  // Also check is_active status
+  // Return soft fail (200) if agent not found - this is expected
   // ============================================
   const { data: agent, error: agentError } = await supabaseAdmin
     .from('delivery_agents')
@@ -186,31 +206,31 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (agentError) {
-    console.error('[update-agent-location] Agent lookup error:', agentError.message);
-    return errorResponse('Failed to lookup agent', 500, agentError.message);
+    console.warn('[update-agent-location] Agent lookup error:', agentError.message);
+    return softFailResponse('agent_lookup_failed', agentError.message);
   }
 
   if (!agent) {
-    console.error(`[update-agent-location] No agent record found for user: ${userId}`);
-    return errorResponse('Agent not found for this user', 404);
+    console.warn(`[update-agent-location] No agent record found for user: ${userId}`);
+    return softFailResponse('agent_not_found', `No agent record for user ${userId}`);
   }
 
   console.log(`[update-agent-location] ✓ Found agent: id=${agent.id}, name=${agent.name}, is_active=${agent.is_active}`);
 
   // ============================================
-  // Step 9: Verify agent is active
-  // Inactive agents cannot update location
+  // Step 9: Check agent is active
+  // Return soft fail (200) if inactive - this is expected
   // ============================================
   if (agent.is_active !== true) {
-    console.warn(`[update-agent-location] Agent ${agent.id} is not active, rejecting location update`);
-    return errorResponse('Agent account is not active', 403);
+    console.warn(`[update-agent-location] Agent ${agent.id} is not active`);
+    return softFailResponse('agent_inactive', `Agent ${agent.id} is not active`);
   }
 
   console.log('[update-agent-location] ✓ Agent is active');
 
   // ============================================
   // Step 10: Update delivery_agents table
-  // Sets current location and online status
+  // Return soft fail (200) if update fails - this is expected
   // ============================================
   const updateTimestamp = new Date().toISOString();
   
@@ -226,16 +246,16 @@ Deno.serve(async (req) => {
     .select('id, latitude, longitude, is_online, last_location_updated_at');
 
   if (updateError) {
-    console.error('[update-agent-location] delivery_agents update error:', updateError.message);
-    return errorResponse('Failed to update location in delivery_agents', 500, updateError.message);
+    console.warn('[update-agent-location] delivery_agents update error:', updateError.message);
+    return softFailResponse('update_failed', updateError.message);
   }
 
   const rowsAffected = updateData?.length || 0;
   console.log(`[update-agent-location] ✓ delivery_agents updated: ${rowsAffected} row(s) affected`);
 
   if (rowsAffected === 0) {
-    console.error(`[update-agent-location] CRITICAL: 0 rows affected for agent ${agent.id}`);
-    return errorResponse('Location update affected 0 rows', 500, `agent_id: ${agent.id}`);
+    console.warn(`[update-agent-location] 0 rows affected for agent ${agent.id}`);
+    return softFailResponse('no_rows_updated', `agent_id: ${agent.id}`);
   }
 
   // ============================================

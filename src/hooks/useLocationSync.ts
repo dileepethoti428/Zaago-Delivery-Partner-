@@ -9,6 +9,8 @@ export function useLocationSync() {
   const lastSyncRef = useRef<number>(0);
   const isSyncingRef = useRef<boolean>(false);
 
+  // CRITICAL: This function is completely NON-BLOCKING
+  // Any failure is logged as a warning but never throws or affects app flow
   const syncLocation = useCallback(async () => {
     // Don't sync if not authenticated
     if (!session?.access_token) {
@@ -29,48 +31,60 @@ export function useLocationSync() {
     isSyncingRef.current = true;
 
     try {
-      // Get current position
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if (!navigator.geolocation) {
-          reject(new Error('Geolocation not supported'));
-          return;
-        }
+      // Check if geolocation is available
+      if (!navigator.geolocation) {
+        console.warn('[LocationSync] Geolocation not supported - skipping sync');
+        return;
+      }
 
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 30000,
+      // Get current position with error handling
+      let position: GeolocationPosition;
+      try {
+        position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 30000,
+          });
         });
-      });
+      } catch (geoError) {
+        // User denied permission, timeout, or position unavailable - all OK
+        console.warn('[LocationSync] Geolocation unavailable (non-blocking):', geoError);
+        return;
+      }
 
       const { latitude, longitude, accuracy, heading, speed } = position.coords;
-
       console.log('[LocationSync] Syncing location:', { latitude, longitude });
 
-      // Send to edge function
-      const { error } = await supabase.functions.invoke('update-agent-location', {
-        body: {
-          latitude,
-          longitude,
-          accuracy,
-          heading: heading ?? undefined,
-          speed: speed ?? undefined,
-        },
-      });
+      // Send to edge function with full error handling
+      try {
+        const { data, error } = await supabase.functions.invoke('update-agent-location', {
+          body: {
+            latitude,
+            longitude,
+            accuracy,
+            heading: heading ?? undefined,
+            speed: speed ?? undefined,
+          },
+        });
 
-      if (error) {
-        console.error('[LocationSync] Error syncing location:', error);
-      } else {
-        console.log('[LocationSync] Location synced successfully');
-        lastSyncRef.current = Date.now();
+        if (error) {
+          // Edge function returned error - log warning and continue
+          console.warn('[LocationSync] Edge function error (non-blocking):', error);
+        } else if (data?.success === false) {
+          // Edge function returned success:false - log reason and continue
+          console.warn('[LocationSync] Sync returned non-success (non-blocking):', data?.reason || 'unknown');
+        } else {
+          console.log('[LocationSync] Location synced successfully');
+          lastSyncRef.current = Date.now();
+        }
+      } catch (invokeError) {
+        // Network error or edge function crash - log and continue
+        console.warn('[LocationSync] Invoke failed (non-blocking):', invokeError);
       }
-    } catch (error) {
-      // Silently handle geolocation errors (user may have denied permission)
-      if (error instanceof GeolocationPositionError) {
-        console.warn('[LocationSync] Geolocation error:', error.message);
-      } else {
-        console.error('[LocationSync] Error:', error);
-      }
+    } catch (unexpectedError) {
+      // Catch-all for any unexpected errors - never throw
+      console.warn('[LocationSync] Unexpected error (non-blocking):', unexpectedError);
     } finally {
       isSyncingRef.current = false;
     }

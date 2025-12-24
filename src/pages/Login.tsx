@@ -40,41 +40,59 @@ async function ensureAgentExists() {
 }
 
 // Helper function to sync location - called after login/signup
-async function syncLocationAfterAuth() {
+// CRITICAL: This is completely NON-BLOCKING - failures never affect login/navigation
+async function syncLocationAfterAuth(): Promise<void> {
   try {
     if (!navigator.geolocation) {
-      console.warn('[Login] Geolocation not supported');
+      console.warn('[Login] Geolocation not supported - continuing without location sync');
       return;
     }
 
-    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 30000,
+    let position: GeolocationPosition;
+    try {
+      position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 30000,
+        });
       });
-    });
+    } catch (geoError) {
+      // Geolocation failed (user denied, timeout, etc.) - this is fine
+      console.warn('[Login] Geolocation unavailable - continuing without location sync:', geoError);
+      return;
+    }
 
     const { latitude, longitude, accuracy, heading, speed } = position.coords;
-    console.log('[Login] Syncing location after auth:', { latitude, longitude });
+    console.log('[Login] Attempting location sync:', { latitude, longitude });
 
-    const { error } = await supabase.functions.invoke('update-agent-location', {
-      body: {
-        latitude,
-        longitude,
-        accuracy,
-        heading: heading ?? undefined,
-        speed: speed ?? undefined,
-      },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('update-agent-location', {
+        body: {
+          latitude,
+          longitude,
+          accuracy,
+          heading: heading ?? undefined,
+          speed: speed ?? undefined,
+        },
+      });
 
-    if (error) {
-      console.error('[Login] Error syncing location:', error);
-    } else {
-      console.log('[Login] Location synced successfully after auth');
+      if (error) {
+        // Edge function returned error - log and continue
+        console.warn('[Login] Location sync edge function error (non-blocking):', error);
+      } else if (data?.success === false) {
+        // Edge function returned success:false - log reason and continue
+        console.warn('[Login] Location sync returned non-success (non-blocking):', data?.reason || 'unknown');
+      } else {
+        console.log('[Login] Location synced successfully');
+      }
+    } catch (invokeError) {
+      // Network or other error calling edge function - log and continue
+      console.warn('[Login] Location sync invoke failed (non-blocking):', invokeError);
     }
-  } catch (error) {
-    console.warn('[Login] Could not sync location:', error);
+  } catch (unexpectedError) {
+    // Catch-all for any unexpected errors - never throw
+    console.warn('[Login] Unexpected error in location sync (non-blocking):', unexpectedError);
   }
 }
 
