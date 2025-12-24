@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
@@ -31,6 +31,7 @@ import { RazorpayQRDisplay } from '@/components/delivery/RazorpayQRDisplay';
 
 export default function ManageDelivery() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const profile = useAuthStore((state) => state.profile);
   const [order, setOrder] = useState<OrderDetails | null>(null);
@@ -40,6 +41,9 @@ export default function ManageDelivery() {
   const [qrData, setQRData] = useState<any>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
+
+  // Determine order type from URL params
+  const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
 
   // Memoized calculations
   const itemsTotal = useMemo(() => 
@@ -69,22 +73,24 @@ export default function ManageDelivery() {
     const fetchOrder = async () => {
       try {
         setLoading(true);
-        const data = await getOrderDetails(id);
+        const data = await getOrderDetails(id, { type: orderType });
         setOrder(data);
       } catch (error: any) {
+        console.error('Failed to load order:', error);
         toast({
           variant: 'destructive',
           title: 'Error',
           description: error?.message || 'Failed to load order details',
         });
-        navigate(-1);
+        // Don't navigate away immediately - show the "not found" UI
+        setOrder(null);
       } finally {
         setLoading(false);
       }
     };
 
     fetchOrder();
-  }, [id, navigate]);
+  }, [id, orderType]);
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
