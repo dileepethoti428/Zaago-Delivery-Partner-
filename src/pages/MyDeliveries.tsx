@@ -6,8 +6,10 @@ import { AssignedOrderCard } from '@/components/order/AssignedOrderCard';
 import { useAssignedOrders } from '@/hooks/useAssignedOrders';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Package, Calendar } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { toast } from 'sonner';
+import { getTodayIST, getTomorrowIST } from '@/utils/dateUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 type DateFilter = 'today' | 'tomorrow' | 'upcoming' | 'all';
 
@@ -16,16 +18,16 @@ export default function MyDeliveries() {
   const { data: orders = [], isLoading, error } = useAssignedOrders();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
 
-  // Calculate date strings
-  const today = useMemo(() => {
-    const d = new Date();
-    return d.toISOString().split('T')[0];
-  }, []);
+  // Calculate date strings using IST timezone (database stores dates in IST)
+  const today = useMemo(() => getTodayIST(), []);
+  const tomorrow = useMemo(() => getTomorrowIST(), []);
 
-  const tomorrow = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
+  // Get agent ID for debug display
+  const [agentId, setAgentId] = useState<string | null>(null);
+  useMemo(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setAgentId(data.user?.id || null);
+    });
   }, []);
 
   // Filter orders based on selected date tab
@@ -76,6 +78,12 @@ export default function MyDeliveries() {
   return (
     <AppShell>
       <div className="space-y-4">
+        {/* Debug Info - TEMPORARY */}
+        <div className="text-xs text-muted-foreground bg-muted p-2 rounded mb-2">
+          <p>Agent ID: {agentId ? `${agentId.slice(0, 8)}...` : 'Loading...'}</p>
+          <p>Query Date (IST): {today}</p>
+        </div>
+
         {/* Date Filter Tabs */}
         <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
           <TabsList className="grid w-full grid-cols-4">

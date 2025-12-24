@@ -68,7 +68,8 @@ export async function fetchAgentEarnings(agentId: string) {
 
 export function computeEarningsTotals(rows: { expected_payout: number | null; created_at: string }[]) {
   const now = new Date();
-  const todayStr = now.toISOString().substring(0, 10);
+  // Use IST timezone for date comparison (database stores dates in IST)
+  const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   const weekStart = new Date(now);
   weekStart.setDate(weekStart.getDate() - 7);
