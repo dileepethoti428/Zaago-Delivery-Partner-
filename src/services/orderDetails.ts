@@ -73,14 +73,15 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
     throw new Error('Order not found');
   }
 
-  // Fetch subscription details (no payment_method column - use default)
+  // Fetch subscription details including payment_id to determine if pre-paid
   const { data: subscription, error: subError } = await supabase
     .from('subscriptions')
     .select(`
       id,
       product_id,
       delivery_address,
-      special_instructions
+      special_instructions,
+      payment_id
     `)
     .eq('id', dailyOrder.subscription_id)
     .single();
@@ -89,6 +90,9 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
     console.error('Subscription not found:', subError);
     throw new Error('Subscription details not found');
   }
+
+  // Subscriptions with payment_id are pre-paid (ONLINE), otherwise COD
+  const isPrepaid = !!subscription.payment_id;
 
   // Fetch customer details
   const { data: customer, error: custError } = await supabase
@@ -171,8 +175,8 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
   return {
     id: dailyOrder.id,
     status: dailyOrder.status || 'pending',
-    payment_method: 'COD', // Default for subscriptions
-    payment_status: 'pending',
+    payment_method: isPrepaid ? 'ONLINE' : 'COD',
+    payment_status: isPrepaid ? 'paid' : 'pending',
     total_amount: totalAmount,
     delivery_charge: 0,
     items: [
