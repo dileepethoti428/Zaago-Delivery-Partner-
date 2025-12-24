@@ -8,6 +8,7 @@ import DeliveryHistory from '@/pages/DeliveryHistory';
 import Earnings from '@/pages/Earnings';
 import Profile from '@/pages/Profile';
 import Settings from '@/pages/Settings';
+import HelpSupport from '@/pages/HelpSupport';
 import UploadDocuments from '@/pages/UploadDocuments';
 import PendingApproval from '@/pages/PendingApproval';
 import Rejected from '@/pages/Rejected';
@@ -81,6 +82,10 @@ export const router = createBrowserRouter([
           {
             path: '/settings',
             element: <Settings />,
+          },
+          {
+            path: '/help',
+            element: <HelpSupport />,
           },
         ],
       },
