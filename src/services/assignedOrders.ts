@@ -12,13 +12,13 @@ export interface AssignedOrder {
   // Customer details
   customerName: string;
   customerPhone: string | null;
-  customerAddress: string | null;
+  customerAddress: string | Record<string, unknown> | null;
   customerCity: string | null;
   customerPincode: string | null;
   customerLatitude: number | null;
   customerLongitude: number | null;
   // Delivery details
-  deliveryAddress: string | null;
+  deliveryAddress: string | Record<string, unknown> | null;
   deliveryTimeSlot: string | null;
   deliveryLatitude: number | null;
   deliveryLongitude: number | null;
