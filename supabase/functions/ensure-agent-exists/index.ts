@@ -1,44 +1,81 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
+// Enhanced CORS headers with methods
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Helper: Soft-fail response (200 OK with success: false) - for expected conditions
+function softFailResponse(reason: string, details?: string): Response {
+  console.warn(`[ensure-agent-exists] Soft-fail: ${reason}`, details || '');
+  return new Response(
+    JSON.stringify({ success: false, reason, details }),
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
+// Helper: Success response
+function successResponse(data: Record<string, unknown>): Response {
+  return new Response(
+    JSON.stringify({ success: true, ...data }),
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
+// Helper: Server error response (only for true unexpected errors)
+function errorResponse(message: string, details?: string): Response {
+  console.error(`[ensure-agent-exists] Error: ${message}`, details || '');
+  return new Response(
+    JSON.stringify({ success: false, error: message, details }),
+    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('[ensure-agent-exists] Handling OPTIONS preflight');
     return new Response(null, { headers: corsHeaders });
   }
 
+  console.log('[ensure-agent-exists] Request received:', req.method);
+
   try {
+    // Validate environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+      return errorResponse('Server configuration error', 'Missing environment variables');
+    }
+
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return softFailResponse('missing_auth_header', 'No Authorization header provided');
+    }
+
     // Create client with user's auth token to get user info
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    );
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    });
 
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      console.error('[ensure-agent-exists] Auth error:', authError);
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.warn('[ensure-agent-exists] Auth error:', authError?.message);
+      return softFailResponse('auth_failed', authError?.message || 'User not authenticated');
     }
 
     console.log('[ensure-agent-exists] Checking agent for user:', user.id, user.email);
 
     // Use SERVICE ROLE client to bypass RLS for insert/update operations
-    const serviceClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check if agent already exists
     const { data: existingAgent, error: fetchError } = await serviceClient
@@ -49,21 +86,15 @@ Deno.serve(async (req) => {
 
     if (fetchError) {
       console.error('[ensure-agent-exists] Fetch error:', fetchError);
-      return new Response(JSON.stringify({ error: 'Failed to check agent status' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return softFailResponse('fetch_failed', fetchError.message);
     }
 
     // If agent exists, return it
     if (existingAgent) {
       console.log('[ensure-agent-exists] Agent already exists:', existingAgent.id);
-      return new Response(JSON.stringify({ 
-        success: true, 
+      return successResponse({ 
         agent: existingAgent,
         created: false 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -107,20 +138,14 @@ Deno.serve(async (req) => {
           .eq('agent_id', user.id)
           .single();
         
-        return new Response(JSON.stringify({ 
-          success: true, 
+        return successResponse({ 
           agent: concurrentAgent,
           created: false 
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
       console.error('[ensure-agent-exists] Insert error:', insertError);
-      return new Response(JSON.stringify({ error: 'Failed to create agent', details: insertError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return softFailResponse('insert_failed', insertError.message);
     }
 
     console.log('[ensure-agent-exists] Agent created successfully:', newAgent.id);
@@ -152,19 +177,13 @@ Deno.serve(async (req) => {
       // Don't fail the request, settings can be created later
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
+    return successResponse({ 
       agent: newAgent,
       created: true 
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('[ensure-agent-exists] Unexpected error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return errorResponse('Internal server error', error instanceof Error ? error.message : 'Unknown error');
   }
 });
