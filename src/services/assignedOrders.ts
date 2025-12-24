@@ -2,6 +2,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface AssignedOrder {
   id: string;
+  dailyOrderId?: string; // The daily_orders.id
+  orderId?: string | null; // The main order/subscription ID for navigation
   date: string;
   quantity: number;
   status: string;

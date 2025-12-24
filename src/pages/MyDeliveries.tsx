@@ -7,6 +7,7 @@ import { useAssignedOrders } from '@/hooks/useAssignedOrders';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Package, Calendar } from 'lucide-react';
+import { toast } from 'sonner';
 
 type DateFilter = 'today' | 'tomorrow' | 'upcoming' | 'all';
 
@@ -51,8 +52,14 @@ export default function MyDeliveries() {
     all: orders.length,
   }), [orders, today, tomorrow]);
 
-  const handleViewOrder = (orderId: string) => {
-    navigate(`/manage-delivery/${orderId}?type=daily`);
+  const handleViewOrder = (order: typeof orders[0]) => {
+    // Use dailyOrderId (which is the daily_orders.id) for navigation
+    const navId = order.dailyOrderId || order.id;
+    if (!navId) {
+      toast.error('Order details not available');
+      return;
+    }
+    navigate(`/manage-delivery/${navId}?type=daily`);
   };
 
   const formatDate = (dateStr: string) => {
@@ -133,7 +140,7 @@ export default function MyDeliveries() {
                 order={order}
                 index={index}
                 dateLabel={dateFilter === 'all' ? formatDate(order.date) : undefined}
-                onManage={() => handleViewOrder(order.id)}
+                onManage={() => handleViewOrder(order)}
               />
             ))}
           </div>
