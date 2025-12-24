@@ -47,16 +47,16 @@ export const router = createBrowserRouter([
         element: <RequireApproval />,
         children: [
           {
-            path: '/home',
-            element: <Home />,
-            // Keep this route alive - preload and maintain state
+            path: '/my-deliveries',
+            element: <MyDeliveries />,
+            // Keep this route alive - preload and maintain state (default landing)
             loader: async () => {
               return { keepAlive: true, preload: true };
             },
           },
           {
-            path: '/my-deliveries',
-            element: <MyDeliveries />,
+            path: '/home',
+            element: <Home />,
           },
           {
             path: '/history',
