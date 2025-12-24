@@ -157,6 +157,8 @@ serve(async (req) => {
 
       const transformed = {
         id: order.id,
+        dailyOrderId: order.id, // The daily_orders.id for reference
+        orderId: order.subscription_id, // Use subscription_id as the main order reference for navigation
         date: order.date,
         quantity: order.quantity,
         status: order.status,
