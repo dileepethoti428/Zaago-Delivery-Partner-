@@ -131,14 +131,6 @@ export default function Profile() {
                   )}
                 </div>
               </div>
-              
-              <button
-                onClick={handleWhatsAppClick}
-                className="h-12 w-12 rounded-full bg-[#25D366] flex items-center justify-center hover:bg-[#20BD5A] transition-colors shadow-lg"
-                aria-label="Contact on WhatsApp"
-              >
-                <WhatsAppIcon className="h-6 w-6 text-white" />
-              </button>
             </div>
 
             <div className="mt-6 flex items-center justify-between p-4 bg-muted/50 rounded-xl">
@@ -203,6 +195,14 @@ export default function Profile() {
           <LogOut className="h-5 w-5" />
           Logout
         </Button>
+
+        <button
+          onClick={handleWhatsAppClick}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#25D366] text-white shadow-lg hover:bg-[#20BD5A] transition-colors mb-4"
+        >
+          <WhatsAppIcon className="h-6 w-6" />
+          <span className="font-medium">Chat on WhatsApp</span>
+        </button>
       </div>
     </AppShell>
     </motion.div>
