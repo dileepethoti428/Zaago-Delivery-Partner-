@@ -1360,7 +1360,7 @@ export type Database = {
             columns: ["assigned_agent_id"]
             isOneToOne: false
             referencedRelation: "delivery_agents"
-            referencedColumns: ["id"]
+            referencedColumns: ["agent_id"]
           },
           {
             foreignKeyName: "daily_orders_customer_id_fkey"
@@ -4256,6 +4256,7 @@ export type Database = {
           ifsc_code: string | null
           is_bank_verified: boolean | null
           latitude: number | null
+          location_id: number | null
           location_verified: boolean | null
           longitude: number | null
           name: string
@@ -4286,6 +4287,7 @@ export type Database = {
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
           latitude?: number | null
+          location_id?: number | null
           location_verified?: boolean | null
           longitude?: number | null
           name: string
@@ -4316,6 +4318,7 @@ export type Database = {
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
           latitude?: number | null
+          location_id?: number | null
           location_verified?: boolean | null
           longitude?: number | null
           name?: string
@@ -5569,7 +5572,7 @@ export type Database = {
             columns: ["assigned_agent_id"]
             isOneToOne: false
             referencedRelation: "delivery_agents"
-            referencedColumns: ["id"]
+            referencedColumns: ["agent_id"]
           },
           {
             foreignKeyName: "daily_orders_customer_id_fkey"
@@ -6251,6 +6254,10 @@ export type Database = {
       extract_seller_ids_from_order: {
         Args: { order_items: Json }
         Returns: string[]
+      }
+      find_or_create_location_3km: {
+        Args: { p_latitude: number; p_longitude: number }
+        Returns: number
       }
       fix_all_subscription_dates_ist: { Args: never; Returns: Json }
       fix_subscription_delivery_dates: { Args: never; Returns: Json }
