@@ -6,6 +6,23 @@ import { CardContent } from '@/components/ui/card';
 import { Clock, MapPin, Phone, Package, Calendar, RefreshCw } from 'lucide-react';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
+// Helper to safely extract address string from string or object
+const getAddressString = (address: unknown): string => {
+  if (!address) return '';
+  if (typeof address === 'string') return address;
+  if (typeof address === 'object') {
+    const addr = address as Record<string, unknown>;
+    if (addr.full_address && typeof addr.full_address === 'string') {
+      return addr.full_address;
+    }
+    // Fallback: combine available fields
+    const parts = [addr.address, addr.street, addr.area, addr.city]
+      .filter(p => p && typeof p === 'string');
+    return parts.join(', ') || '';
+  }
+  return '';
+};
+
 interface AssignedOrderCardProps {
   order: AssignedOrder;
   index: number;
@@ -65,7 +82,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
             <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-muted-foreground">
-                {order.deliveryAddress || order.customerAddress || 'No address'}
+                {getAddressString(order.deliveryAddress) || getAddressString(order.customerAddress) || 'No address'}
               </p>
               {order.customerCity && (
                 <p className="text-xs text-muted-foreground">
