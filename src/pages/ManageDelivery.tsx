@@ -197,6 +197,7 @@ export default function ManageDelivery() {
         body: {
           order_id: order.id,
           payment_method: paymentMethod,
+          order_type: orderType, // Pass order type (daily or order)
         }
       });
 
@@ -243,6 +244,7 @@ export default function ManageDelivery() {
           payment_method: 'ONLINE',
           qr_code_data: qrData?.qr_string,
           payment_id: qrData?.qr_id,
+          order_type: orderType, // Pass order type (daily or order)
         }
       });
 
