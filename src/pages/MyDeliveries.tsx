@@ -1,61 +1,91 @@
-import { useMemo, useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { AssignedOrderCard } from '@/components/order/AssignedOrderCard';
-import { useAssignedOrders } from '@/hooks/useAssignedOrders';
+import { useTodayOrders, useTomorrowOrders, useUpcomingOrders } from '@/hooks/useAssignedOrders';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Package } from 'lucide-react';
 import { toast } from 'sonner';
-import { getTodayIST, getTomorrowIST } from '@/utils/dateUtils';
 import { supabase } from '@/integrations/supabase/client';
 
 type DateFilter = 'today' | 'tomorrow' | 'upcoming' | 'all';
 
 export default function MyDeliveries() {
   const navigate = useNavigate();
-  const { data: orders = [], isLoading, error } = useAssignedOrders();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+  const [agentId, setAgentId] = useState<string | null>(null);
 
-  // Calculate date strings using IST timezone (database stores dates in IST)
-  const today = useMemo(() => getTodayIST(), []);
-  const tomorrow = useMemo(() => getTomorrowIST(), []);
+  // Use separate RPC hooks for each tab - NO FRONTEND DATE LOGIC
+  const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders();
+  const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders();
+  const { data: upcomingOrders = [], isLoading: loadingUpcoming, error: errorUpcoming } = useUpcomingOrders();
 
   // Get agent ID for debug display
-  const [agentId, setAgentId] = useState<string | null>(null);
-  useMemo(() => {
+  useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setAgentId(data.user?.id || null);
     });
   }, []);
 
-  // Filter orders based on selected date tab
-  const filteredOrders = useMemo(() => {
+  // Current orders based on selected tab - NO DATE FILTERING, just tab selection
+  const currentOrders = useMemo(() => {
     switch (dateFilter) {
       case 'today':
-        return orders.filter(o => o.date === today);
+        return todayOrders;
       case 'tomorrow':
-        return orders.filter(o => o.date === tomorrow);
+        return tomorrowOrders;
       case 'upcoming':
-        return orders.filter(o => o.date > tomorrow);
+        return upcomingOrders;
       case 'all':
-        return orders;
+        return [...todayOrders, ...tomorrowOrders, ...upcomingOrders];
       default:
-        return orders;
+        return todayOrders;
     }
-  }, [orders, dateFilter, today, tomorrow]);
+  }, [dateFilter, todayOrders, tomorrowOrders, upcomingOrders]);
 
-  // Count orders per filter
+  // Loading state for current tab
+  const isLoading = useMemo(() => {
+    switch (dateFilter) {
+      case 'today':
+        return loadingToday;
+      case 'tomorrow':
+        return loadingTomorrow;
+      case 'upcoming':
+        return loadingUpcoming;
+      case 'all':
+        return loadingToday || loadingTomorrow || loadingUpcoming;
+      default:
+        return loadingToday;
+    }
+  }, [dateFilter, loadingToday, loadingTomorrow, loadingUpcoming]);
+
+  // Error state for current tab
+  const error = useMemo(() => {
+    switch (dateFilter) {
+      case 'today':
+        return errorToday;
+      case 'tomorrow':
+        return errorTomorrow;
+      case 'upcoming':
+        return errorUpcoming;
+      case 'all':
+        return errorToday || errorTomorrow || errorUpcoming;
+      default:
+        return errorToday;
+    }
+  }, [dateFilter, errorToday, errorTomorrow, errorUpcoming]);
+
+  // Counts from RPC results - NO FRONTEND DATE COMPARISON
   const counts = useMemo(() => ({
-    today: orders.filter(o => o.date === today).length,
-    tomorrow: orders.filter(o => o.date === tomorrow).length,
-    upcoming: orders.filter(o => o.date > tomorrow).length,
-    all: orders.length,
-  }), [orders, today, tomorrow]);
+    today: todayOrders.length,
+    tomorrow: tomorrowOrders.length,
+    upcoming: upcomingOrders.length,
+    all: todayOrders.length + tomorrowOrders.length + upcomingOrders.length,
+  }), [todayOrders, tomorrowOrders, upcomingOrders]);
 
-  const handleViewOrder = (order: typeof orders[0]) => {
-    // Use dailyOrderId (which is the daily_orders.id) for navigation
+  const handleViewOrder = (order: typeof todayOrders[0]) => {
     const navId = order.dailyOrderId || order.id;
     if (!navId) {
       toast.error('Order details not available');
@@ -64,10 +94,9 @@ export default function MyDeliveries() {
     navigate(`/manage-delivery/${navId}?type=daily`);
   };
 
-  const formatDate = (dateStr: string) => {
-    if (dateStr === today) return 'Today';
-    if (dateStr === tomorrow) return 'Tomorrow';
-    const date = new Date(dateStr);
+  // Format date label for "all" tab - uses order.date directly from DB
+  const formatDateLabel = (dateStr: string) => {
+    const date = new Date(dateStr + 'T00:00:00');
     return date.toLocaleDateString('en-IN', { 
       weekday: 'short', 
       day: 'numeric', 
@@ -81,7 +110,7 @@ export default function MyDeliveries() {
         {/* Debug Info - TEMPORARY */}
         <div className="text-xs text-muted-foreground bg-muted p-2 rounded mb-2">
           <p>Agent ID: {agentId ? `${agentId.slice(0, 8)}...` : 'Loading...'}</p>
-          <p>Query Date (IST): {today}</p>
+          <p>Date Source: Postgres CURRENT_DATE (no frontend date logic)</p>
         </div>
 
         {/* Date Filter Tabs */}
@@ -120,7 +149,7 @@ export default function MyDeliveries() {
         )}
 
         {/* Empty State */}
-        {!isLoading && !error && filteredOrders.length === 0 && (
+        {!isLoading && !error && currentOrders.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -140,14 +169,14 @@ export default function MyDeliveries() {
         )}
 
         {/* Orders List */}
-        {!isLoading && !error && filteredOrders.length > 0 && (
+        {!isLoading && !error && currentOrders.length > 0 && (
           <div className="space-y-3">
-            {filteredOrders.map((order, index) => (
+            {currentOrders.map((order, index) => (
               <AssignedOrderCard
                 key={order.id}
                 order={order}
                 index={index}
-                dateLabel={dateFilter === 'all' ? formatDate(order.date) : undefined}
+                dateLabel={dateFilter === 'all' ? formatDateLabel(order.date) : undefined}
                 onManage={() => handleViewOrder(order)}
               />
             ))}
