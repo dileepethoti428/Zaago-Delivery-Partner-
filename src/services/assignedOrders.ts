@@ -32,11 +32,16 @@ export interface AssignedOrder {
 }
 
 export async function fetchAssignedOrders(): Promise<AssignedOrder[]> {
+  console.log('[AssignedOrders] Fetching orders...');
+  
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session) {
+    console.error('[AssignedOrders] Not authenticated');
     throw new Error('Not authenticated');
   }
+
+  console.log('[AssignedOrders] Session user.id:', session.user.id);
 
   const { data, error } = await supabase.functions.invoke('get-agent-assigned-orders', {
     headers: {
@@ -45,9 +50,16 @@ export async function fetchAssignedOrders(): Promise<AssignedOrder[]> {
   });
 
   if (error) {
-    console.error('Error fetching assigned orders:', error);
+    console.error('[AssignedOrders] Error fetching assigned orders:', error);
     throw error;
   }
 
-  return data?.orders || [];
+  console.log('[AssignedOrders] Response data:', data);
+  console.log('[AssignedOrders] Orders count:', data?.orders?.length || 0);
+  console.log('[AssignedOrders] Orders:', JSON.stringify(data?.orders, null, 2));
+
+  const orders = data?.orders || [];
+  
+  // NO FILTERING - return ALL orders from the edge function
+  return orders;
 }
