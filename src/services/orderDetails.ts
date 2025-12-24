@@ -132,11 +132,12 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
   }
 
   // Fetch seller details for phone/address/coordinates
+  // Note: products.seller_id matches sellers.user_id (not sellers.id)
   const { data: seller } = await supabase
     .from('sellers')
     .select('phone, address, latitude, longitude')
-    .eq('id', product.seller_id)
-    .single();
+    .eq('user_id', product.seller_id)
+    .maybeSingle();
 
   // Parse delivery_address if it's a JSON object
   let deliveryAddr = subscription.delivery_address as any;
@@ -145,6 +146,23 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
       deliveryAddr = JSON.parse(deliveryAddr);
     } catch {
       deliveryAddr = { full_address: deliveryAddr };
+    }
+  }
+
+  // Normalize coordinates - delivery_address may use latitude/longitude instead of lat/lng
+  const deliveryLat = deliveryAddr?.coordinates?.lat ?? deliveryAddr?.coordinates?.latitude ?? customer.latitude;
+  const deliveryLng = deliveryAddr?.coordinates?.lng ?? deliveryAddr?.coordinates?.longitude ?? customer.longitude;
+
+  // Parse seller address if it's a JSON object
+  let sellerAddrStr = '';
+  if (seller?.address) {
+    const sellerAddr = seller.address as any;
+    if (typeof sellerAddr === 'object') {
+      sellerAddrStr = [sellerAddr.address, sellerAddr.city, sellerAddr.state, sellerAddr.pincode]
+        .filter(Boolean)
+        .join(', ');
+    } else {
+      sellerAddrStr = String(sellerAddr);
     }
   }
 
@@ -177,14 +195,14 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
       pincode: deliveryAddr?.pincode || customer.pincode || '',
       landmark: deliveryAddr?.landmark || undefined,
       coordinates: {
-        lat: deliveryAddr?.coordinates?.lat || customer.latitude,
-        lng: deliveryAddr?.coordinates?.lng || customer.longitude,
+        lat: deliveryLat,
+        lng: deliveryLng,
       },
     },
     seller: {
       name: product.seller_name || product.seller_business || 'Seller',
       phone: seller?.phone || '',
-      address: (seller?.address as string) || '',
+      address: sellerAddrStr,
       coordinates: {
         lat: seller?.latitude || null,
         lng: seller?.longitude || null,
