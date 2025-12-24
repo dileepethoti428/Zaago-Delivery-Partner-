@@ -6279,6 +6279,69 @@ export type Database = {
       generate_tracking_id: { Args: never; Returns: string }
       get_agent_distance_stats: { Args: { agent_uuid: string }; Returns: Json }
       get_agent_hours_today: { Args: { agent_uuid: string }; Returns: number }
+      get_agent_orders_today: {
+        Args: never
+        Returns: {
+          assigned_agent_id: string | null
+          assigned_by: string | null
+          created_at: string | null
+          customer_id: string
+          date: string
+          id: string
+          location_id: number | null
+          quantity: number
+          status: string
+          subscription_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "daily_orders"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_agent_orders_tomorrow: {
+        Args: never
+        Returns: {
+          assigned_agent_id: string | null
+          assigned_by: string | null
+          created_at: string | null
+          customer_id: string
+          date: string
+          id: string
+          location_id: number | null
+          quantity: number
+          status: string
+          subscription_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "daily_orders"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_agent_orders_upcoming: {
+        Args: never
+        Returns: {
+          assigned_agent_id: string | null
+          assigned_by: string | null
+          created_at: string | null
+          customer_id: string
+          date: string
+          id: string
+          location_id: number | null
+          quantity: number
+          status: string
+          subscription_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "daily_orders"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_agent_performance:
         | {
             Args: never
