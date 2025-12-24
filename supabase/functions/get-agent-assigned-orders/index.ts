@@ -4,6 +4,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
+
+// Soft-fail helper - returns 200 with success: false instead of 4xx
+const softFailResponse = (reason: string) => {
+  console.log('[DEBUG] Soft fail:', reason);
+  return new Response(
+    JSON.stringify({ success: false, reason, orders: [] }),
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
 };
 
 serve(async (req) => {
@@ -21,10 +31,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       console.error('[DEBUG] No authorization header provided');
-      return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return softFailResponse('No authorization header');
     }
 
     // Verify the JWT and get user
@@ -33,10 +40,7 @@ serve(async (req) => {
     
     if (authError || !user) {
       console.error('[DEBUG] Auth error:', authError?.message);
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return softFailResponse('Invalid or expired token');
     }
 
     console.log('[DEBUG] Authenticated user.id:', user.id);
