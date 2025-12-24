@@ -122,7 +122,7 @@ export default function Login() {
       } else if (profile.approval_status === 'rejected') {
         navigate('/rejected');
       } else if (profile.approval_status === 'approved') {
-        navigate('/home');
+        navigate('/my-deliveries');
       }
     }
   }, [session, profile, navigate]);
