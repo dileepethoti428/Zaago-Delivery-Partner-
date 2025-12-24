@@ -93,7 +93,7 @@ serve(async (req) => {
       console.log('📦 Processing daily/subscription order completion...');
       
       try {
-        // Fetch daily order details
+        // Step 1: Fetch daily order with basic relationships (no nested view joins)
         const { data: dailyOrder, error: dailyError } = await supabase
           .from('daily_orders')
           .select(`
@@ -103,8 +103,8 @@ serve(async (req) => {
             subscription_id,
             quantity,
             date,
-            customers!inner(full_name, phone, address, city, state, pincode),
-            subscriptions!inner(product_id, delivery_address, products_with_sellers(name, price, seller_id, sellers(business_name, address, phone)))
+            customers(full_name, phone, address, city, state, pincode),
+            subscriptions(product_id, delivery_address)
           `)
           .eq('id', order_id)
           .single();
@@ -116,6 +116,26 @@ serve(async (req) => {
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        console.log('📋 Daily order found:', dailyOrder.id, 'status:', dailyOrder.status);
+
+        // Step 2: Fetch product details separately
+        const subscription = dailyOrder.subscriptions as any;
+        let product: any = null;
+
+        if (subscription?.product_id) {
+          const { data: productData } = await supabase
+            .from('products')
+            .select('id, name, price, seller_id')
+            .eq('id', subscription.product_id)
+            .single();
+          
+          product = productData;
+          console.log('📦 Product found:', product?.name);
+        }
+
+        const customer = dailyOrder.customers as any;
+        const totalAmount = (product?.price || 0) * dailyOrder.quantity;
 
         // Check if already delivered
         if (dailyOrder.status === 'delivered') {
@@ -133,11 +153,7 @@ serve(async (req) => {
             throw new Error('Failed to update daily order status');
           }
 
-          // Get product details for history
-          const product = (dailyOrder.subscriptions as any)?.products_with_sellers;
-          const customer = dailyOrder.customers as any;
-          const seller = product?.sellers;
-          const totalAmount = (product?.price || 0) * dailyOrder.quantity;
+          console.log('✅ Daily order status updated to delivered');
 
           // Insert into delivery_history
           const { error: historyError } = await supabase
