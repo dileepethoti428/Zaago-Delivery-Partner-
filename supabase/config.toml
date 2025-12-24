@@ -56,3 +56,6 @@ verify_jwt = true
 
 [functions.get-agent-settings]
 verify_jwt = true
+
+[functions.get-agent-assigned-orders]
+verify_jwt = true

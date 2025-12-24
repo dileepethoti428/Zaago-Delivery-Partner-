@@ -11,6 +11,7 @@ import Settings from '@/pages/Settings';
 import UploadDocuments from '@/pages/UploadDocuments';
 import PendingApproval from '@/pages/PendingApproval';
 import Rejected from '@/pages/Rejected';
+import MyDeliveries from '@/pages/MyDeliveries';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RequireApproval } from '@/components/auth/RequireApproval';
 
@@ -52,6 +53,10 @@ export const router = createBrowserRouter([
             loader: async () => {
               return { keepAlive: true, preload: true };
             },
+          },
+          {
+            path: '/my-deliveries',
+            element: <MyDeliveries />,
           },
           {
             path: '/history',

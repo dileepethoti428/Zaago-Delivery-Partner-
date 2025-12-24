@@ -1320,6 +1320,7 @@ export type Database = {
       daily_orders: {
         Row: {
           assigned_agent_id: string | null
+          assigned_by: string | null
           created_at: string | null
           customer_id: string
           date: string
@@ -1331,6 +1332,7 @@ export type Database = {
         }
         Insert: {
           assigned_agent_id?: string | null
+          assigned_by?: string | null
           created_at?: string | null
           customer_id: string
           date: string
@@ -1342,6 +1344,7 @@ export type Database = {
         }
         Update: {
           assigned_agent_id?: string | null
+          assigned_by?: string | null
           created_at?: string | null
           customer_id?: string
           date?: string
@@ -3744,6 +3747,9 @@ export type Database = {
           photo_uploaded_at: string | null
           photo_url: string | null
           photo_verified: boolean | null
+          referral_applied_at: string | null
+          referral_code: string | null
+          referred_by: string | null
           rejection_reason: string | null
           submission_date: string | null
           updated_at: string
@@ -3772,6 +3778,9 @@ export type Database = {
           photo_uploaded_at?: string | null
           photo_url?: string | null
           photo_verified?: boolean | null
+          referral_applied_at?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           rejection_reason?: string | null
           submission_date?: string | null
           updated_at?: string
@@ -3800,12 +3809,23 @@ export type Database = {
           photo_uploaded_at?: string | null
           photo_url?: string | null
           photo_verified?: boolean | null
+          referral_applied_at?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           rejection_reason?: string | null
           submission_date?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       push_notification_logs: {
         Row: {
@@ -3917,6 +3937,60 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products_with_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_rewards: {
+        Row: {
+          created_at: string | null
+          credited_at: string | null
+          id: string
+          referral_code: string
+          referred_id: string
+          referrer_id: string
+          reward_amount: number | null
+          reward_type: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          credited_at?: string | null
+          id?: string
+          referral_code: string
+          referred_id: string
+          referrer_id: string
+          reward_amount?: number | null
+          reward_type?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          credited_at?: string | null
+          id?: string
+          referral_code?: string
+          referred_id?: string
+          referrer_id?: string
+          reward_amount?: number | null
+          reward_type?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_rewards_referred_id_fkey"
+            columns: ["referred_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_rewards_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -5461,6 +5535,58 @@ export type Database = {
       }
     }
     Views: {
+      customer_next_delivery: {
+        Row: {
+          assigned_agent_id: string | null
+          customer_id: string | null
+          date: string | null
+          order_id: string | null
+          quantity: number | null
+          status: string | null
+          subscription_id: string | null
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          customer_id?: string | null
+          date?: string | null
+          order_id?: string | null
+          quantity?: number | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          customer_id?: string | null
+          date?: string | null
+          order_id?: string | null
+          quantity?: number | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_orders_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_orders_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_analytics_mv: {
         Row: {
           confirmed_count: number | null
@@ -6224,6 +6350,15 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      get_customer_next_deliveries: {
+        Args: { p_customer_id: string }
+        Returns: {
+          assigned_agent_id: string
+          next_date: string
+          status: string
+          subscription_id: string
+        }[]
+      }
       get_dashboard_stats: { Args: never; Returns: Json }
       get_delivery_agent_analytics: {
         Args: { time_period?: string }
@@ -6263,6 +6398,10 @@ export type Database = {
           product_price: number
           purchase_count: number
         }[]
+      }
+      get_next_delivery_date_v3: {
+        Args: { p_subscription_id: string }
+        Returns: string
       }
       get_or_create_notification_preferences: {
         Args: { target_user_id: string }
