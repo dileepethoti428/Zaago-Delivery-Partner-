@@ -1,10 +1,11 @@
-import { Home, History, DollarSign, User } from 'lucide-react';
+import { Home, History, DollarSign, User, Truck } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 const tabs = [
   { path: '/home', label: 'Home', icon: Home },
+  { path: '/my-deliveries', label: 'Deliveries', icon: Truck },
   { path: '/history', label: 'History', icon: History },
   { path: '/earnings', label: 'Earnings', icon: DollarSign },
   { path: '/profile', label: 'Profile', icon: User },
