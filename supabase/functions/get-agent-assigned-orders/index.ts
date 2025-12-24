@@ -20,7 +20,7 @@ serve(async (req) => {
     // Get the agent ID from the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      console.error('No authorization header provided');
+      console.error('[DEBUG] No authorization header provided');
       return new Response(
         JSON.stringify({ error: 'No authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -32,14 +32,14 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
-      console.error('Auth error:', authError?.message);
+      console.error('[DEBUG] Auth error:', authError?.message);
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Fetching assigned orders for user:', user.id);
+    console.log('[DEBUG] Authenticated user.id:', user.id);
 
     // Get the delivery agent's internal ID
     const { data: agent, error: agentError } = await supabase
@@ -49,28 +49,59 @@ serve(async (req) => {
       .single();
 
     if (agentError || !agent) {
-      console.error('Agent not found:', agentError?.message);
+      console.error('[DEBUG] Agent not found for user.id:', user.id, 'Error:', agentError?.message);
       return new Response(
         JSON.stringify({ error: 'Agent not found', orders: [] }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Agent internal ID:', agent.id);
+    console.log('[DEBUG] deliveryAgentInternalId:', agent.id);
 
-    // Fetch ALL assigned orders from daily_orders without date filtering
+    // SIMPLE QUERY: Fetch ALL assigned orders from daily_orders
+    // NO date filters, NO subscription filters - just assigned_agent_id and status
+    console.log('[DEBUG] Executing query: SELECT * FROM daily_orders WHERE assigned_agent_id =', agent.id, "AND status IN ('pending', 'assigned') ORDER BY date ASC");
+    
     const { data: dailyOrders, error: ordersError } = await supabase
       .from('daily_orders')
-      .select(`
-        id,
-        date,
-        quantity,
-        status,
-        subscription_id,
-        customer_id,
-        location_id,
-        created_at,
-        subscriptions (
+      .select('*')
+      .eq('assigned_agent_id', agent.id)
+      .in('status', ['pending', 'assigned'])
+      .order('date', { ascending: true });
+
+    if (ordersError) {
+      console.error('[DEBUG] Error fetching daily_orders:', ordersError.message);
+      return new Response(
+        JSON.stringify({ error: ordersError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[DEBUG] orders.length:', dailyOrders?.length || 0);
+    console.log('[DEBUG] orders (raw):', JSON.stringify(dailyOrders, null, 2));
+
+    // If no orders, return early
+    if (!dailyOrders || dailyOrders.length === 0) {
+      console.log('[DEBUG] No orders found, returning empty array');
+      return new Response(
+        JSON.stringify({ orders: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fetch related data separately to avoid join issues
+    const subscriptionIds = [...new Set(dailyOrders.map(o => o.subscription_id).filter(Boolean))];
+    const customerIds = [...new Set(dailyOrders.map(o => o.customer_id).filter(Boolean))];
+
+    console.log('[DEBUG] Fetching subscriptions for IDs:', subscriptionIds);
+    console.log('[DEBUG] Fetching customers for IDs:', customerIds);
+
+    // Fetch subscriptions with products
+    let subscriptionsMap: Record<string, any> = {};
+    if (subscriptionIds.length > 0) {
+      const { data: subscriptions, error: subError } = await supabase
+        .from('subscriptions')
+        .select(`
           id,
           delivery_address,
           delivery_time_slot,
@@ -83,39 +114,44 @@ serve(async (req) => {
             price,
             image_url
           )
-        ),
-        customers (
-          id,
-          full_name,
-          phone,
-          address,
-          city,
-          pincode,
-          latitude,
-          longitude
-        )
-      `)
-      .eq('assigned_agent_id', agent.id)
-      .in('status', ['pending', 'assigned'])
-      .order('date', { ascending: true });
+        `)
+        .in('id', subscriptionIds);
 
-    if (ordersError) {
-      console.error('Error fetching orders:', ordersError.message);
-      return new Response(
-        JSON.stringify({ error: ordersError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (subError) {
+        console.error('[DEBUG] Error fetching subscriptions:', subError.message);
+      } else {
+        console.log('[DEBUG] Fetched subscriptions:', subscriptions?.length || 0);
+        subscriptions?.forEach(s => {
+          subscriptionsMap[s.id] = s;
+        });
+      }
     }
 
-    console.log(`Found ${dailyOrders?.length || 0} assigned orders`);
+    // Fetch customers
+    let customersMap: Record<string, any> = {};
+    if (customerIds.length > 0) {
+      const { data: customers, error: custError } = await supabase
+        .from('customers')
+        .select('id, full_name, phone, address, city, pincode, latitude, longitude')
+        .in('id', customerIds);
+
+      if (custError) {
+        console.error('[DEBUG] Error fetching customers:', custError.message);
+      } else {
+        console.log('[DEBUG] Fetched customers:', customers?.length || 0);
+        customers?.forEach(c => {
+          customersMap[c.id] = c;
+        });
+      }
+    }
 
     // Transform the data for the frontend
-    const transformedOrders = (dailyOrders || []).map(order => {
-      const subscription = order.subscriptions;
-      const customer = order.customers;
-      const product = subscription?.products;
+    const transformedOrders = dailyOrders.map(order => {
+      const subscription = subscriptionsMap[order.subscription_id] || null;
+      const customer = customersMap[order.customer_id] || null;
+      const product = subscription?.products || null;
 
-      return {
+      const transformed = {
         id: order.id,
         date: order.date,
         quantity: order.quantity,
@@ -145,7 +181,12 @@ serve(async (req) => {
         // Flags
         isSubscription: !!order.subscription_id,
       };
+
+      console.log('[DEBUG] Transformed order:', order.id, '| date:', order.date, '| isSubscription:', !!order.subscription_id);
+      return transformed;
     });
+
+    console.log('[DEBUG] Returning', transformedOrders.length, 'transformed orders');
 
     return new Response(
       JSON.stringify({ orders: transformedOrders }),
@@ -153,7 +194,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('[DEBUG] Unexpected error:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
