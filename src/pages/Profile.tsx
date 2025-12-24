@@ -196,14 +196,16 @@ export default function Profile() {
           Logout
         </Button>
 
-        <button
-          onClick={handleWhatsAppClick}
-          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#25D366] text-white shadow-lg hover:bg-[#20BD5A] transition-colors mb-4"
-        >
-          <WhatsAppIcon className="h-6 w-6" />
-          <span className="font-medium">Chat on WhatsApp</span>
-        </button>
       </div>
+
+      {/* Floating WhatsApp Button */}
+      <button
+        onClick={handleWhatsAppClick}
+        className="fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#20BD5A] hover:scale-110 transition-all duration-200 flex items-center justify-center"
+        aria-label="Chat on WhatsApp"
+      >
+        <WhatsAppIcon className="h-7 w-7" />
+      </button>
     </AppShell>
     </motion.div>
   );
