@@ -153,22 +153,21 @@ export default function Login() {
       }
       setLoading(false);
     } else {
-      // Get new user ID
       const newUserId = authData.user?.id;
       const previousAgentId = agentSession.getCurrentAgentId();
 
-      // Check if different agent is logging in
+      // CRITICAL: Set new agent ID IMMEDIATELY to prevent race condition with useAgentGuard
+      // This must happen before any async operations (like fetchProfile)
+      if (newUserId) {
+        agentSession.setCurrentAgentId(newUserId);
+      }
+
+      // Now check if different agent was logged in and clear their caches
       if (previousAgentId && previousAgentId !== newUserId) {
         console.log('🔄 Different agent detected, clearing all caches...');
-        // Clear ALL previous agent data
         cache.clearAll();
         advancedCache.clear();
         queryClient.clear();
-      }
-
-      // Store new agent ID
-      if (newUserId) {
-        agentSession.setCurrentAgentId(newUserId);
       }
 
       await fetchProfile();
@@ -204,9 +203,23 @@ export default function Login() {
     }
 
     if (authData.user) {
+      const newUserId = authData.user.id;
+      const previousAgentId = agentSession.getCurrentAgentId();
+
+      // CRITICAL: Set new agent ID IMMEDIATELY to prevent race condition with useAgentGuard
+      agentSession.setCurrentAgentId(newUserId);
+
+      // Clear any previous agent's cached data
+      if (previousAgentId && previousAgentId !== newUserId) {
+        console.log('🔄 Different agent detected during signup, clearing all caches...');
+        cache.clearAll();
+        advancedCache.clear();
+        queryClient.clear();
+      }
+
       // Create profile
       const { error: profileError } = await supabase.from('profiles').insert({
-        user_id: authData.user.id,
+        user_id: newUserId,
         approval_status: 'pending',
         documents_submitted: false,
       });
