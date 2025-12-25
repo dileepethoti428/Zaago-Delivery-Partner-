@@ -6282,65 +6282,92 @@ export type Database = {
       get_agent_orders_today: {
         Args: never
         Returns: {
-          assigned_agent_id: string | null
-          assigned_by: string | null
-          created_at: string | null
+          assigned_agent_id: string
+          assigned_by: string
+          created_at: string
+          customer_address: string
+          customer_city: string
           customer_id: string
+          customer_latitude: number
+          customer_longitude: number
+          customer_name: string
+          customer_phone: string
+          customer_pincode: string
           date: string
+          delivery_address: Json
+          delivery_latitude: number
+          delivery_longitude: number
+          delivery_time_slot: string
           id: string
-          location_id: number | null
+          location_id: number
+          product_id: string
+          product_image: string
+          product_name: string
+          product_price: number
           quantity: number
           status: string
           subscription_id: string
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "daily_orders"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       get_agent_orders_tomorrow: {
         Args: never
         Returns: {
-          assigned_agent_id: string | null
-          assigned_by: string | null
-          created_at: string | null
+          assigned_agent_id: string
+          assigned_by: string
+          created_at: string
+          customer_address: string
+          customer_city: string
           customer_id: string
+          customer_latitude: number
+          customer_longitude: number
+          customer_name: string
+          customer_phone: string
+          customer_pincode: string
           date: string
+          delivery_address: Json
+          delivery_latitude: number
+          delivery_longitude: number
+          delivery_time_slot: string
           id: string
-          location_id: number | null
+          location_id: number
+          product_id: string
+          product_image: string
+          product_name: string
+          product_price: number
           quantity: number
           status: string
           subscription_id: string
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "daily_orders"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       get_agent_orders_upcoming: {
         Args: never
         Returns: {
-          assigned_agent_id: string | null
-          assigned_by: string | null
-          created_at: string | null
+          assigned_agent_id: string
+          assigned_by: string
+          created_at: string
+          customer_address: string
+          customer_city: string
           customer_id: string
+          customer_latitude: number
+          customer_longitude: number
+          customer_name: string
+          customer_phone: string
+          customer_pincode: string
           date: string
+          delivery_address: Json
+          delivery_latitude: number
+          delivery_longitude: number
+          delivery_time_slot: string
           id: string
-          location_id: number | null
+          location_id: number
+          product_id: string
+          product_image: string
+          product_name: string
+          product_price: number
           quantity: number
           status: string
           subscription_id: string
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "daily_orders"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       get_agent_performance:
         | {
