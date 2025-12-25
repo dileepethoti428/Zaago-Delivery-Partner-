@@ -560,7 +560,7 @@ export default function ManageDelivery() {
               <Button
                 className="rounded-xl h-12 text-sm font-medium"
                 onClick={handleMarkAsDelivered}
-                disabled={!['assigned', 'picked_up'].includes(order.status) || isCompleting || isGeneratingQR}
+                disabled={!['pending', 'assigned', 'picked_up'].includes(order.status) || isCompleting || isGeneratingQR}
               >
                 {isCompleting ? (
                   <>
@@ -584,7 +584,7 @@ export default function ManageDelivery() {
               variant="destructive"
               className="w-full rounded-xl h-12 text-sm font-medium"
               onClick={handleCancel}
-              disabled={!['assigned', 'picked_up'].includes(order.status)}
+              disabled={!['pending', 'assigned', 'picked_up'].includes(order.status)}
             >
               <XCircle className="h-5 w-5 mr-2" />
               Cancel Delivery
