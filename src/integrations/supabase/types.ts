@@ -2822,6 +2822,7 @@ export type Database = {
           pickup_location: Json | null
           pickup_status: string | null
           seller_accepted_at: string | null
+          seller_id: string | null
           seller_latitude: number | null
           seller_longitude: number | null
           seller_name: string | null
@@ -2875,6 +2876,7 @@ export type Database = {
           pickup_location?: Json | null
           pickup_status?: string | null
           seller_accepted_at?: string | null
+          seller_id?: string | null
           seller_latitude?: number | null
           seller_longitude?: number | null
           seller_name?: string | null
@@ -2928,6 +2930,7 @@ export type Database = {
           pickup_location?: Json | null
           pickup_status?: string | null
           seller_accepted_at?: string | null
+          seller_id?: string | null
           seller_latitude?: number | null
           seller_longitude?: number | null
           seller_name?: string | null
@@ -6276,6 +6279,8 @@ export type Database = {
         Args: { order_uuid: string }
         Returns: undefined
       }
+      generate_today_orders_for_test: { Args: never; Returns: undefined }
+      generate_today_orders_for_testing: { Args: never; Returns: undefined }
       generate_tracking_id: { Args: never; Returns: string }
       get_agent_distance_stats: { Args: { agent_uuid: string }; Returns: Json }
       get_agent_hours_today: { Args: { agent_uuid: string }; Returns: number }
@@ -6473,6 +6478,19 @@ export type Database = {
           vehicle_type: string
         }[]
       }
+      get_delivery_agents_near_seller: {
+        Args: { p_radius_km?: number; p_seller_user_id: string }
+        Returns: {
+          agent_id: string
+          distance_km: number
+          id: string
+          is_online: boolean
+          latitude: number
+          longitude: number
+          max_capacity: number
+          name: string
+        }[]
+      }
       get_delivery_performance: {
         Args: { time_period?: string }
         Returns: {
@@ -6666,6 +6684,17 @@ export type Database = {
           viewed_at: string
         }[]
       }
+      get_seller_agent_order_counts: {
+        Args: {
+          p_date: string
+          p_location_id: number
+          p_seller_user_id: string
+        }
+        Returns: {
+          agent_id: string
+          order_count: number
+        }[]
+      }
       get_seller_order_items: {
         Args: { order_items: Json; target_seller_id: string }
         Returns: {
@@ -6687,6 +6716,26 @@ export type Database = {
           items: Json
           payment_status: string
           seller_total: number
+          status: string
+          total: number
+        }[]
+      }
+      get_seller_orders_today_overview: {
+        Args: { seller_user_id: string }
+        Returns: {
+          assigned_agent_id: string
+          delivery_date: string
+          id: string
+          status: string
+        }[]
+      }
+      get_seller_orders_with_filters: {
+        Args: { date_filter?: string; seller_user_id: string; sort_by?: string }
+        Returns: {
+          assigned_agent_id: string
+          created_at: string
+          delivery_date: string
+          id: string
           status: string
           total: number
         }[]
@@ -6720,6 +6769,31 @@ export type Database = {
       get_seller_stats_with_period: {
         Args: { seller_user_id: string; time_period?: string }
         Returns: Json
+      }
+      get_seller_subscription_orders_overview: {
+        Args: { p_date: string; p_seller_user_id: string }
+        Returns: {
+          assigned_orders: number
+          delivered_orders: number
+          pending_orders: number
+          total_orders: number
+          unassigned_orders: number
+        }[]
+      }
+      get_seller_unassigned_orders: {
+        Args: { p_date: string; p_seller_user_id: string }
+        Returns: {
+          customer_id: string
+          customer_name: string
+          date: string
+          id: string
+          location_id: number
+          product_id: string
+          product_name: string
+          quantity: number
+          status: string
+          subscription_id: string
+        }[]
       }
       get_service_config: { Args: { config_key: string }; Returns: string }
       get_suggestions_within_range: {

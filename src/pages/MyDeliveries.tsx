@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
@@ -8,26 +8,17 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Package } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 
 type DateFilter = 'today' | 'tomorrow' | 'upcoming' | 'all';
 
 export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
-  const [agentId, setAgentId] = useState<string | null>(null);
 
   // Use separate RPC hooks for each tab - NO FRONTEND DATE LOGIC
   const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders();
   const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders();
   const { data: upcomingOrders = [], isLoading: loadingUpcoming, error: errorUpcoming } = useUpcomingOrders();
-
-  // Get agent ID for debug display
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setAgentId(data.user?.id || null);
-    });
-  }, []);
 
   // Current orders based on selected tab - NO DATE FILTERING, just tab selection
   const currentOrders = useMemo(() => {
@@ -107,12 +98,6 @@ export default function MyDeliveries() {
   return (
     <AppShell>
       <div className="space-y-4">
-        {/* Debug Info - TEMPORARY */}
-        <div className="text-xs text-muted-foreground bg-muted p-2 rounded mb-2">
-          <p>Agent ID: {agentId ? `${agentId.slice(0, 8)}...` : 'Loading...'}</p>
-          <p>Date Source: Postgres CURRENT_DATE (no frontend date logic)</p>
-        </div>
-
         {/* Date Filter Tabs */}
         <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
           <TabsList className="grid w-full grid-cols-4">
