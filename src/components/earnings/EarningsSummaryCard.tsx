@@ -9,6 +9,7 @@ interface EarningsSummaryCardProps {
   variant?: 'featured' | 'compact';
   delay?: number;
   icon?: React.ReactNode;
+  showAveragePerOrder?: boolean;
 }
 
 export function EarningsSummaryCard({ 
@@ -16,9 +17,11 @@ export function EarningsSummaryCard({
   data, 
   variant = 'compact',
   delay = 0,
-  icon
+  icon,
+  showAveragePerOrder = false
 }: EarningsSummaryCardProps) {
   const isFeatured = variant === 'featured';
+  const avgPerOrder = data.deliveries > 0 ? data.total / data.deliveries : 0;
 
   return (
     <motion.div
@@ -40,6 +43,13 @@ export function EarningsSummaryCard({
               {formatCurrency(data.total)}
             </span>
           </div>
+          
+          {/* Average per order for regular orders */}
+          {showAveragePerOrder && data.deliveries > 0 && (
+            <div className="text-xs text-muted-foreground mt-1">
+              Avg. per order: {formatCurrency(avgPerOrder)}
+            </div>
+          )}
           
           {/* Stats Row */}
           {isFeatured ? (

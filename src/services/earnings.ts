@@ -1,5 +1,15 @@
 import { supabase } from '@/integrations/supabase/client';
 
+/**
+ * Payout breakdown for transparent Zepto/Blinkit style pricing
+ */
+export interface PayoutBreakdown {
+  base_pay: number;      // Fixed ₹10 per order
+  distance_pay: number;  // distance_km × ₹8
+  distance_km: number;   // Actual distance rounded to 1 decimal
+  rate_per_km: number;   // ₹8 per km
+}
+
 // Period earnings breakdown
 export interface PeriodEarnings {
   pending: number;
@@ -20,8 +30,8 @@ export interface EarningRecord {
   actual_payout: number | null;
   status: string;
   distance_km: number;
-  is_peak_hour: boolean | null;
-  payout_breakdown: any;
+  is_peak_hour: boolean;
+  payout_breakdown?: PayoutBreakdown;
   subscription_id?: string | null;
   order_type: 'regular' | 'subscription';
 }

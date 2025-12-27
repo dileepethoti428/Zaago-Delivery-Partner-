@@ -76,11 +76,12 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
           {earnings.map((earning, index) => (
             <div 
               key={earning.order_id} 
-              className={`flex items-center justify-between py-2 ${index < earnings.length - 1 ? 'border-b' : ''}`}
+              className={`py-3 ${index < earnings.length - 1 ? 'border-b' : ''}`}
             >
-              <div className="flex-1 min-w-0">
+              {/* Order Header */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm truncate">
+                  <span className="font-medium text-sm">
                     {type === 'subscription' && earning.subscription_id 
                       ? `Sub #${earning.subscription_id.slice(0, 8)}...`
                       : `Order #${earning.order_id.slice(0, 8)}...`
@@ -89,33 +90,60 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                   {getStatusBadge(earning.status)}
                   {getTypeLabel(earning)}
                 </div>
-                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                  <span>{formatDateTimeIST(earning.accepted_at)}</span>
-                  {earning.distance_km > 0 && (
-                    <>
-                      <span>•</span>
-                      <span>{earning.distance_km.toFixed(1)} km</span>
-                    </>
-                  )}
-                  {earning.is_peak_hour && (
-                    <>
-                      <span>•</span>
-                      <Badge variant="outline" className="text-xs border-yellow-300 text-yellow-600 py-0">Peak</Badge>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="text-right ml-3">
-                <div className="font-semibold text-primary">
-                  {formatCurrency(earning.actual_payout ?? earning.expected_payout)}
-                </div>
                 {earning.status === 'pending' && (
-                  <div className="text-xs text-muted-foreground flex items-center justify-end gap-1">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
                     <RefreshCw className="h-3 w-3" />
                     Expected
                   </div>
                 )}
               </div>
+
+              {/* Zepto/Blinkit style breakdown for regular orders */}
+              {type === 'regular' && earning.payout_breakdown && earning.order_type === 'regular' && (
+                <div className="mt-2 bg-muted/50 rounded-lg p-3 space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Base Pay</span>
+                    <span className="font-medium">₹{earning.payout_breakdown.base_pay}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km})
+                    </span>
+                    <span className="font-medium">₹{earning.payout_breakdown.distance_pay}</span>
+                  </div>
+                  <div className="flex justify-between text-sm pt-1.5 border-t border-border/50">
+                    <span className="font-semibold">Total Payout</span>
+                    <span className="font-bold text-primary">
+                      {formatCurrency(earning.actual_payout ?? earning.expected_payout)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Simple display for subscription or all tab */}
+              {(type !== 'regular' || earning.order_type !== 'regular') && (
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{formatDateTimeIST(earning.accepted_at)}</span>
+                    {earning.distance_km > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>{earning.distance_km.toFixed(1)} km</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="font-semibold text-primary">
+                    {formatCurrency(earning.actual_payout ?? earning.expected_payout)}
+                  </div>
+                </div>
+              )}
+
+              {/* Timestamp for regular orders with breakdown */}
+              {type === 'regular' && earning.payout_breakdown && earning.order_type === 'regular' && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {formatDateTimeIST(earning.accepted_at)}
+                </div>
+              )}
             </div>
           ))}
         </CardContent>
