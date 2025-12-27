@@ -1,37 +1,50 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// Earnings data service
+// Period earnings breakdown
+export interface PeriodEarnings {
+  pending: number;
+  confirmed: number;
+  total: number;
+  deliveries: number;
+  in_progress: number;
+  cancelled: number;
+  total_orders: number;
+}
+
+// Individual earning record
+export interface EarningRecord {
+  order_id: string;
+  accepted_at: string;
+  completed_at: string | null;
+  expected_payout: number;
+  actual_payout: number | null;
+  status: string;
+  distance_km: number;
+  is_peak_hour: boolean | null;
+  payout_breakdown: any;
+  subscription_id?: string | null;
+  order_type: 'regular' | 'subscription';
+}
+
+// Earnings by order type
+export interface EarningsByType {
+  today: PeriodEarnings;
+  week: PeriodEarnings;
+  month: PeriodEarnings;
+  recent_earnings: EarningRecord[];
+}
+
+// Full live earnings data structure
 export interface LiveEarningsData {
-  today: {
-    pending: number;
-    confirmed: number;
-    total: number;
-    deliveries: number;
-    in_progress: number;
-    cancelled: number;
-    total_orders: number;
-  };
-  week: {
-    pending: number;
-    confirmed: number;
-    total: number;
-    deliveries: number;
-    in_progress: number;
-    cancelled: number;
-    total_orders: number;
-  };
-  month: {
-    pending: number;
-    confirmed: number;
-    total: number;
-    deliveries: number;
-    in_progress: number;
-    cancelled: number;
-    total_orders: number;
-  };
-  recent_earnings: any[];
+  today: PeriodEarnings;
+  week: PeriodEarnings;
+  month: PeriodEarnings;
+  recent_earnings: EarningRecord[];
   live_payout: number;
   deliveries_in_progress: number;
+  // Separated earnings by order type
+  regular: EarningsByType;
+  subscription: EarningsByType;
 }
 
 export async function fetchLiveEarnings(): Promise<LiveEarningsData> {
@@ -52,7 +65,8 @@ export async function fetchLiveEarnings(): Promise<LiveEarningsData> {
 }
 
 export function formatCurrency(amount: number | null | undefined): string {
-  if (!amount || amount === 0) return '—';
+  if (amount === null || amount === undefined) return '—';
+  if (amount === 0) return '₹0';
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
