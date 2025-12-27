@@ -7,22 +7,32 @@ const corsHeaders = {
 
 /**
  * Zepto/Blinkit style distance calculation
- * - Uses Mapbox Directions API for ROAD ROUTE distance (no Haversine fallback)
+ * - Uses Google Distance Matrix API for ROAD ROUTE distance
  * - Rounds UP to 1 decimal place (ceil)
  */
 async function calculateRoadDistance(
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number },
-  mapboxToken: string
+  googleApiKey: string
 ): Promise<{ distance_km: number; eta_mins: number; success: boolean; error?: string }> {
   try {
-    const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?access_token=${mapboxToken}&geometries=geojson`;
+    const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&mode=driving&key=${googleApiKey}`;
     
-    const response = await fetch(mapboxUrl);
+    const response = await fetch(apiUrl);
     const data = await response.json();
     
-    if (!data.routes || data.routes.length === 0) {
-      console.error('Mapbox returned no routes:', data);
+    if (data.status !== 'OK') {
+      console.error('Google Distance Matrix API error:', data.status, data.error_message);
+      return { 
+        distance_km: 0, 
+        eta_mins: 0, 
+        success: false, 
+        error: data.error_message || data.status 
+      };
+    }
+    
+    if (!data.rows?.[0]?.elements?.[0]) {
+      console.error('Google returned no route data:', data);
       return { 
         distance_km: 0, 
         eta_mins: 0, 
@@ -31,9 +41,20 @@ async function calculateRoadDistance(
       };
     }
     
-    const route = data.routes[0];
-    const distanceMeters = route.distance;
-    const durationSeconds = route.duration;
+    const element = data.rows[0].elements[0];
+    
+    if (element.status !== 'OK') {
+      console.error('Google element status error:', element.status);
+      return { 
+        distance_km: 0, 
+        eta_mins: 0, 
+        success: false, 
+        error: element.status 
+      };
+    }
+    
+    const distanceMeters = element.distance.value;
+    const durationSeconds = element.duration.value;
     
     // Convert meters to km
     const rawDistanceKm = distanceMeters / 1000;
@@ -47,7 +68,7 @@ async function calculateRoadDistance(
     // ETA in minutes (minimum 1 minute)
     const etaMins = Math.max(1, Math.ceil(durationSeconds / 60));
     
-    console.log('✅ Mapbox road distance calculated:', {
+    console.log('✅ Google road distance calculated:', {
       raw_meters: distanceMeters,
       raw_km: rawDistanceKm,
       rounded_km: finalDistanceKm,
@@ -60,12 +81,12 @@ async function calculateRoadDistance(
       success: true
     };
   } catch (error) {
-    console.error('Mapbox API error:', error);
+    console.error('Google Distance Matrix API error:', error);
     return {
       distance_km: 0,
       eta_mins: 0,
       success: false,
-      error: error instanceof Error ? error.message : 'Mapbox API failed'
+      error: error instanceof Error ? error.message : 'Google API failed'
     };
   }
 }
@@ -93,15 +114,15 @@ serve(async (req) => {
       )
     }
 
-    // Get Mapbox token from environment
-    const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN')
+    // Get Google API key from environment
+    const googleApiKey = Deno.env.get('GOOGLE_PLACES_API_KEY')
     
-    if (!mapboxToken) {
-      console.error('❌ MAPBOX_PUBLIC_TOKEN not configured');
+    if (!googleApiKey) {
+      console.error('❌ GOOGLE_PLACES_API_KEY not configured');
       return new Response(
         JSON.stringify({ 
           error: 'Routing service not configured',
-          message: 'MAPBOX_PUBLIC_TOKEN environment variable is required for road distance calculation',
+          message: 'GOOGLE_PLACES_API_KEY environment variable is required for road distance calculation',
           success: false
         }),
         { 
@@ -111,14 +132,14 @@ serve(async (req) => {
       )
     }
 
-    // Calculate road distance using Mapbox Directions API
-    const result = await calculateRoadDistance(origin, destination, mapboxToken);
+    // Calculate road distance using Google Distance Matrix API
+    const result = await calculateRoadDistance(origin, destination, googleApiKey);
     
     if (!result.success) {
       return new Response(
         JSON.stringify({ 
           error: 'Failed to calculate road distance',
-          message: result.error || 'Mapbox Directions API returned no routes',
+          message: result.error || 'Google Distance Matrix API returned no routes',
           success: false
         }),
         { 
@@ -132,7 +153,7 @@ serve(async (req) => {
       JSON.stringify({ 
         distance_km: result.distance_km,
         eta_mins: result.eta_mins,
-        source: 'mapbox_road',
+        source: 'google_road',
         success: true 
       }),
       { 

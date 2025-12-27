@@ -13,7 +13,7 @@ const REGULAR_ORDER_PRICING = {
 };
 
 /**
- * Calculate road distance using Mapbox Directions API
+ * Calculate road distance using Google Distance Matrix API
  * Returns distance in km, rounded UP to 1 decimal (Zepto style)
  * NO HAVERSINE FALLBACK - returns null if routing fails
  */
@@ -21,26 +21,32 @@ async function calculateRoadDistance(
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number }
 ): Promise<number | null> {
-  const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN');
+  const googleApiKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
   
-  if (!mapboxToken) {
-    console.error('❌ MAPBOX_PUBLIC_TOKEN not configured - cannot calculate road distance');
+  if (!googleApiKey) {
+    console.error('❌ GOOGLE_PLACES_API_KEY not configured - cannot calculate road distance');
     return null;
   }
 
   try {
-    const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?access_token=${mapboxToken}&geometries=geojson`;
+    const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&mode=driving&key=${googleApiKey}`;
     
-    const response = await fetch(mapboxUrl);
+    const response = await fetch(apiUrl);
     const data = await response.json();
     
-    if (!data.routes || data.routes.length === 0) {
-      console.error('Mapbox returned no routes');
+    if (data.status !== 'OK' || !data.rows?.[0]?.elements?.[0]) {
+      console.error('Google Distance Matrix error:', data.status, data.error_message);
       return null;
     }
     
-    const route = data.routes[0];
-    const distanceMeters = route.distance;
+    const element = data.rows[0].elements[0];
+    
+    if (element.status !== 'OK') {
+      console.error('Google element status error:', element.status);
+      return null;
+    }
+    
+    const distanceMeters = element.distance.value;
     
     // Convert meters to km
     const rawDistanceKm = distanceMeters / 1000;
@@ -51,7 +57,7 @@ async function calculateRoadDistance(
     // Minimum distance of 0.1 km
     return Math.max(0.1, roundedDistanceKm);
   } catch (error) {
-    console.error('Mapbox API error:', error);
+    console.error('Google Distance Matrix API error:', error);
     return null;
   }
 }
@@ -560,7 +566,36 @@ serve(async (req) => {
       filteredOrders = nearbyOrders;
       console.log(`After 10km filtering with road distance: ${filteredOrders.length} orders remain`);
     } else {
-      console.log('No agent location available, skipping distance filtering');
+      console.log('No agent location available - using stored distance for payout calculation');
+      
+      // Still process orders with stored distance or default payout
+      filteredOrders = filteredOrders.map(order => {
+        // Skip subscription orders (no payout)
+        if (order.subscription_id || order.order_type === 'subscription') {
+          return { ...order, agent_payout: 0, payout_breakdown: null };
+        }
+        
+        // Use stored distance_km from order, or default to 2.5km
+        const storedDistance = order.distance_km || 2.5;
+        const roundedDistance = Math.ceil(storedDistance * 10) / 10;
+        
+        // Calculate payout using Zepto formula: ₹10 base + ₹8/km
+        const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+        const agentPayout = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
+        
+        return {
+          ...order,
+          distance_km: roundedDistance,
+          agent_payout: Math.round(agentPayout * 10) / 10,
+          estimated_delivery_time: Math.max(5, Math.ceil(roundedDistance * 2)),
+          payout_breakdown: {
+            base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+            distance_pay: Math.round(distancePay * 10) / 10,
+            distance_km: roundedDistance,
+            rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
+          }
+        };
+      });
     }
 
     console.log(`Found ${filteredOrders?.length || 0} available orders for agent ${deliveryAgentId} (auth: ${agent_id})`);
