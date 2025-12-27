@@ -11,6 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // User client (auth only)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -29,10 +30,96 @@ Deno.serve(async (req) => {
       });
     }
 
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!serviceKey) {
+      console.error('[update-agent-preferences] Missing SUPABASE_SERVICE_ROLE_KEY');
+      return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      serviceKey
+    );
+
     const body = await req.json();
     const { is_available, auto_accept_orders, preferred_language, dark_mode } = body;
 
-    console.log('Updating preferences for agent:', user.id);
+    console.log('[update-agent-preferences] Updating preferences for user:', user.id);
+
+    // Map auth user -> delivery_agents row
+    const { data: agent, error: agentError } = await serviceClient
+      .from('delivery_agents')
+      .select('id')
+      .eq('agent_id', user.id)
+      .maybeSingle();
+
+    if (agentError) {
+      console.error('[update-agent-preferences] Agent fetch error:', agentError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch agent profile' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!agent) {
+      return new Response(JSON.stringify({ error: 'Agent profile not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Ensure settings row exists
+    let { data: settings, error: settingsError } = await serviceClient
+      .from('agent_settings')
+      .select('*')
+      .eq('agent_id', agent.id)
+      .maybeSingle();
+
+    if (settingsError && settingsError.code !== 'PGRST116') {
+      console.error('[update-agent-preferences] Settings fetch error:', settingsError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch settings' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!settings) {
+      console.log('[update-agent-preferences] Creating default settings');
+      const { data: newSettings, error: createError } = await serviceClient
+        .from('agent_settings')
+        .insert({
+          agent_id: agent.id,
+          is_available: false,
+          auto_accept_orders: false,
+          notify_new_orders: true,
+          notify_earnings_updates: true,
+          notify_promotions: true,
+          preferred_language: 'en',
+          dark_mode: false,
+          push_notifications: true,
+          sound_alerts: true,
+          vibration: true,
+          ringtone_enabled: true,
+          ringtone_type: 'iphone-ringtone',
+          ringtone_volume: 0.8,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .maybeSingle();
+
+      if (createError && createError.code !== '23505') {
+        console.error('[update-agent-preferences] Settings creation error:', createError);
+        return new Response(JSON.stringify({ error: 'Failed to create settings' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      settings = newSettings ?? settings;
+    }
 
     const updateData: any = {
       updated_at: new Date().toISOString(),
@@ -43,16 +130,15 @@ Deno.serve(async (req) => {
     if (preferred_language !== undefined) updateData.preferred_language = preferred_language;
     if (dark_mode !== undefined) updateData.dark_mode = dark_mode;
 
-    // Update agent settings
-    const { data, error } = await supabase
+    const { data, error } = await serviceClient
       .from('agent_settings')
       .update(updateData)
-      .eq('agent_id', user.id)
+      .eq('agent_id', agent.id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
-      console.error('Preferences update error:', error);
+      console.error('[update-agent-preferences] Preferences update error:', error);
       return new Response(JSON.stringify({ error: 'Failed to update preferences' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -61,26 +147,26 @@ Deno.serve(async (req) => {
 
     // If is_available changed, also update delivery_agents.is_online
     if (is_available !== undefined) {
-      const { error: agentError } = await supabase
+      const { error: agentUpdateError } = await serviceClient
         .from('delivery_agents')
-        .update({ 
+        .update({
           is_online: is_available,
           updated_at: new Date().toISOString(),
         })
         .eq('agent_id', user.id);
 
-      if (agentError) {
-        console.error('Failed to update agent online status:', agentError);
+      if (agentUpdateError) {
+        console.error('[update-agent-preferences] Failed to update agent online status:', agentUpdateError);
       }
     }
 
-    console.log('Preferences updated successfully');
+    console.log('[update-agent-preferences] Preferences updated successfully');
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('[update-agent-preferences] Unexpected error:', error);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
