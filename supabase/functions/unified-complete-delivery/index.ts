@@ -6,6 +6,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Zepto/Blinkit style pricing for regular orders
+const REGULAR_ORDER_PRICING = {
+  BASE_PAY: 10,        // Fixed ₹10 per order
+  DISTANCE_RATE: 8,    // ₹8 per km
+};
+
+function calculatePayout(distanceKm: number) {
+  const roundedDistance = Math.round((distanceKm || 0) * 10) / 10;
+  const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+  const total = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
+  
+  return {
+    base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+    distance_pay: Math.round(distancePay * 10) / 10,
+    distance_km: roundedDistance,
+    rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE,
+    total: Math.round(total * 10) / 10
+  };
+}
+
+// Subscription orders have NO payout - count only
+const SUBSCRIPTION_PAYOUT = 0;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -88,9 +111,9 @@ serve(async (req) => {
 
     let result: any = null;
 
-    // Handle daily/subscription orders differently
+    // Handle daily/subscription orders differently - NO PAYOUT
     if (isDailyOrder) {
-      console.log('📦 Processing daily/subscription order completion...');
+      console.log('📦 Processing daily/subscription order completion (NO PAYOUT)...');
       
       try {
         // Step 1: Fetch daily order with basic relationships (no nested view joins)
@@ -140,7 +163,7 @@ serve(async (req) => {
         // Check if already delivered
         if (dailyOrder.status === 'delivered') {
           console.log('⚠️ Daily order already delivered');
-          result = { success: true, already_completed: true, payout_amount: 30 };
+          result = { success: true, already_completed: true, payout_amount: SUBSCRIPTION_PAYOUT };
         } else {
           // Update daily_orders status to delivered
           const { error: updateError } = await supabase
@@ -155,7 +178,7 @@ serve(async (req) => {
 
           console.log('✅ Daily order status updated to delivered');
 
-          // Insert into delivery_history
+          // Insert into delivery_history - NO PAYOUT for subscription
           const { error: historyError } = await supabase
             .from('delivery_history')
             .insert({
@@ -179,37 +202,16 @@ serve(async (req) => {
               payment_status: normalizedPayment === 'ONLINE' ? 'paid' : 'collected',
               delivery_date: dailyOrder.date,
               completed_at: new Date().toISOString(),
-              delivery_payout: 30
+              delivery_payout: SUBSCRIPTION_PAYOUT // NO PAYOUT for subscription
             });
 
           if (historyError) {
             console.warn('⚠️ Failed to insert delivery history:', historyError);
-            // Don't fail the whole operation for history insert failure
           }
 
-          // Update agent wallet with delivery payout
-          const payoutAmount = 30;
-          const { error: walletError } = await supabase.rpc('add_agent_earnings', {
-            p_agent_id: agent.id,
-            p_order_id: order_id,
-            p_amount: payoutAmount,
-            p_payment_method: normalizedPayment
-          });
-
-          if (walletError) {
-            console.warn('⚠️ Failed to add earnings (trying direct insert):', walletError);
-            // Try direct insert as fallback
-            await supabase.from('earnings').insert({
-              agent_id: agent.id,
-              order_id: order_id,
-              amount: payoutAmount,
-              payment_method: normalizedPayment,
-              status: 'completed'
-            });
-          }
-
-          console.log('✅ Daily order completed successfully');
-          result = { success: true, payout_amount: payoutAmount };
+          // NOTE: No wallet update for subscription orders - they have no payout
+          console.log('✅ Daily order completed successfully (no payout for subscription)');
+          result = { success: true, payout_amount: SUBSCRIPTION_PAYOUT };
         }
       } catch (dailyErr) {
         console.error('❌ Daily order completion failed:', dailyErr);
@@ -222,7 +224,20 @@ serve(async (req) => {
         );
       }
     } else {
-      // Regular order flow - existing logic
+      // Regular order flow - use Zepto/Blinkit formula
+      
+      // First, get order to calculate payout
+      const { data: order } = await supabase
+        .from('orders')
+        .select('distance_km')
+        .eq('id', order_id)
+        .single();
+      
+      const distanceKm = order?.distance_km || 2.5;
+      const payoutData = calculatePayout(distanceKm);
+      const calculatedPayout = payoutData.total;
+      
+      console.log('💵 Regular order payout calculation:', payoutData);
       
       // Method 1: Try QR completion if QR code data provided
       if (qr_code_data) {
@@ -239,7 +254,12 @@ serve(async (req) => {
 
           if (!qrError && qrResult?.success) {
             console.log('✅ QR completion successful');
-            result = qrResult;
+            // Override payout with calculated value if DB function returned wrong amount
+            result = {
+              ...qrResult,
+              payout_amount: qrResult.payout_amount || calculatedPayout,
+              payout_breakdown: payoutData
+            };
           } else {
             console.log('⚠️ QR completion failed, trying manual method');
             console.log('QR Error:', qrError);
@@ -265,7 +285,11 @@ serve(async (req) => {
 
           if (!manualError && manualResult?.success) {
             console.log('✅ Manual completion successful');
-            result = manualResult;
+            result = {
+              ...manualResult,
+              payout_amount: manualResult.payout_amount || calculatedPayout,
+              payout_breakdown: payoutData
+            };
           } else {
             console.log('⚠️ Manual completion failed, trying simple method');
             console.log('Manual Error:', manualError?.message || manualError);
@@ -291,7 +315,11 @@ serve(async (req) => {
 
           if (!simpleError && simpleResult?.success) {
             console.log('✅ Simple completion successful');
-            result = simpleResult;
+            result = {
+              ...simpleResult,
+              payout_amount: simpleResult.payout_amount || calculatedPayout,
+              payout_breakdown: payoutData
+            };
           } else {
             console.error('❌ All completion methods failed');
             console.error('Simple Error:', simpleError?.message || simpleError);
@@ -320,12 +348,15 @@ serve(async (req) => {
     }
 
     // Return success (including already completed cases)
+    const finalPayout = isDailyOrder ? SUBSCRIPTION_PAYOUT : (result.payout_amount || 0);
+    
     console.log('🎉 Delivery completed successfully via unified flow', {
       order_id,
+      order_type: isDailyOrder ? 'subscription' : 'regular',
       method_used: qr_code_data ? 'qr_scan' : 'manual',
       payment_method: normalizedPayment,
       already_completed: result.already_completed || false,
-      payout_amount: result.payout_amount || 30,
+      payout_amount: finalPayout,
       timestamp: new Date().toISOString()
     });
     
@@ -334,8 +365,10 @@ serve(async (req) => {
         success: true,
         message: result.already_completed ? 'Order already completed' : 'Delivery completed successfully',
         order_id,
+        order_type: isDailyOrder ? 'subscription' : 'regular',
         method_used: qr_code_data ? 'qr_scan' : 'manual',
-        payout_amount: result.payout_amount || 30,
+        payout_amount: finalPayout,
+        payout_breakdown: isDailyOrder ? null : result.payout_breakdown,
         already_completed: result.already_completed || false,
         ...result
       }),

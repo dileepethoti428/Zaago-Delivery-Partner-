@@ -6,6 +6,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Zepto/Blinkit style pricing for regular orders
+const REGULAR_ORDER_PRICING = {
+  BASE_PAY: 10,        // Fixed ₹10 per order
+  DISTANCE_RATE: 8,    // ₹8 per km
+};
+
+function calculatePayout(distanceKm: number) {
+  const roundedDistance = Math.round((distanceKm || 0) * 10) / 10;
+  const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+  const total = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
+  
+  return {
+    base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+    distance_pay: Math.round(distancePay * 10) / 10,
+    distance_km: roundedDistance,
+    rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE,
+    total: Math.round(total * 10) / 10
+  };
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -131,7 +151,8 @@ serve(async (req) => {
           payment_status,
           special_instructions,
           delivery_time_slot,
-          agent_id
+          agent_id,
+          distance_km
         )
       `)
       .eq('qr_code_data', qr_code_data)
@@ -269,6 +290,13 @@ serve(async (req) => {
 
     console.log('✅ Order validation passed, proceeding with QR delivery completion');
 
+    // Calculate payout using Zepto/Blinkit formula BEFORE calling DB functions
+    const distanceKm = order.distance_km || 2.5;
+    const payoutData = calculatePayout(distanceKm);
+    const calculatedPayout = payoutData.total;
+    
+    console.log('💵 Calculated payout:', payoutData);
+
     // Mark QR as scanned
     const { error: scanUpdateError } = await supabaseClient
       .from('order_qr_codes')
@@ -323,7 +351,8 @@ serve(async (req) => {
               payment_method: manualResult.payment_method || payment_method,
               payment_status: manualResult.payment_status,
               agent_name: agent.name,
-              payout_amount: manualResult.payout_amount || 0
+              payout_amount: manualResult.payout_amount || calculatedPayout,
+              payout_breakdown: payoutData
             }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -355,7 +384,9 @@ serve(async (req) => {
               total: order.total,
               payment_method: 'COD',
               payment_status: 'cod_collected',
-              agent_name: agent.name
+              agent_name: agent.name,
+              payout_amount: simpleResult.payout_amount || calculatedPayout,
+              payout_breakdown: payoutData
             }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -404,7 +435,8 @@ serve(async (req) => {
               payment_method: manualResult.payment_method || payment_method,
               payment_status: manualResult.payment_status,
               agent_name: agent.name,
-              payout_amount: manualResult.payout_amount || 0
+              payout_amount: manualResult.payout_amount || calculatedPayout,
+              payout_breakdown: payoutData
             }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -436,7 +468,9 @@ serve(async (req) => {
               total: order.total,
               payment_method: 'COD',
               payment_status: 'cod_collected',
-              agent_name: agent.name
+              agent_name: agent.name,
+              payout_amount: simpleResult.payout_amount || calculatedPayout,
+              payout_breakdown: payoutData
             }
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -460,9 +494,11 @@ serve(async (req) => {
 
     const now = new Date().toISOString();
     const payment_status = payment_method === 'COD' ? 'paid_cod' : 'paid_online';
-    const payout_amount = completionResult.payout_amount || 30;
+    
+    // Use calculated payout, not the one from DB function (which may be wrong)
+    const payout_amount = completionResult.payout_amount || calculatedPayout;
 
-    console.log('🎉 QR Delivery completed successfully!');
+    console.log('🎉 QR Delivery completed successfully! Payout:', payout_amount);
 
     return new Response(
       JSON.stringify({
@@ -476,7 +512,8 @@ serve(async (req) => {
           payment_status,
           agent_name: agent.name,
           completed_at: now,
-          payout_amount: payout_amount
+          payout_amount: payout_amount,
+          payout_breakdown: payoutData
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

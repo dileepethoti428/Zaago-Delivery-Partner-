@@ -5,6 +5,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Zepto/Blinkit style pricing for regular orders
+const REGULAR_ORDER_PRICING = {
+  BASE_PAY: 10,        // Fixed ₹10 per order
+  DISTANCE_RATE: 8,    // ₹8 per km
+};
+
+function calculatePayout(distanceKm: number) {
+  const roundedDistance = Math.round((distanceKm || 0) * 10) / 10;
+  const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+  const total = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
+  
+  return {
+    base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+    distance_pay: Math.round(distancePay * 10) / 10,
+    distance_km: roundedDistance,
+    rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE,
+    total: Math.round(total * 10) / 10
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -104,7 +124,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('✅ Order found:', order.id, 'Status:', order.status);
+    console.log('✅ Order found:', order.id, 'Status:', order.status, 'Distance:', order.distance_km);
 
     // Normalize payment method
     const normalizedPayment = payment_method?.toUpperCase() === 'COD' ? 'COD' : 'ONLINE';
@@ -113,8 +133,15 @@ Deno.serve(async (req) => {
 
     console.log('💰 Payment:', normalizedPayment, 'Status:', paymentStatus);
 
-    // 1. Insert delivery history - let database defaults handle timestamps (100% accurate method)
-    console.log('📝 Creating delivery history with database defaults');
+    // Calculate payout using Zepto/Blinkit formula: ₹10 base + ₹8/km
+    const distanceKm = order.distance_km || 2.5; // Default to 2.5km if not set
+    const payoutData = calculatePayout(distanceKm);
+    const totalPayout = payoutData.total;
+
+    console.log('💵 Payout calculation:', payoutData);
+
+    // 1. Insert delivery history with correct payout
+    console.log('📝 Creating delivery history with correct payout');
     
     const { error: historyError } = await supabaseAdmin
       .from('delivery_history')
@@ -129,9 +156,9 @@ Deno.serve(async (req) => {
         delivery_date: new Date().toISOString().split('T')[0],
         payment_method: normalizedPayment,
         payment_status: paymentStatus,
-        delivery_payout: 25.00,
+        delivery_payout: totalPayout,
+        distance_traveled: payoutData.distance_km,
         delivery_time_slot: null
-        // NOT setting completed_at, created_at, updated_at - let DEFAULT now() handle it
       });
 
     if (historyError) {
@@ -144,32 +171,32 @@ Deno.serve(async (req) => {
 
     console.log('✅ Delivery history created successfully');
 
-    // Insert into agent_earnings_tracking for earnings display
+    // Insert into agent_earnings_tracking with correct Zepto formula
     const { error: earningsError } = await supabaseAdmin
       .from('agent_earnings_tracking')
       .insert({
         agent_id: agent.id,
         order_id: orderId,
-        expected_payout: 25.00,
-        actual_payout: 25.00,
+        expected_payout: totalPayout,
+        actual_payout: totalPayout,
         payout_status: 'confirmed',
         accepted_at: order.accepted_at || currentTime,
         completed_at: currentTime,
         payment_method: normalizedPayment,
-        distance_km: 2.5,
+        distance_km: payoutData.distance_km,
         is_peak_hour: false,
         payout_breakdown: {
-          base_pay: 27,
-          distance_pay: 11,
-          peak_bonus: 0,
-          platform_fee: 13
+          base_pay: payoutData.base_pay,
+          distance_pay: payoutData.distance_pay,
+          distance_km: payoutData.distance_km,
+          rate_per_km: payoutData.rate_per_km
         }
       });
 
     if (earningsError) {
       console.error('❌ Earnings tracking insert failed:', earningsError);
     } else {
-      console.log('✅ Earnings tracked successfully');
+      console.log('✅ Earnings tracked successfully:', totalPayout);
     }
 
     // 2. Update order status using admin client
@@ -194,7 +221,7 @@ Deno.serve(async (req) => {
         total_deliveries: agent.total_deliveries + 1,
         deliveries_today: agent.deliveries_today + 1,
         last_delivery_at: currentTime,
-        total_earnings: agent.total_earnings + 25.00,
+        total_earnings: agent.total_earnings + totalPayout,
         updated_at: currentTime
       })
       .eq('id', agent.id);
@@ -214,7 +241,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin
         .from('agent_wallet')
         .update({
-          balance: wallet.balance + 25.00,
+          balance: wallet.balance + totalPayout,
           updated_at: currentTime
         })
         .eq('agent_id', agent.id);
@@ -223,13 +250,13 @@ Deno.serve(async (req) => {
         .from('agent_wallet')
         .insert({
           agent_id: agent.id,
-          balance: 25.00,
+          balance: totalPayout,
           updated_at: currentTime,
           created_at: currentTime
         });
     }
 
-    console.log('✅ Wallet updated');
+    console.log('✅ Wallet updated with:', totalPayout);
 
     // 5. Create wallet transaction using admin client
     const { error: txError } = await supabaseAdmin
@@ -237,9 +264,9 @@ Deno.serve(async (req) => {
       .insert({
         agent_id: agent.id,
         order_id: orderId,
-        amount: 25.00,
+        amount: totalPayout,
         transaction_type: 'delivery_payment',
-        description: 'Delivery payout',
+        description: `Delivery payout: ₹${payoutData.base_pay} base + ₹${payoutData.distance_pay} (${payoutData.distance_km}km × ₹${payoutData.rate_per_km})`,
         status: 'completed',
         created_at: currentTime,
         updated_at: currentTime
@@ -257,15 +284,16 @@ Deno.serve(async (req) => {
 
     console.log('✅ QR marked as scanned');
 
-    // Return success
-    console.log('🎉 Delivery completed successfully!');
+    // Return success with correct payout
+    console.log('🎉 Delivery completed successfully! Payout:', totalPayout);
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Delivery completed successfully',
         order_id: orderId,
         payment_method: normalizedPayment,
-        payout_amount: 25.00
+        payout_amount: totalPayout,
+        payout_breakdown: payoutData
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
