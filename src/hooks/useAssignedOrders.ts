@@ -7,7 +7,7 @@ import {
   type AssignedOrder 
 } from '@/services/assignedOrders';
 
-// Hook for TODAY's orders (uses Postgres CURRENT_DATE)
+// Hook for TODAY's orders (uses IST-aware date from Postgres)
 export function useTodayOrders() {
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'today'],
