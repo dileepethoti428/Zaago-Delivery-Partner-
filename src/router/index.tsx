@@ -13,6 +13,8 @@ import UploadDocuments from '@/pages/UploadDocuments';
 import PendingApproval from '@/pages/PendingApproval';
 import Rejected from '@/pages/Rejected';
 import MyDeliveries from '@/pages/MyDeliveries';
+import PrivacyPolicy from '@/pages/PrivacyPolicy';
+import TermsConditions from '@/pages/TermsConditions';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RequireApproval } from '@/components/auth/RequireApproval';
 
@@ -28,6 +30,14 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />,
+  },
+  {
+    path: '/privacy-policy',
+    element: <PrivacyPolicy />,
+  },
+  {
+    path: '/terms-conditions',
+    element: <TermsConditions />,
   },
   {
     element: <RequireAuth />,
