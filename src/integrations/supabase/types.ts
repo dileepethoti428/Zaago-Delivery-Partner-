@@ -4253,11 +4253,15 @@ export type Database = {
           business_license: string | null
           business_name: string | null
           created_at: string
+          deleted_at: string | null
+          deletion_reason: string | null
+          deletion_requested_by: string | null
           device_info: Json | null
           email: string
           id: string
           ifsc_code: string | null
           is_bank_verified: boolean | null
+          is_deleted: boolean | null
           latitude: number | null
           location_id: number | null
           location_verified: boolean | null
@@ -4265,8 +4269,11 @@ export type Database = {
           name: string
           onesignal_player_id: string | null
           phone: string | null
+          privacy_accepted_at: string | null
           rejection_reason: string | null
           status: string
+          terms_accepted_at: string | null
+          terms_version: string | null
           updated_at: string
           user_id: string | null
         }
@@ -4284,11 +4291,15 @@ export type Database = {
           business_license?: string | null
           business_name?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deletion_reason?: string | null
+          deletion_requested_by?: string | null
           device_info?: Json | null
           email: string
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
+          is_deleted?: boolean | null
           latitude?: number | null
           location_id?: number | null
           location_verified?: boolean | null
@@ -4296,8 +4307,11 @@ export type Database = {
           name: string
           onesignal_player_id?: string | null
           phone?: string | null
+          privacy_accepted_at?: string | null
           rejection_reason?: string | null
           status?: string
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -4315,11 +4329,15 @@ export type Database = {
           business_license?: string | null
           business_name?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deletion_reason?: string | null
+          deletion_requested_by?: string | null
           device_info?: Json | null
           email?: string
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
+          is_deleted?: boolean | null
           latitude?: number | null
           location_id?: number | null
           location_verified?: boolean | null
@@ -4327,8 +4345,11 @@ export type Database = {
           name?: string
           onesignal_player_id?: string | null
           phone?: string | null
+          privacy_accepted_at?: string | null
           rejection_reason?: string | null
           status?: string
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -6478,19 +6499,59 @@ export type Database = {
           vehicle_type: string
         }[]
       }
-      get_delivery_agents_near_seller: {
-        Args: { p_radius_km?: number; p_seller_user_id: string }
-        Returns: {
-          agent_id: string
-          distance_km: number
-          id: string
-          is_online: boolean
-          latitude: number
-          longitude: number
-          max_capacity: number
-          name: string
-        }[]
-      }
+      get_delivery_agents_near_seller:
+        | {
+            Args: { p_radius_km?: number; p_seller_user_id: string }
+            Returns: {
+              agent_id: string
+              average_rating: number
+              created_at: string
+              distance_km: number
+              email: string
+              id: string
+              is_active: boolean
+              is_online: boolean
+              last_delivery_at: string
+              last_status_change: string
+              latitude: number
+              longitude: number
+              max_capacity: number
+              name: string
+              performance_score: number
+              phone: string
+              profile_image: string
+              total_deliveries: number
+              vehicle_number: string
+              vehicle_type: string
+              verification_status: string
+            }[]
+          }
+        | {
+            Args: { radius_km?: number; seller_lat: number; seller_lng: number }
+            Returns: {
+              agent_id: string
+              average_rating: number
+              created_at: string
+              distance_km: number
+              email: string
+              id: string
+              is_active: boolean
+              is_online: boolean
+              last_delivery_at: string
+              last_status_change: string
+              latitude: number
+              longitude: number
+              max_capacity: number
+              name: string
+              performance_score: number
+              phone: string
+              profile_image: string
+              total_deliveries: number
+              vehicle_number: string
+              vehicle_type: string
+              verification_status: string
+            }[]
+          }
       get_delivery_performance: {
         Args: { time_period?: string }
         Returns: {
@@ -7145,6 +7206,18 @@ export type Database = {
       }
       seller_order_action: {
         Args: { p_action: string; p_order_id: string; p_seller_user_id: string }
+        Returns: Json
+      }
+      seller_set_subscription_agent: {
+        Args: { p_agent_id?: string; p_subscription_id: string }
+        Returns: Json
+      }
+      seller_update_nearby_agent_capacity: {
+        Args: {
+          p_agent_row_id: string
+          p_new_capacity: number
+          p_radius_km?: number
+        }
         Returns: Json
       }
       send_birthday_messages: { Args: never; Returns: number }
