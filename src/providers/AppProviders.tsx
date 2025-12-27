@@ -8,6 +8,7 @@ import { useAuthStore } from "@/store/auth";
 import { useLocationStore } from "@/store/location";
 import { advancedCache } from '@/utils/advancedCache';
 import { agentSession } from '@/utils/agentSession';
+import { supabase } from '@/integrations/supabase/client';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,21 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     
     // Initialize location services
     initLocation();
+    
+    // Initialize dark mode from user settings
+    const initDarkMode = async () => {
+      try {
+        const { data } = await supabase.functions.invoke('get-agent-settings');
+        if (data?.settings?.dark_mode) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (error) {
+        console.log('Failed to fetch dark mode preference');
+      }
+    };
+    initDarkMode();
   }, [initAuth, initLocation]);
 
   return <>{children}</>;

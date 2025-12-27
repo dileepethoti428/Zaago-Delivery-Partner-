@@ -86,6 +86,15 @@ export default function Settings() {
   };
 
   const onPreferencesChange = (field: keyof PreferencesFormData, value: any) => {
+    // Apply dark mode immediately
+    if (field === 'dark_mode') {
+      if (value) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    
     const currentValues = preferencesForm.getValues();
     updatePreferences.mutate({ ...currentValues, [field]: value });
     preferencesForm.setValue(field, value);
@@ -376,54 +385,6 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* KYC Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <CardTitle>KYC & Documents</CardTitle>
-            </div>
-            <CardDescription>
-              <div className="flex items-center gap-2 mt-2">
-                <span>KYC Status:</span>
-                <Badge variant={getKYCBadgeVariant(settings?.documents?.kyc_status || 'pending')}>
-                  {settings?.documents?.kyc_status || 'pending'}
-                </Badge>
-              </div>
-              {settings?.documents?.kyc_status === 'rejected' && (
-                <p className="text-sm text-destructive mt-2">
-                  Your KYC was rejected. Please update details and resubmit.
-                </p>
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={kycForm.handleSubmit(onKYCSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="aadhar_number_masked">Aadhaar Number (Masked)</Label>
-                <Input
-                  id="aadhar_number_masked"
-                  {...kycForm.register('aadhar_number_masked')}
-                  placeholder="XXXX XXXX 1234"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="driving_license_number_masked">Driving License Number</Label>
-                <Input
-                  id="driving_license_number_masked"
-                  {...kycForm.register('driving_license_number_masked')}
-                  placeholder="DL-XXXXXXXXX"
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={updateKYC.isPending}>
-                {updateKYC.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Submit KYC
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
 
         {/* App Preferences Section */}
         <Card>
@@ -462,30 +423,12 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Support & Account Section */}
+        {/* Account Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Support & Account</CardTitle>
+            <CardTitle>Account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => navigate('/profile')}
-            >
-              <HelpCircle className="mr-2 h-4 w-4" />
-              Help & Support
-            </Button>
-
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={handleLogout}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Log Out
-            </Button>
-
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" className="w-full justify-start">
