@@ -85,10 +85,15 @@ export default function MyDeliveries() {
     navigate(`/manage-delivery/${navId}?type=daily`);
   };
 
-  // Format date label for "all" tab - uses order.date directly from DB
+  // Format date label for "all" tab - uses IST timezone
   const formatDateLabel = (dateStr: string) => {
-    const date = new Date(dateStr + 'T00:00:00');
+    // Handle date-only strings by appending midnight
+    const date = dateStr.includes('T') 
+      ? new Date(dateStr)
+      : new Date(dateStr + 'T00:00:00');
+    
     return date.toLocaleDateString('en-IN', { 
+      timeZone: 'Asia/Kolkata',
       weekday: 'short', 
       day: 'numeric', 
       month: 'short' 
