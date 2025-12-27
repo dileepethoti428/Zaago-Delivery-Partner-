@@ -49,6 +49,29 @@ Deno.serve(async (req) => {
 
     console.log('Updating profile for agent:', user.id);
 
+    // First verify agent exists
+    const { data: existingAgent, error: checkError } = await supabase
+      .from('delivery_agents')
+      .select('id')
+      .eq('agent_id', user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('Error checking agent:', checkError);
+      return new Response(JSON.stringify({ error: 'Failed to verify agent' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!existingAgent) {
+      console.error('Agent not found for user:', user.id);
+      return new Response(JSON.stringify({ error: 'Agent profile not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Update delivery agent profile
     const updateData: any = {
       name: full_name,
@@ -65,11 +88,19 @@ Deno.serve(async (req) => {
       .update(updateData)
       .eq('agent_id', user.id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Profile update error:', error);
       return new Response(JSON.stringify({ error: 'Failed to update profile' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!data) {
+      console.error('No data returned after update');
+      return new Response(JSON.stringify({ error: 'Profile update failed - no data returned' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
