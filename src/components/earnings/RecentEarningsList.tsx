@@ -120,7 +120,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                 </div>
               )}
 
-              {/* Simple display for subscription or all tab */}
+              {/* Simple display for all tab - show payout only for regular orders */}
               {(type !== 'regular' || earning.order_type !== 'regular') && (
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -132,9 +132,16 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                       </>
                     )}
                   </div>
-                  <div className="font-semibold text-primary">
-                    {formatCurrency(earning.actual_payout ?? earning.expected_payout)}
-                  </div>
+                  {/* Show payout only for regular orders, not subscription */}
+                  {earning.order_type === 'regular' ? (
+                    <div className="font-semibold text-primary">
+                      {formatCurrency(earning.actual_payout ?? earning.expected_payout)}
+                    </div>
+                  ) : (
+                    <Badge variant="outline" className="text-xs border-purple-300 text-purple-600">
+                      Delivered
+                    </Badge>
+                  )}
                 </div>
               )}
 
