@@ -113,12 +113,11 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
     };
   }) as ZaagoOrder[];
 
-  // Filter out orders with no payout (backend couldn't calculate road distance)
-  const validOrders = orders.filter(o => o.payout > 0);
+  // Keep all orders with valid data - don't filter by payout
+  // Subscription orders have payout=0 which is correct
+  const validOrders = orders.filter(o => o.id && o.status);
   
-  if (validOrders.length < orders.length) {
-    console.warn(`⚠️ Filtered out ${orders.length - validOrders.length} orders without valid payout`);
-  }
+  console.log(`📦 Returning ${validOrders.length} orders`);
 
   return validOrders;
 }
