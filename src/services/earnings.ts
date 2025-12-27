@@ -67,12 +67,25 @@ export async function fetchAgentEarnings(agentId: string) {
 }
 
 export function computeEarningsTotals(rows: { expected_payout: number | null; created_at: string }[]) {
+  const IST_TIMEZONE = 'Asia/Kolkata';
   const now = new Date();
-  // Use IST timezone for date comparison (database stores dates in IST)
-  const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  
+  // Get today's date in IST for accurate comparison
+  const todayIST = now.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
 
+  // Calculate week start in IST
   const weekStart = new Date(now);
   weekStart.setDate(weekStart.getDate() - 7);
+
+  // Get current month/year in IST
+  const currentMonthIST = parseInt(now.toLocaleDateString('en-CA', { 
+    timeZone: IST_TIMEZONE, 
+    month: 'numeric' 
+  })) - 1; // 0-indexed
+  const currentYearIST = parseInt(now.toLocaleDateString('en-CA', { 
+    timeZone: IST_TIMEZONE, 
+    year: 'numeric' 
+  }));
 
   let today = 0;
   let week = 0;
@@ -82,7 +95,19 @@ export function computeEarningsTotals(rows: { expected_payout: number | null; cr
     const d = new Date(r.created_at);
     const amt = Number(r.expected_payout) || 0;
 
-    if (r.created_at.startsWith(todayStr)) {
+    // Get the row's date in IST for comparison
+    const rowDateIST = d.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
+    const rowMonthIST = parseInt(d.toLocaleDateString('en-CA', { 
+      timeZone: IST_TIMEZONE, 
+      month: 'numeric' 
+    })) - 1;
+    const rowYearIST = parseInt(d.toLocaleDateString('en-CA', { 
+      timeZone: IST_TIMEZONE, 
+      year: 'numeric' 
+    }));
+
+    // Compare dates in IST
+    if (rowDateIST === todayIST) {
       today += amt;
     }
 
@@ -90,7 +115,7 @@ export function computeEarningsTotals(rows: { expected_payout: number | null; cr
       week += amt;
     }
 
-    if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+    if (rowMonthIST === currentMonthIST && rowYearIST === currentYearIST) {
       month += amt;
     }
   });

@@ -56,16 +56,30 @@ export async function fetchDeliveryHistory(
 }
 
 export function formatDeliveryDate(dateString: string): string {
+  const IST_TIMEZONE = 'Asia/Kolkata';
   const date = new Date(dateString);
+  
+  // Get today and yesterday in IST
+  const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayIST = yesterdayDate.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
+  
+  // Get the date in IST for comparison
+  const dateIST = date.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
+
+  if (dateIST === todayIST) return 'Today';
+  if (dateIST === yesterdayIST) return 'Yesterday';
+  
+  // Calculate days difference
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
+  
+  if (diffDays < 7 && diffDays > 0) return `${diffDays} days ago`;
   
   return date.toLocaleDateString('en-IN', { 
+    timeZone: IST_TIMEZONE,
     day: 'numeric', 
     month: 'short', 
     year: 'numeric' 
@@ -75,6 +89,7 @@ export function formatDeliveryDate(dateString: string): string {
 export function formatDeliveryTime(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleTimeString('en-IN', { 
+    timeZone: 'Asia/Kolkata',
     hour: '2-digit', 
     minute: '2-digit',
     hour12: true 
