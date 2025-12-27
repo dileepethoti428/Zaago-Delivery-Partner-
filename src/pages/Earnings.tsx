@@ -4,13 +4,14 @@ import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { IndianRupee, Calendar, Loader2, Package, ShoppingBag, RefreshCw } from 'lucide-react';
+import { Calendar, Loader2, Package, ShoppingBag, RefreshCw } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { useEarnings } from '@/hooks/useEarnings';
 import { formatCurrency } from '@/services/earnings';
 import { EarningsSummaryCard } from '@/components/earnings/EarningsSummaryCard';
 import { RecentEarningsList } from '@/components/earnings/RecentEarningsList';
 import { EarningsTabContent } from '@/components/earnings/EarningsTabContent';
+import { SubscriptionTabContent } from '@/components/earnings/SubscriptionTabContent';
 
 export default function Earnings() {
   const { data: earningsData, isLoading: loading } = useEarnings();
@@ -38,7 +39,7 @@ export default function Earnings() {
                 </TabsTrigger>
                 <TabsTrigger value="subscription" className="text-xs sm:text-sm">
                   <RefreshCw className="h-3 w-3 mr-1 hidden sm:inline" />
-                  Subscription
+                  Deliveries
                 </TabsTrigger>
               </TabsList>
 
@@ -143,10 +144,10 @@ export default function Earnings() {
                             <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Subscriptions</span>
                           </div>
                           <div className="text-xl font-bold text-purple-600">
-                            {formatCurrency(earningsData?.subscription?.month.total || 0)}
+                            {earningsData?.subscription?.month.deliveries || 0}
                           </div>
                           <div className="text-xs text-purple-600/70 mt-1">
-                            {earningsData?.subscription?.month.deliveries || 0} deliveries
+                            Deliveries Completed
                           </div>
                         </div>
                       </div>
@@ -174,14 +175,14 @@ export default function Earnings() {
                 )}
               </TabsContent>
 
-              {/* Subscription Orders Tab */}
+              {/* Subscription Deliveries Tab - NO earnings display */}
               <TabsContent value="subscription" className="mt-0">
                 {earningsData?.subscription ? (
-                  <EarningsTabContent data={earningsData.subscription} type="subscription" />
+                  <SubscriptionTabContent data={earningsData.subscription} />
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     <RefreshCw className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    <p>No subscription earnings data available</p>
+                    <p>No subscription deliveries data available</p>
                   </div>
                 )}
               </TabsContent>
