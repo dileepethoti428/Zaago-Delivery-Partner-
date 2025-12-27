@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
     let { data: settings, error: settingsError } = await serviceClient
       .from('agent_settings')
       .select('*')
-      .eq('agent_id', user.id)
+      .eq('agent_id', agent.id)
       .maybeSingle();
 
     if (settingsError && settingsError.code !== 'PGRST116') {
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
       const { data: newSettings, error: createSettingsError } = await serviceClient
         .from('agent_settings')
         .insert({
-          agent_id: user.id,
+          agent_id: agent.id,
           is_available: false,
           auto_accept_orders: false,
           notify_new_orders: true,
@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
     const { data: bankDetails } = await serviceClient
       .from('agent_bank_details')
       .select('*')
-      .eq('agent_id', user.id)
+      .eq('agent_id', agent.id)
       .eq('is_primary', true)
       .maybeSingle();
 

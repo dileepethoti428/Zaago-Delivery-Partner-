@@ -11,6 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Client with user's auth token (auth only)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -28,6 +29,21 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!serviceKey) {
+      console.error('[update-agent-profile] Missing SUPABASE_SERVICE_ROLE_KEY');
+      return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Service role client to bypass RLS (DB writes)
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      serviceKey
+    );
 
     const body = await req.json();
     const { full_name, phone, vehicle_type, vehicle_number, profile_image_url } = body;
@@ -47,17 +63,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('Updating profile for agent:', user.id);
+    console.log('[update-agent-profile] Updating profile for agent:', user.id);
 
-    // First verify agent exists
-    const { data: existingAgent, error: checkError } = await supabase
+    // Verify agent exists
+    const { data: existingAgent, error: checkError } = await serviceClient
       .from('delivery_agents')
       .select('id')
       .eq('agent_id', user.id)
       .maybeSingle();
 
     if (checkError) {
-      console.error('Error checking agent:', checkError);
+      console.error('[update-agent-profile] Error checking agent:', checkError);
       return new Response(JSON.stringify({ error: 'Failed to verify agent' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -65,7 +81,7 @@ Deno.serve(async (req) => {
     }
 
     if (!existingAgent) {
-      console.error('Agent not found for user:', user.id);
+      console.error('[update-agent-profile] Agent not found for user:', user.id);
       return new Response(JSON.stringify({ error: 'Agent profile not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -83,7 +99,7 @@ Deno.serve(async (req) => {
     if (vehicle_number !== undefined) updateData.vehicle_number = vehicle_number;
     if (profile_image_url !== undefined) updateData.profile_image = profile_image_url;
 
-    const { data, error } = await supabase
+    const { data, error } = await serviceClient
       .from('delivery_agents')
       .update(updateData)
       .eq('agent_id', user.id)
@@ -91,7 +107,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (error) {
-      console.error('Profile update error:', error);
+      console.error('[update-agent-profile] Profile update error:', error);
       return new Response(JSON.stringify({ error: 'Failed to update profile' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -99,20 +115,20 @@ Deno.serve(async (req) => {
     }
 
     if (!data) {
-      console.error('No data returned after update');
-      return new Response(JSON.stringify({ error: 'Profile update failed - no data returned' }), {
+      console.error('[update-agent-profile] No data returned after update');
+      return new Response(JSON.stringify({ error: 'Profile update failed' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('Profile updated successfully');
+    console.log('[update-agent-profile] Profile updated successfully');
 
     return new Response(JSON.stringify({ data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('[update-agent-profile] Unexpected error:', error);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
