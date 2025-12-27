@@ -111,17 +111,46 @@ serve(async (req) => {
     const agentId = agentData.id;
     console.log('✅ Agent found:', agentId);
 
-    // Calculate date ranges
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    // Calculate date ranges using IST
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+    const nowUTC = new Date();
+    const nowIST = new Date(nowUTC.getTime() + IST_OFFSET);
+    
+    // Get IST date boundaries
+    const todayISTStart = new Date(Date.UTC(
+      nowIST.getUTCFullYear(),
+      nowIST.getUTCMonth(),
+      nowIST.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    todayISTStart.setTime(todayISTStart.getTime() - IST_OFFSET); // Convert back to UTC
+    
+    const weekISTStart = new Date(todayISTStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const monthISTStart = new Date(Date.UTC(
+      nowIST.getUTCFullYear(),
+      nowIST.getUTCMonth(),
+      1, 0, 0, 0, 0
+    ));
+    monthISTStart.setTime(monthISTStart.getTime() - IST_OFFSET); // Convert back to UTC
 
-    // Fetch all earnings tracking data
-    console.log('⏱️ Fetching earnings tracking data...');
+    const todayStart = todayISTStart.toISOString();
+    const weekStart = weekISTStart.toISOString();
+    const monthStart = monthISTStart.toISOString();
+
+    console.log('📅 IST Date ranges:', { todayStart, weekStart, monthStart });
+
+    // Fetch earnings tracking data with order details to determine subscription vs regular
+    console.log('⏱️ Fetching earnings tracking data with order info...');
     const { data: trackingData, error: trackingError } = await supabase
       .from('agent_earnings_tracking')
-      .select('*')
+      .select(`
+        *,
+        orders:order_id (
+          id,
+          subscription_id
+        )
+      `)
       .eq('agent_id', agentId)
       .gte('accepted_at', monthStart)
       .order('accepted_at', { ascending: false });
@@ -136,9 +165,28 @@ serve(async (req) => {
 
     console.log('✅ Tracking data fetched:', { recordCount: trackingData?.length || 0 });
 
-    // Calculate earnings for different periods
-    const calculatePeriodEarnings = (startDate: string) => {
-      const periodData = trackingData?.filter(t => t.accepted_at >= startDate) || [];
+    // Separate tracking data by order type
+    const regularOrders = trackingData?.filter(t => !t.orders?.subscription_id) || [];
+    const subscriptionOrders = trackingData?.filter(t => t.orders?.subscription_id) || [];
+
+    console.log('📊 Order type breakdown:', {
+      regular: regularOrders.length,
+      subscription: subscriptionOrders.length
+    });
+
+    // Calculate earnings for different periods and order types
+    type OrderType = 'all' | 'regular' | 'subscription';
+    
+    const calculatePeriodEarnings = (startDate: string, orderType: OrderType = 'all') => {
+      let dataSource = trackingData || [];
+      
+      if (orderType === 'regular') {
+        dataSource = regularOrders;
+      } else if (orderType === 'subscription') {
+        dataSource = subscriptionOrders;
+      }
+      
+      const periodData = dataSource.filter(t => t.accepted_at >= startDate);
       
       const pending = periodData
         .filter(t => t.payout_status === 'pending')
@@ -153,17 +201,6 @@ serve(async (req) => {
       const cancelled = periodData.filter(t => t.payout_status === 'cancelled').length;
       const totalOrders = deliveries + inProgress + cancelled;
       
-      console.log('📊 Period earnings breakdown:', {
-        period: startDate,
-        total_records: periodData.length,
-        confirmed_count: deliveries,
-        pending_count: inProgress,
-        cancelled_count: cancelled,
-        total_orders: totalOrders,
-        confirmed_amount: confirmed.toFixed(2),
-        pending_amount: pending.toFixed(2)
-      });
-      
       return {
         pending: parseFloat(pending.toFixed(2)),
         confirmed: parseFloat(confirmed.toFixed(2)),
@@ -175,12 +212,29 @@ serve(async (req) => {
       };
     };
 
-    const todayEarnings = calculatePeriodEarnings(todayStart);
-    const weekEarnings = calculatePeriodEarnings(weekStart);
-    const monthEarnings = calculatePeriodEarnings(monthStart);
+    // Calculate combined earnings (existing behavior)
+    const todayEarnings = calculatePeriodEarnings(todayStart, 'all');
+    const weekEarnings = calculatePeriodEarnings(weekStart, 'all');
+    const monthEarnings = calculatePeriodEarnings(monthStart, 'all');
 
-    // Get recent earnings details
-    const recentEarnings = (trackingData || []).slice(0, 10).map(tracking => ({
+    // Calculate regular order earnings
+    const regularTodayEarnings = calculatePeriodEarnings(todayStart, 'regular');
+    const regularWeekEarnings = calculatePeriodEarnings(weekStart, 'regular');
+    const regularMonthEarnings = calculatePeriodEarnings(monthStart, 'regular');
+
+    // Calculate subscription order earnings
+    const subscriptionTodayEarnings = calculatePeriodEarnings(todayStart, 'subscription');
+    const subscriptionWeekEarnings = calculatePeriodEarnings(weekStart, 'subscription');
+    const subscriptionMonthEarnings = calculatePeriodEarnings(monthStart, 'subscription');
+
+    console.log('📊 Earnings breakdown:', {
+      all: { today: todayEarnings.total, week: weekEarnings.total, month: monthEarnings.total },
+      regular: { today: regularTodayEarnings.total, week: regularWeekEarnings.total, month: regularMonthEarnings.total },
+      subscription: { today: subscriptionTodayEarnings.total, week: subscriptionWeekEarnings.total, month: subscriptionMonthEarnings.total }
+    });
+
+    // Format recent earnings helper
+    const formatEarningRecord = (tracking: any) => ({
       order_id: tracking.order_id,
       accepted_at: tracking.accepted_at,
       completed_at: tracking.completed_at,
@@ -189,18 +243,42 @@ serve(async (req) => {
       status: tracking.payout_status,
       distance_km: parseFloat(tracking.distance_km || 0),
       is_peak_hour: tracking.is_peak_hour,
-      payout_breakdown: tracking.payout_breakdown
-    }));
+      payout_breakdown: tracking.payout_breakdown,
+      subscription_id: tracking.orders?.subscription_id || null,
+      order_type: tracking.orders?.subscription_id ? 'subscription' : 'regular'
+    });
+
+    // Get recent earnings for each type
+    const recentEarnings = (trackingData || []).slice(0, 10).map(formatEarningRecord);
+    const recentRegularEarnings = regularOrders.slice(0, 10).map(formatEarningRecord);
+    const recentSubscriptionEarnings = subscriptionOrders.slice(0, 10).map(formatEarningRecord);
 
     const responseData = {
       success: true,
       data: {
+        // Combined totals (existing behavior for backward compatibility)
         today: todayEarnings,
         week: weekEarnings,
         month: monthEarnings,
         recent_earnings: recentEarnings,
         live_payout: todayEarnings.pending,
-        deliveries_in_progress: todayEarnings.in_progress
+        deliveries_in_progress: todayEarnings.in_progress,
+        
+        // NEW: Regular order earnings
+        regular: {
+          today: regularTodayEarnings,
+          week: regularWeekEarnings,
+          month: regularMonthEarnings,
+          recent_earnings: recentRegularEarnings
+        },
+        
+        // NEW: Subscription earnings
+        subscription: {
+          today: subscriptionTodayEarnings,
+          week: subscriptionWeekEarnings,
+          month: subscriptionMonthEarnings,
+          recent_earnings: recentSubscriptionEarnings
+        }
       }
     };
 
@@ -208,6 +286,8 @@ serve(async (req) => {
       todayTotal: todayEarnings.total,
       weekTotal: weekEarnings.total,
       monthTotal: monthEarnings.total,
+      regularMonthTotal: regularMonthEarnings.total,
+      subscriptionMonthTotal: subscriptionMonthEarnings.total,
       recentCount: recentEarnings.length
     });
 
