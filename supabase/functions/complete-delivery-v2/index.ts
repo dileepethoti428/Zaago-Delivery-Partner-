@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Zepto/Blinkit style pricing for regular orders
+const REGULAR_ORDER_PRICING = {
+  BASE_PAY: 10,        // Fixed ₹10 per order
+  DISTANCE_RATE: 8,    // ₹8 per km
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -123,24 +129,34 @@ Deno.serve(async (req) => {
       source: live_distance_km ? 'live' : (order.distance_km ? 'order' : 'fallback')
     });
 
-    // Calculate payout (₹12 base + ₹8 per km after 1km)
-    const payout_amount = distance_km <= 1 ? 12 : 12 + (distance_km - 1) * 8;
-    const rounded_payout = Math.round(payout_amount);
+    // Calculate payout using simple Zepto/Blinkit formula
+    // ₹10 base + ₹8/km (no surge, no platform fee)
+    const roundedDistance = Math.round(distance_km * 10) / 10;
+    const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+    const totalPayout = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
+    const rounded_payout = Math.round(totalPayout * 10) / 10;
 
-    console.log('💰 Calculated payout:', { 
-      distance_km, 
-      payout_amount: rounded_payout,
-      calculation: `${distance_km}km: ₹12 base + ₹${((distance_km - 1) * 8).toFixed(2)} distance = ₹${rounded_payout}`
+    console.log('💰 Calculated payout (Zepto/Blinkit style):', { 
+      distance_km: roundedDistance, 
+      base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+      distance_pay: Math.round(distancePay * 10) / 10,
+      total_payout: rounded_payout,
+      calculation: `₹${REGULAR_ORDER_PRICING.BASE_PAY} base + (${roundedDistance}km × ₹${REGULAR_ORDER_PRICING.DISTANCE_RATE}) = ₹${rounded_payout}`
     });
+
+    // Payout breakdown for transparency
+    const payoutBreakdown = {
+      base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+      distance_pay: Math.round(distancePay * 10) / 10,
+      distance_km: roundedDistance,
+      rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
+    };
 
     // Enhanced logging before INSERT
     console.log('🔍 Pre-INSERT verification:', {
       payment_method: normalizedPayment,
       payment_status: paymentStatus,
-      typeof_payment_method: typeof normalizedPayment,
-      value_length: normalizedPayment?.length,
-      char_codes: normalizedPayment?.split('').map(c => c.charCodeAt(0)),
-      json_stringify: JSON.stringify({ payment_method: normalizedPayment }),
+      payout_breakdown: payoutBreakdown,
       order_id: order_id,
       agent_id: agent.id
     });
@@ -162,7 +178,7 @@ Deno.serve(async (req) => {
           delivery_payout: rounded_payout,
           delivery_date: new Date().toISOString().split('T')[0],
           completed_at: new Date().toISOString(),
-          distance_traveled: distance_km
+          distance_traveled: roundedDistance
         });
 
       if (historyError) {
@@ -244,7 +260,8 @@ Deno.serve(async (req) => {
         order_id: order_id,
         amount: rounded_payout,
         status: 'completed',
-        description: `Delivery payout: ${distance_km.toFixed(2)}km`
+        description: `Delivery: ₹${REGULAR_ORDER_PRICING.BASE_PAY} base + ${roundedDistance}km × ₹${REGULAR_ORDER_PRICING.DISTANCE_RATE}`,
+        distance_km: roundedDistance
       });
 
     if (earningsError) {
@@ -295,7 +312,7 @@ Deno.serve(async (req) => {
         order_id: order_id,
         amount: rounded_payout,
         transaction_type: 'delivery_payment',
-        description: `Delivery payout: ${distance_km.toFixed(2)}km`,
+        description: `Delivery: ₹${REGULAR_ORDER_PRICING.BASE_PAY} base + ${roundedDistance}km × ₹${REGULAR_ORDER_PRICING.DISTANCE_RATE}`,
         status: 'completed'
       });
 
@@ -304,15 +321,17 @@ Deno.serve(async (req) => {
       // Don't throw - not critical
     }
 
-    // 7. Update earnings tracking
+    // 7. Update earnings tracking with final payout breakdown
     const { error: trackingUpdateError } = await supabase
       .from('agent_earnings_tracking')
       .update({
         completed_at: new Date().toISOString(),
         actual_payout: rounded_payout,
         payout_status: 'confirmed',
-        distance_km: distance_km,
+        distance_km: roundedDistance,
         payment_method: normalizedPayment,
+        is_peak_hour: false, // No peak hour in new model
+        payout_breakdown: payoutBreakdown,
         updated_at: new Date().toISOString()
       })
       .eq('order_id', order_id)
@@ -327,21 +346,23 @@ Deno.serve(async (req) => {
         order_id,
         agent_id: agent.id,
         actual_payout: rounded_payout,
-        distance_km: distance_km,
-        payout_status: 'confirmed'
+        distance_km: roundedDistance,
+        payout_status: 'confirmed',
+        breakdown: payoutBreakdown
       });
     }
 
-    console.log('✅ Delivery completed successfully (V2)');
+    console.log('✅ Delivery completed successfully (V2 - Zepto/Blinkit pricing)');
 
     return new Response(
       JSON.stringify({ 
         success: true,
         message: 'Delivery completed successfully',
         payout_amount: rounded_payout,
+        payout_breakdown: payoutBreakdown,
         payment_method: normalizedPayment,
         payment_status: paymentStatus,
-        distance_km: distance_km,
+        distance_km: roundedDistance,
         order_id: order_id
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

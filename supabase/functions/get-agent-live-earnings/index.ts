@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Zepto/Blinkit style pricing constants for display
+const REGULAR_ORDER_PRICING = {
+  BASE_PAY: 10,
+  DISTANCE_RATE: 8,
+};
+
 console.log("Get agent live earnings function started")
 
 serve(async (req) => {
@@ -233,20 +239,39 @@ serve(async (req) => {
       subscription: { today: subscriptionTodayEarnings.total, week: subscriptionWeekEarnings.total, month: subscriptionMonthEarnings.total }
     });
 
-    // Format recent earnings helper
-    const formatEarningRecord = (tracking: any) => ({
-      order_id: tracking.order_id,
-      accepted_at: tracking.accepted_at,
-      completed_at: tracking.completed_at,
-      expected_payout: parseFloat(tracking.expected_payout || 0),
-      actual_payout: tracking.actual_payout ? parseFloat(tracking.actual_payout) : null,
-      status: tracking.payout_status,
-      distance_km: parseFloat(tracking.distance_km || 0),
-      is_peak_hour: tracking.is_peak_hour,
-      payout_breakdown: tracking.payout_breakdown,
-      subscription_id: tracking.orders?.subscription_id || null,
-      order_type: tracking.orders?.subscription_id ? 'subscription' : 'regular'
-    });
+    // Format recent earnings helper with Zepto/Blinkit breakdown
+    const formatEarningRecord = (tracking: any) => {
+      const distanceKm = parseFloat(tracking.distance_km || 0);
+      const actualPayout = tracking.actual_payout ? parseFloat(tracking.actual_payout) : null;
+      
+      // Ensure payout_breakdown exists for regular orders
+      // If not stored, reconstruct from actual values
+      let breakdown = tracking.payout_breakdown;
+      if (!breakdown && !tracking.orders?.subscription_id) {
+        // Reconstruct breakdown for regular orders
+        const distancePay = Math.round(distanceKm * REGULAR_ORDER_PRICING.DISTANCE_RATE * 10) / 10;
+        breakdown = {
+          base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+          distance_pay: distancePay,
+          distance_km: distanceKm,
+          rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
+        };
+      }
+      
+      return {
+        order_id: tracking.order_id,
+        accepted_at: tracking.accepted_at,
+        completed_at: tracking.completed_at,
+        expected_payout: parseFloat(tracking.expected_payout || 0),
+        actual_payout: actualPayout,
+        status: tracking.payout_status,
+        distance_km: distanceKm,
+        is_peak_hour: false, // Removed peak hour from new model
+        payout_breakdown: breakdown,
+        subscription_id: tracking.orders?.subscription_id || null,
+        order_type: tracking.orders?.subscription_id ? 'subscription' : 'regular'
+      };
+    };
 
     // Get recent earnings for each type
     const recentEarnings = (trackingData || []).slice(0, 10).map(formatEarningRecord);

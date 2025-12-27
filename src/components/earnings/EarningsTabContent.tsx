@@ -21,6 +21,7 @@ export function EarningsTabContent({ data, type }: EarningsTabContentProps) {
         data={data.today}
         variant="featured"
         delay={0}
+        showAveragePerOrder={type === 'regular'}
       />
 
       {/* Week and Month Cards */}

@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Zepto/Blinkit style pricing for regular orders
+const REGULAR_ORDER_PRICING = {
+  BASE_PAY: 10,        // Fixed ₹10 per order
+  DISTANCE_RATE: 8,    // ₹8 per km
+};
+
 console.log("Accept order function started")
 
 serve(async (req) => {
@@ -55,32 +61,14 @@ serve(async (req) => {
 
     console.log(`✅ Agent ${agent_id} validated successfully`);
 
-    // Get payout configuration for earnings calculation
-    const { data: payoutConfig } = await supabase
-      .from('payout_config')
-      .select('*')
-      .eq('is_active', true)
-      .single();
-
-    const basePay = payoutConfig?.base_pay_amount || 40;
-    const baseDistanceKm = payoutConfig?.base_pay_distance_km || 3;
-    const perKmRate = payoutConfig?.per_km_max_rate || 9;
+    // Estimate distance for expected payout (will be updated on completion with actual distance)
+    const estimatedDistance = 5; // 5km estimate
     
-    // Check if peak hour
-    const currentTime = new Date().toTimeString().substring(0, 5);
-    const peakStart = payoutConfig?.peak_hour_start || '06:00';
-    const peakEnd = payoutConfig?.peak_hour_end || '12:00';
-    const isPeakHour = currentTime >= peakStart && currentTime <= peakEnd;
-
-    // Calculate expected payout (estimated distance: 5km for now, will be updated on completion)
-    const estimatedDistance = 5;
-    const distancePay = estimatedDistance > baseDistanceKm ? 
-      (estimatedDistance - baseDistanceKm) * perKmRate : 0;
-    
-    const subtotal = basePay + distancePay;
-    const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
-    const platformFee = 13;
-    const expectedPayout = subtotal + surgeAmount - platformFee;
+    // Calculate expected payout using simple Zepto/Blinkit formula
+    // ₹10 base + ₹8/km
+    const roundedDistance = Math.round(estimatedDistance * 10) / 10;
+    const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+    const expectedPayout = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
     
     const acceptedAt = new Date().toISOString();
 
@@ -208,22 +196,23 @@ serve(async (req) => {
 
     console.log(`Order ${order_id} successfully accepted by agent ${agent_id}`);
     
-    // Create earnings tracking record
+    // Create earnings tracking record with simple Zepto/Blinkit breakdown
     const { error: trackingError } = await supabase
       .from('agent_earnings_tracking')
       .insert({
         agent_id: agentData.id, // Use delivery agent's primary key
         order_id: order_id,
         accepted_at: acceptedAt,
-        expected_payout: expectedPayout,
+        expected_payout: Math.round(expectedPayout * 10) / 10,
         payout_status: 'pending',
-        distance_km: estimatedDistance,
-        is_peak_hour: isPeakHour,
+        distance_km: roundedDistance,
+        is_peak_hour: false, // No peak hour pricing in new model
         payout_breakdown: {
-          base_pay: basePay,
-          distance_pay: distancePay,
-          peak_bonus: surgeAmount,
-          platform_fee: platformFee
+          base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+          distance_pay: Math.round(distancePay * 10) / 10,
+          distance_km: roundedDistance,
+          rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
+          // NO peak_bonus, NO platform_fee - simple transparent pricing
         }
       });
 
@@ -231,7 +220,7 @@ serve(async (req) => {
       console.error('❌ Failed to create earnings tracking:', trackingError);
       // Don't fail the order acceptance, just log
     } else {
-      console.log(`✅ Earnings tracking created: ₹${expectedPayout} expected payout`);
+      console.log(`✅ Earnings tracking created: ₹${expectedPayout} expected payout (₹${REGULAR_ORDER_PRICING.BASE_PAY} base + ₹${distancePay} distance)`);
     }
     
     // Generate OTP for delivery verification
