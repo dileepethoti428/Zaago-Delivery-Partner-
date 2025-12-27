@@ -12,8 +12,13 @@ const REGULAR_ORDER_PRICING = {
   DISTANCE_RATE: 8,    // ₹8 per km
 };
 
+/**
+ * Calculate payout using Zepto/Blinkit formula
+ * Distance is rounded UP to 1 decimal (ceil) for fair agent pay
+ */
 function calculatePayout(distanceKm: number) {
-  const roundedDistance = Math.round((distanceKm || 0) * 10) / 10;
+  // Zepto style: Round UP to 1 decimal place (ceil)
+  const roundedDistance = Math.ceil((distanceKm || 0.1) * 10) / 10;
   const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
   const total = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
   

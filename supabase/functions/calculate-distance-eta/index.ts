@@ -5,17 +5,69 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Haversine formula to calculate distance between two points
-function calculateHaversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371 // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLng/2) * Math.sin(dLng/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-  return R * c
+/**
+ * Zepto/Blinkit style distance calculation
+ * - Uses Mapbox Directions API for ROAD ROUTE distance (no Haversine fallback)
+ * - Rounds UP to 1 decimal place (ceil)
+ */
+async function calculateRoadDistance(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+  mapboxToken: string
+): Promise<{ distance_km: number; eta_mins: number; success: boolean; error?: string }> {
+  try {
+    const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?access_token=${mapboxToken}&geometries=geojson`;
+    
+    const response = await fetch(mapboxUrl);
+    const data = await response.json();
+    
+    if (!data.routes || data.routes.length === 0) {
+      console.error('Mapbox returned no routes:', data);
+      return { 
+        distance_km: 0, 
+        eta_mins: 0, 
+        success: false, 
+        error: 'No route found between locations' 
+      };
+    }
+    
+    const route = data.routes[0];
+    const distanceMeters = route.distance;
+    const durationSeconds = route.duration;
+    
+    // Convert meters to km
+    const rawDistanceKm = distanceMeters / 1000;
+    
+    // Zepto style: Round UP to 1 decimal place (ceil)
+    const roundedDistanceKm = Math.ceil(rawDistanceKm * 10) / 10;
+    
+    // Minimum distance of 0.1 km
+    const finalDistanceKm = Math.max(0.1, roundedDistanceKm);
+    
+    // ETA in minutes (minimum 1 minute)
+    const etaMins = Math.max(1, Math.ceil(durationSeconds / 60));
+    
+    console.log('✅ Mapbox road distance calculated:', {
+      raw_meters: distanceMeters,
+      raw_km: rawDistanceKm,
+      rounded_km: finalDistanceKm,
+      eta_mins: etaMins
+    });
+    
+    return {
+      distance_km: finalDistanceKm,
+      eta_mins: etaMins,
+      success: true
+    };
+  } catch (error) {
+    console.error('Mapbox API error:', error);
+    return {
+      distance_km: 0,
+      eta_mins: 0,
+      success: false,
+      error: error instanceof Error ? error.message : 'Mapbox API failed'
+    };
+  }
 }
 
 serve(async (req) => {
@@ -31,14 +83,12 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           error: 'Missing required coordinates',
-          message: 'Please provide origin and destination with lat/lng values'
+          message: 'Please provide origin and destination with lat/lng values',
+          success: false
         }),
         { 
           status: 400, 
-          headers: { 
-            ...corsHeaders, 
-            'Content-Type': 'application/json' 
-          } 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
@@ -46,84 +96,47 @@ serve(async (req) => {
     // Get Mapbox token from environment
     const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN')
     
-    let distance_km = 0
-    let eta_mins = 0
-    let source = 'fallback'
+    if (!mapboxToken) {
+      console.error('❌ MAPBOX_PUBLIC_TOKEN not configured');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Routing service not configured',
+          message: 'MAPBOX_PUBLIC_TOKEN environment variable is required for road distance calculation',
+          success: false
+        }),
+        { 
+          status: 503, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
 
-    if (mapboxToken) {
-      try {
-        // Try Mapbox Directions API first
-        const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?access_token=${mapboxToken}&geometries=geojson`
-        
-        const mapboxResponse = await fetch(mapboxUrl)
-        const mapboxData = await mapboxResponse.json()
-        
-        if (mapboxData.routes && mapboxData.routes.length > 0) {
-          const route = mapboxData.routes[0]
-          distance_km = (route.distance / 1000) // Convert meters to km
-          
-          // Handle very short distances - set minimum practical values
-          if (distance_km < 0.01) { // Less than 10 meters
-            distance_km = 0.01 // Set minimum 10m for practical purposes
-            eta_mins = 1 // Minimum 1 minute
-          } else {
-            eta_mins = Math.max(1, Math.ceil(distance_km * 2)) // Minimum 1 min, 2 min per km
-          }
-          
-          source = 'mapbox'
-          
-          console.log('Mapbox route found:', { 
-            original_distance: route.distance, 
-            distance_km, 
-            eta_mins, 
-            very_close: route.distance < 10 
-          })
-        } else {
-          throw new Error('No routes found from Mapbox')
+    // Calculate road distance using Mapbox Directions API
+    const result = await calculateRoadDistance(origin, destination, mapboxToken);
+    
+    if (!result.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to calculate road distance',
+          message: result.error || 'Mapbox Directions API returned no routes',
+          success: false
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
-      } catch (mapboxError) {
-        console.log('Mapbox failed, using fallback:', mapboxError instanceof Error ? mapboxError.message : 'Unknown error')
-        // Fall back to Haversine calculation
-        distance_km = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng)
-        
-        // Handle very short distances for fallback too
-        if (distance_km < 0.01) {
-          distance_km = 0.01
-          eta_mins = 1
-        } else {
-          eta_mins = Math.max(1, Math.ceil(distance_km * 2)) // Minimum 1 min, 2 min per km
-        }
-        
-        source = 'fallback'
-      }
-    } else {
-      console.log('No Mapbox token, using Haversine fallback')
-      // Use Haversine distance if no Mapbox token
-      distance_km = calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng)
-      
-      // Handle very short distances for Haversine too
-      if (distance_km < 0.01) {
-        distance_km = 0.01
-        eta_mins = 1
-      } else {
-        eta_mins = Math.max(1, Math.ceil(distance_km * 2)) // Minimum 1 min, 2 min per km
-      }
-      
-      source = 'fallback'
+      )
     }
 
     return new Response(
       JSON.stringify({ 
-        distance_km: Math.round(distance_km * 10) / 10, // Round to 1 decimal
-        eta_mins,
-        source,
+        distance_km: result.distance_km,
+        eta_mins: result.eta_mins,
+        source: 'mapbox_road',
         success: true 
       }),
       { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
   } catch (error) {
@@ -131,14 +144,12 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Failed to calculate distance',
-        message: error instanceof Error ? error.message : 'Unknown error occurred' 
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
+        success: false
       }),
       { 
         status: 500, 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
   }

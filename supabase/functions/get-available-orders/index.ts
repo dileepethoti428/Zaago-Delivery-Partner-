@@ -6,77 +6,65 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Haversine formula to calculate distance between two points
-function calculateHaversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLng/2) * Math.sin(dLng/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
+// Zepto/Blinkit style pricing for regular orders
+const REGULAR_ORDER_PRICING = {
+  BASE_PAY: 10,        // Fixed ₹10 per order
+  DISTANCE_RATE: 8,    // ₹8 per km
+};
 
-// Calculate agent payout based on distance - Match frontend structure
-function calculateAgentPayout(distance: number): number {
-  // Base fare for first 3 km: ₹40
-  const baseFare = 40;
-  
-  // Additional distance beyond 3 km
-  const additionalDistance = Math.max(0, distance - 3);
-  
-  // Per km rate for additional distance: ₹9
-  const perKmRate = 9;
-  const distanceFare = additionalDistance * perKmRate;
-  
-  // Subtotal before platform fee
-  const subtotal = baseFare + distanceFare;
-  
-  // Peak hour surge: 15% if current time is peak
-  const isPeakHour = () => {
-    const currentHour = new Date().getHours();
-    const isWeekend = [0, 6].includes(new Date().getDay());
-    const isLunchRush = currentHour >= 12 && currentHour < 14;
-    const isDinnerRush = currentHour >= 19 && currentHour < 22;
-    return isLunchRush || isDinnerRush || isWeekend;
-  };
-  
-  const surgeAmount = isPeakHour() ? subtotal * 0.15 : 0;
-  
-  // Agent payout (total - platform fee of ₹13)
-  const agentPayout = (subtotal + surgeAmount) - 13;
-  
-  return Math.max(12, Math.round(agentPayout * 100) / 100);
-}
-async function calculateDistance(origin: {lat: number, lng: number}, destination: {lat: number, lng: number}): Promise<number> {
+/**
+ * Calculate road distance using Mapbox Directions API
+ * Returns distance in km, rounded UP to 1 decimal (Zepto style)
+ * NO HAVERSINE FALLBACK - returns null if routing fails
+ */
+async function calculateRoadDistance(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number }
+): Promise<number | null> {
   const mapboxToken = Deno.env.get('MAPBOX_PUBLIC_TOKEN');
   
-  if (mapboxToken) {
-    try {
-      // Try Mapbox Directions API first
-      const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?access_token=${mapboxToken}&geometries=geojson`;
-      
-      const mapboxResponse = await fetch(mapboxUrl);
-      const mapboxData = await mapboxResponse.json();
-      
-      if (mapboxData.routes && mapboxData.routes.length > 0) {
-        const route = mapboxData.routes[0];
-        return route.distance / 1000; // Convert meters to km
-      } else {
-        throw new Error('No routes found from Mapbox');
-      }
-    } catch (mapboxError) {
-      console.log('Mapbox failed, using fallback for distance calculation:', mapboxError instanceof Error ? mapboxError.message : 'Unknown error');
-      // Fall back to Haversine calculation
-      return calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng);
-    }
-  } else {
-    console.log('No Mapbox token, using Haversine fallback for distance calculation');
-    // Use Haversine distance if no Mapbox token
-    return calculateHaversineDistance(origin.lat, origin.lng, destination.lat, destination.lng);
+  if (!mapboxToken) {
+    console.error('❌ MAPBOX_PUBLIC_TOKEN not configured - cannot calculate road distance');
+    return null;
   }
+
+  try {
+    const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?access_token=${mapboxToken}&geometries=geojson`;
+    
+    const response = await fetch(mapboxUrl);
+    const data = await response.json();
+    
+    if (!data.routes || data.routes.length === 0) {
+      console.error('Mapbox returned no routes');
+      return null;
+    }
+    
+    const route = data.routes[0];
+    const distanceMeters = route.distance;
+    
+    // Convert meters to km
+    const rawDistanceKm = distanceMeters / 1000;
+    
+    // Zepto style: Round UP to 1 decimal place (ceil)
+    const roundedDistanceKm = Math.ceil(rawDistanceKm * 10) / 10;
+    
+    // Minimum distance of 0.1 km
+    return Math.max(0.1, roundedDistanceKm);
+  } catch (error) {
+    console.error('Mapbox API error:', error);
+    return null;
+  }
+}
+
+/**
+ * Calculate agent payout using Zepto/Blinkit formula
+ * ₹10 base + ₹8/km
+ */
+function calculateAgentPayout(distanceKm: number): number {
+  const roundedDistance = Math.ceil(distanceKm * 10) / 10; // Always round UP
+  const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+  const totalPayout = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
+  return Math.round(totalPayout * 10) / 10;
 }
 
 serve(async (req) => {
@@ -143,7 +131,6 @@ serve(async (req) => {
 
     if (locationError) {
       console.warn('Failed to get agent location:', locationError);
-      // If no location found, return all orders (backward compatibility)
     }
 
     // First, automatically reassign stale orders from other agents (older than 30 minutes)
@@ -285,31 +272,25 @@ serve(async (req) => {
         const isImmediate = !order.subscription_id && 
                            (!order.delivery_time_slot || !order.delivery_time_slot.includes('-')) &&
                            (!order.delivery_date || order.delivery_date <= today) &&
-                           minutesSinceCreated < 30; // Recent orders are likely immediate
+                           minutesSinceCreated < 30;
         
         if (!isImmediate && order.delivery_time_slot) {
           try {
             let deliverySlot = null;
             
-            // Validate delivery_time_slot is not null or empty
             const timeSlot = order.delivery_time_slot?.toString().trim();
             if (!timeSlot) {
-              return order; // Skip processing if empty
+              return order;
             }
             
             if (timeSlot.includes('-')) {
-              // Create a synthetic delivery slot for time range format like "02:00-04:00" or "16:00-18:00"
               const [startTime, endTime] = timeSlot.split('-');
               
-              // Validate both parts exist and are valid times
               if (startTime && endTime) {
                 const formatTime = (time: string) => {
                   const trimmed = time.trim();
-                  // If time is already in HH:MM:SS format, use it
                   if (trimmed.match(/^\d{1,2}:\d{2}:\d{2}$/)) return trimmed;
-                  // If time is in HH:MM format, add seconds
                   if (trimmed.match(/^\d{1,2}:\d{2}$/)) return `${trimmed}:00`;
-                  // Return as-is for other formats
                   return trimmed;
                 };
                 
@@ -321,7 +302,6 @@ serve(async (req) => {
                 };
               }
             } else if (timeSlot.match(/^[0-9a-fA-F-]{36}$/)) {
-              // Try to fetch from delivery_slots table (UUID format)
               const { data: slot } = await supabase
                 .from('delivery_slots')
                 .select('id, slot_name, start_time, end_time')
@@ -329,20 +309,14 @@ serve(async (req) => {
                 .maybeSingle();
               deliverySlot = slot;
             } else if (timeSlot.match(/^\d{1,2}:\d{2}(:\d{2})?$/)) {
-              // Handle single time format - DON'T create synthetic ranges for actual delivery times
-              // Instead, let the frontend handle display of single times
               const formatTime = (time: string) => {
                 const trimmed = time.trim();
-                // If time is already in HH:MM:SS format, use it
                 if (trimmed.match(/^\d{1,2}:\d{2}:\d{2}$/)) return trimmed;
-                // If time is in HH:MM format, add seconds
                 if (trimmed.match(/^\d{1,2}:\d{2}$/)) return `${trimmed}:00`;
                 return trimmed;
               };
               
-              // Create proper time slots for subscription orders (morning delivery windows)
               if (order.subscription_id) {
-                // Subscription orders get morning delivery windows
                 deliverySlot = {
                   id: `slot-${order.id}`,
                   slot_name: 'Morning Delivery',
@@ -350,7 +324,6 @@ serve(async (req) => {
                   end_time: '10:00:00'
                 };
               } else {
-                // For scheduled orders with single time, create a 2-hour window
                 const baseTime = new Date(`2000-01-01 ${formatTime(timeSlot)}`);
                 const endTime = new Date(baseTime.getTime() + 2 * 60 * 60 * 1000);
                 
@@ -372,7 +345,6 @@ serve(async (req) => {
             return order;
           }
         }
-        // For immediate orders (no subscription_id), return without delivery_slots
         return order;
       })
     );
@@ -389,7 +361,6 @@ serve(async (req) => {
       const nearbyOrders = [];
       
       for (const order of filteredOrders) {
-        // Enhanced delivery type classification using database timings
         const orderCreatedAt = new Date(order.created_at);
         const now = new Date();
         const today = now.toISOString().split('T')[0];
@@ -397,71 +368,45 @@ serve(async (req) => {
         
         let calculatedType: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later' = 'immediate';
         let properTimeSlot = order.delivery_time_slot;
-        
-        const orderAnalysis = {
-          subscription_id: order.subscription_id,
-          payment_status: order.payment_status,
-          delivery_date: order.delivery_date,
-          delivery_time_slot: order.delivery_time_slot,
-          delivery_time: order.delivery_time,
-          created_at: order.created_at,
-          minutes_since_created: minutesSinceCreated
-        };
-        
-        console.log(`Order ${order.id} analysis:`, JSON.stringify(orderAnalysis, null, 2));
-        
-        // Determine delivery type using proper logic and database timings
         let immediateTimingConfig = null;
         
-        // Enhanced classification order - most specific first with better detection
+        // Determine delivery type
         if (order.subscription_id) {
           calculatedType = 'subscription';
-          // Get subscription timing from database or use default morning window
           const subscriptionTiming = deliveryTimings?.find(t => t.delivery_type === 'subscription');
           if (subscriptionTiming && !properTimeSlot) {
             properTimeSlot = `${subscriptionTiming.time_slot_start.slice(0, 5)}-${subscriptionTiming.time_slot_end.slice(0, 5)}`;
           } else if (!properTimeSlot) {
-            properTimeSlot = '06:00-10:00'; // Default subscription window
+            properTimeSlot = '06:00-10:00';
           }
-          console.log(`Order ${order.id} -> subscription (has subscription_id: ${order.subscription_id}, time: ${properTimeSlot})`);
         } else if (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) {
           calculatedType = 'scheduled';
           properTimeSlot = order.delivery_time_slot.trim();
-          console.log(`Order ${order.id} -> scheduled (has time slot: ${order.delivery_time_slot})`);
         } else if (order.delivery_date && order.delivery_date !== today) {
           calculatedType = 'scheduled';
-          // Assign appropriate scheduled timing if none exists
           if (!properTimeSlot) {
             const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
             if (scheduledTiming) {
               properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
             } else {
-              properTimeSlot = '09:00-12:00'; // Default scheduled window
+              properTimeSlot = '09:00-12:00';
             }
           }
-          console.log(`Order ${order.id} -> scheduled (future date: ${order.delivery_date}, time: ${properTimeSlot})`);
         } else if (order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim()) {
           calculatedType = 'scheduled';
-          console.log(`Order ${order.id} -> scheduled (specific time: ${order.delivery_time})`);
-        } else if (order.payment_status && (order.payment_status.toLowerCase().includes('paid_subscription') || order.payment_status.toLowerCase() === 'paid_subscription')) {
-          // Additional check for subscription orders via payment status
+        } else if (order.payment_status && order.payment_status.toLowerCase().includes('paid_subscription')) {
           calculatedType = 'subscription';
           if (!properTimeSlot) {
-            properTimeSlot = '06:00-10:00'; // Default subscription window
+            properTimeSlot = '06:00-10:00';
           }
-          console.log(`Order ${order.id} -> subscription (payment status indicates subscription: ${order.payment_status})`);
         } else if (
-          // Check for immediate orders (recent orders without specific scheduling)
           !order.subscription_id &&
           (!order.delivery_time_slot || order.delivery_time_slot === null || order.delivery_time_slot === '' || order.delivery_time_slot.trim() === '') &&
           (!order.delivery_date || order.delivery_date === today) && 
-          minutesSinceCreated < 45 && // Reduced to 45 minutes for more accurate immediate classification
-          (!order.delivery_time || order.delivery_time === '12:00:00') // No specific delivery time or default time
+          minutesSinceCreated < 45 &&
+          (!order.delivery_time || order.delivery_time === '12:00:00')
         ) {
-          // Recent orders without specific scheduling should be immediate
           calculatedType = 'immediate';
-          
-          // Get immediate delivery timing configuration from database
           const immediateTiming = deliveryTimings?.find(t => t.delivery_type === 'immediate');
           if (immediateTiming) {
             immediateTimingConfig = {
@@ -470,32 +415,26 @@ serve(async (req) => {
               time_slot_end: immediateTiming.time_slot_end,
               slot_name: immediateTiming.slot_name
             };
-            console.log(`Order ${order.id} -> immediate (recent order, no specific scheduling, created ${minutesSinceCreated} min ago) - using ${immediateTiming.max_duration_minutes}min timing`);
           } else {
-            // Fallback to 20 minutes if no database config
             immediateTimingConfig = {
               max_duration_minutes: 20,
               time_slot_start: '00:00:00',
               time_slot_end: '23:59:59',
               slot_name: 'Immediate Delivery'
             };
-            console.log(`Order ${order.id} -> immediate (recent order, no specific scheduling, created ${minutesSinceCreated} min ago) - using fallback 20min timing`);
           }
         } else if (order.payment_status === 'pending') {
           calculatedType = 'book_now_pay_later';
-          console.log(`Order ${order.id} -> book_now_pay_later (pending payment)`);
         } else {
-          // Orders that don't meet immediate criteria should be classified as scheduled with better detection
           calculatedType = 'scheduled';
           if (!properTimeSlot) {
             const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
             if (scheduledTiming) {
               properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
             } else {
-              properTimeSlot = '09:00-12:00'; // Default fallback
+              properTimeSlot = '09:00-12:00';
             }
           }
-          console.log(`Order ${order.id} -> scheduled (fallback classification, minutes since created: ${minutesSinceCreated}, delivery_date: ${order.delivery_date}, time_slot: ${order.delivery_time_slot})`);
         }
         
         // Check if order has address with coordinates
@@ -528,132 +467,98 @@ serve(async (req) => {
               }
             }
             
-            // Calculate two-leg distance: Agent → Pickup → Customer with error handling
-            let totalDistance = 2.5; // Default fallback
-            let agentToShopDistance = 2.5; // Default fallback
+            // Calculate ROAD distance using Mapbox (NO Haversine fallback)
+            let shopToCustomerDistance: number | null = null;
+            let agentToShopDistance: number | null = null;
             
-            try {
-              if (pickupLocation) {
-                // Leg 1: Agent to pickup location
-                try {
-                  const distanceToPickup = await calculateDistance(
-                    { lat: agentLocation.latitude, lng: agentLocation.longitude },
-                    { lat: pickupLocation.lat, lng: pickupLocation.lng }
-                  );
-                  agentToShopDistance = Number(distanceToPickup.toFixed(2));
-                  console.log(`✅ Agent to shop distance: ${agentToShopDistance}km`);
-                } catch (distError) {
-                  console.warn(`⚠️ Failed to calculate agent-to-shop distance for order ${order.id}, using fallback`);
-                  agentToShopDistance = 2.5;
-                }
-                
-                // Leg 2: Pickup to customer location
-                try {
-                  const distanceToCustomer = await calculateDistance(
-                    { lat: pickupLocation.lat, lng: pickupLocation.lng },
-                    { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-                  );
-                  totalDistance = Number((agentToShopDistance + distanceToCustomer).toFixed(2));
-                  console.log(`✅ Total distance (agent→shop→customer): ${totalDistance}km`);
-                } catch (distError) {
-                  console.warn(`⚠️ Failed to calculate shop-to-customer distance for order ${order.id}, using fallback`);
-                  totalDistance = agentToShopDistance + 2.5;
-                }
+            if (pickupLocation) {
+              // Leg 1: Agent to pickup location (for filtering only)
+              agentToShopDistance = await calculateRoadDistance(
+                { lat: agentLocation.latitude, lng: agentLocation.longitude },
+                { lat: pickupLocation.lat, lng: pickupLocation.lng }
+              );
+              
+              // Leg 2: Pickup to customer location (for payout calculation)
+              shopToCustomerDistance = await calculateRoadDistance(
+                { lat: pickupLocation.lat, lng: pickupLocation.lng },
+                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+              );
+              
+              if (agentToShopDistance !== null && shopToCustomerDistance !== null) {
+                console.log(`✅ Order ${order.id} road distances - Agent→Shop: ${agentToShopDistance}km, Shop→Customer: ${shopToCustomerDistance}km`);
               } else {
-                // Fallback: Direct distance to customer
-                try {
-                  totalDistance = await calculateDistance(
-                    { lat: agentLocation.latitude, lng: agentLocation.longitude },
-                    { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-                  );
-                  totalDistance = Number(totalDistance.toFixed(2));
-                  agentToShopDistance = totalDistance;
-                  console.log(`✅ Direct distance to customer: ${totalDistance}km`);
-                } catch (distError) {
-                  console.warn(`⚠️ Failed to calculate direct distance for order ${order.id}, using fallback`);
-                  totalDistance = 2.5;
-                  agentToShopDistance = 2.5;
-                }
+                console.warn(`⚠️ Order ${order.id} - Could not calculate road distance, skipping`);
+                continue; // Skip orders where road distance cannot be calculated
               }
-            } catch (error) {
-              console.error(`❌ Error calculating distances for order ${order.id}:`, error);
-              totalDistance = 2.5;
-              agentToShopDistance = 2.5;
+            } else {
+              // Direct distance to customer if no pickup location
+              shopToCustomerDistance = await calculateRoadDistance(
+                { lat: agentLocation.latitude, lng: agentLocation.longitude },
+                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+              );
+              agentToShopDistance = shopToCustomerDistance;
+              
+              if (shopToCustomerDistance === null) {
+                console.warn(`⚠️ Order ${order.id} - Could not calculate road distance, skipping`);
+                continue;
+              }
             }
             
-            console.log(`📊 Order ${order.id} - Agent→Shop: ${agentToShopDistance}km, Total: ${totalDistance}km`);
+            const totalDistance = (agentToShopDistance || 0) + (shopToCustomerDistance || 0);
             
             // Include orders within 10km radius
             if (totalDistance <= 10) {
-              // Calculate shop-to-customer distance for accurate payout with error handling
-              let shopToCustomerDistance = totalDistance - agentToShopDistance;
+              // Minimum distance for payout
+              const payoutDistance = Math.max(0.1, shopToCustomerDistance || 0.1);
               
-              if (pickupLocation && shopToCustomerDistance <= 0) {
-                try {
-                  shopToCustomerDistance = await calculateDistance(
-                    { lat: pickupLocation.lat, lng: pickupLocation.lng },
-                    { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-                  );
-                  shopToCustomerDistance = Number(shopToCustomerDistance.toFixed(2));
-                  console.log(`✅ Shop to customer distance recalculated: ${shopToCustomerDistance}km`);
-                } catch (error) {
-                  console.warn(`⚠️ Failed to recalculate shop-to-customer distance, using fallback`);
-                  shopToCustomerDistance = 2.5;
+              // Calculate payout using Zepto/Blinkit formula: ₹10 base + ₹8/km
+              const agentPayout = calculateAgentPayout(payoutDistance);
+              const estimatedTime = Math.max(5, Math.ceil(payoutDistance * 2));
+              
+              console.log(`✅ Order ${order.id} - Distance: ${payoutDistance}km, Payout: ₹${agentPayout} (₹10 + ${payoutDistance}×₹8)`);
+              
+              nearbyOrders.push({
+                ...order,
+                distance_km: payoutDistance,
+                agent_to_shop_distance: agentToShopDistance,
+                total_distance: totalDistance,
+                agent_payout: agentPayout,
+                estimated_delivery_time: estimatedTime,
+                backend_calculated: true,
+                road_distance: true, // Flag indicating this is road distance, not Haversine
+                pickup_location: pickupLocation,
+                pickup_address: pickupAddress,
+                pickup_status: 'pending',
+                seller_name: sellerName,
+                seller_phone: sellerPhone,
+                calculated_delivery_type: calculatedType,
+                delivery_type: calculatedType,
+                delivery_time_slot: properTimeSlot || order.delivery_time_slot,
+                original_created_at: order.created_at,
+                immediate_timing_config: immediateTimingConfig,
+                // Include payout breakdown for transparency
+                payout_breakdown: {
+                  base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+                  distance_pay: Math.round((payoutDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE) * 10) / 10,
+                  distance_km: payoutDistance,
+                  rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
                 }
-              }
-              
-              // Ensure positive distance
-              shopToCustomerDistance = Math.max(0.5, shopToCustomerDistance);
-              
-              // Calculate payout - ensure it's always valid
-              const agentPayout = Number(calculateAgentPayout(shopToCustomerDistance).toFixed(2));
-              const estimatedTime = Math.max(5, Math.ceil(shopToCustomerDistance * 2)); // Minimum 5 minutes
-              
-              // Validate all numeric fields before adding
-              if (isNaN(agentToShopDistance) || isNaN(totalDistance) || isNaN(agentPayout)) {
-                console.error(`❌ Invalid numeric values for order ${order.id}, skipping`);
-              } else {
-                console.log(`✅ Adding order ${order.id} with payout: ₹${agentPayout}`);
-                nearbyOrders.push({
-                  ...order,
-                  distance_km: Number(shopToCustomerDistance.toFixed(2)), // Actual delivery distance (shop to customer)
-                  agent_to_shop_distance: Number(agentToShopDistance.toFixed(2)), // Distance from agent's location to pickup shop
-                  total_distance: Number(totalDistance.toFixed(2)), // Total distance (agent to shop + shop to customer)
-                  agent_payout: Number(agentPayout.toFixed(2)),
-                  estimated_delivery_time: Number(estimatedTime), // 2 minutes per km for delivery
-                  backend_calculated: true,
-                  pickup_location: pickupLocation,
-                  pickup_address: pickupAddress,
-                  pickup_status: 'pending',
-                  seller_name: sellerName,
-                  seller_phone: sellerPhone,
-                  // Use calculated delivery type from timing database
-                  calculated_delivery_type: calculatedType,
-                  delivery_type: calculatedType,
-                  delivery_time_slot: properTimeSlot || order.delivery_time_slot,
-                  // Preserve original created_at for accurate timer calculations
-                  original_created_at: order.created_at,
-                  // Add immediate timing configuration for frontend
-                  immediate_timing_config: immediateTimingConfig
-                });
-              }
+              });
             } else {
               console.log(`❌ Order ${order.id} too far: ${totalDistance}km > 10km`);
             }
           } catch (distanceError) {
-            console.warn(`Failed to calculate distance for order ${order.id}:`, distanceError);
-            // Include order if distance calculation fails (backward compatibility)
-            nearbyOrders.push(order);
+            console.error(`Failed to calculate distance for order ${order.id}:`, distanceError);
+            // DO NOT include orders if road distance cannot be calculated
           }
         } else {
-          console.warn(`Order ${order.id} has no coordinates, including anyway`);
-          // Include orders without coordinates (backward compatibility)
-          nearbyOrders.push(order);
+          console.warn(`Order ${order.id} has no coordinates, skipping (road distance required)`);
+          // DO NOT include orders without coordinates
         }
       }
       
       filteredOrders = nearbyOrders;
-      console.log(`After 10km filtering: ${filteredOrders.length} orders remain`);
+      console.log(`After 10km filtering with road distance: ${filteredOrders.length} orders remain`);
     } else {
       console.log('No agent location available, skipping distance filtering');
     }

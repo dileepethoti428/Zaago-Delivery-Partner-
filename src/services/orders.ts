@@ -1,14 +1,12 @@
-// Order fetching services
+// Order fetching services - DISPLAY ONLY (no local calculations)
 import { supabase } from '@/integrations/supabase/client';
 import { parsePoint, GeoPoint } from '@/utils/coords';
-import { getDistanceKm } from '@/utils/geo';
-import { calculateAgentPayout, calculateETA } from '@/utils/pricing';
 
 export type DbOrderRow = {
   id: string;
   status?: string | null;
   total?: number | null;
-  address?: any | null; // jsonb - delivery address
+  address?: any | null;
   pickup_address?: string | null;
   pickup_location?: any | null;
   delivery_address_id?: string | null;
@@ -35,6 +33,13 @@ export type ZaagoOrder = {
   customerName?: string;
   createdAt?: number;
   agentId?: string | null;
+  payoutBreakdown?: {
+    base_pay: number;
+    distance_pay: number;
+    distance_km: number;
+    rate_per_km: number;
+  };
+  roadDistance?: boolean; // Flag indicating backend calculated road distance
 };
 
 function coerceStatus(s?: string | null): ZaagoOrder['status'] {
@@ -44,48 +49,11 @@ function coerceStatus(s?: string | null): ZaagoOrder['status'] {
   return v;
 }
 
-function toZaagoOrder(row: DbOrderRow): ZaagoOrder {
-  // Choose pickup coordinates from first available source
-  const pickupCoord =
-    parsePoint(row.pickup_location) ??
-    parsePoint(row?.delivery_addresses?.coordinates) ??
-    null;
-
-  // Extract drop address from address jsonb or delivery_addresses
-  const dropAddress = 
-    row.address?.full_address ?? 
-    row.address?.addressLine1 ?? 
-    row?.delivery_addresses?.full_address ?? 
-    row?.delivery_addresses?.address_line ?? 
-    'Delivery address';
-
-  // Extract drop coordinates from address jsonb
-  const dropCoord = parsePoint(row.address?.coordinates);
-
-  // Calculate distance if both coords available
-  let distanceKm = 0;
-  if (pickupCoord && dropCoord) {
-    distanceKm = getDistanceKm(pickupCoord, dropCoord);
-  }
-
-  // Calculate payout and ETA based on distance
-  const payout = distanceKm > 0 ? calculateAgentPayout(distanceKm) : 30;
-  const etaMin = distanceKm > 0 ? calculateETA(distanceKm) : 12;
-
-  return {
-    id: row.id,
-    pickup: row.pickup_address ?? row?.delivery_addresses?.address_line ?? 'Pickup',
-    drop: dropAddress,
-    pickupCoord,
-    etaMin,
-    payout,
-    status: coerceStatus(row.status),
-    distanceKm: distanceKm > 0 ? distanceKm : undefined,
-    customerName: row.customer_name ?? undefined,
-    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
-  };
-}
-
+/**
+ * Fetch available orders from backend
+ * ALL distance and payout calculations are done on backend
+ * Frontend only displays the values
+ */
 export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[]> {
   if (!agentId) return [];
 
@@ -122,26 +90,44 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
       return o.address?.full_address || 'Delivery location';
     })();
 
+    // Use ONLY backend-calculated values - NO local calculations
     return {
       id: o.id,
       pickup: o.pickup_address || o?.seller?.address_line || 'Pickup location',
       drop: dropAddress,
       pickupCoord: parsePoint(o.pickup_location || o?.seller?.coordinates) || null,
-      etaMin: o.estimated_delivery_time ? Math.round(o.estimated_delivery_time) : 12,
-      payout: o.agent_payout ? Math.round(o.agent_payout) : 30,
+      // Use backend ETA, fallback to reasonable default only if missing
+      etaMin: typeof o.estimated_delivery_time === 'number' ? Math.round(o.estimated_delivery_time) : 15,
+      // Use backend payout - NEVER calculate locally
+      payout: typeof o.agent_payout === 'number' ? Math.round(o.agent_payout) : 0,
       status: o.status || 'open',
-      distanceKm: typeof o.distance_km === 'number' ? Number(o.distance_km.toFixed(2)) : undefined,
+      // Use backend distance - NEVER calculate locally
+      distanceKm: typeof o.distance_km === 'number' ? Number(o.distance_km.toFixed(1)) : undefined,
       customerName: o.customer_name || undefined,
       createdAt: o.created_at ? new Date(o.created_at).getTime() : Date.now(),
       agentId: o.agent_id || null,
+      // Include payout breakdown for UI display
+      payoutBreakdown: o.payout_breakdown || undefined,
+      // Flag indicating road distance was used (not Haversine)
+      roadDistance: o.road_distance === true,
     };
   }) as ZaagoOrder[];
 
-  return orders;
+  // Filter out orders with no payout (backend couldn't calculate road distance)
+  const validOrders = orders.filter(o => o.payout > 0);
+  
+  if (validOrders.length < orders.length) {
+    console.warn(`⚠️ Filtered out ${orders.length - validOrders.length} orders without valid payout`);
+  }
+
+  return validOrders;
 }
 
+/**
+ * Fetch open orders directly from database
+ * Note: This is a fallback - prefer fetchAvailableOrders for accurate distance/payout
+ */
 export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
-  // Try to select with delivery_addresses join
   try {
     const { data, error } = await supabase
       .from('orders')
@@ -151,21 +137,60 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
         delivery_address_id,
         customer_name,
         created_at,
+        distance_km,
         delivery_addresses:delivery_address_id ( 
           id, coordinates, full_address, address_line 
         )
       `);
 
     if (error) throw error;
-    return ((data ?? []) as unknown as DbOrderRow[]).map(toZaagoOrder);
+    
+    // Map to ZaagoOrder format - use stored distance_km, don't calculate
+    return ((data ?? []) as any[]).map(row => {
+      const pickupCoord = parsePoint(row.pickup_location) ?? null;
+      const dropAddress = 
+        row.address?.full_address ?? 
+        row.address?.addressLine1 ?? 
+        row?.delivery_addresses?.full_address ?? 
+        'Delivery address';
+
+      // Use stored distance from database - DO NOT calculate
+      const storedDistance = row.distance_km;
+      
+      return {
+        id: row.id,
+        pickup: row.pickup_address ?? 'Pickup',
+        drop: dropAddress,
+        pickupCoord,
+        // Use stored distance for ETA estimate (2 min per km)
+        etaMin: storedDistance ? Math.ceil(storedDistance * 2) : 15,
+        // Return 0 payout - actual payout must come from backend
+        payout: 0,
+        status: coerceStatus(row.status),
+        distanceKm: storedDistance ? Number(storedDistance.toFixed(1)) : undefined,
+        customerName: row.customer_name ?? undefined,
+        createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+      };
+    });
   } catch (joinError) {
-    // Fall back to simpler query without join
-    console.warn('Join query failed, falling back to simple query:', joinError);
+    console.warn('Query failed, falling back to simple query:', joinError);
     const { data, error } = await supabase
       .from('orders')
-      .select('id, status, total, address, pickup_address, pickup_location, customer_name, created_at');
+      .select('id, status, total, address, pickup_address, pickup_location, customer_name, created_at, distance_km');
 
     if (error) throw error;
-    return ((data ?? []) as unknown as DbOrderRow[]).map(toZaagoOrder);
+    
+    return ((data ?? []) as any[]).map(row => ({
+      id: row.id,
+      pickup: row.pickup_address ?? 'Pickup',
+      drop: row.address?.full_address ?? 'Delivery address',
+      pickupCoord: parsePoint(row.pickup_location) ?? null,
+      etaMin: row.distance_km ? Math.ceil(row.distance_km * 2) : 15,
+      payout: 0, // Must come from backend
+      status: coerceStatus(row.status),
+      distanceKm: row.distance_km ? Number(row.distance_km.toFixed(1)) : undefined,
+      customerName: row.customer_name ?? undefined,
+      createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    }));
   }
 }
