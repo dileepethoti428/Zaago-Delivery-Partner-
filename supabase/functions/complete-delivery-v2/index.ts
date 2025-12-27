@@ -129,9 +129,9 @@ Deno.serve(async (req) => {
       source: live_distance_km ? 'live' : (order.distance_km ? 'order' : 'fallback')
     });
 
-    // Calculate payout using simple Zepto/Blinkit formula
-    // ₹10 base + ₹8/km (no surge, no platform fee)
-    const roundedDistance = Math.round(distance_km * 10) / 10;
+    // Calculate payout using Zepto/Blinkit formula
+    // ₹10 base + ₹8/km - Distance rounded UP (ceil) for fair agent pay
+    const roundedDistance = Math.ceil(distance_km * 10) / 10;
     const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
     const totalPayout = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
     const rounded_payout = Math.round(totalPayout * 10) / 10;
