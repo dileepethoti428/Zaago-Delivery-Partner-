@@ -85,23 +85,53 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Upsert bank details
-    const bankData: any = {
-      agent_id: agent.id,
-      account_holder_name: bank_account_name,
-      account_number: bank_account_number,
-      ifsc_code: ifsc_code || null,
-      bank_name: bank_name || null,
-      upi_id: upi_id || null,
-      is_primary: true,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await supabase
+    // Check if bank details already exist for this agent
+    const { data: existingBank } = await supabase
       .from('agent_bank_details')
-      .upsert(bankData, { onConflict: 'agent_id' })
-      .select()
-      .single();
+      .select('id')
+      .eq('agent_id', agent.id)
+      .maybeSingle();
+
+    let data, error;
+    
+    if (existingBank) {
+      // Update existing record
+      console.log('Updating existing bank details for agent:', agent.id);
+      const result = await supabase
+        .from('agent_bank_details')
+        .update({
+          account_holder_name: bank_account_name,
+          account_number: bank_account_number,
+          ifsc_code: ifsc_code || null,
+          bank_name: bank_name || null,
+          upi_id: upi_id || null,
+          is_primary: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingBank.id)
+        .select()
+        .single();
+      data = result.data;
+      error = result.error;
+    } else {
+      // Insert new record
+      console.log('Creating new bank details for agent:', agent.id);
+      const result = await supabase
+        .from('agent_bank_details')
+        .insert({
+          agent_id: agent.id,
+          account_holder_name: bank_account_name,
+          account_number: bank_account_number,
+          ifsc_code: ifsc_code || null,
+          bank_name: bank_name || null,
+          upi_id: upi_id || null,
+          is_primary: true,
+        })
+        .select()
+        .single();
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error('Bank details update error:', error);
