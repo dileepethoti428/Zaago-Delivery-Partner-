@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
-import { LogOut, User, DollarSign, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2 } from 'lucide-react';
+import { LogOut, User, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2 } from 'lucide-react';
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg 
@@ -90,7 +90,6 @@ export default function Profile() {
 
   const menuItems = [
     { icon: User, label: 'Edit Profile', action: () => navigate('/settings') },
-    { icon: DollarSign, label: 'Payout Settings', action: () => navigate('/settings') },
     { icon: HelpCircle, label: 'Help & Support', action: () => navigate('/help') },
   ];
 
