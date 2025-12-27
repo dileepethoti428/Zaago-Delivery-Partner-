@@ -1533,8 +1533,12 @@ export type Database = {
           onesignal_player_id: string | null
           performance_score: number | null
           phone: string | null
+          privacy_accepted_at: string | null
+          privacy_version: string | null
           profile_image: string | null
           push_subscription: Json | null
+          terms_accepted_at: string | null
+          terms_version: string | null
           total_deliveries: number | null
           total_earnings: number | null
           updated_at: string | null
@@ -1564,8 +1568,12 @@ export type Database = {
           onesignal_player_id?: string | null
           performance_score?: number | null
           phone?: string | null
+          privacy_accepted_at?: string | null
+          privacy_version?: string | null
           profile_image?: string | null
           push_subscription?: Json | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           total_deliveries?: number | null
           total_earnings?: number | null
           updated_at?: string | null
@@ -1595,8 +1603,12 @@ export type Database = {
           onesignal_player_id?: string | null
           performance_score?: number | null
           phone?: string | null
+          privacy_accepted_at?: string | null
+          privacy_version?: string | null
           profile_image?: string | null
           push_subscription?: Json | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           total_deliveries?: number | null
           total_earnings?: number | null
           updated_at?: string | null

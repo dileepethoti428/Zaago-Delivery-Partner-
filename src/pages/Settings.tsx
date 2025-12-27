@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, User, Settings as SettingsIcon, Bell, CreditCard, FileText, Globe, LogOut, Trash2, HelpCircle } from 'lucide-react';
+import { Loader2, User, Settings as SettingsIcon, Bell, CreditCard, FileText, Globe, LogOut, Trash2, HelpCircle, Shield, ChevronRight } from 'lucide-react';
 import { useAgentSettings, useUpdateProfile, useUpdatePreferences, useUpdateNotifications, useUpdatePayout, useUpdateKYC, useDeleteAccount } from '@/hooks/useSettings';
 import { profileSchema, payoutSchema, kycSchema, notificationsSchema, preferencesSchema, type ProfileFormData, type PayoutFormData, type KYCFormData, type NotificationsFormData, type PreferencesFormData } from '@/utils/settingsValidation';
 import { useAuthStore } from '@/store/auth';
@@ -420,6 +420,41 @@ export default function Settings() {
                 onCheckedChange={(checked) => onPreferencesChange('dark_mode', checked)}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Legal Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <CardTitle>Legal</CardTitle>
+            </div>
+            <CardDescription>Privacy Policy & Terms of Service</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-between" 
+              onClick={() => navigate('/privacy-policy')}
+            >
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Privacy Policy
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-between" 
+              onClick={() => navigate('/terms-conditions')}
+            >
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Terms & Conditions
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </Button>
           </CardContent>
         </Card>
 
