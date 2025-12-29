@@ -2235,6 +2235,51 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_content: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          end_time: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          priority: number | null
+          redirect_type: string | null
+          redirect_value: string | null
+          start_time: string | null
+          title: string | null
+          type: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          priority?: number | null
+          redirect_type?: string | null
+          redirect_value?: string | null
+          start_time?: string | null
+          title?: string | null
+          type?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          end_time?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          priority?: number | null
+          redirect_type?: string | null
+          redirect_value?: string | null
+          start_time?: string | null
+          title?: string | null
+          type?: string | null
+        }
+        Relationships: []
+      }
       milk_transactions: {
         Row: {
           created_at: string
@@ -2820,6 +2865,8 @@ export type Database = {
           delivery_time_slot: string | null
           id: string
           items: Json
+          last_notified_at: string | null
+          last_notified_status: string | null
           notification_count: number
           otp_attempts: number | null
           otp_expires_at: string | null
@@ -2874,6 +2921,8 @@ export type Database = {
           delivery_time_slot?: string | null
           id?: string
           items: Json
+          last_notified_at?: string | null
+          last_notified_status?: string | null
           notification_count?: number
           otp_attempts?: number | null
           otp_expires_at?: string | null
@@ -2928,6 +2977,8 @@ export type Database = {
           delivery_time_slot?: string | null
           id?: string
           items?: Json
+          last_notified_at?: string | null
+          last_notified_status?: string | null
           notification_count?: number
           otp_attempts?: number | null
           otp_expires_at?: string | null
@@ -3757,6 +3808,7 @@ export type Database = {
           full_name: string | null
           id: string
           notification_preferences: Json | null
+          onesignal_external_user_id: string | null
           onesignal_player_id: string | null
           phone: string | null
           photo_uploaded_at: string | null
@@ -3788,6 +3840,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           notification_preferences?: Json | null
+          onesignal_external_user_id?: string | null
           onesignal_player_id?: string | null
           phone?: string | null
           photo_uploaded_at?: string | null
@@ -3819,6 +3872,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           notification_preferences?: Json | null
+          onesignal_external_user_id?: string | null
           onesignal_player_id?: string | null
           phone?: string | null
           photo_uploaded_at?: string | null
@@ -6268,6 +6322,10 @@ export type Database = {
       create_validated_payout: {
         Args: { end_date: string; start_date: string; target_seller_id: string }
         Returns: string
+      }
+      customer_has_subscription_to_seller_products: {
+        Args: { _customer_id: string; _seller_user_id: string }
+        Returns: boolean
       }
       delete_orders_with_related_data: {
         Args: { order_ids: string[] }
