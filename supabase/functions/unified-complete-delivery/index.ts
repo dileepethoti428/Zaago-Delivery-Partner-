@@ -214,6 +214,30 @@ serve(async (req) => {
             console.warn('⚠️ Failed to insert delivery history:', historyError);
           }
 
+          // Insert into agent_earnings_tracking for subscription orders
+          // Even though payout is 0, we need to track the delivery count
+          const { error: trackingError } = await supabase
+            .from('agent_earnings_tracking')
+            .insert({
+              order_id: order_id,
+              agent_id: agent.id,
+              accepted_at: new Date().toISOString(),
+              completed_at: new Date().toISOString(),
+              expected_payout: 0,
+              actual_payout: 0,
+              distance_km: 0,
+              is_peak_hour: false,
+              payout_status: 'confirmed',
+              payout_breakdown: { subscription: true, base_pay: 0, distance_pay: 0 },
+              order_type: 'subscription'
+            });
+
+          if (trackingError) {
+            console.warn('⚠️ Failed to insert subscription earnings tracking:', trackingError);
+          } else {
+            console.log('✅ Subscription earnings tracking inserted');
+          }
+
           // NOTE: No wallet update for subscription orders - they have no payout
           console.log('✅ Daily order completed successfully (no payout for subscription)');
           result = { success: true, payout_amount: SUBSCRIPTION_PAYOUT };
