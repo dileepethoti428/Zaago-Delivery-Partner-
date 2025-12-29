@@ -146,17 +146,11 @@ serve(async (req) => {
 
     console.log('📅 IST Date ranges:', { todayStart, weekStart, monthStart });
 
-    // Fetch earnings tracking data with order details to determine subscription vs regular
-    console.log('⏱️ Fetching earnings tracking data with order info...');
+    // Fetch earnings tracking data - use order_type column for filtering
+    console.log('⏱️ Fetching earnings tracking data...');
     const { data: trackingData, error: trackingError } = await supabase
       .from('agent_earnings_tracking')
-      .select(`
-        *,
-        orders:order_id (
-          id,
-          subscription_id
-        )
-      `)
+      .select('*')
       .eq('agent_id', agentId)
       .gte('accepted_at', monthStart)
       .order('accepted_at', { ascending: false });
@@ -171,9 +165,9 @@ serve(async (req) => {
 
     console.log('✅ Tracking data fetched:', { recordCount: trackingData?.length || 0 });
 
-    // Separate tracking data by order type
-    const regularOrders = trackingData?.filter(t => !t.orders?.subscription_id) || [];
-    const subscriptionOrders = trackingData?.filter(t => t.orders?.subscription_id) || [];
+    // Separate tracking data by order_type column (more reliable than join)
+    const regularOrders = trackingData?.filter(t => t.order_type === 'regular' || !t.order_type) || [];
+    const subscriptionOrders = trackingData?.filter(t => t.order_type === 'subscription') || [];
 
     console.log('📊 Order type breakdown:', {
       regular: regularOrders.length,
@@ -243,11 +237,12 @@ serve(async (req) => {
     const formatEarningRecord = (tracking: any) => {
       const distanceKm = parseFloat(tracking.distance_km || 0);
       const actualPayout = tracking.actual_payout ? parseFloat(tracking.actual_payout) : null;
+      const orderType = tracking.order_type || 'regular';
       
       // Ensure payout_breakdown exists for regular orders
       // If not stored, reconstruct from actual values
       let breakdown = tracking.payout_breakdown;
-      if (!breakdown && !tracking.orders?.subscription_id) {
+      if (!breakdown && orderType === 'regular') {
         // Reconstruct breakdown for regular orders
         const distancePay = Math.round(distanceKm * REGULAR_ORDER_PRICING.DISTANCE_RATE * 10) / 10;
         breakdown = {
@@ -268,8 +263,8 @@ serve(async (req) => {
         distance_km: distanceKm,
         is_peak_hour: false, // Removed peak hour from new model
         payout_breakdown: breakdown,
-        subscription_id: tracking.orders?.subscription_id || null,
-        order_type: tracking.orders?.subscription_id ? 'subscription' : 'regular'
+        subscription_id: null, // No longer querying orders table
+        order_type: orderType
       };
     };
 

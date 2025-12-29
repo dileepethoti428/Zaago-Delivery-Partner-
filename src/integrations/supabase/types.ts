@@ -263,6 +263,7 @@ export type Database = {
           id: string
           is_peak_hour: boolean | null
           order_id: string
+          order_type: string | null
           payment_method: string | null
           payout_breakdown: Json | null
           payout_status: string
@@ -279,6 +280,7 @@ export type Database = {
           id?: string
           is_peak_hour?: boolean | null
           order_id: string
+          order_type?: string | null
           payment_method?: string | null
           payout_breakdown?: Json | null
           payout_status?: string
@@ -295,6 +297,7 @@ export type Database = {
           id?: string
           is_peak_hour?: boolean | null
           order_id?: string
+          order_type?: string | null
           payment_method?: string | null
           payout_breakdown?: Json | null
           payout_status?: string
