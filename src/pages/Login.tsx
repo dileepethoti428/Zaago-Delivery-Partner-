@@ -17,6 +17,7 @@ import { agentSession } from '@/utils/agentSession';
 import { cache } from '@/utils/cache';
 import { advancedCache } from '@/utils/advancedCache';
 import { queryClient } from '@/providers/AppProviders';
+import { registerPushNotifications } from '@/utils/onesignal';
 
 type Mode = 'login' | 'signup' | 'reset';
 
@@ -178,6 +179,20 @@ export default function Login() {
       // Sync location immediately after login (non-blocking)
       syncLocationAfterAuth();
       
+      // Register push notifications (non-blocking)
+      if (authData.user?.email) {
+        registerPushNotifications(authData.user.email)
+          .then(result => {
+            if (result.success) {
+              toast({
+                title: 'Push notifications enabled',
+                description: 'You will receive delivery alerts',
+              });
+            }
+          })
+          .catch(() => {}); // Silent error handling
+      }
+      
       // Navigation handled by useEffect
     }
   };
@@ -240,6 +255,20 @@ export default function Login() {
       
       // Sync location immediately after signup (non-blocking)
       syncLocationAfterAuth();
+      
+      // Register push notifications (non-blocking)
+      if (authData.user?.email) {
+        registerPushNotifications(authData.user.email)
+          .then(result => {
+            if (result.success) {
+              toast({
+                title: 'Push notifications enabled',
+                description: 'You will receive delivery alerts',
+              });
+            }
+          })
+          .catch(() => {}); // Silent error handling
+      }
       
       navigate('/upload-documents');
     }
