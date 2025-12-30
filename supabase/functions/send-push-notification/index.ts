@@ -92,12 +92,13 @@ serve(async (req) => {
     console.log('[send-push-notification] OneSignal payload:', JSON.stringify(oneSignalPayload, null, 2));
     console.log('[send-push-notification] Targeting user with external_id:', userEmail);
 
-    // Send notification via OneSignal API
-    const oneSignalResponse = await fetch('https://onesignal.com/api/v1/notifications', {
+    // Send notification via OneSignal API (Updated Nov 2024+ standard)
+    console.log("🚀 Sending push via https://api.onesignal.com/notifications");
+    const oneSignalResponse = await fetch('https://api.onesignal.com/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${oneSignalApiKey}`
+        'Authorization': `Key ${oneSignalApiKey}`
       },
       body: JSON.stringify(oneSignalPayload)
     });
