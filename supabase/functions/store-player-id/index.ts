@@ -9,6 +9,7 @@ interface StorePlayerIdRequest {
   email: string;
   playerId: string;
   platform?: string;
+  app_type?: string;
 }
 
 Deno.serve(async (req) => {
@@ -30,9 +31,9 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request body
-    const { email, playerId, platform }: StorePlayerIdRequest = await req.json();
+    const { email, playerId, platform, app_type }: StorePlayerIdRequest = await req.json();
 
-    console.log('[store-player-id] Received request:', { email, playerId, platform });
+    console.log('[store-player-id] Received request:', { email, playerId, platform, app_type });
 
     if (!email || !playerId) {
       console.error('[store-player-id] Missing required fields');
