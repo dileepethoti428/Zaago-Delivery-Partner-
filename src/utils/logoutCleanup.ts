@@ -6,6 +6,7 @@ import { stopOrdersRealtime, useOrdersStore } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
 import { useAppStore } from '@/store/app';
 import { agentSession } from '@/utils/agentSession';
+import { onesignalLogout } from '@/utils/onesignal';
 
 // All known localStorage keys to clear on logout
 const STORAGE_KEYS_TO_CLEAR = [
@@ -51,7 +52,15 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 3. Clear all localStorage caches
+    // 3. Logout from OneSignal
+    onesignalLogout();
+    console.log('✅ OneSignal logged out');
+  } catch (e) {
+    console.warn('Failed to logout from OneSignal:', e);
+  }
+
+  try {
+    // 4. Clear all localStorage caches
     cache.clearAll(); // Clears all zaago_cache_* keys (agent-aware)
     advancedCache.clear(); // Clears zaago_v2_* keys
     
@@ -83,7 +92,7 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 4. Clear TanStack Query cache
+    // 5. Clear TanStack Query cache
     queryClient.clear();
     console.log('✅ Query cache cleared');
   } catch (e) {
@@ -91,7 +100,7 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 5. Reset Zustand stores to initial state
+    // 6. Reset Zustand stores to initial state
     useOrdersStore.getState().reset();
     useLocationStore.getState().reset();
     useAppStore.setState({
@@ -105,7 +114,7 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 6. Sign out from Supabase (clears auth tokens)
+    // 7. Sign out from Supabase (clears auth tokens)
     await supabase.auth.signOut();
     console.log('✅ Supabase auth signed out');
   } catch (e) {

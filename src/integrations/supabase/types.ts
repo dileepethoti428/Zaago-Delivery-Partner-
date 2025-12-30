@@ -1329,6 +1329,7 @@ export type Database = {
           date: string
           id: string
           location_id: number | null
+          notification_sent: boolean | null
           quantity: number
           status: string
           subscription_id: string
@@ -1341,6 +1342,7 @@ export type Database = {
           date: string
           id?: string
           location_id?: number | null
+          notification_sent?: boolean | null
           quantity: number
           status?: string
           subscription_id: string
@@ -1353,6 +1355,7 @@ export type Database = {
           date?: string
           id?: string
           location_id?: number | null
+          notification_sent?: boolean | null
           quantity?: number
           status?: string
           subscription_id?: string
@@ -2871,6 +2874,7 @@ export type Database = {
           last_notified_at: string | null
           last_notified_status: string | null
           notification_count: number
+          notification_sent: boolean | null
           otp_attempts: number | null
           otp_expires_at: string | null
           otp_verified: boolean | null
@@ -2927,6 +2931,7 @@ export type Database = {
           last_notified_at?: string | null
           last_notified_status?: string | null
           notification_count?: number
+          notification_sent?: boolean | null
           otp_attempts?: number | null
           otp_expires_at?: string | null
           otp_verified?: boolean | null
@@ -2983,6 +2988,7 @@ export type Database = {
           last_notified_at?: string | null
           last_notified_status?: string | null
           notification_count?: number
+          notification_sent?: boolean | null
           otp_attempts?: number | null
           otp_expires_at?: string | null
           otp_verified?: boolean | null
@@ -4303,6 +4309,54 @@ export type Database = {
             columns: ["suggestion_id"]
             isOneToOne: false
             referencedRelation: "product_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      seller_restock_list: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_purchased: boolean | null
+          notes: string | null
+          product_id: string
+          seller_id: string
+          suggested_quantity: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_purchased?: boolean | null
+          notes?: string | null
+          product_id: string
+          seller_id: string
+          suggested_quantity: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_purchased?: boolean | null
+          notes?: string | null
+          product_id?: string
+          seller_id?: string
+          suggested_quantity?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seller_restock_list_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seller_restock_list_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
             referencedColumns: ["id"]
           },
         ]
