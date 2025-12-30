@@ -17,7 +17,7 @@ import { agentSession } from '@/utils/agentSession';
 import { cache } from '@/utils/cache';
 import { advancedCache } from '@/utils/advancedCache';
 import { queryClient } from '@/providers/AppProviders';
-import { registerPushNotifications } from '@/utils/onesignal';
+import { registerPushNotifications, forceReRegisterPush } from '@/utils/onesignal';
 
 type Mode = 'login' | 'signup' | 'reset';
 
@@ -102,6 +102,7 @@ export default function Login() {
   const { session, profile, fetchProfile } = useAuthStore();
   const [mode, setMode] = useState<Mode>('login');
   const [loading, setLoading] = useState(false);
+  const [reregistering, setReregistering] = useState(false);
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -389,6 +390,38 @@ export default function Login() {
                   >
                     Create account
                   </button>
+                </div>
+
+                {/* Debug: Force Re-register Push Button */}
+                <div className="pt-4 border-t mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full rounded-xl text-sm"
+                    onClick={async () => {
+                      const email = loginForm.getValues('email');
+                      if (!email) {
+                        toast({
+                          title: 'Email required',
+                          description: 'Enter your email first to test push registration',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+                      setReregistering(true);
+                      await forceReRegisterPush(email);
+                      setReregistering(false);
+                    }}
+                    disabled={reregistering}
+                  >
+                    {reregistering ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
+                    🔧 Force Re-register Push
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Debug: Clears localStorage + retries registration
+                  </p>
                 </div>
               </form>
             )}
