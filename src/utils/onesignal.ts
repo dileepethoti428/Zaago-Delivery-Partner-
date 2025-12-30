@@ -237,13 +237,14 @@ export async function registerPushNotifications(email: string): Promise<{
     if (playerId) {
       try {
         console.log('[OneSignal] Storing player_id:', playerId, 'for email:', email);
-        const { error } = await supabase.functions.invoke('store-player-id', {
-          body: {
-            email,
-            playerId,
-            platform: detectPlatform(),
-          },
-        });
+      const { error } = await supabase.functions.invoke('store-player-id', {
+        body: {
+          email,
+          playerId,
+          platform: detectPlatform(),
+          app_type: 'agent',
+        },
+      });
 
         if (error) {
           console.error('[OneSignal] Failed to store player_id:', error);
