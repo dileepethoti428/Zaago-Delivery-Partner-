@@ -65,12 +65,71 @@ export function clearPushRegistration(): void {
 }
 
 /**
+ * Poll for window.median.onesignal to be available
+ * Shows countdown toast during polling
+ */
+async function pollForOneSignalBridge(
+  showDebugToasts: boolean = false
+): Promise<boolean> {
+  const maxAttempts = 60; // 30 seconds total
+  const intervalMs = 500;
+  
+  console.log('[OneSignal] Starting bridge polling...');
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Check if onesignal bridge is available
+    if (window.median?.onesignal) {
+      console.log('[OneSignal] Bridge ready after', attempt, 'attempts');
+      if (showDebugToasts) {
+        toast({
+          title: '✅ OneSignal ready!',
+          description: 'Median bridge initialized',
+        });
+      }
+      return true;
+    }
+    
+    // Calculate remaining time
+    const remainingSeconds = Math.ceil((maxAttempts - attempt) * intervalMs / 1000);
+    
+    // Show countdown every 2 seconds (every 4 attempts)
+    if (showDebugToasts && attempt % 4 === 1) {
+      toast({
+        title: `⏳ Polling OneSignal... ${remainingSeconds}s`,
+        description: `Attempt ${attempt}/${maxAttempts}`,
+      });
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  
+  // Timeout reached
+  console.error('[OneSignal] Bridge polling timeout after 30 seconds');
+  if (showDebugToasts) {
+    toast({
+      title: '❌ Timeout: OneSignal not ready',
+      description: 'Install latest APK from Median with OneSignal enabled',
+      variant: 'destructive',
+    });
+  }
+  
+  return false;
+}
+
+/**
  * Wait for OneSignal to be ready (poll device state)
  */
 async function waitForOneSignalReady(maxAttempts = 10, intervalMs = 500): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const state = await window.median!.onesignal.getDeviceState();
+      // First check if onesignal exists
+      if (!window.median?.onesignal) {
+        console.log(`[OneSignal] Bridge not available yet (attempt ${attempt}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+        continue;
+      }
+      
+      const state = await window.median.onesignal.getDeviceState();
       console.log(`[OneSignal] Device state check ${attempt}/${maxAttempts}:`, state);
       if (state) {
         console.log('[OneSignal] Ready ✓');
@@ -168,8 +227,8 @@ export async function registerPushNotifications(
   success: boolean;
   playerId?: string;
 }> {
-  // Step 1: Check if in Median app
-  if (!isMedianApp()) {
+  // Step 0: Check if in Median app
+  if (!window.median) {
     console.log('[OneSignal] Not in Median app, skipping push registration');
     if (showDebugToasts) {
       toast({
@@ -181,11 +240,37 @@ export async function registerPushNotifications(
     return { success: false };
   }
 
-  if (showDebugToasts) {
-    toast({
-      title: '✅ Median app detected',
-      description: 'Proceeding with push registration...',
-    });
+  // Step 1: Check if onesignal is immediately available or poll for it
+  if (!window.median.onesignal) {
+    console.log('[OneSignal] Bridge not immediately available, starting polling...');
+    if (showDebugToasts) {
+      toast({
+        title: '⚠️ OneSignal not ready',
+        description: 'Starting polling...',
+      });
+    }
+    
+    // Poll for up to 30 seconds
+    const bridgeReady = await pollForOneSignalBridge(showDebugToasts);
+    
+    if (!bridgeReady) {
+      console.error('[OneSignal] Bridge never became available');
+      if (showDebugToasts) {
+        toast({
+          title: '❌ Update Median APK',
+          description: 'OneSignal bridge not found after 30s',
+          variant: 'destructive',
+        });
+      }
+      return { success: false };
+    }
+  } else {
+    if (showDebugToasts) {
+      toast({
+        title: '✅ Median app detected',
+        description: 'OneSignal bridge available',
+      });
+    }
   }
 
   // Check if already registered for this email
@@ -211,14 +296,14 @@ export async function registerPushNotifications(
   try {
     console.log('[OneSignal] Starting push registration for:', email);
 
-    // Wait for OneSignal to be ready
+    // Wait for OneSignal device state to be ready
     const isReady = await waitForOneSignalReady();
     if (!isReady) {
-      console.error('[OneSignal] Push registration aborted - not ready');
+      console.error('[OneSignal] Push registration aborted - device state not ready');
       if (showDebugToasts) {
         toast({
-          title: '❌ OneSignal not ready',
-          description: 'Failed to initialize after 10 attempts',
+          title: '❌ Device state not ready',
+          description: 'OneSignal failed to return device state',
           variant: 'destructive',
         });
       }
