@@ -55,6 +55,18 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
+    // OneSignal Agent credentials - use agent-specific ones, fallback to generic
+    const oneSignalAgentAppId = Deno.env.get('ONESIGNAL_AGENT_APP_ID') || Deno.env.get('ONESIGNAL_APP_ID')
+    const oneSignalAgentApiKey = Deno.env.get('ONESIGNAL_AGENT_API_KEY') || Deno.env.get('ONESIGNAL_REST_API_KEY')
+    
+    console.log('🔑 OneSignal Agent credentials loaded:', {
+      hasAgentAppId: !!Deno.env.get('ONESIGNAL_AGENT_APP_ID'),
+      hasAgentApiKey: !!Deno.env.get('ONESIGNAL_AGENT_API_KEY'),
+      usingFallback: !Deno.env.get('ONESIGNAL_AGENT_APP_ID') || !Deno.env.get('ONESIGNAL_AGENT_API_KEY'),
+      appIdPresent: !!oneSignalAgentAppId,
+      apiKeyPresent: !!oneSignalAgentApiKey
+    })
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
     const { order_id, status, customer_name, total_amount } = await req.json()
@@ -319,69 +331,115 @@ serve(async (req) => {
     // Unsubscribe after sending
     await supabase.removeChannel(channel)
     
-    // CRITICAL: Send Web Push notifications for background/closed app scenarios
-    console.log('📲 Sending Web Push notifications to agents...')
+    // CRITICAL: Send OneSignal Push notifications to agents
+    console.log('📲 Sending OneSignal Push notifications to agents...')
     
-    // Get agents with push subscriptions
-    const { data: agentsWithPush } = await supabase
-      .from('delivery_agents')
-      .select('id, name, email, push_subscription')
-      .eq('is_active', true)
-      .in('id', nearbyAgents.map(a => a.id))
-      .not('push_subscription', 'is', null);
-    
-    const pushPromises = (agentsWithPush || []).map(async (agent) => {
-      try {
-        const subscription = agent.push_subscription as any;
-        
-        if (!subscription?.endpoint || !subscription?.keys) {
-          console.log(`⚠️ Invalid push subscription for agent ${agent.id}`);
-          return;
+    if (!oneSignalAgentAppId || !oneSignalAgentApiKey) {
+      console.error('❌ OneSignal Agent credentials not configured - skipping push notifications')
+    } else {
+      // Get agents with OneSignal player IDs
+      const agentPlayerIds = nearbyAgents
+        .filter(a => a.onesignal_player_id)
+        .map(a => a.onesignal_player_id);
+      
+      console.log(`Found ${agentPlayerIds.length} agents with OneSignal player IDs`)
+      
+      if (agentPlayerIds.length > 0) {
+        try {
+          const oneSignalPayload = {
+            app_id: oneSignalAgentAppId,
+            include_player_ids: agentPlayerIds,
+            headings: { en: broadcastPayload.title },
+            contents: { en: broadcastPayload.message },
+            data: {
+              order_id,
+              status,
+              notification_type: broadcastPayload.notification_type,
+              url: '/home',
+              play_audio: true,
+              timestamp: Date.now()
+            },
+            priority: 10,
+            ttl: 86400,
+            android_channel_id: 'urgent_orders',
+            ios_sound: 'default',
+            android_sound: 'default'
+          };
+          
+          console.log('📤 Sending OneSignal notification to', agentPlayerIds.length, 'agents')
+          
+          const oneSignalResponse = await fetch('https://onesignal.com/api/v1/notifications', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Basic ${oneSignalAgentApiKey}`
+            },
+            body: JSON.stringify(oneSignalPayload)
+          });
+          
+          const oneSignalResult = await oneSignalResponse.json();
+          
+          if (oneSignalResponse.ok) {
+            console.log('✅ OneSignal notification sent successfully:', oneSignalResult);
+          } else {
+            console.error('❌ OneSignal API error:', oneSignalResult);
+          }
+        } catch (oneSignalError) {
+          console.error('❌ Error sending OneSignal notification:', oneSignalError);
         }
+      } else {
+        console.log('⚠️ No agents have OneSignal player IDs - falling back to external_user_ids')
         
-        // Prepare Web Push payload
-        const pushPayload = {
-          title: broadcastPayload.title,
-          body: broadcastPayload.message,
-          icon: '/zaago-logo-favicon.png',
-          badge: '/zaago-delivery-favicon.png',
-          tag: `order-${order_id}`,
-          data: {
-            url: '/home',
-            order_id,
-            notification_type: broadcastPayload.notification_type,
-            play_audio: true,
-            timestamp: Date.now()
-          },
-          requireInteraction: true,
-          vibrate: [200, 100, 200]
-        };
+        // Fallback to external user IDs (email)
+        const agentEmails = nearbyAgents
+          .filter(a => a.email)
+          .map(a => a.email);
         
-        console.log(`📤 Sending Web Push to agent ${agent.id} (${agent.name})`);
-        
-        // Send push notification using fetch to subscription endpoint
-        const response = await fetch(subscription.endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'TTL': '86400' // 24 hours
-          },
-          body: JSON.stringify(pushPayload)
-        });
-        
-        if (response.ok) {
-          console.log(`✅ Web Push sent successfully to agent ${agent.id}`);
-        } else {
-          console.error(`❌ Web Push failed for agent ${agent.id}:`, response.status, response.statusText);
+        if (agentEmails.length > 0) {
+          try {
+            const oneSignalPayload = {
+              app_id: oneSignalAgentAppId,
+              include_external_user_ids: agentEmails,
+              headings: { en: broadcastPayload.title },
+              contents: { en: broadcastPayload.message },
+              data: {
+                order_id,
+                status,
+                notification_type: broadcastPayload.notification_type,
+                url: '/home',
+                play_audio: true,
+                timestamp: Date.now()
+              },
+              priority: 10,
+              ttl: 86400
+            };
+            
+            console.log('📤 Sending OneSignal notification via external_user_ids to', agentEmails.length, 'agents')
+            
+            const oneSignalResponse = await fetch('https://onesignal.com/api/v1/notifications', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${oneSignalAgentApiKey}`
+              },
+              body: JSON.stringify(oneSignalPayload)
+            });
+            
+            const oneSignalResult = await oneSignalResponse.json();
+            
+            if (oneSignalResponse.ok) {
+              console.log('✅ OneSignal notification (external_user_ids) sent successfully:', oneSignalResult);
+            } else {
+              console.error('❌ OneSignal API error (external_user_ids):', oneSignalResult);
+            }
+          } catch (oneSignalError) {
+            console.error('❌ Error sending OneSignal notification (external_user_ids):', oneSignalError);
+          }
         }
-        
-      } catch (error) {
-        console.error(`Error sending Web Push to agent ${agent.id}:`, error);
       }
-    });
+    }
     
-    await Promise.allSettled(pushPromises);
-    console.log(`📲 Web Push notifications processed for ${pushPromises.length} agents`)
+    console.log(`📲 OneSignal Push notifications processed for nearby agents`)
     
     // Update order notification sent flag
     await supabase
