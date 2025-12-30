@@ -117,31 +117,54 @@ async function pollForOneSignalBridge(
 }
 
 /**
- * Wait for OneSignal to be ready (poll device state)
+ * Poll for device subscription until userId is available
+ * This is called AFTER permission is granted
  */
-async function waitForOneSignalReady(maxAttempts = 10, intervalMs = 500): Promise<boolean> {
+async function pollForDeviceSubscription(
+  showDebugToasts: boolean = false
+): Promise<{ userId: string | null; isSubscribed: boolean }> {
+  const maxAttempts = 20; // 20 seconds total
+  const intervalMs = 1000;
+  
+  console.log('[OneSignal] Starting device subscription polling...');
+  
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const remainingSeconds = maxAttempts - attempt + 1;
+    
+    // Show countdown every 3 seconds
+    if (showDebugToasts && attempt % 3 === 1) {
+      toast({
+        title: `⏳ Waiting device state... ${remainingSeconds}s left`,
+        description: `Attempt ${attempt}/${maxAttempts}`,
+      });
+    }
+    
     try {
-      // First check if onesignal exists
-      if (!window.median?.onesignal) {
-        console.log(`[OneSignal] Bridge not available yet (attempt ${attempt}/${maxAttempts})`);
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-        continue;
-      }
+      const state = await window.median!.onesignal.getDeviceState();
+      console.log(`[OneSignal] Device state poll ${attempt}/${maxAttempts}:`, state);
       
-      const state = await window.median.onesignal.getDeviceState();
-      console.log(`[OneSignal] Device state check ${attempt}/${maxAttempts}:`, state);
-      if (state) {
-        console.log('[OneSignal] Ready ✓');
-        return true;
+      if (state?.userId) {
+        console.log('[OneSignal] Device subscribed! userId:', state.userId);
+        return { userId: state.userId, isSubscribed: true };
       }
     } catch (e) {
-      console.log(`[OneSignal] Not ready yet (attempt ${attempt}/${maxAttempts})`);
+      console.log(`[OneSignal] Device state error (attempt ${attempt}):`, e);
     }
+    
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
-  console.warn('[OneSignal] Failed to become ready after max attempts');
-  return false;
+  
+  // Timeout
+  console.error('[OneSignal] Device subscription polling timeout');
+  if (showDebugToasts) {
+    toast({
+      title: '❌ OneSignal not subscribed',
+      description: 'Check phone notification settings',
+      variant: 'destructive',
+    });
+  }
+  
+  return { userId: null, isSubscribed: false };
 }
 
 /**
@@ -164,10 +187,9 @@ export async function onesignalLogin(email: string): Promise<void> {
   try {
     console.log('[OneSignal] Starting login flow for:', email);
     
-    // Wait for OneSignal to be ready
-    const isReady = await waitForOneSignalReady();
-    if (!isReady) {
-      console.error('[OneSignal] Login aborted - not ready');
+    // Check if OneSignal bridge is available
+    if (!window.median?.onesignal) {
+      console.error('[OneSignal] Login aborted - bridge not available');
       loginInProgress = false;
       return;
     }
@@ -296,97 +318,81 @@ export async function registerPushNotifications(
   try {
     console.log('[OneSignal] Starting push registration for:', email);
 
-    // Wait for OneSignal device state to be ready
-    const isReady = await waitForOneSignalReady();
-    if (!isReady) {
-      console.error('[OneSignal] Push registration aborted - device state not ready');
+    // Step 2: Request push notification permission FIRST
+    if (showDebugToasts) {
+      toast({
+        title: '🔐 Requesting push permission...',
+        description: 'Please allow notifications when prompted',
+      });
+    }
+
+    let permissionGranted = false;
+    try {
+      console.log('[OneSignal] Requesting push permission...');
+      permissionGranted = await window.median!.onesignal.requestPermission();
+      console.log('[OneSignal] Permission result:', permissionGranted);
+    } catch (permError) {
+      console.log('[OneSignal] Permission request error (may already be granted):', permError);
+      // Assume granted if error (might already be granted)
+      permissionGranted = true;
+    }
+
+    // Wait 3 seconds for permission to take effect
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    if (showDebugToasts) {
+      if (permissionGranted) {
+        toast({
+          title: '✅ Permission granted',
+          description: 'Push notifications allowed',
+        });
+      } else {
+        toast({
+          title: '❌ Push permission required',
+          description: 'Enable in app settings to receive notifications',
+          variant: 'destructive',
+        });
+        return { success: false };
+      }
+    }
+
+    // If permission explicitly denied, stop
+    if (!permissionGranted) {
+      console.error('[OneSignal] Permission denied by user');
+      return { success: false };
+    }
+
+    // Step 3: Poll for device subscription (up to 20s)
+    const subscriptionResult = await pollForDeviceSubscription(showDebugToasts);
+
+    if (!subscriptionResult.userId) {
+      console.error('[OneSignal] Device never became subscribed');
       if (showDebugToasts) {
         toast({
-          title: '❌ Device state not ready',
-          description: 'OneSignal failed to return device state',
+          title: '❌ OneSignal not subscribed',
+          description: 'Check phone notification settings',
           variant: 'destructive',
         });
       }
       return { success: false };
     }
 
-    // Step 2: Request push notification permission
-    let permissionGranted = false;
-    try {
-      console.log('[OneSignal] Requesting push permission...');
-      permissionGranted = await window.median!.onesignal.requestPermission();
-      console.log('[OneSignal] Permission granted:', permissionGranted);
-      
-      if (showDebugToasts) {
-        if (permissionGranted) {
-          toast({
-            title: '✅ Permission granted',
-            description: 'Push notifications allowed',
-          });
-        } else {
-          toast({
-            title: '❌ Permission denied',
-            description: 'User denied push permission',
-            variant: 'destructive',
-          });
-        }
-      }
-    } catch (permError) {
-      console.log('[OneSignal] Permission request failed (may already be granted):', permError);
-      if (showDebugToasts) {
-        toast({
-          title: '⚠️ Permission check failed',
-          description: 'May already be granted',
-        });
-      }
+    const playerId = subscriptionResult.userId;
+
+    if (showDebugToasts) {
+      toast({
+        title: '✅ Device subscribed! Player ID: ' + playerId.substring(0, 8) + '...',
+        description: 'Ready to receive push notifications',
+      });
     }
 
-    // Brief pause for permission to take effect
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Login with email as external_id (sets the external identifier)
+    // Step 4: Login with email as external_id
     try {
       window.median!.onesignal.login(email);
       console.log('[OneSignal] External ID set:', email);
       await new Promise(resolve => setTimeout(resolve, 500)); // Wait for login to process
     } catch (loginError) {
       console.error('[OneSignal] Failed to set external_id:', loginError);
-    }
-
-    // Step 3: Get device state including player_id
-    let playerId: string | null = null;
-    try {
-      const state = await window.median!.onesignal.getDeviceState();
-      console.log('[OneSignal] Device state after registration:', state);
-      playerId = state?.userId || null;
-      
-      if (showDebugToasts) {
-        if (playerId) {
-          toast({
-            title: '✅ Player ID: ' + playerId.substring(0, 8) + '...',
-            description: 'Device registered with OneSignal',
-          });
-        } else {
-          toast({
-            title: '❌ No player ID available',
-            description: 'Device state returned null userId',
-            variant: 'destructive',
-          });
-        }
-      }
-      
-      if (!playerId) {
-        console.warn('[OneSignal] No player_id available yet');
-      }
-    } catch (stateError) {
-      console.error('[OneSignal] Failed to get device state:', stateError);
-      if (showDebugToasts) {
-        toast({
-          title: '❌ Failed to get device state',
-          description: String(stateError),
-          variant: 'destructive',
-        });
-      }
     }
 
     // Step 4: Send player_id + email to backend
