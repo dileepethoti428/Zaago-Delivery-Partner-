@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { cleanupOnLogout } from '@/utils/logoutCleanup';
+import { onesignalLogin, onesignalLogout } from '@/utils/onesignal';
 
 interface Profile {
   user_id: string;
@@ -73,12 +74,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Listen for auth changes
     supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] State change:', event);
       set({ session, user: session?.user ?? null });
       
       if (session?.user) {
         await get().fetchProfile();
+        
+        // OneSignal login on SIGNED_IN (deferred to avoid blocking)
+        if (event === 'SIGNED_IN' && session.user.email) {
+          setTimeout(() => {
+            onesignalLogin(session.user.email!);
+          }, 0);
+        }
       } else {
         set({ profile: null });
+        
+        // OneSignal logout on SIGNED_OUT
+        if (event === 'SIGNED_OUT') {
+          onesignalLogout();
+        }
       }
     });
 
