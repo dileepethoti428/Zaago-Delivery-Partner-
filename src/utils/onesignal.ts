@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 // Extended Median OneSignal interface with all methods
 declare global {
@@ -160,18 +161,42 @@ export function onesignalLogout(): void {
  * 
  * Returns success status for toast display
  */
-export async function registerPushNotifications(email: string): Promise<{
+export async function registerPushNotifications(
+  email: string,
+  showDebugToasts: boolean = false
+): Promise<{
   success: boolean;
   playerId?: string;
 }> {
+  // Step 1: Check if in Median app
   if (!isMedianApp()) {
     console.log('[OneSignal] Not in Median app, skipping push registration');
+    if (showDebugToasts) {
+      toast({
+        title: '❌ Not in Median app',
+        description: 'Push only works in the native APK',
+        variant: 'destructive',
+      });
+    }
     return { success: false };
+  }
+
+  if (showDebugToasts) {
+    toast({
+      title: '✅ Median app detected',
+      description: 'Proceeding with push registration...',
+    });
   }
 
   // Check if already registered for this email
   if (isPushRegisteredForEmail(email)) {
     console.log('[OneSignal] Push already registered for:', email);
+    if (showDebugToasts) {
+      toast({
+        title: '✅ Already registered',
+        description: `Push already set up for ${email}`,
+      });
+    }
     return { success: true };
   }
 
@@ -190,21 +215,45 @@ export async function registerPushNotifications(email: string): Promise<{
     const isReady = await waitForOneSignalReady();
     if (!isReady) {
       console.error('[OneSignal] Push registration aborted - not ready');
+      if (showDebugToasts) {
+        toast({
+          title: '❌ OneSignal not ready',
+          description: 'Failed to initialize after 10 attempts',
+          variant: 'destructive',
+        });
+      }
       return { success: false };
     }
 
-    // Request push notification permission
+    // Step 2: Request push notification permission
+    let permissionGranted = false;
     try {
       console.log('[OneSignal] Requesting push permission...');
-      const granted = await window.median!.onesignal.requestPermission();
-      console.log('[OneSignal] Permission granted:', granted);
+      permissionGranted = await window.median!.onesignal.requestPermission();
+      console.log('[OneSignal] Permission granted:', permissionGranted);
       
-      if (!granted) {
-        console.log('[OneSignal] Permission denied, continuing without push');
-        // Still continue to set external_id for targeting
+      if (showDebugToasts) {
+        if (permissionGranted) {
+          toast({
+            title: '✅ Permission granted',
+            description: 'Push notifications allowed',
+          });
+        } else {
+          toast({
+            title: '❌ Permission denied',
+            description: 'User denied push permission',
+            variant: 'destructive',
+          });
+        }
       }
     } catch (permError) {
       console.log('[OneSignal] Permission request failed (may already be granted):', permError);
+      if (showDebugToasts) {
+        toast({
+          title: '⚠️ Permission check failed',
+          description: 'May already be granted',
+        });
+      }
     }
 
     // Brief pause for permission to take effect
@@ -219,40 +268,82 @@ export async function registerPushNotifications(email: string): Promise<{
       console.error('[OneSignal] Failed to set external_id:', loginError);
     }
 
-    // Get device state including player_id
+    // Step 3: Get device state including player_id
     let playerId: string | null = null;
     try {
       const state = await window.median!.onesignal.getDeviceState();
       console.log('[OneSignal] Device state after registration:', state);
       playerId = state?.userId || null;
       
+      if (showDebugToasts) {
+        if (playerId) {
+          toast({
+            title: '✅ Player ID: ' + playerId.substring(0, 8) + '...',
+            description: 'Device registered with OneSignal',
+          });
+        } else {
+          toast({
+            title: '❌ No player ID available',
+            description: 'Device state returned null userId',
+            variant: 'destructive',
+          });
+        }
+      }
+      
       if (!playerId) {
         console.warn('[OneSignal] No player_id available yet');
       }
     } catch (stateError) {
       console.error('[OneSignal] Failed to get device state:', stateError);
+      if (showDebugToasts) {
+        toast({
+          title: '❌ Failed to get device state',
+          description: String(stateError),
+          variant: 'destructive',
+        });
+      }
     }
 
-    // Send player_id + email to backend (even if player_id is null, we record the email)
+    // Step 4: Send player_id + email to backend
     if (playerId) {
       try {
         console.log('[OneSignal] Storing player_id:', playerId, 'for email:', email);
-      const { error } = await supabase.functions.invoke('store-player-id', {
-        body: {
-          email,
-          playerId,
-          platform: detectPlatform(),
-          app_type: 'agent',
-        },
-      });
+        const { error } = await supabase.functions.invoke('store-player-id', {
+          body: {
+            email,
+            playerId,
+            platform: detectPlatform(),
+            app_type: 'agent',
+          },
+        });
 
         if (error) {
           console.error('[OneSignal] Failed to store player_id:', error);
+          if (showDebugToasts) {
+            toast({
+              title: '❌ Failed to store in backend',
+              description: error.message || 'Edge function error',
+              variant: 'destructive',
+            });
+          }
         } else {
           console.log('[OneSignal] Player ID stored successfully ✓');
+          if (showDebugToasts) {
+            toast({
+              title: '✅ Stored in backend',
+              description: 'Player ID saved to database',
+            });
+          }
         }
       } catch (storeError) {
         console.error('[OneSignal] Error calling store-player-id:', storeError);
+        if (showDebugToasts) {
+          toast({
+            title: '❌ Backend call failed',
+            description: String(storeError),
+            variant: 'destructive',
+          });
+        }
       }
     }
 
@@ -267,10 +358,33 @@ export async function registerPushNotifications(email: string): Promise<{
 
   } catch (error) {
     console.error('[OneSignal] Push registration failed:', error);
+    if (showDebugToasts) {
+      toast({
+        title: '❌ Registration failed',
+        description: String(error),
+        variant: 'destructive',
+      });
+    }
     return { success: false };
   } finally {
     registrationInProgress = false;
   }
+}
+
+/**
+ * Force re-register push notifications (clears localStorage + retries with debug toasts)
+ */
+export async function forceReRegisterPush(email: string): Promise<{ success: boolean; playerId?: string }> {
+  // Clear localStorage flags
+  clearPushRegistration();
+  
+  toast({
+    title: '🔄 Re-registering push...',
+    description: 'Clearing cache and retrying',
+  });
+  
+  // Call registration with debug toasts enabled
+  return registerPushNotifications(email, true);
 }
 
 /**
