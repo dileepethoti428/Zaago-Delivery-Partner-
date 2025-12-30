@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Toaster } from "@/components/ui/toaster";
@@ -9,6 +9,7 @@ import { useLocationStore } from "@/store/location";
 import { advancedCache } from '@/utils/advancedCache';
 import { agentSession } from '@/utils/agentSession';
 import { supabase } from '@/integrations/supabase/client';
+import { checkAndRegisterPush } from '@/utils/onesignal';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +70,22 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     };
     initDarkMode();
   }, [initAuth, initLocation]);
+
+  // Handle app resume - re-register push if needed
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const user = useAuthStore.getState().user;
+        if (user?.email) {
+          // Non-blocking push registration check
+          checkAndRegisterPush(user.email);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   return <>{children}</>;
 }
