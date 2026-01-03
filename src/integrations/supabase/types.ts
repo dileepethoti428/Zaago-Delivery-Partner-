@@ -2977,6 +2977,7 @@ export type Database = {
           delivery_payout: number | null
           delivery_time: string | null
           delivery_time_slot: string | null
+          distance_km: number | null
           id: string
           items: Json
           last_notified_at: string | null
@@ -3034,6 +3035,7 @@ export type Database = {
           delivery_payout?: number | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
+          distance_km?: number | null
           id?: string
           items: Json
           last_notified_at?: string | null
@@ -3091,6 +3093,7 @@ export type Database = {
           delivery_payout?: number | null
           delivery_time?: string | null
           delivery_time_slot?: string | null
+          distance_km?: number | null
           id?: string
           items?: Json
           last_notified_at?: string | null
@@ -6428,6 +6431,14 @@ export type Database = {
         Returns: Json
       }
       complete_delivery_trigger_free: {
+        Args: {
+          p_agent_id: string
+          p_order_id: string
+          p_payment_method?: string
+        }
+        Returns: Json
+      }
+      complete_delivery_zepto: {
         Args: {
           p_agent_id: string
           p_order_id: string

@@ -6,31 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Zepto/Blinkit style pricing for regular orders
-const REGULAR_ORDER_PRICING = {
-  BASE_PAY: 10,        // Fixed ₹10 per order
-  DISTANCE_RATE: 8,    // ₹8 per km
-};
-
-/**
- * Calculate payout using Zepto/Blinkit formula
- * Distance is rounded UP to 1 decimal (ceil) for fair agent pay
- */
-function calculatePayout(distanceKm: number) {
-  // Zepto style: Round UP to 1 decimal place (ceil)
-  const roundedDistance = Math.ceil((distanceKm || 0.1) * 10) / 10;
-  const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
-  const total = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
-  
-  return {
-    base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
-    distance_pay: Math.round(distancePay * 10) / 10,
-    distance_km: roundedDistance,
-    rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE,
-    total: Math.round(total * 10) / 10
-  };
-}
-
 // Subscription orders have NO payout - count only
 const SUBSCRIPTION_PAYOUT = 0;
 
@@ -40,7 +15,7 @@ serve(async (req) => {
   }
 
   try {
-    const { order_id, payment_method, qr_code_data, payment_id, order_type } = await req.json();
+    const { order_id, payment_method, order_type } = await req.json();
 
     // Determine if this is a daily/subscription order
     const isDailyOrder = order_type === 'daily';
@@ -50,8 +25,6 @@ serve(async (req) => {
       payment_method,
       order_type: order_type || 'regular',
       is_daily: isDailyOrder,
-      has_qr: !!qr_code_data,
-      payment_id: payment_id || 'none',
       timestamp: new Date().toISOString()
     });
 
@@ -77,7 +50,7 @@ serve(async (req) => {
 
     const token = authHeader.replace(/^Bearer\s+/i, '');
 
-    // Auth client (use ANON key) + pass JWT explicitly (Edge Functions have no persisted session)
+    // Auth client (use ANON key) + pass JWT explicitly
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
 
     // Service client for database operations
@@ -121,7 +94,7 @@ serve(async (req) => {
       console.log('📦 Processing daily/subscription order completion (NO PAYOUT)...');
       
       try {
-        // Step 1: Fetch daily order with basic relationships (no nested view joins)
+        // Step 1: Fetch daily order with basic relationships
         const { data: dailyOrder, error: dailyError } = await supabase
           .from('daily_orders')
           .select(`
@@ -207,7 +180,7 @@ serve(async (req) => {
               payment_status: normalizedPayment === 'ONLINE' ? 'paid' : 'collected',
               delivery_date: dailyOrder.date,
               completed_at: new Date().toISOString(),
-              delivery_payout: SUBSCRIPTION_PAYOUT // NO PAYOUT for subscription
+              delivery_payout: SUBSCRIPTION_PAYOUT
             });
 
           if (historyError) {
@@ -215,7 +188,6 @@ serve(async (req) => {
           }
 
           // Insert into agent_earnings_tracking for subscription orders
-          // Even though payout is 0, we need to track the delivery count
           const { error: trackingError } = await supabase
             .from('agent_earnings_tracking')
             .insert({
@@ -238,7 +210,6 @@ serve(async (req) => {
             console.log('✅ Subscription earnings tracking inserted');
           }
 
-          // NOTE: No wallet update for subscription orders - they have no payout
           console.log('✅ Daily order completed successfully (no payout for subscription)');
           result = { success: true, payout_amount: SUBSCRIPTION_PAYOUT };
         }
@@ -253,136 +224,56 @@ serve(async (req) => {
         );
       }
     } else {
-      // Regular order flow - use Zepto/Blinkit formula
-      
-      // First, get order to calculate payout
-      const { data: order } = await supabase
-        .from('orders')
-        .select('distance_km')
-        .eq('id', order_id)
-        .single();
-      
-      const distanceKm = order?.distance_km || 2.5;
-      const payoutData = calculatePayout(distanceKm);
-      const calculatedPayout = payoutData.total;
-      
-      console.log('💵 Regular order payout calculation:', payoutData);
-      
-      // Method 1: Try QR completion if QR code data provided
-      if (qr_code_data) {
-        console.log('📱 Attempting QR completion...');
-        try {
-          const { data: qrResult, error: qrError } = await supabase.rpc(
-            'qr_complete_delivery_v3',
-            {
-              p_qr_code_data: qr_code_data,
-              p_agent_id: agent.id,
-              p_payment_method: normalizedPayment
-            }
-          );
+      // Regular order flow - delegate 100% to DB via complete_delivery_zepto
+      console.log('📦 Processing regular order completion via Zepto RPC...');
 
-          if (!qrError && qrResult?.success) {
-            console.log('✅ QR completion successful');
-            // Override payout with calculated value if DB function returned wrong amount
-            result = {
-              ...qrResult,
-              payout_amount: qrResult.payout_amount || calculatedPayout,
-              payout_breakdown: payoutData
-            };
-          } else {
-            console.log('⚠️ QR completion failed, trying manual method');
-            console.log('QR Error:', qrError);
-            console.log('QR Result:', qrResult);
-          }
-        } catch (qrErr) {
-          console.log('⚠️ QR completion exception, trying manual method:', qrErr);
+      const { data, error } = await supabase.rpc(
+        'complete_delivery_zepto',
+        {
+          p_order_id: order_id,
+          p_agent_id: agent.id,
+          p_payment_method: normalizedPayment
         }
+      );
+
+      if (error) {
+        console.error('❌ complete_delivery_zepto failed:', error);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: error.message || 'Delivery completion failed'
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      // Method 2: Try manual completion if QR failed or not provided
-      if (!result) {
-        console.log('📝 Attempting manual completion...');
-        try {
-          const { data: manualResult, error: manualError } = await supabase.rpc(
-            'manual_complete_delivery',
-            {
-              p_order_id: order_id,
-              p_agent_id: agent.id,
-              p_payment_method: normalizedPayment
-            }
-          );
-
-          if (!manualError && manualResult?.success) {
-            console.log('✅ Manual completion successful');
-            result = {
-              ...manualResult,
-              payout_amount: manualResult.payout_amount || calculatedPayout,
-              payout_breakdown: payoutData
-            };
-          } else {
-            console.log('⚠️ Manual completion failed, trying simple method');
-            console.log('Manual Error:', manualError?.message || manualError);
-            console.log('Manual Result:', manualResult);
-          }
-        } catch (manualErr) {
-          console.log('⚠️ Manual completion exception, trying simple method:', manualErr);
-        }
+      if (!data?.success) {
+        console.error('❌ complete_delivery_zepto returned failure:', data);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: data?.error || 'Delivery completion failed'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      // Method 3: Simple fallback as last resort
-      if (!result) {
-        console.log('🆘 Attempting simple fallback completion...');
-        try {
-          const { data: simpleResult, error: simpleError } = await supabase.rpc(
-            'simple_mark_delivered',
-            {
-              p_order_id: order_id,
-              p_agent_id: agent.id,
-              p_payment_method: normalizedPayment
-            }
-          );
-
-          if (!simpleError && simpleResult?.success) {
-            console.log('✅ Simple completion successful');
-            result = {
-              ...simpleResult,
-              payout_amount: simpleResult.payout_amount || calculatedPayout,
-              payout_breakdown: payoutData
-            };
-          } else {
-            console.error('❌ All completion methods failed');
-            console.error('Simple Error:', simpleError?.message || simpleError);
-            console.error('Simple Result:', simpleResult);
-            return new Response(
-              JSON.stringify({ 
-                success: false, 
-                error: simpleError?.message || 'All delivery completion methods failed',
-                details: simpleError
-              }),
-              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-        } catch (simpleErr) {
-          console.error('❌ Simple completion exception:', simpleErr);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'All delivery completion methods failed',
-              details: simpleErr
-            }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
+      console.log('✅ Zepto completion successful:', data);
+      result = {
+        success: true,
+        payout_amount: data.payout_amount,
+        distance_km: data.distance_km,
+        payout_breakdown: data.payout_breakdown,
+        already_completed: data.already_completed || false
+      };
     }
 
-    // Return success (including already completed cases)
+    // Return success
     const finalPayout = isDailyOrder ? SUBSCRIPTION_PAYOUT : (result.payout_amount || 0);
     
     console.log('🎉 Delivery completed successfully via unified flow', {
       order_id,
       order_type: isDailyOrder ? 'subscription' : 'regular',
-      method_used: qr_code_data ? 'qr_scan' : 'manual',
       payment_method: normalizedPayment,
       already_completed: result.already_completed || false,
       payout_amount: finalPayout,
@@ -395,11 +286,10 @@ serve(async (req) => {
         message: result.already_completed ? 'Order already completed' : 'Delivery completed successfully',
         order_id,
         order_type: isDailyOrder ? 'subscription' : 'regular',
-        method_used: qr_code_data ? 'qr_scan' : 'manual',
         payout_amount: finalPayout,
         payout_breakdown: isDailyOrder ? null : result.payout_breakdown,
-        already_completed: result.already_completed || false,
-        ...result
+        distance_km: result.distance_km || 0,
+        already_completed: result.already_completed || false
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
