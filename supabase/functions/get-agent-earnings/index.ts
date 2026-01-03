@@ -11,16 +11,8 @@ interface EarningsSummary {
   hours: number;
 }
 
-interface PayoutConfig {
-  base_pay_amount: number;
-  base_pay_distance_km: number;
-  per_km_min_rate: number;
-  per_km_max_rate: number;
-  peak_hour_start: string;
-  peak_hour_end: string;
-  peak_hour_order_threshold: number;
-  peak_hour_bonus_amount: number;
-}
+// PayoutConfig removed - no longer recalculating payouts in JS
+// All payout logic is now in the database (complete_delivery_zepto)
 
 interface DistanceStats {
   distance_today: number;
@@ -76,16 +68,7 @@ Deno.serve(async (req) => {
 
     console.log('✅ Agent ID:', agent.id);
 
-    // Fetch payout configuration
-    const { data: payoutConfig } = await supabase
-      .from('payout_config')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    console.log('📊 Payout config loaded:', payoutConfig ? 'Yes' : 'No');
+    // Payout config no longer needed - all payout logic is in DB
 
     // Fetch delivery_history as PRIMARY source (contains all completed deliveries)
     const { data: deliveryHistory, error: historyError } = await supabase
@@ -189,62 +172,25 @@ Deno.serve(async (req) => {
 
     console.log('📏 Distance stats:', distanceStats);
 
-    // Format recent earnings from delivery_history (primary source)
-    const basePay = payoutConfig?.base_pay_amount || 40;
-    const baseDistanceKm = payoutConfig?.base_pay_distance_km || 3;
-    const perKmRate = payoutConfig?.per_km_max_rate || 9;
-
+    // Format recent earnings from delivery_history (READ-ONLY - trust DB 100%)
     const recentEarnings = (deliveryHistory || []).slice(0, 10).map(delivery => {
-      const distance = delivery.distance_traveled || 0;
-      
-      const distancePay = distance > baseDistanceKm ? 
-        (distance - baseDistanceKm) * perKmRate : 0;
-      
-      const deliveryTime = new Date(delivery.completed_at).toTimeString().substring(0, 5);
-      const peakStart = payoutConfig?.peak_hour_start || '06:00';
-      const peakEnd = payoutConfig?.peak_hour_end || '12:00';
-      const isPeakHour = deliveryTime >= peakStart && deliveryTime <= peakEnd;
-      
-      const subtotal = basePay + distancePay;
-      const surgeAmount = isPeakHour ? subtotal * 0.15 : 0;
-      const totalBeforeFee = subtotal + surgeAmount;
-      const platformFee = 13;
-      const expectedTotal = totalBeforeFee - platformFee;
-      
-      // Use actual delivery_payout if available
-      const actualPayout = delivery.delivery_payout || expectedTotal;
-      const peakBonus = Math.max(0, actualPayout - expectedTotal);
-      
       return {
         id: delivery.id,
         order_id: delivery.order_id,
         customer_name: delivery.customer_name || 'Customer',
-        amount: actualPayout,
+        amount: delivery.delivery_payout ?? 0,  // Trust DB
         time: new Date(delivery.completed_at).toLocaleTimeString('en-US', { 
           hour: 'numeric', 
           minute: '2-digit',
           hour12: true 
         }),
         delivery_date: delivery.delivery_date,
-        distance_km: distance,
-        breakdown: {
-          base_pay: basePay,
-          distance_pay: Math.round(distancePay * 100) / 100,
-          peak_bonus: Math.round(peakBonus * 100) / 100
-        }
+        distance_km: delivery.distance_traveled ?? 0,  // Trust DB
+        breakdown: delivery.payout_breakdown ?? null   // If DB didn't store it, don't invent it
       };
     });
 
-    console.log(`✅ Formatted ${recentEarnings.length} recent earnings`);
-
-    // Count today's peak hour orders from delivery_history
-    const peakStart = payoutConfig?.peak_hour_start || '06:00';
-    const peakEnd = payoutConfig?.peak_hour_end || '12:00';
-    
-    const peakOrdersToday = todayHistory.filter(delivery => {
-      const deliveryTime = new Date(delivery.completed_at).toTimeString().substring(0, 5);
-      return deliveryTime >= peakStart && deliveryTime <= peakEnd;
-    }).length;
+    console.log(`✅ Formatted ${recentEarnings.length} recent earnings (READ-ONLY from DB)`);
 
     // Calculate performance metrics
     const todayData = earningsSummary.today;
@@ -262,8 +208,6 @@ Deno.serve(async (req) => {
           earnings_summary: earningsSummary,
           distance_stats: distanceStats,
           recent_earnings: recentEarnings,
-          payout_config: payoutConfig,
-          peak_orders_today: peakOrdersToday,
           performance_metrics: performanceMetrics
         }
       }),
