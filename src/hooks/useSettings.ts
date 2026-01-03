@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/auth';
 
 interface AgentSettings {
   profile: any;
@@ -10,14 +11,21 @@ interface AgentSettings {
 }
 
 export function useAgentSettings() {
+  const { session } = useAuthStore();
+  
   return useQuery({
     queryKey: ['agent-settings'],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('get-agent-settings');
+      const { data, error } = await supabase.functions.invoke('get-agent-settings', {
+        headers: {
+          Authorization: `Bearer ${session!.access_token}`,
+        },
+      });
       
       if (error) throw error;
       return data as AgentSettings;
     },
+    enabled: !!session?.access_token,
   });
 }
 

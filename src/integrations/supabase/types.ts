@@ -1946,6 +1946,27 @@ export type Database = {
         }
         Relationships: []
       }
+      devices: {
+        Row: {
+          fcm_token: string
+          id: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          fcm_token: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          fcm_token?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       driver_locations: {
         Row: {
           accuracy: number | null
@@ -2122,6 +2143,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fcm_tokens: {
+        Row: {
+          created_at: string | null
+          id: string
+          platform: string | null
+          token: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          platform?: string | null
+          token?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          platform?: string | null
+          token?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       flexible_payment_requests: {
         Row: {
@@ -2416,6 +2461,45 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_queue: {
+        Row: {
+          body: string
+          created_at: string | null
+          data: Json | null
+          event_type: string | null
+          id: string
+          order_id: string | null
+          processed: boolean | null
+          target: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          data?: Json | null
+          event_type?: string | null
+          id?: string
+          order_id?: string | null
+          processed?: boolean | null
+          target?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          data?: Json | null
+          event_type?: string | null
+          id?: string
+          order_id?: string | null
+          processed?: boolean | null
+          target?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notification_recipients: {
         Row: {
           created_at: string
@@ -2466,48 +2550,72 @@ export type Database = {
           },
         ]
       }
+      notification_types: {
+        Row: {
+          body_template: string
+          key: string
+          title: string
+        }
+        Insert: {
+          body_template: string
+          key: string
+          title: string
+        }
+        Update: {
+          body_template?: string
+          key?: string
+          title?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
-          created_at: string
-          id: string
-          is_read: boolean
+          body: string
+          created_at: string | null
+          data: Json | null
+          id: number
+          is_read: boolean | null
           link: string | null
-          message: string
+          message: string | null
           metadata: Json | null
           order_id: string | null
           reference_id: string | null
-          role: string
+          role: string | null
           title: string
-          type: string
-          user_id: string
+          type: string | null
+          user_id: string | null
         }
         Insert: {
-          created_at?: string
-          id?: string
-          is_read?: boolean
+          body: string
+          created_at?: string | null
+          data?: Json | null
+          id?: number
+          is_read?: boolean | null
           link?: string | null
-          message: string
+          message?: string | null
           metadata?: Json | null
           order_id?: string | null
           reference_id?: string | null
-          role?: string
+          role?: string | null
           title: string
-          type: string
-          user_id: string
+          type?: string | null
+          user_id?: string | null
         }
         Update: {
-          created_at?: string
-          id?: string
-          is_read?: boolean
+          body?: string
+          created_at?: string | null
+          data?: Json | null
+          id?: number
+          is_read?: boolean | null
           link?: string | null
-          message?: string
+          message?: string | null
           metadata?: Json | null
           order_id?: string | null
           reference_id?: string | null
-          role?: string
+          role?: string | null
           title?: string
-          type?: string
-          user_id?: string
+          type?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -3944,6 +4052,36 @@ export type Database = {
           target_type?: string | null
           target_user_id?: string | null
           title?: string
+        }
+        Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          app_type: string
+          created_at: string | null
+          device_type: string
+          fcm_token: string
+          id: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          app_type: string
+          created_at?: string | null
+          device_type: string
+          fcm_token: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          app_type?: string
+          created_at?: string | null
+          device_type?: string
+          fcm_token?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
