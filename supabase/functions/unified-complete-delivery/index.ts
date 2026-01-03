@@ -84,8 +84,21 @@ serve(async (req) => {
 
     console.log('✅ Agent authenticated:', agent.name);
 
-    // Normalize payment method
-    const normalizedPayment = payment_method?.toUpperCase() === 'ONLINE' ? 'ONLINE' : 'COD';
+    // Normalize payment method to match RPC enum: 'cod' | 'razorpay' | 'upi' | 'subscription_auto'
+    let normalizedPayment = 'cod';
+    if (payment_method) {
+      const pm = payment_method.toLowerCase();
+      if (pm === 'online' || pm === 'razorpay') {
+        normalizedPayment = 'razorpay';
+      } else if (pm === 'upi') {
+        normalizedPayment = 'upi';
+      } else if (pm === 'subscription_auto') {
+        normalizedPayment = 'subscription_auto';
+      } else {
+        normalizedPayment = 'cod';
+      }
+    }
+    console.log('💳 Payment method normalized:', { original: payment_method, normalized: normalizedPayment });
 
     let result: any = null;
 
@@ -177,7 +190,7 @@ serve(async (req) => {
               }],
               total_amount: totalAmount,
               payment_method: normalizedPayment,
-              payment_status: normalizedPayment === 'ONLINE' ? 'paid' : 'collected',
+              payment_status: normalizedPayment === 'razorpay' || normalizedPayment === 'upi' ? 'paid' : 'collected',
               delivery_date: dailyOrder.date,
               completed_at: new Date().toISOString(),
               delivery_payout: SUBSCRIPTION_PAYOUT
