@@ -193,11 +193,20 @@ export default function ManageDelivery() {
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
+      // Get session token for explicit Authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Session expired. Please login again.');
+      }
+      
       const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
         body: {
           order_id: order.id,
           payment_method: paymentMethod,
-          order_type: orderType, // Pass order type (daily or order)
+          order_type: orderType,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
       });
 
@@ -205,7 +214,6 @@ export default function ManageDelivery() {
         throw new Error(data?.error || 'Failed to complete delivery');
       }
 
-      // Show success message based on payment method
       const successMessage = paymentMethod === 'COD' 
         ? 'Product delivered successfully - COD ✓'
         : 'Product delivered successfully - Paid Online ✓';
@@ -215,7 +223,6 @@ export default function ManageDelivery() {
         description: successMessage,
       });
       
-      // Navigate back after a short delay - use browser history for instant back
       setTimeout(() => navigate(-1), 1500);
       
     } catch (error: any) {
@@ -235,8 +242,13 @@ export default function ManageDelivery() {
     try {
       setIsCompleting(true);
       
-      // Pass qr_id for server-side payment verification
       const { supabase } = await import('@/integrations/supabase/client');
+      
+      // Get session token for explicit Authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Session expired. Please login again.');
+      }
       
       const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
         body: {
@@ -244,7 +256,10 @@ export default function ManageDelivery() {
           payment_method: 'ONLINE',
           qr_code_data: qrData?.qr_string,
           payment_id: qrData?.qr_id,
-          order_type: orderType, // Pass order type (daily or order)
+          order_type: orderType,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
       });
 
