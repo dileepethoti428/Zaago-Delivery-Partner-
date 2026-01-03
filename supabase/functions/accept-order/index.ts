@@ -81,12 +81,12 @@ serve(async (req) => {
       .from('orders')
       .update({
         status: 'assigned',
-        agent_id: agentData.id,
+        assigned_agent_id: agentData.id,  // FIXED: was agent_id
         accepted_at: acceptedAt,
         updated_at: acceptedAt
       })
       .eq('id', order_id)
-      .is('agent_id', null)  // CRITICAL: Only if not yet assigned
+      .is('assigned_agent_id', null)  // FIXED: was agent_id - CRITICAL: Only if not yet assigned
       .in('status', ['accepted', 'packed'])  // Only if still available
       .select(`*, items`)
       .maybeSingle();
