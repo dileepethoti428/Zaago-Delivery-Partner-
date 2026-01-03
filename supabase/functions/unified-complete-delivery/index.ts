@@ -93,13 +93,13 @@ serve(async (req) => {
       );
     }
 
-    // Get agent details
+    // Get agent details - use maybeSingle() to avoid throwing on no match
     const { data: agent, error: agentError } = await supabase
       .from('delivery_agents')
       .select('id, name, email')
       .eq('email', user.email)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (agentError || !agent) {
       console.error('❌ Agent not found:', agentError);
