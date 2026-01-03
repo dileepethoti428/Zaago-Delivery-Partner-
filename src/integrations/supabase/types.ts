@@ -6443,7 +6443,7 @@ export type Database = {
             Args: {
               p_agent_id: string
               p_order_id: string
-              p_payment_method?: string
+              p_payment_method: string
             }
             Returns: Json
           }
