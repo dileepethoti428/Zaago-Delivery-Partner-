@@ -6,11 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Zepto/Blinkit style pricing constants for display
-const REGULAR_ORDER_PRICING = {
-  BASE_PAY: 10,
-  DISTANCE_RATE: 8,
-};
+// REGULAR_ORDER_PRICING removed - no longer recalculating payouts in JS
+// All payout logic is now in the database (complete_delivery_zepto)
 
 console.log("Get agent live earnings function started")
 
@@ -104,7 +101,7 @@ serve(async (req) => {
       .select('id')
       .eq('email', user.email)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (agentError || !agentData) {
       console.error('❌ Agent not found:', { email: user.email, error: agentError });
@@ -239,19 +236,8 @@ serve(async (req) => {
       const actualPayout = tracking.actual_payout ? parseFloat(tracking.actual_payout) : null;
       const orderType = tracking.order_type || 'regular';
       
-      // Ensure payout_breakdown exists for regular orders
-      // If not stored, reconstruct from actual values
-      let breakdown = tracking.payout_breakdown;
-      if (!breakdown && orderType === 'regular') {
-        // Reconstruct breakdown for regular orders
-        const distancePay = Math.round(distanceKm * REGULAR_ORDER_PRICING.DISTANCE_RATE * 10) / 10;
-        breakdown = {
-          base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
-          distance_pay: distancePay,
-          distance_km: distanceKm,
-          rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
-        };
-      }
+      // READ-ONLY: Trust DB 100% - don't invent breakdown
+      const breakdown = tracking.payout_breakdown ?? null;
       
       return {
         order_id: tracking.order_id,
