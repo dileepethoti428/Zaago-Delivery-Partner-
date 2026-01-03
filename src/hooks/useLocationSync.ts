@@ -54,6 +54,18 @@ export function useLocationSync() {
       }
 
       const { latitude, longitude, accuracy, heading, speed } = position.coords;
+
+      // Validate coordinates before sending
+      if (
+        typeof latitude !== 'number' ||
+        typeof longitude !== 'number' ||
+        isNaN(latitude) ||
+        isNaN(longitude)
+      ) {
+        console.warn('[LocationSync] Invalid coordinates (non-blocking):', { latitude, longitude });
+        return;
+      }
+
       console.log('[LocationSync] Syncing location:', { latitude, longitude });
 
       // Send to edge function with full error handling
@@ -91,8 +103,10 @@ export function useLocationSync() {
   }, [session?.access_token]);
 
   useEffect(() => {
-    // Sync on mount (app open)
-    syncLocation();
+    // Delay initial sync by 2s to allow GPS to warm up
+    const initialSyncTimeout = setTimeout(() => {
+      syncLocation();
+    }, 2000);
 
     // Sync when app comes to foreground
     const handleVisibilityChange = () => {
@@ -112,6 +126,7 @@ export function useLocationSync() {
     window.addEventListener('focus', handleFocus);
 
     return () => {
+      clearTimeout(initialSyncTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
