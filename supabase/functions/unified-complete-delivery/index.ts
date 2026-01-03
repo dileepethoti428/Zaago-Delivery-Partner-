@@ -48,18 +48,16 @@ serve(async (req) => {
       );
     }
 
-    // Auth client with Authorization header in global config + persistSession: false
-    // This is REQUIRED for Edge Functions - prevents AuthSessionMissingError
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false }
-    });
+    // Extract token from Authorization header
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    console.log('🔐 Auth header present:', !!authHeader, 'Token prefix:', token?.slice(0, 10));
 
     // Service client for database operations (bypasses RLS)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user - no need to pass token, it's in the global headers
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    // Auth client - use service key but validate user token explicitly
+    // CRITICAL: Pass token explicitly to getUser() - Edge Functions have no session storage
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
       console.error('❌ Authentication failed:', authError);
