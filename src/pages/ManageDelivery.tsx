@@ -214,14 +214,22 @@ export default function ManageDelivery() {
         throw new Error(data?.error || 'Failed to complete delivery');
       }
 
-      const successMessage = paymentMethod === 'COD' 
-        ? 'Product delivered successfully - COD ✓'
-        : 'Product delivered successfully - Paid Online ✓';
-      
-      toast({
-        title: 'Delivery Completed!',
-        description: successMessage,
-      });
+      // Handle already completed gracefully (Zepto-style idempotency)
+      if (data.already_completed) {
+        toast({
+          title: 'Already Delivered',
+          description: 'This order was already marked as delivered.',
+        });
+      } else {
+        const successMessage = paymentMethod === 'COD' 
+          ? 'Product delivered successfully - COD ✓'
+          : 'Product delivered successfully - Paid Online ✓';
+        
+        toast({
+          title: 'Delivery Completed!',
+          description: successMessage,
+        });
+      }
       
       setTimeout(() => navigate(-1), 1500);
       
@@ -267,10 +275,18 @@ export default function ManageDelivery() {
         throw new Error(data?.error || 'Payment completed but delivery marking failed');
       }
 
-      toast({
-        title: 'Delivery Completed!',
-        description: 'Product delivered successfully - Paid Online ✓',
-      });
+      // Handle already completed gracefully (Zepto-style idempotency)
+      if (data.already_completed) {
+        toast({
+          title: 'Already Delivered',
+          description: 'This order was already marked as delivered.',
+        });
+      } else {
+        toast({
+          title: 'Delivery Completed!',
+          description: 'Product delivered successfully - Paid Online ✓',
+        });
+      }
       
       setTimeout(() => navigate(-1), 1500);
       
