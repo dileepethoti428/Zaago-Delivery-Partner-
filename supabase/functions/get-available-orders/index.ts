@@ -158,10 +158,12 @@ serve(async (req) => {
 
     // Get two types of orders:
     // 1. Available orders (packed, unassigned) - for agent to accept
-    // 2. Agent's own active orders (assigned/picked_up) - to track their deliveries until completion
+    // 2. Agent's own active orders - to track their deliveries until completion
+    //    Include all active statuses: assigned, accepted, picked_up, out_for_delivery, payment_pending
     
-    // Query: Get available orders (packed, unassigned) OR agent's active orders (assigned/picked_up)
+    // Query: Get available orders (packed, unassigned) OR agent's active orders (multiple statuses)
     // Check BOTH agent_id AND assigned_agent_id columns for robustness
+    const activeStatuses = ['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending'];
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -171,7 +173,7 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .or(`and(status.eq.packed,agent_id.is.null,assigned_agent_id.is.null),and(status.in.(assigned,picked_up),or(agent_id.eq.${deliveryAgentId},assigned_agent_id.eq.${deliveryAgentId}))`)
+      .or(`and(status.eq.packed,agent_id.is.null,assigned_agent_id.is.null),and(status.in.(${activeStatuses.join(',')}),or(agent_id.eq.${deliveryAgentId},assigned_agent_id.eq.${deliveryAgentId}))`)
       .order('created_at', { ascending: true }); // Show oldest orders first
 
     // Filter out any orders that have been completed
@@ -224,10 +226,12 @@ serve(async (req) => {
 
     // Filter: Keep available orders (both columns null) OR orders assigned to current agent (either column)
     // Also exclude orders that have been completed (are in delivery_completions)
+    // Include all active statuses for agent's own orders
+    const activeStatusSet = new Set(['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending']);
     let availableOrders = orders?.filter(order => 
       ((order.agent_id === null && order.assigned_agent_id === null && order.status === 'packed') || 
        ((order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) && 
-        ['assigned', 'picked_up'].includes(order.status))) &&
+        activeStatusSet.has(order.status))) &&
       !completedIds.has(order.id)
     ) || [];
     
@@ -236,8 +240,8 @@ serve(async (req) => {
     // Filter out rejected orders (only applies to available orders, not assigned ones)
     const rejectedOrderIds = rejections?.map(r => r.order_id) || [];
     let filteredOrders = availableOrders.filter(order => {
-      // Don't filter out orders already assigned to this agent
-      if (order.agent_id === deliveryAgentId) return true;
+      // Don't filter out orders already assigned to this agent (check BOTH columns)
+      if (order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) return true;
       // Filter out rejected available orders
       return !rejectedOrderIds.includes(order.id);
     });

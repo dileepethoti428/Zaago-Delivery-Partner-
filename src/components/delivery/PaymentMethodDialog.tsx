@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Banknote, QrCode } from 'lucide-react';
 
@@ -20,9 +20,9 @@ export function PaymentMethodDialog({
       <DialogContent className="sm:max-w-md rounded-3xl">
         <DialogHeader>
           <DialogTitle className="text-xl text-center">Choose Payment Method</DialogTitle>
-          <p className="text-center text-muted-foreground">
+          <DialogDescription className="text-center">
             Total Amount: <span className="font-bold text-primary">₹{amount}</span>
-          </p>
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-3 pt-4">
