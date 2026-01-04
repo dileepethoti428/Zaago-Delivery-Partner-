@@ -67,6 +67,13 @@ export default function ManageDelivery() {
     );
   }, [order]);
 
+  // Check if order is in terminal state (delivered/cancelled/completed)
+  const isTerminalState = useMemo(() => {
+    if (!order) return false;
+    const terminalStatuses = ['delivered', 'cancelled', 'canceled', 'completed'];
+    return terminalStatuses.includes(order.status?.toLowerCase());
+  }, [order?.status]);
+
   useEffect(() => {
     if (!id) return;
 
@@ -581,60 +588,74 @@ export default function ManageDelivery() {
 
           {/* Action Buttons */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t-2 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant="default"
-                className="rounded-xl h-12 text-sm font-medium"
-                onClick={() => {
-                  const coords = order.customer.coordinates;
-                  if (coords?.lat && coords?.lng) {
-                    openGoogleMapsCoordinates(coords.lat, coords.lng);
-                  } else if (displayAddress) {
-                    openGoogleMapsAddress(displayAddress);
-                  } else {
-                    toast({
-                      variant: 'destructive',
-                      title: 'Error',
-                      description: 'Delivery address not available',
-                    });
-                  }
-                }}
-              >
-                <Navigation className="h-5 w-5 mr-2" />
-                Navigate to Customer
-              </Button>
-              <Button
-                className="rounded-xl h-12 text-sm font-medium"
-                onClick={handleMarkAsDelivered}
-                disabled={!['pending', 'assigned', 'picked_up'].includes(order.status) || isCompleting || isGeneratingQR}
-              >
-                {isCompleting ? (
-                  <>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Completing...
-                  </>
-                ) : isGeneratingQR ? (
-                  <>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Generating QR...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-5 w-5 mr-2" />
-                    Mark as Delivered
-                  </>
-                )}
-              </Button>
-            </div>
+            {/* Navigate button - always visible */}
             <Button
-              variant="destructive"
+              variant="default"
               className="w-full rounded-xl h-12 text-sm font-medium"
-              onClick={handleCancel}
-              disabled={!['pending', 'assigned', 'picked_up'].includes(order.status)}
+              onClick={() => {
+                const coords = order.customer.coordinates;
+                if (coords?.lat && coords?.lng) {
+                  openGoogleMapsCoordinates(coords.lat, coords.lng);
+                } else if (displayAddress) {
+                  openGoogleMapsAddress(displayAddress);
+                } else {
+                  toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: 'Delivery address not available',
+                  });
+                }
+              }}
             >
-              <XCircle className="h-5 w-5 mr-2" />
-              Cancel Delivery
+              <Navigation className="h-5 w-5 mr-2" />
+              Navigate to Customer
             </Button>
+
+            {/* Action buttons - only show if NOT in terminal state */}
+            {!isTerminalState && (
+              <>
+                <Button
+                  className="w-full rounded-xl h-12 text-sm font-medium"
+                  onClick={handleMarkAsDelivered}
+                  disabled={isCompleting || isGeneratingQR}
+                >
+                  {isCompleting ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Completing...
+                    </>
+                  ) : isGeneratingQR ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Generating QR...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                      Mark as Delivered
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="w-full rounded-xl h-12 text-sm font-medium"
+                  onClick={handleCancel}
+                >
+                  <XCircle className="h-5 w-5 mr-2" />
+                  Cancel Delivery
+                </Button>
+              </>
+            )}
+
+            {/* Show status indicator for terminal states */}
+            {isTerminalState && (
+              <div className="flex items-center justify-center gap-2 py-3 text-muted-foreground">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <span className="text-sm font-medium">
+                  {order.status === 'delivered' ? 'Order Already Delivered' : 'Order Closed'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
