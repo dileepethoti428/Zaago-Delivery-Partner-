@@ -70,19 +70,34 @@ export default function ManageDelivery() {
   useEffect(() => {
     if (!id) return;
 
-    const fetchOrder = async () => {
+    const fetchOrder = async (retryCount = 0) => {
       try {
         setLoading(true);
         const data = await getOrderDetails(id, { type: orderType });
-        setOrder(data);
+        
+        if (data) {
+          setOrder(data);
+        } else if (retryCount < 2) {
+          // Order might not be synced yet after accept - retry with delay
+          console.log(`Order not found, retrying (${retryCount + 1}/2)...`);
+          await new Promise(r => setTimeout(r, 800));
+          return fetchOrder(retryCount + 1);
+        } else {
+          setOrder(null);
+        }
       } catch (error: any) {
         console.error('Failed to load order:', error);
+        if (retryCount < 2) {
+          // Retry on error as well
+          console.log(`Fetch error, retrying (${retryCount + 1}/2)...`);
+          await new Promise(r => setTimeout(r, 800));
+          return fetchOrder(retryCount + 1);
+        }
         toast({
           variant: 'destructive',
           title: 'Error',
           description: error?.message || 'Failed to load order details',
         });
-        // Don't navigate away immediately - show the "not found" UI
         setOrder(null);
       } finally {
         setLoading(false);

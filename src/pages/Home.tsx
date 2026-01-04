@@ -127,6 +127,8 @@ export default function Home() {
     
     try {
       await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
+      // Small delay to allow backend to sync before navigating
+      await new Promise(r => setTimeout(r, 300));
       navigate(`/manage-delivery/${orderId}`);
     } finally {
       setProcessingOrder(null);
