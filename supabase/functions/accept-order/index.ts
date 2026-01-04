@@ -107,6 +107,13 @@ serve(async (req) => {
     // This combines the check + update in ONE query
     // If agent_id is already set, 0 rows are updated
     // ============================================
+    console.log(`📋 Attempting atomic update for order ${order_id}`, {
+      current_status: existingOrder.status,
+      current_agent_id: existingOrder.agent_id,
+      current_assigned_agent_id: existingOrder.assigned_agent_id,
+      new_agent_id: agentData.id
+    });
+
     const { data: updatedOrder, error: updateError } = await supabase
       .from('orders')
       .update({
@@ -117,7 +124,8 @@ serve(async (req) => {
         updated_at: acceptedAt
       })
       .eq('id', order_id)
-      .or('agent_id.is.null,assigned_agent_id.is.null')  // Check either column is null
+      .is('agent_id', null)               // Must be unassigned
+      .is('assigned_agent_id', null)      // Must be unassigned
       .in('status', ['accepted', 'packed'])  // Only if still available
       .select(`*, items`)
       .maybeSingle();
