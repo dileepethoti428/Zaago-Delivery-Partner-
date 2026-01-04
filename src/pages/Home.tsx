@@ -126,10 +126,13 @@ export default function Home() {
     setProcessingOrder(orderId);
     
     try {
-      await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
+      const result = await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
       // Small delay to allow backend to sync before navigating
       await new Promise(r => setTimeout(r, 300));
       navigate(`/manage-delivery/${orderId}`);
+    } catch (error) {
+      // Error already handled in mutation onError - don't navigate on failure
+      console.log('Accept order failed, staying on Home page');
     } finally {
       setProcessingOrder(null);
     }
