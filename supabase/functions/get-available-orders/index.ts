@@ -160,6 +160,8 @@ serve(async (req) => {
     // 1. Available orders (packed, unassigned) - for agent to accept
     // 2. Agent's own active orders (assigned/picked_up) - to track their deliveries until completion
     
+    // Query: Get available orders (packed, unassigned) OR agent's active orders (assigned/picked_up)
+    // Check BOTH agent_id AND assigned_agent_id columns for robustness
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -169,7 +171,7 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
-      .or(`and(status.eq.packed,agent_id.is.null),and(status.in.(assigned,picked_up),agent_id.eq.${deliveryAgentId})`)
+      .or(`and(status.eq.packed,agent_id.is.null,assigned_agent_id.is.null),and(status.in.(assigned,picked_up),or(agent_id.eq.${deliveryAgentId},assigned_agent_id.eq.${deliveryAgentId}))`)
       .order('created_at', { ascending: true }); // Show oldest orders first
 
     // Filter out any orders that have been completed
@@ -220,11 +222,12 @@ serve(async (req) => {
     
     console.log(`Agent ${deliveryAgentId} (auth: ${agent_id}) has ${rejections?.length || 0} rejected orders`);
 
-    // Filter: Keep available orders (agent_id=null) OR orders assigned to current agent
+    // Filter: Keep available orders (both columns null) OR orders assigned to current agent (either column)
     // Also exclude orders that have been completed (are in delivery_completions)
     let availableOrders = orders?.filter(order => 
-      ((order.agent_id === null && order.status === 'packed') || 
-       (order.agent_id === deliveryAgentId && ['assigned', 'picked_up'].includes(order.status))) &&
+      ((order.agent_id === null && order.assigned_agent_id === null && order.status === 'packed') || 
+       ((order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) && 
+        ['assigned', 'picked_up'].includes(order.status))) &&
       !completedIds.has(order.id)
     ) || [];
     

@@ -2466,7 +2466,8 @@ export type Database = {
           body: string
           created_at: string | null
           data: Json | null
-          event_type: string | null
+          debug_source: string | null
+          event_type: string
           id: string
           order_id: string | null
           processed: boolean | null
@@ -2478,7 +2479,8 @@ export type Database = {
           body: string
           created_at?: string | null
           data?: Json | null
-          event_type?: string | null
+          debug_source?: string | null
+          event_type: string
           id?: string
           order_id?: string | null
           processed?: boolean | null
@@ -2490,7 +2492,8 @@ export type Database = {
           body?: string
           created_at?: string | null
           data?: Json | null
-          event_type?: string | null
+          debug_source?: string | null
+          event_type?: string
           id?: string
           order_id?: string | null
           processed?: boolean | null

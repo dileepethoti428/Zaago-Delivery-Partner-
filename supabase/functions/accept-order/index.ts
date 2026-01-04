@@ -81,12 +81,13 @@ serve(async (req) => {
       .from('orders')
       .update({
         status: 'assigned',
-        assigned_agent_id: agentData.id,  // FIXED: was agent_id
+        agent_id: agentData.id,           // Set BOTH columns for consistency
+        assigned_agent_id: agentData.id,  // Both columns point to same agent
         accepted_at: acceptedAt,
         updated_at: acceptedAt
       })
       .eq('id', order_id)
-      .is('assigned_agent_id', null)  // FIXED: was agent_id - CRITICAL: Only if not yet assigned
+      .or('agent_id.is.null,assigned_agent_id.is.null')  // Check either column is null
       .in('status', ['accepted', 'packed'])  // Only if still available
       .select(`*, items`)
       .maybeSingle();
