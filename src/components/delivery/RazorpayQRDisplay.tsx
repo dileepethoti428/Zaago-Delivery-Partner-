@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, X, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -121,7 +121,7 @@ export function RazorpayQRDisplay({
   return (
     <>
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-lg md:max-w-xl rounded-2xl p-0 max-h-screen overflow-y-auto">
+      <DialogContent className="sm:max-w-lg md:max-w-xl rounded-2xl p-0 max-h-screen overflow-y-auto" aria-describedby="payment-qr-desc">
         {paymentStatus === 'success' ? (
           <div className="flex flex-col items-center justify-center py-12 px-6 space-y-4">
             <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -134,6 +134,9 @@ export function RazorpayQRDisplay({
           </div>
         ) : (
           <div className="px-5 pt-6 pb-5">
+            <DialogDescription id="payment-qr-desc" className="sr-only">
+              Scan the QR code with any UPI app to complete payment
+            </DialogDescription>
             <Button
               variant="ghost"
               size="icon"
@@ -204,7 +207,8 @@ export function RazorpayQRDisplay({
     </Dialog>
 
     <Dialog open={isFullscreen} onOpenChange={(o) => setIsFullscreen(o)}>
-      <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white border-0">
+      <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white border-0" aria-describedby="fullscreen-qr-desc">
+        <DialogDescription id="fullscreen-qr-desc" className="sr-only">Fullscreen payment QR code</DialogDescription>
         <div className="w-full h-full flex items-center justify-center bg-white">
           {qrData?.qr_string ? (
             <QRCodeSVG

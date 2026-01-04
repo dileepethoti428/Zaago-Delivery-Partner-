@@ -105,7 +105,7 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
       distanceKm: typeof o.distance_km === 'number' ? Number(o.distance_km.toFixed(1)) : undefined,
       customerName: o.customer_name || undefined,
       createdAt: o.created_at ? new Date(o.created_at).getTime() : Date.now(),
-      agentId: o.agent_id || null,
+      agentId: o.agent_id ?? o.assigned_agent_id ?? null,
       // Include payout breakdown for UI display
       payoutBreakdown: o.payout_breakdown || undefined,
       // Flag indicating road distance was used (not Haversine)

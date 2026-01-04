@@ -10,7 +10,7 @@ export const useOrders = (agentId?: string) => {
     enabled: !!agentId,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
-    refetchOnMount: false,
+    refetchOnMount: 'always', // Always refetch on mount to show fresh data after navigation
     refetchOnWindowFocus: true,
   });
 };
@@ -29,21 +29,11 @@ export const useAcceptOrder = () => {
       
       return data;
     },
-    onMutate: async ({ orderId }) => {
-      await queryClient.cancelQueries({ queryKey: ['orders'] });
-      const previous = queryClient.getQueryData(['orders']);
-      
-      queryClient.setQueryData(['orders'], (old: any) =>
-        old?.filter((o: any) => o.id !== orderId)
-      );
-      
-      return { previous };
-    },
-    onError: (err, variables, context) => {
-      queryClient.setQueryData(['orders'], context?.previous);
+    onError: () => {
       toast.error('Failed to accept order');
     },
     onSuccess: () => {
+      // Invalidate and refetch orders to show updated list with agent's new order
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['earnings'] });
       toast.success('Order accepted successfully!');
