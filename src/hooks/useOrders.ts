@@ -24,19 +24,53 @@ export const useAcceptOrder = () => {
         body: { order_id: orderId, agent_id: agentId }
       });
       
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Failed to accept order');
+      // Handle HTTP errors (including 409)
+      if (error) {
+        // Try to extract error details from the response
+        const errorCode = (error as any)?.context?.error_code || 'UNKNOWN_ERROR';
+        const is409 = (error as any)?.status === 409 || error.message?.includes('409');
+        
+        if (is409 || errorCode === 'ORDER_ALREADY_ACCEPTED' || errorCode === 'ORDER_NOT_AVAILABLE') {
+          throw new Error('ORDER_CONFLICT:' + (error.message || 'Order no longer available'));
+        }
+        throw error;
+      }
+      
+      if (!data?.success) {
+        const errorCode = data?.error_code;
+        if (errorCode === 'ORDER_ALREADY_ACCEPTED' || errorCode === 'ORDER_NOT_AVAILABLE') {
+          throw new Error('ORDER_CONFLICT:' + (data?.error || 'Order no longer available'));
+        }
+        throw new Error(data?.error || 'Failed to accept order');
+      }
       
       return data;
     },
-    onError: () => {
-      toast.error('Failed to accept order');
+    onError: (error: Error, variables) => {
+      const isConflict = error.message?.startsWith('ORDER_CONFLICT:');
+      
+      if (isConflict) {
+        toast.error('Order already taken by another agent');
+        // Remove the order from cache immediately for better UX
+        queryClient.setQueriesData({ queryKey: ['orders'] }, (old: any) => 
+          old?.filter((o: any) => o.id !== variables.orderId)
+        );
+      } else {
+        toast.error('Failed to accept order');
+      }
+      
+      // Always invalidate to get fresh data
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate and refetch orders to show updated list with agent's new order
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['earnings'] });
-      toast.success('Order accepted successfully!');
+      
+      // Only show toast if not already assigned (avoid double toast on retry)
+      if (!data?.already_assigned) {
+        toast.success('Order accepted successfully!');
+      }
     },
   });
 };

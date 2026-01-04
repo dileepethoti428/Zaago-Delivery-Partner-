@@ -73,6 +73,36 @@ serve(async (req) => {
     const acceptedAt = new Date().toISOString();
 
     // ============================================
+    // IDEMPOTENCY CHECK: If agent already owns this order, return success
+    // ============================================
+    const { data: existingOrder, error: checkError } = await supabase
+      .from('orders')
+      .select('id, status, agent_id, assigned_agent_id, items')
+      .eq('id', order_id)
+      .single();
+
+    if (checkError || !existingOrder) {
+      console.error('❌ Order not found:', order_id, checkError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Order not found', error_code: 'ORDER_NOT_FOUND' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    // If this agent already owns the order, return success (idempotent)
+    if (existingOrder.agent_id === agentData.id || existingOrder.assigned_agent_id === agentData.id) {
+      console.log(`✅ Order ${order_id} already assigned to this agent - returning success (idempotent)`);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          already_assigned: true,
+          message: 'Order already assigned to you'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    // ============================================
     // ATOMIC UPDATE: Only first agent wins
     // This combines the check + update in ONE query
     // If agent_id is already set, 0 rows are updated
@@ -104,14 +134,22 @@ serve(async (req) => {
       );
     }
 
-    // If no rows updated, order was already taken by another agent
+    // If no rows updated, order was already taken or status changed
     if (!updatedOrder) {
-      console.error('❌ Order already accepted by another agent:', order_id);
+      const reason = (existingOrder.agent_id || existingOrder.assigned_agent_id) 
+        ? 'ORDER_ALREADY_ACCEPTED' 
+        : 'ORDER_NOT_AVAILABLE';
+      const message = reason === 'ORDER_ALREADY_ACCEPTED'
+        ? 'This order has already been accepted by another agent'
+        : `Order is no longer available (status: ${existingOrder.status})`;
+      
+      console.error(`❌ ${message}:`, order_id);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'This order has already been accepted by another agent',
-          error_code: 'ORDER_ALREADY_ACCEPTED'
+          error: message,
+          error_code: reason,
+          current_status: existingOrder.status
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
       );
