@@ -44,9 +44,15 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
 
   const ordersWithDistance = useMemo(() => {
-    if (!lastKnown) return orders.map(order => ({ order, distanceKm: null }));
+    // Safety filter: exclude terminal statuses client-side as well
+    const terminalStatuses = ['delivered', 'completed', 'cancelled', 'canceled'];
+    const activeOrders = orders.filter(order => 
+      !terminalStatuses.includes(order.status?.toLowerCase() ?? '')
+    );
     
-    return orders.map(order => {
+    if (!lastKnown) return activeOrders.map(order => ({ order, distanceKm: null }));
+    
+    return activeOrders.map(order => {
       if (!order.pickupCoord) {
         return { order, distanceKm: null };
       }

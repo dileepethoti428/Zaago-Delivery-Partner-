@@ -227,13 +227,37 @@ serve(async (req) => {
     // Filter: Keep available orders (both columns null) OR orders assigned to current agent (either column)
     // Also exclude orders that have been completed (are in delivery_completions)
     // Include all active statuses for agent's own orders
+    // CRITICAL: Exclude terminal statuses (delivered, completed, cancelled, canceled)
+    const terminalStatuses = ['delivered', 'completed', 'cancelled', 'canceled'];
     const activeStatusSet = new Set(['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending']);
-    let availableOrders = orders?.filter(order => 
-      ((order.agent_id === null && order.assigned_agent_id === null && order.status === 'packed') || 
-       ((order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) && 
-        activeStatusSet.has(order.status))) &&
-      !completedIds.has(order.id)
-    ) || [];
+    
+    let availableOrders = orders?.filter(order => {
+      // First, exclude any terminal statuses - these should never show
+      if (terminalStatuses.includes(order.status?.toLowerCase())) {
+        console.log(`Excluding terminal status order ${order.id}: ${order.status}`);
+        return false;
+      }
+      
+      // Exclude orphaned payment_pending orders (no agent assigned)
+      const isOrphanedPaymentPending = order.status === 'payment_pending' && 
+                                        order.agent_id === null && 
+                                        order.assigned_agent_id === null;
+      if (isOrphanedPaymentPending) {
+        console.log(`Excluding orphaned payment_pending order ${order.id}`);
+        return false;
+      }
+      
+      // Available orders: packed + unassigned
+      const isAvailable = order.agent_id === null && 
+                          order.assigned_agent_id === null && 
+                          order.status === 'packed';
+      
+      // Agent's active orders: assigned to current agent with active status
+      const isAgentOrder = (order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) && 
+                           activeStatusSet.has(order.status);
+      
+      return (isAvailable || isAgentOrder) && !completedIds.has(order.id);
+    }) || [];
     
     console.log(`After safety filter (excluding ${completedIds.size} completed orders): ${availableOrders.length} orders remain`);
     
