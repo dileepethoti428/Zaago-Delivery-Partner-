@@ -163,7 +163,13 @@ serve(async (req) => {
     
     // Query: Get available orders (packed, unassigned) OR agent's active orders (multiple statuses)
     // Check BOTH agent_id AND assigned_agent_id columns for robustness
+    // CRITICAL: Exclude terminal statuses at DATABASE LEVEL to prevent delivered orders from showing
     const activeStatuses = ['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending'];
+    const terminalStatusesForQuery = ['delivered', 'completed', 'cancelled', 'canceled'];
+    
+    // Only fetch orders from last 7 days to avoid stale data
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -173,8 +179,12 @@ serve(async (req) => {
         delivery_date, 
         subscription_id
       `)
+      .not('status', 'in', `(${terminalStatusesForQuery.join(',')})`)  // CRITICAL: Exclude terminal statuses at DB level
+      .gte('created_at', sevenDaysAgo)  // Only orders from last 7 days
       .or(`and(status.eq.packed,agent_id.is.null,assigned_agent_id.is.null),and(status.in.(${activeStatuses.join(',')}),or(agent_id.eq.${deliveryAgentId},assigned_agent_id.eq.${deliveryAgentId}))`)
       .order('created_at', { ascending: true }); // Show oldest orders first
+    
+    console.log(`[DB FILTER] Excluded terminal statuses: ${terminalStatusesForQuery.join(', ')}, only orders since: ${sevenDaysAgo}`);
 
     // Filter out any orders that have been completed
     const { data: completedOrderIds } = await supabase
