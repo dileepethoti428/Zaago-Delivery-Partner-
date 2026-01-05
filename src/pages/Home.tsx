@@ -23,7 +23,6 @@ import LocationChip from '@/components/location/LocationChip';
 import type { GeoPoint } from '@/utils/coords';
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { formatDistanceToNow } from 'date-fns';
-import { startOrdersRealtime, stopOrdersRealtime } from '@/store/orders';
 
 const RADIUS_KM = 15;
 
@@ -113,16 +112,10 @@ export default function Home() {
   useEffect(() => {
     startWatch();
     
-    // Start realtime with current agent's internal ID for proper filtering
-    if (profile?.id) {
-      startOrdersRealtime(profile.id);
-    }
-    
     return () => {
       stopWatch();
-      stopOrdersRealtime();
     };
-  }, [profile?.id]);
+  }, [startWatch, stopWatch]);
 
   const handleRefresh = useCallback(async () => {
     // Refresh location first to get fresh coordinates

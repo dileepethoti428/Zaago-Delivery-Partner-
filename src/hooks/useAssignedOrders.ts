@@ -18,7 +18,7 @@ export function useTodayOrders() {
       return orders;
     },
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Removed refetchInterval - realtime handles updates
   });
 }
 
@@ -33,7 +33,7 @@ export function useTomorrowOrders() {
       return orders;
     },
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Removed refetchInterval - realtime handles updates
   });
 }
 
@@ -48,7 +48,7 @@ export function useUpcomingOrders() {
       return orders;
     },
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Removed refetchInterval - realtime handles updates
   });
 }
 
@@ -63,6 +63,6 @@ export function useAssignedOrders() {
       return orders;
     },
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Removed refetchInterval - realtime handles updates
   });
 }
