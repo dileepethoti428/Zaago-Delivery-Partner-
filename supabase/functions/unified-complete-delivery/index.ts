@@ -238,9 +238,84 @@ serve(async (req) => {
         );
       }
     } else {
-      // Regular order flow - delegate 100% to DB via complete_delivery_zepto
+      // Regular order flow - add pre-completion guards before calling RPC
       console.log('📦 Processing regular order completion via Zepto RPC...');
 
+      // PRE-COMPLETION GUARD 1: Check if order exists in delivery_history
+      const { data: existingHistory, error: historyCheckError } = await supabase
+        .from('delivery_history')
+        .select('id, completed_at')
+        .eq('order_id', order_id)
+        .maybeSingle();
+
+      if (existingHistory) {
+        console.log('⚠️ Order already in delivery_history:', {
+          order_id,
+          history_id: existingHistory.id,
+          completed_at: existingHistory.completed_at
+        });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            already_completed: true,
+            message: 'Order was already completed',
+            order_id,
+            completed_at: existingHistory.completed_at
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // PRE-COMPLETION GUARD 2: Fetch order and validate status
+      const { data: orderCheck, error: orderCheckError } = await supabase
+        .from('orders')
+        .select('id, status, subscription_id, payment_status')
+        .eq('id', order_id)
+        .single();
+
+      if (orderCheckError || !orderCheck) {
+        console.error('❌ Order not found:', orderCheckError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Order not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('🔍 PRE-COMPLETION GUARD CHECK:', {
+        order_id,
+        order_status: orderCheck.status,
+        payment_status: orderCheck.payment_status,
+        subscription_id: orderCheck.subscription_id,
+        agent_id: agent.id,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validate status - only allow completion for appropriate statuses
+      const allowedStatuses = ['assigned', 'accepted', 'picked_up', 'out_for_delivery'];
+      if (!allowedStatuses.includes(orderCheck.status?.toLowerCase())) {
+        console.log('❌ BLOCKED: Order status not eligible for completion:', orderCheck.status);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Order status '${orderCheck.status}' cannot be completed. Must be: ${allowedStatuses.join(', ')}`
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Validate not a subscription order
+      if (orderCheck.subscription_id) {
+        console.log('❌ BLOCKED: Subscription order sent to regular completion flow');
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Use subscription completion flow for subscription orders'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Now call the RPC with validated data
       const { data, error } = await supabase.rpc(
         'complete_delivery_zepto',
         {
