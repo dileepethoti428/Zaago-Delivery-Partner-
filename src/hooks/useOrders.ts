@@ -24,39 +24,48 @@ export const useAcceptOrder = () => {
         body: { order_id: orderId, agent_id: agentId }
       });
       
-      // Handle HTTP errors (including 409)
+      // Handle actual HTTP/network errors
       if (error) {
-        // Try to extract error details from the response
-        const errorCode = (error as any)?.context?.error_code || 'UNKNOWN_ERROR';
-        const is409 = (error as any)?.status === 409 || error.message?.includes('409');
-        
-        if (is409 || errorCode === 'ORDER_ALREADY_ACCEPTED' || errorCode === 'ORDER_NOT_AVAILABLE') {
-          throw new Error('ORDER_CONFLICT:' + (error.message || 'Order no longer available'));
-        }
-        throw error;
+        console.error('Accept order HTTP error:', error);
+        throw new Error(error.message || 'Network error while accepting order');
       }
       
+      // Now data is always returned (200 OK) - check success flag
       if (!data?.success) {
         const errorCode = data?.error_code;
-        if (errorCode === 'ORDER_ALREADY_ACCEPTED' || errorCode === 'ORDER_NOT_AVAILABLE') {
-          throw new Error('ORDER_CONFLICT:' + (data?.error || 'Order no longer available'));
+        
+        // Controlled conflict - throw with special prefix for onError handler
+        if (errorCode === 'ORDER_ALREADY_ACCEPTED') {
+          throw new Error('ORDER_TAKEN:Order already taken by another agent');
         }
+        if (errorCode === 'ORDER_NOT_AVAILABLE') {
+          throw new Error('ORDER_UNAVAILABLE:Order is no longer available');
+        }
+        
+        // Other failures
         throw new Error(data?.error || 'Failed to accept order');
       }
       
       return data;
     },
     onError: (error: Error, variables) => {
-      const isConflict = error.message?.startsWith('ORDER_CONFLICT:');
+      const isTaken = error.message?.startsWith('ORDER_TAKEN:');
+      const isUnavailable = error.message?.startsWith('ORDER_UNAVAILABLE:');
       
-      if (isConflict) {
+      if (isTaken) {
         toast.error('Order already taken by another agent');
-        // Remove the order from cache immediately for better UX
-        queryClient.setQueriesData({ queryKey: ['orders'] }, (old: any) => 
-          old?.filter((o: any) => o.id !== variables.orderId)
-        );
+      } else if (isUnavailable) {
+        toast.error('Order is no longer available');
       } else {
         toast.error('Failed to accept order');
+      }
+      
+      // Remove the order from cache immediately for better UX (any conflict)
+      if (isTaken || isUnavailable) {
+        queryClient.setQueriesData({ queryKey: ['orders'] }, (old: any) => {
+          if (!Array.isArray(old)) return old;
+          return old.filter((o: any) => o.id !== variables.orderId);
+        });
       }
       
       // Always invalidate to get fresh data

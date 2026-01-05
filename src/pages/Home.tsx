@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrders, useAcceptOrder, useRejectOrder } from '@/hooks/useOrders';
+import { useOrdersRealtimeInvalidate } from '@/hooks/useOrdersRealtimeInvalidate';
 import { useLocationStore } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
 import { useProfile } from '@/hooks/useProfile';
@@ -99,6 +100,9 @@ export default function Home() {
     
     return sorted;
   }, [otherOrders, sortBy]);
+
+  // Realtime invalidation for React Query cache
+  useOrdersRealtimeInvalidate(profile?.id);
 
   useEffect(() => {
     startWatch();
@@ -397,7 +401,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* Action Buttons - 3 state logic */}
                     {order.agentId === profile?.id ? (
                       // Order is assigned to current agent
                       <div className="pt-2">
@@ -412,7 +416,19 @@ export default function Home() {
                           Manage Delivery
                         </Button>
                       </div>
-                    ) : (order.status === 'packed' || order.status === 'accepted') && !order.agentId ? (
+                    ) : order.agentId ? (
+                      // Order is assigned to another agent - show disabled "Taken" button
+                      <div className="pt-2">
+                        <Button
+                          disabled
+                          variant="secondary"
+                          className="w-full rounded-xl gap-2"
+                          size="sm"
+                        >
+                          Taken
+                        </Button>
+                      </div>
+                    ) : (order.status === 'packed' || order.status === 'accepted') ? (
                       // Order is not assigned and available for acceptance
                       <div className="flex gap-2 pt-2">
                         <Button
