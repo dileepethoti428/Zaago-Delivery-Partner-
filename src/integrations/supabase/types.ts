@@ -4463,6 +4463,7 @@ export type Database = {
           device: string | null
           fcm_token: string
           id: string
+          is_active: boolean | null
           seller_id: string
         }
         Insert: {
@@ -4470,6 +4471,7 @@ export type Database = {
           device?: string | null
           fcm_token: string
           id?: string
+          is_active?: boolean | null
           seller_id: string
         }
         Update: {
@@ -4477,6 +4479,7 @@ export type Database = {
           device?: string | null
           fcm_token?: string
           id?: string
+          is_active?: boolean | null
           seller_id?: string
         }
         Relationships: []
