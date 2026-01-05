@@ -139,21 +139,68 @@ serve(async (req) => {
       console.warn('Failed to get agent location:', locationError);
     }
 
-    // First, automatically reassign stale orders from other agents (older than 30 minutes)
+    // STEP 1: Fetch ALL completed order IDs from delivery_history FIRST
+    // delivery_history is the SOURCE OF TRUTH for completion (Zepto pattern)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: completedOrderIds, error: completedError } = await supabase
+      .from('delivery_history')
+      .select('order_id')
+      .gte('completed_at', sevenDaysAgo);
+    
+    if (completedError) {
+      console.warn('Failed to fetch completed orders from delivery_history:', completedError);
+    }
+    
+    const completedIds = new Set(completedOrderIds?.map(c => c.order_id) || []);
+    console.log(`[COMPLETION FILTER] Found ${completedIds.size} completed orders in delivery_history to exclude`);
+
+    // STEP 2: Reassign stale orders with HARDENED logic
+    // DO NOT reassign orders that:
+    // - Exist in delivery_history (already completed)
+    // - Have payment_status = 'paid' (money already collected)
+    // - Are subscription orders
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     
-    const { error: reassignError } = await supabase
-      .from('orders')
-      .update({ agent_id: null })
-      .eq('status', 'packed')
-      .not('agent_id', 'is', null)
-      .not('agent_id', 'eq', deliveryAgentId)
-      .lt('updated_at', thirtyMinutesAgo);
+    // Build list of order IDs to exclude from reassignment
+    const completedIdsList = Array.from(completedIds);
+    
+    // Only reassign if we have orders to exclude OR if the set is empty
+    if (completedIdsList.length > 0) {
+      // Reassign stale packed orders, excluding completed ones
+      const { error: reassignError } = await supabase
+        .from('orders')
+        .update({ agent_id: null })
+        .eq('status', 'packed')
+        .is('subscription_id', null)  // Only regular orders
+        .not('agent_id', 'is', null)
+        .not('agent_id', 'eq', deliveryAgentId)
+        .neq('payment_status', 'paid')  // Don't reassign paid orders
+        .not('id', 'in', `(${completedIdsList.join(',')})`)  // Don't reassign completed orders
+        .lt('updated_at', thirtyMinutesAgo);
 
-    if (reassignError) {
-      console.warn('Failed to reassign stale orders:', reassignError);
+      if (reassignError) {
+        console.warn('Failed to reassign stale orders:', reassignError);
+      } else {
+        console.log('✅ Reassigned stale orders (excluded completed, paid, subscription orders)');
+      }
     } else {
-      console.log('Automatically reassigned stale orders older than 30 minutes');
+      // No completed orders to exclude
+      const { error: reassignError } = await supabase
+        .from('orders')
+        .update({ agent_id: null })
+        .eq('status', 'packed')
+        .is('subscription_id', null)
+        .not('agent_id', 'is', null)
+        .not('agent_id', 'eq', deliveryAgentId)
+        .neq('payment_status', 'paid')
+        .lt('updated_at', thirtyMinutesAgo);
+
+      if (reassignError) {
+        console.warn('Failed to reassign stale orders:', reassignError);
+      } else {
+        console.log('✅ Reassigned stale orders (no completed orders to exclude)');
+      }
     }
 
     // Get two types of orders:
@@ -167,8 +214,7 @@ serve(async (req) => {
     const activeStatuses = ['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending'];
     const terminalStatusesForQuery = ['delivered', 'completed', 'cancelled', 'canceled'];
     
-    // Only fetch orders from last 7 days to avoid stale data
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // STEP 3: Fetch orders (sevenDaysAgo already defined above)
     
     const { data: orders, error } = await supabase
       .from('orders')
@@ -186,19 +232,7 @@ serve(async (req) => {
     
     console.log(`[DB FILTER] Excluded terminal statuses: ${terminalStatusesForQuery.join(', ')}, only orders since: ${sevenDaysAgo}`);
 
-    // Filter out any orders that have been completed - use delivery_history (the REAL completion table)
-    // delivery_completions was unused/empty, delivery_history has 773+ actual completion records
-    const { data: completedOrderIds, error: completedError } = await supabase
-      .from('delivery_history')
-      .select('order_id')
-      .gte('completed_at', sevenDaysAgo);  // Match the 7-day window for performance
-    
-    if (completedError) {
-      console.warn('Failed to fetch completed orders from delivery_history:', completedError);
-    }
-    
-    const completedIds = new Set(completedOrderIds?.map(c => c.order_id) || []);
-    console.log(`[COMPLETION FILTER] Found ${completedIds.size} completed orders in delivery_history to exclude`);
+    // NOTE: completedIds already fetched at the top (Step 1) - no need to fetch again
 
     console.log('Raw query result:', orders?.map(o => ({ 
       id: o.id, 
