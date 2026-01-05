@@ -241,16 +241,22 @@ serve(async (req) => {
     console.log(`Agent ${deliveryAgentId} (auth: ${agent_id}) has ${rejections?.length || 0} rejected orders`);
 
     // Filter: Keep available orders (both columns null) OR orders assigned to current agent (either column)
-    // Also exclude orders that have been completed (are in delivery_completions)
-    // Include all active statuses for agent's own orders
-    // CRITICAL: Exclude terminal statuses (delivered, completed, cancelled, canceled)
+    // CRITICAL: Use delivery_history as THE SOURCE OF TRUTH for completion (Zepto pattern)
+    // An order is considered complete if it exists in delivery_history, regardless of orders.status
     const terminalStatuses = ['delivered', 'completed', 'cancelled', 'canceled'];
     const activeStatusSet = new Set(['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending']);
     
     let availableOrders = orders?.filter(order => {
-      // First, exclude any terminal statuses - these should never show
-      if (terminalStatuses.includes(order.status?.toLowerCase())) {
-        console.log(`Excluding terminal status order ${order.id}: ${order.status}`);
+      // FIRST: Check delivery_history (SOURCE OF TRUTH) - if order was completed, exclude it
+      if (completedIds.has(order.id)) {
+        console.log(`🚫 Excluding ${order.id}: found in delivery_history (completed)`);
+        return false;
+      }
+      
+      // SECOND: Check orders.status as backup - exclude terminal statuses
+      const status = order.status?.toLowerCase();
+      if (terminalStatuses.includes(status)) {
+        console.log(`🚫 Excluding ${order.id}: terminal status ${order.status}`);
         return false;
       }
       
@@ -259,7 +265,7 @@ serve(async (req) => {
                                         order.agent_id === null && 
                                         order.assigned_agent_id === null;
       if (isOrphanedPaymentPending) {
-        console.log(`Excluding orphaned payment_pending order ${order.id}`);
+        console.log(`🚫 Excluding orphaned payment_pending order ${order.id}`);
         return false;
       }
       
@@ -272,10 +278,10 @@ serve(async (req) => {
       const isAgentOrder = (order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) && 
                            activeStatusSet.has(order.status);
       
-      return (isAvailable || isAgentOrder) && !completedIds.has(order.id);
+      return isAvailable || isAgentOrder;
     }) || [];
     
-    console.log(`After safety filter (excluding ${completedIds.size} completed orders): ${availableOrders.length} orders remain`);
+    console.log(`✅ After double-verification filter: ${availableOrders.length} orders remain (excluded ${completedIds.size} from delivery_history)`);
     
     // Filter out rejected orders (only applies to available orders, not assigned ones)
     const rejectedOrderIds = rejections?.map(r => r.order_id) || [];

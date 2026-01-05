@@ -25,6 +25,16 @@ export const queryClient = new QueryClient({
   },
 });
 
+// Filter out orders queries from persistence - they get stale quickly and cause delivered orders to reappear
+const shouldDehydrateQuery = (query: { queryKey: readonly unknown[] }) => {
+  const key = query.queryKey[0];
+  // DON'T persist orders - they get stale quickly and show delivered orders
+  if (key === 'orders' || key === 'available-orders' || key === 'assigned-orders') {
+    return false;
+  }
+  return true;
+};
+
 const persister = createSyncStoragePersister({
   storage: {
     getItem: (key) => {
@@ -96,7 +106,15 @@ function AuthInitializer({ children }: { children: ReactNode }) {
 
 export default function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister }}>
+    <PersistQueryClientProvider 
+      client={queryClient} 
+      persistOptions={{ 
+        persister,
+        dehydrateOptions: {
+          shouldDehydrateQuery,
+        },
+      }}
+    >
       <AuthInitializer>
         {children}
       </AuthInitializer>
