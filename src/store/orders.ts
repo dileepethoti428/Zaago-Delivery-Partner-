@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { ZaagoOrder } from '@/services/orders';
 import { fetchOpenOrders, fetchAvailableOrders } from '@/services/orders';
-import { supabase } from '@/integrations/supabase/client';
 import { cache } from '@/utils/cache';
 import { toast } from '@/hooks/use-toast';
 import { agentSession } from '@/utils/agentSession';
@@ -57,9 +56,12 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
       if (agentId) {
         cache.setForAgent('ORDERS', filtered, agentId);
       }
-      set({ orders: filtered, loading: false });
+      set({ orders: filtered, error: null });
     } catch (e: any) {
-      set({ error: e?.message ?? 'Failed to load orders', loading: false });
+      set({ error: e?.message ?? 'Failed to load orders' });
+    } finally {
+      // CRITICAL: Always reset loading state
+      set({ loading: false });
     }
   },
 
@@ -141,71 +143,3 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
     });
   },
 }));
-
-// Initialize realtime subscription
-let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
-let currentAgentIdForRealtime: string | null = null;
-
-export function startOrdersRealtime(agentId?: string) {
-  // Store the agent ID for filtering
-  if (agentId) {
-    currentAgentIdForRealtime = agentId;
-  }
-  
-  if (realtimeChannel) return;
-
-  console.log('📡 Starting orders realtime subscription for agent:', currentAgentIdForRealtime);
-
-  realtimeChannel = supabase
-    .channel('orders-realtime')
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'orders' },
-      (payload) => {
-        const updatedOrder = payload.new as any;
-        const orderId = updatedOrder.id;
-        const newStatus = updatedOrder.status;
-        const assignedAgentId = updatedOrder.agent_id;
-        
-        console.log('📡 Realtime UPDATE:', { orderId, newStatus, assignedAgentId, currentAgent: currentAgentIdForRealtime });
-        
-        // Rule: If order is assigned to someone else, REMOVE INSTANTLY
-        // No re-fetch, no polling - just remove from local state
-        if (assignedAgentId && assignedAgentId !== currentAgentIdForRealtime) {
-          console.log('🗑️ Order assigned to another agent - removing instantly');
-          useOrdersStore.setState((state) => ({
-            orders: state.orders.filter((o) => o.id !== orderId),
-          }));
-        }
-        
-        // If order status changed to something not available, remove it
-        if (newStatus && !['accepted', 'packed'].includes(newStatus) && !assignedAgentId) {
-          console.log('🗑️ Order status changed to unavailable - removing');
-          useOrdersStore.setState((state) => ({
-            orders: state.orders.filter((o) => o.id !== orderId),
-          }));
-        }
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'orders' },
-      (payload) => {
-        // New order - could optionally add to list, but for now just log
-        console.log('📡 Realtime INSERT - new order available:', payload.new);
-        // User can refresh to see new orders
-      }
-    )
-    .subscribe((status) => {
-      console.log('📡 Realtime subscription status:', status);
-    });
-}
-
-export function stopOrdersRealtime() {
-  if (realtimeChannel) {
-    console.log('📡 Stopping orders realtime subscription');
-    supabase.removeChannel(realtimeChannel);
-    realtimeChannel = null;
-  }
-  currentAgentIdForRealtime = null;
-}

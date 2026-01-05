@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { cache } from '@/utils/cache';
 import { advancedCache } from '@/utils/advancedCache';
 import { queryClient } from '@/providers/AppProviders';
-import { stopOrdersRealtime, useOrdersStore } from '@/store/orders';
+import { useOrdersStore } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
 import { useAppStore } from '@/store/app';
 import { agentSession } from '@/utils/agentSession';
@@ -35,13 +35,8 @@ const STORAGE_KEYS_TO_CLEAR = [
 export async function cleanupOnLogout(): Promise<void> {
   console.log('🧹 Starting logout cleanup...');
 
-  try {
-    // 1. Stop all realtime subscriptions FIRST (critical!)
-    stopOrdersRealtime();
-    console.log('✅ Realtime subscriptions stopped');
-  } catch (e) {
-    console.warn('Failed to stop realtime:', e);
-  }
+  // Note: Realtime cleanup is now handled automatically by React Query hooks
+  // via useOrdersRealtimeInvalidate cleanup in useEffect return
 
   try {
     // 2. Stop geolocation watch

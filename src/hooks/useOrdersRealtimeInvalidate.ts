@@ -12,12 +12,13 @@ export function useOrdersRealtimeInvalidate(agentId?: string) {
   useEffect(() => {
     if (!agentId) return;
 
+    // Use unique channel name per agent to avoid conflicts
     const channel = supabase
-      .channel('orders-realtime-invalidate')
+      .channel(`agent-orders-${agentId}`)
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
           schema: 'public',
           table: 'orders',
         },
@@ -25,38 +26,43 @@ export function useOrdersRealtimeInvalidate(agentId?: string) {
           const newRecord = payload.new as any;
           const oldRecord = payload.old as any;
           
-          // Check if assignment or status changed
-          const assignmentChanged = 
-            newRecord.agent_id !== oldRecord.agent_id ||
-            newRecord.assigned_agent_id !== oldRecord.assigned_agent_id;
-          const statusChanged = newRecord.status !== oldRecord.status;
+          console.log('🔄 Realtime order change:', {
+            event: payload.eventType,
+            orderId: newRecord?.id || oldRecord?.id,
+            newStatus: newRecord?.status,
+            newAgentId: newRecord?.agent_id
+          });
           
-          if (assignmentChanged || statusChanged) {
-            console.log('🔄 Order changed, invalidating cache:', {
-              orderId: newRecord.id,
-              newStatus: newRecord.status,
-              newAgentId: newRecord.agent_id,
-              assignmentChanged,
-              statusChanged
-            });
+          // For UPDATE events, check if assignment or status changed
+          if (payload.eventType === 'UPDATE') {
+            const assignmentChanged = 
+              newRecord.agent_id !== oldRecord.agent_id ||
+              newRecord.assigned_agent_id !== oldRecord.assigned_agent_id;
+            const statusChanged = newRecord.status !== oldRecord.status;
             
-            // Immediately remove this order from cache if it's now assigned to someone else
-            if (newRecord.agent_id && newRecord.agent_id !== agentId) {
-              queryClient.setQueriesData({ queryKey: ['orders'] }, (old: any) => {
-                if (!Array.isArray(old)) return old;
-                return old.filter((o: any) => o.id !== newRecord.id);
-              });
+            if (assignmentChanged || statusChanged) {
+              // Immediately remove this order from cache if it's now assigned to someone else
+              if (newRecord.agent_id && newRecord.agent_id !== agentId) {
+                queryClient.setQueriesData({ queryKey: ['orders'] }, (old: any) => {
+                  if (!Array.isArray(old)) return old;
+                  return old.filter((o: any) => o.id !== newRecord.id);
+                });
+              }
             }
-            
-            // Also invalidate to refetch fresh data
-            queryClient.invalidateQueries({ queryKey: ['orders', agentId] });
           }
+          
+          // Invalidate to refetch fresh data for all order changes
+          queryClient.invalidateQueries({ queryKey: ['orders', agentId] });
+          queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Realtime subscription status:', status);
+      });
 
     return () => {
-      supabase.removeChannel(channel);
+      console.log('📡 Cleaning up realtime channel for agent:', agentId);
+      supabase.removeChannel(channel); // 🔥 CRITICAL cleanup
     };
   }, [agentId, queryClient]);
 }
