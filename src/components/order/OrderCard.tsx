@@ -50,6 +50,60 @@ export const OrderCard = memo(function OrderCard({
   }, [order.id, onManage]);
 
   const isAssignedToCurrentAgent = order.agentId === currentAgentId;
+  const isAssignedToOtherAgent = !!(order.agentId && order.agentId !== currentAgentId);
+
+  // Determine button state: 
+  // 1. Assigned to me → Manage Delivery
+  // 2. Unassigned → Accept / Reject
+  // 3. Assigned to someone else → Disabled "Taken" button
+  const renderActionButtons = () => {
+    if (isAssignedToCurrentAgent) {
+      return (
+        <Button
+          size="sm"
+          className="flex-1"
+          onClick={handleManage}
+        >
+          Manage Delivery
+        </Button>
+      );
+    }
+    
+    if (isAssignedToOtherAgent) {
+      return (
+        <Button
+          size="sm"
+          className="flex-1"
+          variant="secondary"
+          disabled
+        >
+          Taken
+        </Button>
+      );
+    }
+    
+    // Unassigned - show Accept/Reject
+    return (
+      <>
+        <Button
+          size="sm"
+          className="flex-1"
+          disabled={isProcessing}
+          onClick={handleAccept}
+        >
+          Accept
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={isProcessing}
+          onClick={handleReject}
+        >
+          Reject
+        </Button>
+      </>
+    );
+  };
 
   return (
     <AnimatedCard delay={index * 0.05} onClick={handleView}>
@@ -101,34 +155,7 @@ export const OrderCard = memo(function OrderCard({
           </div>
 
           <div className="flex gap-2 pt-2">
-            {isAssignedToCurrentAgent ? (
-              <Button
-                size="sm"
-                className="flex-1"
-                onClick={handleManage}
-              >
-                Manage Delivery
-              </Button>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  className="flex-1"
-                  disabled={isProcessing}
-                  onClick={handleAccept}
-                >
-                  Accept
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isProcessing}
-                  onClick={handleReject}
-                >
-                  Reject
-                </Button>
-              </>
-            )}
+            {renderActionButtons()}
           </div>
         </div>
       </CardContent>

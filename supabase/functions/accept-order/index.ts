@@ -143,6 +143,7 @@ serve(async (req) => {
     }
 
     // If no rows updated, order was already taken or status changed
+    // Return 200 with success:false for race conditions (not a server error)
     if (!updatedOrder) {
       const reason = (existingOrder.agent_id || existingOrder.assigned_agent_id) 
         ? 'ORDER_ALREADY_ACCEPTED' 
@@ -151,15 +152,26 @@ serve(async (req) => {
         ? 'This order has already been accepted by another agent'
         : `Order is no longer available (status: ${existingOrder.status})`;
       
-      console.error(`❌ ${message}:`, order_id);
+      // Log as info, not error - this is a normal race condition
+      console.log(`ℹ️ Order conflict for ${order_id}:`, {
+        reason,
+        order_id,
+        current_status: existingOrder.status,
+        current_agent_id: existingOrder.agent_id,
+        current_assigned_agent_id: existingOrder.assigned_agent_id,
+        requesting_agent_id: agentData.id
+      });
+      
+      // Return 200 with success:false - prevents FunctionsHttpError on client
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: message,
           error_code: reason,
-          current_status: existingOrder.status
+          current_status: existingOrder.status,
+          current_agent_id: existingOrder.agent_id
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
