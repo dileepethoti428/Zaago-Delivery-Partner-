@@ -186,13 +186,19 @@ serve(async (req) => {
     
     console.log(`[DB FILTER] Excluded terminal statuses: ${terminalStatusesForQuery.join(', ')}, only orders since: ${sevenDaysAgo}`);
 
-    // Filter out any orders that have been completed
-    const { data: completedOrderIds } = await supabase
-      .from('delivery_completions')
+    // Filter out any orders that have been completed - use delivery_history (the REAL completion table)
+    // delivery_completions was unused/empty, delivery_history has 773+ actual completion records
+    const { data: completedOrderIds, error: completedError } = await supabase
+      .from('delivery_history')
       .select('order_id')
-      .eq('status', 'completed');
+      .gte('completed_at', sevenDaysAgo);  // Match the 7-day window for performance
+    
+    if (completedError) {
+      console.warn('Failed to fetch completed orders from delivery_history:', completedError);
+    }
     
     const completedIds = new Set(completedOrderIds?.map(c => c.order_id) || []);
+    console.log(`[COMPLETION FILTER] Found ${completedIds.size} completed orders in delivery_history to exclude`);
 
     console.log('Raw query result:', orders?.map(o => ({ 
       id: o.id, 
