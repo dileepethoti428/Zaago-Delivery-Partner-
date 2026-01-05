@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +34,7 @@ export default function ManageDelivery() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const profile = useAuthStore((state) => state.profile);
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -238,10 +240,19 @@ export default function ManageDelivery() {
 
       // Handle already completed gracefully (Zepto-style idempotency)
       if (data.already_completed) {
+        // Invalidate orders cache immediately to prevent stale data
+        await queryClient.invalidateQueries({ queryKey: ['orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
+        
         toast({
           title: 'Already Delivered',
           description: 'This order was already marked as delivered.',
         });
+        
+        // Navigate away immediately
+        navigate('/my-deliveries');
+        return;
       } else {
         const successMessage = paymentMethod === 'COD' 
           ? 'Product delivered successfully - COD ✓'
@@ -252,6 +263,10 @@ export default function ManageDelivery() {
           description: successMessage,
         });
       }
+      
+      // Invalidate cache after successful completion too
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
       
       setTimeout(() => navigate(-1), 1500);
       
@@ -299,16 +314,28 @@ export default function ManageDelivery() {
 
       // Handle already completed gracefully (Zepto-style idempotency)
       if (data.already_completed) {
+        // Invalidate orders cache immediately
+        await queryClient.invalidateQueries({ queryKey: ['orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
+        
         toast({
           title: 'Already Delivered',
           description: 'This order was already marked as delivered.',
         });
+        
+        navigate('/my-deliveries');
+        return;
       } else {
         toast({
           title: 'Delivery Completed!',
           description: 'Product delivered successfully - Paid Online ✓',
         });
       }
+      
+      // Invalidate cache after successful completion
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
       
       setTimeout(() => navigate(-1), 1500);
       
