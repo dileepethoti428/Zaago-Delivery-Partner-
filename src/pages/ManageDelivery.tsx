@@ -384,7 +384,8 @@ export default function ManageDelivery() {
         body: {
           order_id: order.id,
           agent_id: profile.user_id,
-          cancellation_reason: 'Agent cancelled from manage delivery page'
+          cancellation_reason: 'Agent cancelled from manage delivery page',
+          order_type: orderType
         },
       });
 

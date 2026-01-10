@@ -125,16 +125,20 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
             
             return (
               <div 
-                key={earning.order_id} 
+                key={earning.order_id || earning.daily_order_id || `earning-${index}`} 
                 className={`py-3 ${index < earnings.length - 1 ? 'border-b' : ''}`}
               >
                 {/* Order Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">
-                      {type === 'subscription' && earning.subscription_id 
-                        ? `Sub #${earning.subscription_id.slice(0, 8)}...`
-                        : `Order #${earning.order_id.slice(0, 8)}...`
+                      {earning.order_type === 'subscription' || earning.daily_order_id
+                        ? earning.daily_order_id 
+                          ? `Sub #${earning.daily_order_id.slice(0, 8)}...`
+                          : `Delivery #${index + 1}`
+                        : earning.order_id 
+                          ? `Order #${earning.order_id.slice(0, 8)}...`
+                          : `Delivery #${index + 1}`
                       }
                     </span>
                     {getStatusBadge(earning.status)}

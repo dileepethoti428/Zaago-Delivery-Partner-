@@ -20,8 +20,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { order_id, agent_id, cancellation_reason } = await req.json();
-    console.log('Processing cancellation for order:', order_id, 'agent:', agent_id);
+    const { order_id, agent_id, cancellation_reason, order_type } = await req.json();
+    console.log('Processing cancellation for order:', order_id, 'agent:', agent_id, 'type:', order_type);
 
     if (!order_id || !agent_id) {
       console.error('Missing required fields:', { order_id, agent_id });
@@ -34,7 +34,111 @@ serve(async (req) => {
       );
     }
 
-    // Determine if this is a rejection (unassigned order) or cancellation (assigned to this agent)
+    // Handle subscription (daily) orders differently
+    if (order_type === 'daily') {
+      console.log('Processing daily order cancellation');
+      
+      const { data: dailyOrder, error: fetchError } = await supabase
+        .from('daily_orders')
+        .select('id, assigned_agent_id, status')
+        .eq('id', order_id)
+        .maybeSingle();
+
+      if (fetchError || !dailyOrder) {
+        console.error('Daily order not found:', fetchError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Order not found' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 404 
+          }
+        );
+      }
+
+      // Check if assigned to this agent
+      if (dailyOrder.assigned_agent_id && dailyOrder.assigned_agent_id !== agent_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Order is assigned to another agent' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 403 
+          }
+        );
+      }
+
+      // Update daily_orders - release back to pool
+      const { error: updateError } = await supabase
+        .from('daily_orders')
+        .update({
+          status: 'pending',
+          assigned_agent_id: null
+        })
+        .eq('id', order_id)
+        .eq('assigned_agent_id', agent_id);
+
+      if (updateError) {
+        console.error('Failed to update daily order:', updateError);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to cancel delivery' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500 
+          }
+        );
+      }
+
+      // Update earnings tracking using daily_order_id
+      const { error: trackingError } = await supabase
+        .from('agent_earnings_tracking')
+        .update({
+          payout_status: 'cancelled',
+          completed_at: new Date().toISOString(),
+          actual_payout: 0,
+          updated_at: new Date().toISOString()
+        })
+        .eq('daily_order_id', order_id)
+        .eq('agent_id', agent_id)
+        .eq('payout_status', 'pending');
+
+      if (trackingError) {
+        console.warn('Failed to update earnings tracking:', trackingError);
+      } else {
+        console.log('✅ Earnings tracking marked as cancelled for daily order:', order_id);
+      }
+
+      // Log the cancellation
+      try {
+        await supabase
+          .from('delivery_logs')
+          .insert({
+            order_id,
+            agent_id,
+            action: 'cancelled',
+            details: {
+              reason: cancellation_reason || 'Agent cancelled delivery',
+              order_type: 'daily',
+              cancelled_at: new Date().toISOString()
+            }
+          });
+      } catch (logError) {
+        console.warn('Failed to log cancellation:', logError);
+      }
+
+      console.log('Daily order cancelled successfully:', order_id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Delivery cancelled successfully'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
+
+    // Regular order flow (existing logic)
     const { data: order, error: fetchError } = await supabase
       .from('orders')
       .select('id, agent_id, status')
