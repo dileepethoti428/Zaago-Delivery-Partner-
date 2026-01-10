@@ -64,8 +64,9 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="max-h-[400px] px-6 py-4">
-            <div className="space-y-3">
+          <div className="h-[400px]">
+            <ScrollArea className="h-full">
+              <div className="space-y-3 px-6 py-4">
               {deliveries.map((delivery, index) => (
             <div 
               key={delivery.order_id} 
@@ -97,8 +98,9 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
               </div>
             </div>
           ))}
-            </div>
-          </ScrollArea>
+              </div>
+            </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

@@ -114,8 +114,9 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="max-h-[400px] px-6 py-4">
-            <div className="space-y-3">
+          <div className="h-[400px]">
+            <ScrollArea className="h-full">
+              <div className="space-y-3 px-6 py-4">
               {earnings.map((earning, index) => {
             // Validate payout for regular orders
             const { payout: validatedPayout, isFixed } = earning.order_type === 'regular' 
@@ -208,8 +209,9 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
               </div>
             );
           })}
-            </div>
-          </ScrollArea>
+              </div>
+            </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

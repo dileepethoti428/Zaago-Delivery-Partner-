@@ -143,6 +143,76 @@ export async function fetchUpcomingOrders(): Promise<AssignedOrder[]> {
   return transformEnrichedOrders((data || []) as EnrichedOrderRow[]);
 }
 
+// Interface for the delivered orders RPC response (simpler than EnrichedOrderRow)
+interface DeliveredOrderRow {
+  id: string;
+  date: string;
+  quantity: number;
+  status: string;
+  subscription_id: string | null;
+  customer_id: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_address: string | null;
+  customer_latitude: number | null;
+  customer_longitude: number | null;
+  product_id: string | null;
+  product_name: string | null;
+  product_unit: string | null;
+  product_image: string | null;
+  seller_id: string | null;
+}
+
+// Transform delivered orders RPC response to AssignedOrder
+function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
+  if (!rows || rows.length === 0) return [];
+
+  return rows.map(row => ({
+    id: row.id,
+    dailyOrderId: row.id,
+    orderId: row.subscription_id,
+    date: row.date,
+    quantity: row.quantity,
+    status: row.status,
+    subscriptionId: row.subscription_id,
+    customerId: row.customer_id,
+    locationId: null,
+    createdAt: new Date().toISOString(),
+    customerName: row.customer_name || 'Unknown Customer',
+    customerPhone: row.customer_phone || null,
+    customerAddress: row.customer_address || null,
+    customerCity: null,
+    customerPincode: null,
+    customerLatitude: row.customer_latitude || null,
+    customerLongitude: row.customer_longitude || null,
+    deliveryAddress: row.customer_address || null,
+    deliveryTimeSlot: null,
+    deliveryLatitude: null,
+    deliveryLongitude: null,
+    productId: row.product_id || null,
+    productName: row.product_name || 'Unknown Product',
+    productPrice: 0,
+    productImage: row.product_image || null,
+    isSubscription: !!row.subscription_id,
+  }));
+}
+
+// Fetch DELIVERED orders for today using Postgres RPC
+export async function fetchDeliveredOrders(): Promise<AssignedOrder[]> {
+  console.log('[AssignedOrders] Fetching DELIVERED orders via RPC...');
+  
+  const { data, error } = await supabase.rpc('get_agent_orders_delivered_today');
+  
+  console.log('[AssignedOrders] DELIVERED RPC response:', { error, count: data?.length || 0 });
+  
+  if (error) {
+    console.error('[AssignedOrders] DELIVERED RPC error:', error);
+    throw error;
+  }
+  
+  return transformDeliveredOrders((data || []) as DeliveredOrderRow[]);
+}
+
 // Legacy function - kept for backward compatibility, now fetches all orders
 export async function fetchAssignedOrders(): Promise<AssignedOrder[]> {
   const [today, tomorrow, upcoming] = await Promise.all([
