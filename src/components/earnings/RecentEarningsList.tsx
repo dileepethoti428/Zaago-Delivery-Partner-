@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Receipt, Package, RefreshCw, AlertTriangle } from 'lucide-react';
 import { formatCurrency, EarningRecord } from '@/services/earnings';
 import { formatDateTimeIST } from '@/utils/dateUtils';
@@ -112,8 +113,10 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
             Recent {type === 'subscription' ? 'Subscription' : type === 'regular' ? 'Regular Order' : ''} Deliveries
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {earnings.map((earning, index) => {
+        <CardContent className="p-0">
+          <ScrollArea className="max-h-[400px] px-6 py-4">
+            <div className="space-y-3">
+              {earnings.map((earning, index) => {
             // Validate payout for regular orders
             const { payout: validatedPayout, isFixed } = earning.order_type === 'regular' 
               ? getValidatedPayout(earning)
@@ -205,6 +208,8 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
               </div>
             );
           })}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
     </motion.div>
