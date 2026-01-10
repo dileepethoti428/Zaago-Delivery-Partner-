@@ -258,11 +258,12 @@ export type Database = {
           agent_id: string
           completed_at: string | null
           created_at: string | null
+          daily_order_id: string | null
           distance_km: number | null
           expected_payout: number
           id: string
           is_peak_hour: boolean | null
-          order_id: string
+          order_id: string | null
           order_type: string | null
           payment_method: string | null
           payout_breakdown: Json | null
@@ -275,11 +276,12 @@ export type Database = {
           agent_id: string
           completed_at?: string | null
           created_at?: string | null
+          daily_order_id?: string | null
           distance_km?: number | null
           expected_payout?: number
           id?: string
           is_peak_hour?: boolean | null
-          order_id: string
+          order_id?: string | null
           order_type?: string | null
           payment_method?: string | null
           payout_breakdown?: Json | null
@@ -292,11 +294,12 @@ export type Database = {
           agent_id?: string
           completed_at?: string | null
           created_at?: string | null
+          daily_order_id?: string | null
           distance_km?: number | null
           expected_payout?: number
           id?: string
           is_peak_hour?: boolean | null
-          order_id?: string
+          order_id?: string | null
           order_type?: string | null
           payment_method?: string | null
           payout_breakdown?: Json | null
@@ -312,17 +315,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "agent_earnings_tracking_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: true
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
+            foreignKeyName: "agent_earnings_tracking_daily_order_id_fkey"
+            columns: ["daily_order_id"]
+            isOneToOne: false
+            referencedRelation: "customer_next_delivery"
+            referencedColumns: ["order_id"]
           },
           {
-            foreignKeyName: "agent_earnings_tracking_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: true
-            referencedRelation: "orders_with_agents"
+            foreignKeyName: "agent_earnings_tracking_daily_order_id_fkey"
+            columns: ["daily_order_id"]
+            isOneToOne: false
+            referencedRelation: "daily_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -6632,6 +6635,27 @@ export type Database = {
       generate_tracking_id: { Args: never; Returns: string }
       get_agent_distance_stats: { Args: { agent_uuid: string }; Returns: Json }
       get_agent_hours_today: { Args: { agent_uuid: string }; Returns: number }
+      get_agent_orders_delivered_today: {
+        Args: never
+        Returns: {
+          customer_address: string
+          customer_id: string
+          customer_latitude: number
+          customer_longitude: number
+          customer_name: string
+          customer_phone: string
+          date: string
+          id: string
+          product_id: string
+          product_image: string
+          product_name: string
+          product_unit: string
+          quantity: number
+          seller_id: string
+          status: string
+          subscription_id: string
+        }[]
+      }
       get_agent_orders_today: {
         Args: never
         Returns: {

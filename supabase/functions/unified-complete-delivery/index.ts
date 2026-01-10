@@ -202,10 +202,12 @@ serve(async (req) => {
           }
 
           // Insert into agent_earnings_tracking for subscription orders
+          // Use daily_order_id instead of order_id to avoid FK violation
           const { error: trackingError } = await supabase
             .from('agent_earnings_tracking')
             .insert({
-              order_id: order_id,
+              order_id: null,  // Set to null for subscription orders
+              daily_order_id: order_id,  // Use the new column for daily_orders reference
               agent_id: agent.id,
               accepted_at: new Date().toISOString(),
               completed_at: new Date().toISOString(),

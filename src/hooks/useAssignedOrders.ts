@@ -3,6 +3,7 @@ import {
   fetchTodayOrders, 
   fetchTomorrowOrders, 
   fetchUpcomingOrders,
+  fetchDeliveredOrders,
   fetchAssignedOrders,
   type AssignedOrder 
 } from '@/services/assignedOrders';
@@ -45,6 +46,21 @@ export function useUpcomingOrders() {
       console.log('[useUpcomingOrders] Fetching via RPC...');
       const orders = await fetchUpcomingOrders();
       console.log('[useUpcomingOrders] Received:', orders.length, 'orders');
+      return orders;
+    },
+    staleTime: 30 * 1000,
+    // Removed refetchInterval - realtime handles updates
+  });
+}
+
+// Hook for DELIVERED orders today (uses Postgres CURRENT_DATE)
+export function useDeliveredOrders() {
+  return useQuery<AssignedOrder[], Error>({
+    queryKey: ['assigned-orders', 'delivered'],
+    queryFn: async () => {
+      console.log('[useDeliveredOrders] Fetching via RPC...');
+      const orders = await fetchDeliveredOrders();
+      console.log('[useDeliveredOrders] Received:', orders.length, 'orders');
       return orders;
     },
     staleTime: 30 * 1000,

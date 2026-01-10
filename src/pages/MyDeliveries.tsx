@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { AssignedOrderCard } from '@/components/order/AssignedOrderCard';
-import { useTodayOrders, useTomorrowOrders, useUpcomingOrders } from '@/hooks/useAssignedOrders';
+import { useTodayOrders, useTomorrowOrders, useDeliveredOrders } from '@/hooks/useAssignedOrders';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Package } from 'lucide-react';
 import { toast } from 'sonner';
 
-type DateFilter = 'today' | 'tomorrow' | 'upcoming' | 'all';
+type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 
 export default function MyDeliveries() {
   const navigate = useNavigate();
@@ -18,7 +18,7 @@ export default function MyDeliveries() {
   // Use separate RPC hooks for each tab - NO FRONTEND DATE LOGIC
   const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders();
   const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders();
-  const { data: upcomingOrders = [], isLoading: loadingUpcoming, error: errorUpcoming } = useUpcomingOrders();
+  const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders();
 
   // Current orders based on selected tab - NO DATE FILTERING, just tab selection
   const currentOrders = useMemo(() => {
@@ -27,14 +27,14 @@ export default function MyDeliveries() {
         return todayOrders;
       case 'tomorrow':
         return tomorrowOrders;
-      case 'upcoming':
-        return upcomingOrders;
+      case 'delivered':
+        return deliveredOrders;
       case 'all':
-        return [...todayOrders, ...tomorrowOrders, ...upcomingOrders];
+        return [...todayOrders, ...tomorrowOrders];
       default:
         return todayOrders;
     }
-  }, [dateFilter, todayOrders, tomorrowOrders, upcomingOrders]);
+  }, [dateFilter, todayOrders, tomorrowOrders, deliveredOrders]);
 
   // Loading state for current tab
   const isLoading = useMemo(() => {
@@ -43,14 +43,14 @@ export default function MyDeliveries() {
         return loadingToday;
       case 'tomorrow':
         return loadingTomorrow;
-      case 'upcoming':
-        return loadingUpcoming;
+      case 'delivered':
+        return loadingDelivered;
       case 'all':
-        return loadingToday || loadingTomorrow || loadingUpcoming;
+        return loadingToday || loadingTomorrow;
       default:
         return loadingToday;
     }
-  }, [dateFilter, loadingToday, loadingTomorrow, loadingUpcoming]);
+  }, [dateFilter, loadingToday, loadingTomorrow, loadingDelivered]);
 
   // Error state for current tab
   const error = useMemo(() => {
@@ -59,22 +59,22 @@ export default function MyDeliveries() {
         return errorToday;
       case 'tomorrow':
         return errorTomorrow;
-      case 'upcoming':
-        return errorUpcoming;
+      case 'delivered':
+        return errorDelivered;
       case 'all':
-        return errorToday || errorTomorrow || errorUpcoming;
+        return errorToday || errorTomorrow;
       default:
         return errorToday;
     }
-  }, [dateFilter, errorToday, errorTomorrow, errorUpcoming]);
+  }, [dateFilter, errorToday, errorTomorrow, errorDelivered]);
 
   // Counts from RPC results - NO FRONTEND DATE COMPARISON
   const counts = useMemo(() => ({
     today: todayOrders.length,
     tomorrow: tomorrowOrders.length,
-    upcoming: upcomingOrders.length,
-    all: todayOrders.length + tomorrowOrders.length + upcomingOrders.length,
-  }), [todayOrders, tomorrowOrders, upcomingOrders]);
+    delivered: deliveredOrders.length,
+    all: todayOrders.length + tomorrowOrders.length,
+  }), [todayOrders, tomorrowOrders, deliveredOrders]);
 
   const handleViewOrder = (order: typeof todayOrders[0]) => {
     const navId = order.dailyOrderId || order.id;
@@ -112,8 +112,8 @@ export default function MyDeliveries() {
             <TabsTrigger value="tomorrow" className="text-xs">
               Tomorrow ({counts.tomorrow})
             </TabsTrigger>
-            <TabsTrigger value="upcoming" className="text-xs">
-              Upcoming ({counts.upcoming})
+            <TabsTrigger value="delivered" className="text-xs">
+              Delivered ({counts.delivered})
             </TabsTrigger>
             <TabsTrigger value="all" className="text-xs">
               All ({counts.all})
@@ -152,7 +152,7 @@ export default function MyDeliveries() {
             <p className="text-sm text-muted-foreground">
               {dateFilter === 'today' && 'No deliveries assigned for today'}
               {dateFilter === 'tomorrow' && 'No deliveries assigned for tomorrow'}
-              {dateFilter === 'upcoming' && 'No upcoming deliveries'}
+              {dateFilter === 'delivered' && 'No deliveries completed today'}
               {dateFilter === 'all' && 'No assigned deliveries'}
             </p>
           </motion.div>
