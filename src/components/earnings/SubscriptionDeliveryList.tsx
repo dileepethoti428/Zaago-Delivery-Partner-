@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Receipt, Package, RefreshCw } from 'lucide-react';
 import { EarningRecord } from '@/services/earnings';
 import { formatDateTimeIST } from '@/utils/dateUtils';
@@ -62,8 +63,10 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
             Recent Subscription Deliveries
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {deliveries.map((delivery, index) => (
+        <CardContent className="p-0">
+          <ScrollArea className="max-h-[400px] px-6 py-4">
+            <div className="space-y-3">
+              {deliveries.map((delivery, index) => (
             <div 
               key={delivery.order_id} 
               className={`py-3 ${index < deliveries.length - 1 ? 'border-b' : ''}`}
@@ -94,6 +97,8 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
               </div>
             </div>
           ))}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
     </motion.div>
