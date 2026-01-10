@@ -615,34 +615,35 @@ export default function ManageDelivery() {
 
           {/* Action Buttons */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t-2 space-y-3">
-            {/* Navigate button - always visible */}
-            <Button
-              variant="default"
-              className="w-full rounded-xl h-12 text-sm font-medium"
-              onClick={() => {
-                const coords = order.customer.coordinates;
-                if (coords?.lat && coords?.lng) {
-                  openGoogleMapsCoordinates(coords.lat, coords.lng);
-                } else if (displayAddress) {
-                  openGoogleMapsAddress(displayAddress);
-                } else {
-                  toast({
-                    variant: 'destructive',
-                    title: 'Error',
-                    description: 'Delivery address not available',
-                  });
-                }
-              }}
-            >
-              <Navigation className="h-5 w-5 mr-2" />
-              Navigate to Customer
-            </Button>
-
-            {/* Action buttons - only show if NOT in terminal state */}
+            {/* Top row: Navigate + Mark as Delivered side by side */}
             {!isTerminalState && (
-              <>
+              <div className="flex gap-3">
+                {/* Navigate button */}
                 <Button
-                  className="w-full rounded-xl h-12 text-sm font-medium"
+                  variant="outline"
+                  className="flex-1 rounded-xl h-12 text-sm font-medium"
+                  onClick={() => {
+                    const coords = order.customer.coordinates;
+                    if (coords?.lat && coords?.lng) {
+                      openGoogleMapsCoordinates(coords.lat, coords.lng);
+                    } else if (displayAddress) {
+                      openGoogleMapsAddress(displayAddress);
+                    } else {
+                      toast({
+                        variant: 'destructive',
+                        title: 'Error',
+                        description: 'Delivery address not available',
+                      });
+                    }
+                  }}
+                >
+                  <Navigation className="h-5 w-5 mr-2" />
+                  Customer
+                </Button>
+
+                {/* Mark as Delivered button */}
+                <Button
+                  className="flex-1 rounded-xl h-12 text-sm font-medium"
                   onClick={handleMarkAsDelivered}
                   disabled={isCompleting || isGeneratingQR}
                 >
@@ -654,24 +655,28 @@ export default function ManageDelivery() {
                   ) : isGeneratingQR ? (
                     <>
                       <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Generating QR...
+                      Generating...
                     </>
                   ) : (
                     <>
                       <CheckCircle className="h-5 w-5 mr-2" />
-                      Mark as Delivered
+                      Delivered
                     </>
                   )}
                 </Button>
-                <Button
-                  variant="destructive"
-                  className="w-full rounded-xl h-12 text-sm font-medium"
-                  onClick={handleCancel}
-                >
-                  <XCircle className="h-5 w-5 mr-2" />
-                  Cancel Delivery
-                </Button>
-              </>
+              </div>
+            )}
+
+            {/* Cancel Delivery - full width below */}
+            {!isTerminalState && (
+              <Button
+                variant="destructive"
+                className="w-full rounded-xl h-12 text-sm font-medium"
+                onClick={handleCancel}
+              >
+                <XCircle className="h-5 w-5 mr-2" />
+                Cancel Delivery
+              </Button>
             )}
 
             {/* Show status indicator for terminal states */}
