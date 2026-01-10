@@ -23,7 +23,8 @@ export interface PeriodEarnings {
 
 // Individual earning record
 export interface EarningRecord {
-  order_id: string;
+  order_id: string | null;
+  daily_order_id?: string | null;
   accepted_at: string;
   completed_at: string | null;
   expected_payout: number;
