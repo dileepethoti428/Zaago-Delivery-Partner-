@@ -2,7 +2,6 @@ import { ReactNode } from 'react';
 import { ZaagoHeader } from './ZaagoHeader';
 import { TabBar } from './TabBar';
 import { motion } from 'framer-motion';
-import { useLocationSync } from '@/hooks/useLocationSync';
 
 interface AppShellProps {
   children: ReactNode;
@@ -10,8 +9,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, showTabBar = true }: AppShellProps) {
-  // Sync agent location on app open and foreground resume
-  useLocationSync();
+  // Location sync is now handled centrally in AppProviders via useLocationSyncController
 
   return (
     <div className="min-h-screen bg-background">
