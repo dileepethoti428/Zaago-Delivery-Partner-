@@ -10,7 +10,7 @@ import { advancedCache } from '@/utils/advancedCache';
 import { agentSession } from '@/utils/agentSession';
 import { supabase } from '@/integrations/supabase/client';
 import { checkAndRegisterPush } from '@/utils/onesignal';
-import { useAppResume } from '@/hooks/useAppResume';
+import { useLocationSyncController } from '@/hooks/useLocationSyncController';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,8 +59,8 @@ function AuthInitializer({ children }: { children: ReactNode }) {
   const initAuth = useAuthStore((state) => state.initialize);
   const initLocation = useLocationStore((state) => state.init);
 
-  // Handle app resume from background (Zepto-style stability)
-  useAppResume();
+  // Clean location sync: starts on visible, stops on background
+  useLocationSyncController();
 
   useEffect(() => {
     // Initialize authentication

@@ -69,7 +69,7 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
               <div className="space-y-3 px-6 py-4">
               {deliveries.map((delivery, index) => (
             <div 
-              key={delivery.order_id} 
+              key={delivery.subscription_id || delivery.daily_order_id || `delivery-${index}`} 
               className={`py-3 ${index < deliveries.length - 1 ? 'border-b' : ''}`}
             >
               {/* Delivery Header - NO payout info */}
@@ -79,7 +79,9 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
                   <span className="font-medium text-sm">
                     {delivery.subscription_id 
                       ? `Sub #${delivery.subscription_id.slice(0, 8)}...`
-                      : `Order #${delivery.order_id.slice(0, 8)}...`
+                      : delivery.daily_order_id
+                        ? `Delivery #${delivery.daily_order_id.slice(0, 8)}...`
+                        : `Delivery #${index + 1}`
                     }
                   </span>
                 </div>
