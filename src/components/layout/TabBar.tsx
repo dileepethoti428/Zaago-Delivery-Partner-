@@ -34,13 +34,6 @@ export function TabBar() {
             >
               <Icon className="h-5 w-5" />
               <span className="text-xs font-medium">{tab.label}</span>
-              {isActive && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                />
-              )}
             </motion.button>
           );
         })}
