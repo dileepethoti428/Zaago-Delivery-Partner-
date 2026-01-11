@@ -81,7 +81,7 @@ export default function Settings() {
       is_available: settings?.settings?.is_available ?? true,
       auto_accept_orders: settings?.settings?.auto_accept_orders ?? false,
       preferred_language: settings?.settings?.preferred_language || 'en',
-      dark_mode: settings?.settings?.dark_mode ?? false,
+      theme_preference: settings?.settings?.theme_preference || 'system',
     },
   });
 
@@ -121,12 +121,16 @@ export default function Settings() {
   };
 
   const onPreferencesChange = (field: keyof PreferencesFormData, value: any) => {
-    // Apply dark mode immediately
-    if (field === 'dark_mode') {
-      if (value) {
+    // Apply theme immediately
+    if (field === 'theme_preference') {
+      if (value === 'dark') {
         document.documentElement.classList.add('dark');
-      } else {
+      } else if (value === 'light') {
         document.documentElement.classList.remove('dark');
+      } else {
+        // System preference
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', systemDark);
       }
     }
     
@@ -477,11 +481,20 @@ export default function Settings() {
             </div>
 
             <div className="flex items-center justify-between">
-              <Label>Dark Mode</Label>
-              <Switch
-                checked={preferencesForm.watch('dark_mode')}
-                onCheckedChange={(checked) => onPreferencesChange('dark_mode', checked)}
-              />
+              <Label>App Theme</Label>
+              <Select
+                value={preferencesForm.watch('theme_preference') || 'system'}
+                onValueChange={(value) => onPreferencesChange('theme_preference', value)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">System Default</SelectItem>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

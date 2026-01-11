@@ -31,7 +31,7 @@ export const preferencesSchema = z.object({
   is_available: z.boolean(),
   auto_accept_orders: z.boolean(),
   preferred_language: z.string(),
-  dark_mode: z.boolean(),
+  theme_preference: z.enum(['system', 'light', 'dark']),
 });
 
 export type ProfileFormData = z.infer<typeof profileSchema>;

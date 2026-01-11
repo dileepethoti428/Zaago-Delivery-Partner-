@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { is_available, auto_accept_orders, preferred_language, dark_mode } = body;
+    const { is_available, auto_accept_orders, preferred_language, theme_preference } = body;
 
     console.log('[update-agent-preferences] Updating preferences for user:', user.id);
 
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
           notify_earnings_updates: true,
           notify_promotions: true,
           preferred_language: 'en',
-          dark_mode: false,
+          theme_preference: 'system',
           push_notifications: true,
           sound_alerts: true,
           vibration: true,
@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
     if (is_available !== undefined) updateData.is_available = is_available;
     if (auto_accept_orders !== undefined) updateData.auto_accept_orders = auto_accept_orders;
     if (preferred_language !== undefined) updateData.preferred_language = preferred_language;
-    if (dark_mode !== undefined) updateData.dark_mode = dark_mode;
+    if (theme_preference !== undefined) updateData.theme_preference = theme_preference;
 
     const { data, error } = await serviceClient
       .from('agent_settings')
