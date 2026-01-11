@@ -299,7 +299,7 @@ export default function Login() {
 
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: 'https://zaago-rider.vercel.app/login',
     });
 
     if (error) {
