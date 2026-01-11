@@ -128,6 +128,17 @@ export default function Login() {
     }
   }, [session, profile, navigate]);
 
+  // Listen for PASSWORD_RECOVERY event from reset link
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        navigate('/reset-password');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
   const handleLogin = async (data: LoginFormData) => {
     setLoading(true);
     const { data: authData, error } = await supabase.auth.signInWithPassword({
