@@ -154,8 +154,27 @@ async function navigationStrategy(request) {
     return networkResponse;
   } catch (error) {
     // Return cached index.html for offline navigation
+    // The React app will detect offline status and show the Offline page
     const cachedResponse = await caches.match('/');
-    return cachedResponse || new Response('Offline', { status: 503 });
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    // Return a basic offline HTML page if nothing is cached
+    return new Response(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Offline</title></head>
+        <body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
+          <div style="text-align:center;">
+            <h1>You're Offline</h1>
+            <p>Please check your internet connection.</p>
+          </div>
+        </body>
+      </html>
+    `, { 
+      status: 200,
+      headers: { 'Content-Type': 'text/html' }
+    });
   }
 }
 

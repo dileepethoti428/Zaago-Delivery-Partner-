@@ -452,6 +452,7 @@ export type Database = {
           ringtone_type: string | null
           ringtone_volume: number | null
           sound_alerts: boolean | null
+          theme_preference: string | null
           updated_at: string | null
           vehicle_info: Json | null
           vibration: boolean | null
@@ -478,6 +479,7 @@ export type Database = {
           ringtone_type?: string | null
           ringtone_volume?: number | null
           sound_alerts?: boolean | null
+          theme_preference?: string | null
           updated_at?: string | null
           vehicle_info?: Json | null
           vibration?: boolean | null
@@ -504,6 +506,7 @@ export type Database = {
           ringtone_type?: string | null
           ringtone_volume?: number | null
           sound_alerts?: boolean | null
+          theme_preference?: string | null
           updated_at?: string | null
           vehicle_info?: Json | null
           vibration?: boolean | null

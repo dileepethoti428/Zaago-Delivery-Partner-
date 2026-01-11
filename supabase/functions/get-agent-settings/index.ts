@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
           notify_earnings_updates: true,
           notify_promotions: true,
           preferred_language: 'en',
-          dark_mode: false,
+          theme_preference: 'system',
           push_notifications: true,
           sound_alerts: true,
           vibration: true,

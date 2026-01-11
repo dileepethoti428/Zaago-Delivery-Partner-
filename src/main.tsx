@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import AppProviders from './providers/AppProviders';
+import { NetworkStatusWrapper } from './components/layout/NetworkStatusWrapper';
 import './index.css';
 
 const rootElement = document.getElementById("root");
@@ -15,7 +16,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AppProviders>
-      <RouterProvider router={router} />
+      <NetworkStatusWrapper>
+        <RouterProvider router={router} />
+      </NetworkStatusWrapper>
     </AppProviders>
   </StrictMode>
 );

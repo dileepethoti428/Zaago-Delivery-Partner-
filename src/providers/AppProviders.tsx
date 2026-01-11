@@ -69,20 +69,32 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     // Initialize location services
     initLocation();
     
-    // Initialize dark mode from user settings
-    const initDarkMode = async () => {
+    // Initialize theme from user settings (system default with override)
+    const initTheme = async () => {
       try {
         const { data } = await supabase.functions.invoke('get-agent-settings');
-        if (data?.settings?.dark_mode) {
+        const themePref = data?.settings?.theme_preference; // 'system' | 'light' | 'dark'
+        
+        if (themePref === 'dark') {
           document.documentElement.classList.add('dark');
-        } else {
+        } else if (themePref === 'light') {
           document.documentElement.classList.remove('dark');
+        } else {
+          // Default: follow system preference
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (systemDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
         }
       } catch (error) {
-        console.log('Failed to fetch dark mode preference');
+        // Fallback to system preference
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', systemDark);
       }
     };
-    initDarkMode();
+    initTheme();
   }, [initAuth, initLocation]);
 
   // Handle app resume - re-register push if needed
