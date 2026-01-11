@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Splash from '@/pages/Splash';
 import Login from '@/pages/Login';
+import ResetPassword from '@/pages/ResetPassword';
 import Home from '@/pages/Home';
 import OrderDetails from '@/pages/OrderDetails';
 import ManageDelivery from '@/pages/ManageDelivery';
@@ -17,7 +18,6 @@ import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import TermsConditions from '@/pages/TermsConditions';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RequireApproval } from '@/components/auth/RequireApproval';
-
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -30,6 +30,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />,
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPassword />,
   },
   {
     path: '/privacy-policy',
