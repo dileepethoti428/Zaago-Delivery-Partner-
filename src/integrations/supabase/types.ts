@@ -5740,6 +5740,67 @@ export type Database = {
         }
         Relationships: []
       }
+      vacation_compensations: {
+        Row: {
+          assigned_agent_id: string | null
+          compensation_delivery_date: string
+          created_at: string | null
+          id: string
+          original_vacation_date: string
+          seller_id: string
+          status: string | null
+          subscription_id: string
+          updated_at: string | null
+          vacation_period_id: string
+        }
+        Insert: {
+          assigned_agent_id?: string | null
+          compensation_delivery_date: string
+          created_at?: string | null
+          id?: string
+          original_vacation_date: string
+          seller_id: string
+          status?: string | null
+          subscription_id: string
+          updated_at?: string | null
+          vacation_period_id: string
+        }
+        Update: {
+          assigned_agent_id?: string | null
+          compensation_delivery_date?: string
+          created_at?: string | null
+          id?: string
+          original_vacation_date?: string
+          seller_id?: string
+          status?: string | null
+          subscription_id?: string
+          updated_at?: string | null
+          vacation_period_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacation_compensations_assigned_agent_id_fkey"
+            columns: ["assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_vacation_period_id_fkey"
+            columns: ["vacation_period_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_vacation_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       variant_templates: {
         Row: {
           category_name: string
@@ -7177,10 +7238,23 @@ export type Database = {
           updated_at: string
         }[]
       }
-      get_seller_stats: { Args: { seller_user_id: string }; Returns: Json }
+      get_seller_stats:
+        | { Args: { seller_user_id: string }; Returns: Json }
+        | { Args: { period?: string; seller_user_id: string }; Returns: Json }
       get_seller_stats_with_period: {
-        Args: { seller_user_id: string; time_period?: string }
-        Returns: Json
+        Args: { period?: string; seller_user_id: string }
+        Returns: {
+          active_orders: number
+          active_subscriptions: number
+          delivered_count: number
+          pending_revenue: number
+          pending_subscription_revenue: number
+          projected_daily_subscription: number
+          regular_revenue: number
+          subscription_revenue: number
+          total_products: number
+          total_revenue: number
+        }[]
       }
       get_seller_subscription_orders_overview: {
         Args: { p_date: string; p_seller_user_id: string }
