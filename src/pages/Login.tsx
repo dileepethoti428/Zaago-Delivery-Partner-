@@ -26,42 +26,25 @@ type Mode = "login" | "signup" | "reset";
 async function testFCMToken() {
   await PushNotifications.removeAllListeners();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.email) {
+    console.error("❌ No authenticated user found");
+    return;
+  }
+
   PushNotifications.addListener("registration", async (token) => {
     console.log("✅ FCM TOKEN:", token.value);
 
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
+    const { error } = await supabase.from("delivery_agents").update({ fcm_token: token.value }).eq("email", user.email);
 
-      if (!accessToken) {
-        console.error("❌ No access token");
-        return;
-      }
-
-      const res = await fetch(
-        "https://amhpjsmubciahslghobw.supabase.co/functions/v1/store-fcm-token",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtaHBqc211YmNpYWhzbGdob2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzAxNjksImV4cCI6MjA3MTEwNjE2OX0.QtKx2Nvm0MkIgJUXSoUxQH20l7W-UyzdVInVps_z70Y",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            fcmToken: token.value,
-          }),
-        }
-      );
-
-      const text = await res.text();
-      console.log("✅ store-fcm-token response:", text);
-    } catch (err) {
-      console.error("❌ Native fetch failed:", err);
+    if (error) {
+      console.error("❌ Failed to store FCM token:", error);
+    } else {
+      console.log("✅ FCM token stored in DB");
     }
-  });
-
-  PushNotifications.addListener("registrationError", (err) => {
-    console.error("❌ FCM ERROR:", err);
   });
 
   await PushNotifications.register();
