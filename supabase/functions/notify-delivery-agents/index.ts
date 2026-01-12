@@ -128,11 +128,12 @@ serve(async (req) => {
     
     console.log('✅ Order validation passed - proceeding with notifications')
     
-    // Get all active agents with their locations
+    // Get all active AND online agents with their locations
     const { data: agents, error: agentsError } = await supabase
       .from('delivery_agents')
       .select('id, name, email, onesignal_player_id')
       .eq('is_active', true)
+      .eq('is_online', true)
     
     if (agentsError) {
       console.error('Error fetching agents:', agentsError)
