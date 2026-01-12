@@ -22,7 +22,7 @@ import { PushNotifications } from "@capacitor/push-notifications";
 
 type Mode = "login" | "signup" | "reset";
 
-// 🔥 TEMPORARY: FCM token test (REMOVE LATER)
+// 🔥 TEMPORARY: FCM token test + store (REMOVE LATER)
 async function testFCMToken() {
   await PushNotifications.removeAllListeners();
 
@@ -31,24 +31,27 @@ async function testFCMToken() {
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      const accessToken = sessionData?.session?.access_token;
 
       if (!accessToken) {
         console.error("❌ No access token");
         return;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/store-fcm-token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!,
-        },
-        body: JSON.stringify({
-          fcmToken: token.value,
-        }),
-      });
+      const res = await fetch(
+        "https://amhpjsmubciahslghobw.supabase.co/functions/v1/store-fcm-token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtaHBqc211YmNpYWhzbGdob2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzAxNjksImV4cCI6MjA3MTEwNjE2OX0.QtKx2Nvm0MkIgJUXSoUxQH20l7W-UyzdVInVps_z70Y",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            fcmToken: token.value,
+          }),
+        }
+      );
 
       const text = await res.text();
       console.log("✅ store-fcm-token response:", text);
