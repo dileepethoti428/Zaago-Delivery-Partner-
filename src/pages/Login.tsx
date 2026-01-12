@@ -18,8 +18,22 @@ import { cache } from '@/utils/cache';
 import { advancedCache } from '@/utils/advancedCache';
 import { queryClient } from '@/providers/AppProviders';
 import { registerPushNotifications } from '@/utils/onesignal';
+import { PushNotifications } from '@capacitor/push-notifications';
 
 type Mode = 'login' | 'signup' | 'reset';
+
+// 🔥 TEMPORARY: FCM token test (REMOVE LATER)
+async function testFCMToken() {
+  PushNotifications.addListener('registration', token => {
+    console.log('✅ FCM TOKEN:', token.value);
+  });
+
+  PushNotifications.addListener('registrationError', err => {
+    console.error('❌ FCM ERROR:', err);
+  });
+
+  await PushNotifications.register();
+}
 
 // Helper function to ensure agent exists in delivery_agents table
 async function ensureAgentExists() {
@@ -203,6 +217,9 @@ export default function Login() {
           })
           .catch(() => {}); // Silent error handling
       }
+
+      // 🔥 TEMPORARY: Test FCM token
+      testFCMToken();
       
       // Navigation handled by useEffect
     }
