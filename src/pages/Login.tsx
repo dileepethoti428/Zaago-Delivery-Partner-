@@ -26,23 +26,33 @@ type Mode = "login" | "signup" | "reset";
 async function testFCMToken() {
   await PushNotifications.removeAllListeners();
 
-  const perm = await PushNotifications.requestPermissions();
-  if (perm.receive !== "granted") {
-    console.warn("❌ Notification permission denied");
-    return;
-  }
-
   PushNotifications.addListener("registration", async (token) => {
     console.log("✅ FCM TOKEN:", token.value);
 
-    const { error } = await supabase.functions.invoke("store-fcm-token", {
-      body: { fcmToken: token.value },
-    });
+    const session = (await supabase.auth.getSession()).data.session;
 
-    if (error) {
-      console.error("❌ Failed to store FCM token:", error);
-    } else {
-      console.log("✅ FCM token stored successfully");
+    if (!session) {
+      console.error("❌ No auth session found");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.functions.invoke("store-fcm-token", {
+        body: {
+          fcmToken: token.value,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) {
+        console.error("❌ Failed to store FCM token:", error);
+      } else {
+        console.log("✅ FCM token stored successfully");
+      }
+    } catch (err) {
+      console.error("❌ Edge function call failed:", err);
     }
   });
 
