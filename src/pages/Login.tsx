@@ -1,35 +1,55 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { pageTransition, pageTransitionConfig } from '@/animation/variants';
-import { Truck, Loader2 } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuthStore } from '@/store/auth';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
-import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from '@/utils/validation';
-import { agentSession } from '@/utils/agentSession';
-import { cache } from '@/utils/cache';
-import { advancedCache } from '@/utils/advancedCache';
-import { queryClient } from '@/providers/AppProviders';
-import { registerPushNotifications } from '@/utils/onesignal';
-import { PushNotifications } from '@capacitor/push-notifications';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { pageTransition, pageTransitionConfig } from "@/animation/variants";
+import { Truck, Loader2 } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuthStore } from "@/store/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import { loginSchema, signupSchema, type LoginFormData, type SignupFormData } from "@/utils/validation";
+import { agentSession } from "@/utils/agentSession";
+import { cache } from "@/utils/cache";
+import { advancedCache } from "@/utils/advancedCache";
+import { queryClient } from "@/providers/AppProviders";
+import { registerPushNotifications } from "@/utils/onesignal";
+import { PushNotifications } from "@capacitor/push-notifications";
 
-type Mode = 'login' | 'signup' | 'reset';
+type Mode = "login" | "signup" | "reset";
 
 // 🔥 TEMPORARY: FCM token test (REMOVE LATER)
+// 🔥 TEMPORARY: FCM token test + store (REMOVE LATER)
 async function testFCMToken() {
-  PushNotifications.addListener('registration', token => {
-    console.log('✅ FCM TOKEN:', token.value);
+  // Prevent duplicate listeners
+  await PushNotifications.removeAllListeners();
+
+  PushNotifications.addListener("registration", async (token) => {
+    console.log("✅ FCM TOKEN:", token.value);
+
+    try {
+      const { error } = await supabase.functions.invoke("store-fcm-token", {
+        body: {
+          fcmToken: token.value,
+        },
+      });
+
+      if (error) {
+        console.error("❌ Failed to store FCM token:", error);
+      } else {
+        console.log("✅ FCM token stored successfully");
+      }
+    } catch (err) {
+      console.error("❌ Error calling store-fcm-token:", err);
+    }
   });
 
-  PushNotifications.addListener('registrationError', err => {
-    console.error('❌ FCM ERROR:', err);
+  PushNotifications.addListener("registrationError", (err) => {
+    console.error("❌ FCM ERROR:", err);
   });
 
   await PushNotifications.register();
@@ -38,18 +58,18 @@ async function testFCMToken() {
 // Helper function to ensure agent exists in delivery_agents table
 async function ensureAgentExists() {
   try {
-    console.log('[Login] Ensuring agent exists in delivery_agents...');
-    const { data, error } = await supabase.functions.invoke('ensure-agent-exists');
-    
+    console.log("[Login] Ensuring agent exists in delivery_agents...");
+    const { data, error } = await supabase.functions.invoke("ensure-agent-exists");
+
     if (error) {
-      console.error('[Login] Error ensuring agent exists:', error);
+      console.error("[Login] Error ensuring agent exists:", error);
       return false;
     }
-    
-    console.log('[Login] Agent ensured:', data);
+
+    console.log("[Login] Agent ensured:", data);
     return true;
   } catch (error) {
-    console.error('[Login] Failed to ensure agent exists:', error);
+    console.error("[Login] Failed to ensure agent exists:", error);
     return false;
   }
 }
@@ -59,7 +79,7 @@ async function ensureAgentExists() {
 async function syncLocationAfterAuth(): Promise<void> {
   try {
     if (!navigator.geolocation) {
-      console.warn('[Login] Geolocation not supported - continuing without location sync');
+      console.warn("[Login] Geolocation not supported - continuing without location sync");
       return;
     }
 
@@ -74,15 +94,15 @@ async function syncLocationAfterAuth(): Promise<void> {
       });
     } catch (geoError) {
       // Geolocation failed (user denied, timeout, etc.) - this is fine
-      console.warn('[Login] Geolocation unavailable - continuing without location sync:', geoError);
+      console.warn("[Login] Geolocation unavailable - continuing without location sync:", geoError);
       return;
     }
 
     const { latitude, longitude, accuracy, heading, speed } = position.coords;
-    console.log('[Login] Attempting location sync:', { latitude, longitude });
+    console.log("[Login] Attempting location sync:", { latitude, longitude });
 
     try {
-      const { data, error } = await supabase.functions.invoke('update-agent-location', {
+      const { data, error } = await supabase.functions.invoke("update-agent-location", {
         body: {
           latitude,
           longitude,
@@ -94,59 +114,61 @@ async function syncLocationAfterAuth(): Promise<void> {
 
       if (error) {
         // Edge function returned error - log and continue
-        console.warn('[Login] Location sync edge function error (non-blocking):', error);
+        console.warn("[Login] Location sync edge function error (non-blocking):", error);
       } else if (data?.success === false) {
         // Edge function returned success:false - log reason and continue
-        console.warn('[Login] Location sync returned non-success (non-blocking):', data?.reason || 'unknown');
+        console.warn("[Login] Location sync returned non-success (non-blocking):", data?.reason || "unknown");
       } else {
-        console.log('[Login] Location synced successfully');
+        console.log("[Login] Location synced successfully");
       }
     } catch (invokeError) {
       // Network or other error calling edge function - log and continue
-      console.warn('[Login] Location sync invoke failed (non-blocking):', invokeError);
+      console.warn("[Login] Location sync invoke failed (non-blocking):", invokeError);
     }
   } catch (unexpectedError) {
     // Catch-all for any unexpected errors - never throw
-    console.warn('[Login] Unexpected error in location sync (non-blocking):', unexpectedError);
+    console.warn("[Login] Unexpected error in location sync (non-blocking):", unexpectedError);
   }
 }
 
 export default function Login() {
   const navigate = useNavigate();
   const { session, profile, fetchProfile } = useAuthStore();
-  const [mode, setMode] = useState<Mode>('login');
+  const [mode, setMode] = useState<Mode>("login");
   const [loading, setLoading] = useState(false);
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: "", password: "" },
   });
 
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: '', password: '', confirmPassword: '' },
+    defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
   // Redirect if already authenticated
   useEffect(() => {
     if (session && profile) {
       if (!profile.documents_submitted) {
-        navigate('/upload-documents');
-      } else if (profile.approval_status === 'pending') {
-        navigate('/pending-approval');
-      } else if (profile.approval_status === 'rejected') {
-        navigate('/rejected');
-      } else if (profile.approval_status === 'approved') {
-        navigate('/my-deliveries');
+        navigate("/upload-documents");
+      } else if (profile.approval_status === "pending") {
+        navigate("/pending-approval");
+      } else if (profile.approval_status === "rejected") {
+        navigate("/rejected");
+      } else if (profile.approval_status === "approved") {
+        navigate("/my-deliveries");
       }
     }
   }, [session, profile, navigate]);
 
   // Listen for PASSWORD_RECOVERY event from reset link
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        navigate('/reset-password');
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        navigate("/reset-password");
       }
     });
 
@@ -162,19 +184,19 @@ export default function Login() {
 
     if (error) {
       // Provide helpful error messages based on error type
-      const isInvalidCredentials = error.message.toLowerCase().includes('invalid');
-      
+      const isInvalidCredentials = error.message.toLowerCase().includes("invalid");
+
       if (isInvalidCredentials) {
         toast({
-          title: 'Login failed',
-          description: 'Invalid email or password. If you don\'t have an account, please create one first.',
-          variant: 'destructive',
+          title: "Login failed",
+          description: "Invalid email or password. If you don't have an account, please create one first.",
+          variant: "destructive",
         });
       } else {
         toast({
-          title: 'Login failed',
+          title: "Login failed",
           description: error.message,
-          variant: 'destructive',
+          variant: "destructive",
         });
       }
       setLoading(false);
@@ -190,28 +212,28 @@ export default function Login() {
 
       // Now check if different agent was logged in and clear their caches
       if (previousAgentId && previousAgentId !== newUserId) {
-        console.log('🔄 Different agent detected, clearing all caches...');
+        console.log("🔄 Different agent detected, clearing all caches...");
         cache.clearAll();
         advancedCache.clear();
         queryClient.clear();
       }
 
       await fetchProfile();
-      
+
       // Ensure agent exists in delivery_agents table (non-blocking)
       ensureAgentExists();
-      
+
       // Sync location immediately after login (non-blocking)
       syncLocationAfterAuth();
-      
+
       // Register push notifications (non-blocking)
       if (authData.user?.email) {
         registerPushNotifications(authData.user.email)
-          .then(result => {
+          .then((result) => {
             if (result.success) {
               toast({
-                title: 'Push notifications enabled',
-                description: 'You will receive delivery alerts',
+                title: "Push notifications enabled",
+                description: "You will receive delivery alerts",
               });
             }
           })
@@ -220,7 +242,7 @@ export default function Login() {
 
       // 🔥 TEMPORARY: Test FCM token
       testFCMToken();
-      
+
       // Navigation handled by useEffect
     }
   };
@@ -237,9 +259,9 @@ export default function Login() {
 
     if (error) {
       toast({
-        title: 'Signup failed',
+        title: "Signup failed",
         description: error.message,
-        variant: 'destructive',
+        variant: "destructive",
       });
       setLoading(false);
       return;
@@ -254,89 +276,95 @@ export default function Login() {
 
       // Clear any previous agent's cached data
       if (previousAgentId && previousAgentId !== newUserId) {
-        console.log('🔄 Different agent detected during signup, clearing all caches...');
+        console.log("🔄 Different agent detected during signup, clearing all caches...");
         cache.clearAll();
         advancedCache.clear();
         queryClient.clear();
       }
 
       // Create profile
-      const { error: profileError } = await supabase.from('profiles').insert({
+      const { error: profileError } = await supabase.from("profiles").insert({
         user_id: newUserId,
-        approval_status: 'pending',
+        approval_status: "pending",
         documents_submitted: false,
       });
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
+        console.error("Profile creation error:", profileError);
       }
 
       toast({
-        title: 'Account created',
-        description: 'Please upload your documents to continue',
+        title: "Account created",
+        description: "Please upload your documents to continue",
       });
 
       await fetchProfile();
-      
+
       // Ensure agent exists in delivery_agents table (non-blocking)
       ensureAgentExists();
-      
+
       // Sync location immediately after signup (non-blocking)
       syncLocationAfterAuth();
-      
+
       // Register push notifications (non-blocking)
       if (authData.user?.email) {
         registerPushNotifications(authData.user.email)
-          .then(result => {
+          .then((result) => {
             if (result.success) {
               toast({
-                title: 'Push notifications enabled',
-                description: 'You will receive delivery alerts',
+                title: "Push notifications enabled",
+                description: "You will receive delivery alerts",
               });
             }
           })
           .catch(() => {}); // Silent error handling
       }
-      
-      navigate('/upload-documents');
+
+      navigate("/upload-documents");
     }
     setLoading(false);
   };
 
   const handleResetPassword = async () => {
-    const email = loginForm.getValues('email');
+    const email = loginForm.getValues("email");
     if (!email) {
       toast({
-        title: 'Email required',
-        description: 'Please enter your email address',
-        variant: 'destructive',
+        title: "Email required",
+        description: "Please enter your email address",
+        variant: "destructive",
       });
       return;
     }
 
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://zaago-rider.vercel.app/login',
+      redirectTo: "https://zaago-rider.vercel.app/login",
     });
 
     if (error) {
       toast({
-        title: 'Reset failed',
+        title: "Reset failed",
         description: error.message,
-        variant: 'destructive',
+        variant: "destructive",
       });
     } else {
       toast({
-        title: 'Check your email',
-        description: 'Password reset link has been sent',
+        title: "Check your email",
+        description: "Password reset link has been sent",
       });
-      setMode('login');
+      setMode("login");
     }
     setLoading(false);
   };
 
   return (
-    <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4">
+    <motion.div
+      initial={pageTransition.initial}
+      animate={pageTransition.animate}
+      exit={pageTransition.exit}
+      transition={pageTransitionConfig}
+      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4"
+    >
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -353,18 +381,18 @@ export default function Login() {
         <Card className="rounded-2xl shadow-xl border-0 bg-card/50 backdrop-blur">
           <CardHeader>
             <CardTitle>
-              {mode === 'login' && 'Welcome back'}
-              {mode === 'signup' && 'Create account'}
-              {mode === 'reset' && 'Reset password'}
+              {mode === "login" && "Welcome back"}
+              {mode === "signup" && "Create account"}
+              {mode === "reset" && "Reset password"}
             </CardTitle>
             <CardDescription>
-              {mode === 'login' && 'Sign in to your delivery agent account'}
-              {mode === 'signup' && 'Join as a delivery agent'}
-              {mode === 'reset' && 'Enter your email to receive a reset link'}
+              {mode === "login" && "Sign in to your delivery agent account"}
+              {mode === "signup" && "Join as a delivery agent"}
+              {mode === "reset" && "Enter your email to receive a reset link"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {mode === 'login' && (
+            {mode === "login" && (
               <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -373,7 +401,7 @@ export default function Login() {
                     type="email"
                     placeholder="agent@zaago.com"
                     className="rounded-xl"
-                    {...loginForm.register('email')}
+                    {...loginForm.register("email")}
                   />
                   {loginForm.formState.errors.email && (
                     <p className="text-sm text-destructive">{loginForm.formState.errors.email.message}</p>
@@ -387,41 +415,29 @@ export default function Login() {
                     type="password"
                     placeholder="••••••••"
                     className="rounded-xl"
-                    {...loginForm.register('password')}
+                    {...loginForm.register("password")}
                   />
                   {loginForm.formState.errors.password && (
                     <p className="text-sm text-destructive">{loginForm.formState.errors.password.message}</p>
                   )}
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full rounded-xl h-11 text-base font-medium"
-                  disabled={loading}
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign in'}
+                <Button type="submit" className="w-full rounded-xl h-11 text-base font-medium" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
                 </Button>
 
                 <div className="flex justify-between text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setMode('reset')}
-                    className="text-primary hover:underline"
-                  >
+                  <button type="button" onClick={() => setMode("reset")} className="text-primary hover:underline">
                     Forgot password?
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode('signup')}
-                    className="text-primary hover:underline"
-                  >
+                  <button type="button" onClick={() => setMode("signup")} className="text-primary hover:underline">
                     Create account
                   </button>
                 </div>
               </form>
             )}
 
-            {mode === 'signup' && (
+            {mode === "signup" && (
               <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
@@ -430,7 +446,7 @@ export default function Login() {
                     type="email"
                     placeholder="agent@zaago.com"
                     className="rounded-xl"
-                    {...signupForm.register('email')}
+                    {...signupForm.register("email")}
                   />
                   {signupForm.formState.errors.email && (
                     <p className="text-sm text-destructive">{signupForm.formState.errors.email.message}</p>
@@ -444,7 +460,7 @@ export default function Login() {
                     type="password"
                     placeholder="••••••••"
                     className="rounded-xl"
-                    {...signupForm.register('password')}
+                    {...signupForm.register("password")}
                   />
                   {signupForm.formState.errors.password && (
                     <p className="text-sm text-destructive">{signupForm.formState.errors.password.message}</p>
@@ -458,34 +474,26 @@ export default function Login() {
                     type="password"
                     placeholder="••••••••"
                     className="rounded-xl"
-                    {...signupForm.register('confirmPassword')}
+                    {...signupForm.register("confirmPassword")}
                   />
                   {signupForm.formState.errors.confirmPassword && (
                     <p className="text-sm text-destructive">{signupForm.formState.errors.confirmPassword.message}</p>
                   )}
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full rounded-xl h-11 text-base font-medium"
-                  disabled={loading}
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create account'}
+                <Button type="submit" className="w-full rounded-xl h-11 text-base font-medium" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
                 </Button>
 
                 <div className="text-center text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setMode('login')}
-                    className="text-primary hover:underline"
-                  >
+                  <button type="button" onClick={() => setMode("login")} className="text-primary hover:underline">
                     Already have an account? Sign in
                   </button>
                 </div>
               </form>
             )}
 
-            {mode === 'reset' && (
+            {mode === "reset" && (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="reset-email">Email</Label>
@@ -494,7 +502,7 @@ export default function Login() {
                     type="email"
                     placeholder="agent@zaago.com"
                     className="rounded-xl"
-                    {...loginForm.register('email')}
+                    {...loginForm.register("email")}
                   />
                 </div>
 
@@ -503,15 +511,11 @@ export default function Login() {
                   className="w-full rounded-xl h-11 text-base font-medium"
                   disabled={loading}
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send reset link'}
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
                 </Button>
 
                 <div className="text-center text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setMode('login')}
-                    className="text-primary hover:underline"
-                  >
+                  <button type="button" onClick={() => setMode("login")} className="text-primary hover:underline">
                     Back to sign in
                   </button>
                 </div>
