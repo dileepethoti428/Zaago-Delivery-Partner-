@@ -12,6 +12,54 @@ const REGULAR_ORDER_PRICING = {
   DISTANCE_RATE: 8,    // ₹8 per km
 };
 
+/**
+ * Calculate road distance between seller and customer using Google Distance Matrix API
+ * This is the CORRECT distance for payout calculation (not agent location)
+ */
+async function calculateRoadDistance(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number }
+): Promise<number | null> {
+  const googleApiKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
+  
+  if (!googleApiKey) {
+    console.error('❌ GOOGLE_PLACES_API_KEY not configured');
+    return null;
+  }
+
+  if (!origin.lat || !origin.lng || !destination.lat || !destination.lng) {
+    console.error('❌ Invalid coordinates:', { origin, destination });
+    return null;
+  }
+
+  try {
+    const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&mode=driving&key=${googleApiKey}`;
+    
+    console.log(`📍 Calculating road distance: Seller(${origin.lat},${origin.lng}) → Customer(${destination.lat},${destination.lng})`);
+    
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    
+    if (data.status === 'OK' && data.rows[0]?.elements[0]?.status === 'OK') {
+      const distanceMeters = data.rows[0].elements[0].distance.value;
+      const distanceKm = distanceMeters / 1000;
+      // Round UP to 1 decimal place (Zepto/Blinkit style)
+      const roundedDistance = Math.ceil(distanceKm * 10) / 10;
+      // Minimum 0.1km, maximum 25km
+      const finalDistance = Math.max(0.1, Math.min(25, roundedDistance));
+      
+      console.log(`✅ Road distance calculated: ${finalDistance}km (raw: ${distanceKm.toFixed(2)}km)`);
+      return finalDistance;
+    } else {
+      console.error('❌ Google Distance Matrix API returned invalid status:', data.status, data.rows?.[0]?.elements?.[0]?.status);
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Google Distance Matrix API error:', error);
+    return null;
+  }
+}
+
 console.log("Accept order function started")
 
 serve(async (req) => {
@@ -39,7 +87,7 @@ serve(async (req) => {
     // VALIDATE: Agent exists and is active
     const { data: agentData, error: agentError } = await supabase
       .from('delivery_agents')
-      .select('id, is_active')
+      .select('id, is_active, latitude, longitude')
       .eq('agent_id', agent_id) // Query by auth user ID
       .single();
 
@@ -61,15 +109,6 @@ serve(async (req) => {
 
     console.log(`✅ Agent ${agent_id} validated successfully`);
 
-    // Estimate distance for expected payout (will be updated on completion with actual distance)
-    const estimatedDistance = 5; // 5km estimate
-    
-    // Calculate expected payout using simple Zepto/Blinkit formula
-    // ₹10 base + ₹8/km
-    const roundedDistance = Math.round(estimatedDistance * 10) / 10;
-    const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
-    const expectedPayout = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
-    
     const acceptedAt = new Date().toISOString();
 
     // ============================================
@@ -77,7 +116,7 @@ serve(async (req) => {
     // ============================================
     const { data: existingOrder, error: checkError } = await supabase
       .from('orders')
-      .select('id, status, agent_id, assigned_agent_id, items')
+      .select('id, status, agent_id, assigned_agent_id, items, address')
       .eq('id', order_id)
       .single();
 
@@ -182,6 +221,7 @@ serve(async (req) => {
     let pickupAddress = null;
     let sellerName = null;
     let sellerPhone = null;
+    let calculatedDistance: number | null = null;
 
     if (updatedOrder.items && updatedOrder.items.length > 0) {
       const sellerId = updatedOrder.items[0].seller_id;
@@ -235,27 +275,75 @@ serve(async (req) => {
             pickupAddress = normalizedAddress;
             sellerName = sellerData.name || sellerData.business_name;
             sellerPhone = sellerData.phone;
+
+            // ============================================
+            // CALCULATE SELLER → CUSTOMER ROAD DISTANCE
+            // This is the CORRECT distance for payout calculation
+            // ============================================
+            const customerCoords = updatedOrder.address?.coordinates;
+            
+            if (customerCoords?.lat && customerCoords?.lng) {
+              console.log(`📍 Calculating distance: Seller(${sellerData.latitude},${sellerData.longitude}) → Customer(${customerCoords.lat},${customerCoords.lng})`);
+              
+              calculatedDistance = await calculateRoadDistance(
+                { lat: sellerData.latitude, lng: sellerData.longitude },
+                { lat: customerCoords.lat, lng: customerCoords.lng }
+              );
+              
+              // Validation guard - prevent obviously wrong distances
+              if (calculatedDistance !== null) {
+                if (calculatedDistance < 0.1 || calculatedDistance > 25) {
+                  console.warn(`⚠️ Distance out of expected range: ${calculatedDistance}km, using fallback`);
+                  calculatedDistance = 2.5; // Reasonable fallback
+                }
+              } else {
+                console.warn('⚠️ Could not calculate road distance, using fallback');
+                calculatedDistance = 2.5; // Fallback if API fails
+              }
+              
+              console.log(`✅ Final distance for payout: ${calculatedDistance}km`);
+            } else {
+              console.warn('⚠️ Customer coordinates not available in order.address');
+              calculatedDistance = 2.5; // Fallback
+            }
           }
         }
       }
     }
 
-    // Update pickup details in a separate query (non-critical)
-    if (pickupLocation || pickupAddress || sellerName || sellerPhone) {
-      await supabase
+    // Use calculated distance or fallback
+    const finalDistance = calculatedDistance ?? 2.5;
+    
+    // Recalculate expected payout with ACTUAL distance
+    const distancePay = finalDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
+    const expectedPayout = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
+    
+    console.log(`💰 Payout calculation: ₹${REGULAR_ORDER_PRICING.BASE_PAY} base + ₹${distancePay.toFixed(2)} distance (${finalDistance}km × ₹${REGULAR_ORDER_PRICING.DISTANCE_RATE}) = ₹${expectedPayout.toFixed(2)}`);
+
+    // Update order with pickup details AND calculated distance
+    const updateFields: Record<string, unknown> = {};
+    if (pickupLocation) updateFields.pickup_location = pickupLocation;
+    if (pickupAddress) updateFields.pickup_address = pickupAddress;
+    if (sellerName) updateFields.seller_name = sellerName;
+    if (sellerPhone) updateFields.seller_phone = sellerPhone;
+    updateFields.distance_km = finalDistance; // Store calculated distance!
+    
+    if (Object.keys(updateFields).length > 0) {
+      const { error: updateFieldsError } = await supabase
         .from('orders')
-        .update({
-          pickup_location: pickupLocation,
-          pickup_address: pickupAddress,
-          seller_name: sellerName,
-          seller_phone: sellerPhone
-        })
+        .update(updateFields)
         .eq('id', order_id);
+      
+      if (updateFieldsError) {
+        console.error('⚠️ Failed to update order fields:', updateFieldsError);
+      } else {
+        console.log(`✅ Order updated with distance_km: ${finalDistance}km`);
+      }
     }
 
     console.log(`Order ${order_id} successfully accepted by agent ${agent_id}`);
     
-    // Create earnings tracking record with simple Zepto/Blinkit breakdown
+    // Create earnings tracking record with ACTUAL calculated distance
     const { error: trackingError } = await supabase
       .from('agent_earnings_tracking')
       .insert({
@@ -264,14 +352,14 @@ serve(async (req) => {
         accepted_at: acceptedAt,
         expected_payout: Math.round(expectedPayout * 10) / 10,
         payout_status: 'pending',
-        distance_km: roundedDistance,
+        distance_km: finalDistance, // Use calculated distance!
         is_peak_hour: false, // No peak hour pricing in new model
         payout_breakdown: {
           base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
           distance_pay: Math.round(distancePay * 10) / 10,
-          distance_km: roundedDistance,
-          rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
-          // NO peak_bonus, NO platform_fee - simple transparent pricing
+          distance_km: finalDistance,
+          rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE,
+          distance_source: 'google_distance_matrix'
         }
       });
 
@@ -279,7 +367,7 @@ serve(async (req) => {
       console.error('❌ Failed to create earnings tracking:', trackingError);
       // Don't fail the order acceptance, just log
     } else {
-      console.log(`✅ Earnings tracking created: ₹${expectedPayout} expected payout (₹${REGULAR_ORDER_PRICING.BASE_PAY} base + ₹${distancePay} distance)`);
+      console.log(`✅ Earnings tracking created: ₹${expectedPayout.toFixed(2)} expected payout (₹${REGULAR_ORDER_PRICING.BASE_PAY} base + ₹${distancePay.toFixed(2)} for ${finalDistance}km)`);
     }
     
     // Generate OTP for delivery verification
