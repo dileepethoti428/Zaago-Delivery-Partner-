@@ -29,30 +29,31 @@ async function testFCMToken() {
   PushNotifications.addListener("registration", async (token) => {
     console.log("✅ FCM TOKEN:", token.value);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const session = sessionData.session;
-
-    if (!session) {
-      console.error("❌ No auth session found");
-      return;
-    }
-
     try {
-      const { data, error } = await supabase.functions.invoke("store-fcm-token", {
-        body: { fcmToken: token.value },
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        console.error("❌ No access token");
+        return;
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/store-fcm-token`, {
+        method: "POST",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!,
         },
+        body: JSON.stringify({
+          fcmToken: token.value,
+        }),
       });
 
-      if (error) {
-        console.error("❌ Failed to store FCM token:", error);
-      } else {
-        console.log("✅ FCM token stored successfully", data);
-      }
+      const text = await res.text();
+      console.log("✅ store-fcm-token response:", text);
     } catch (err) {
-      console.error("❌ Edge function call failed (network/CORS):", err);
+      console.error("❌ Native fetch failed:", err);
     }
   });
 
