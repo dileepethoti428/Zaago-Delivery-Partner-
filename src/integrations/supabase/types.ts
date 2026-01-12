@@ -1531,6 +1531,7 @@ export type Database = {
           device_info: Json | null
           documents_verified: boolean | null
           email: string
+          fcm_token: string | null
           id: string
           is_active: boolean | null
           is_online: boolean | null
@@ -1566,6 +1567,7 @@ export type Database = {
           device_info?: Json | null
           documents_verified?: boolean | null
           email: string
+          fcm_token?: string | null
           id?: string
           is_active?: boolean | null
           is_online?: boolean | null
@@ -1601,6 +1603,7 @@ export type Database = {
           device_info?: Json | null
           documents_verified?: boolean | null
           email?: string
+          fcm_token?: string | null
           id?: string
           is_active?: boolean | null
           is_online?: boolean | null
