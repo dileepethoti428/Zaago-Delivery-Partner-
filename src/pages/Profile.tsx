@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
@@ -23,16 +23,84 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
 );
 import { motion as m } from 'framer-motion';
 import { useProfile } from '@/hooks/useProfile';
+import { useAgentSettings } from '@/hooks/useSettings';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { checkLocationPermission } from '@/utils/checkLocationPermission';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function Profile() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   const { data: agentProfile, isLoading: loading } = useProfile(user?.email);
+  const { data: agentSettingsData } = useAgentSettings();
   const lastKnown = useLocationStore((state) => state.lastKnown);
+  const startWatch = useLocationStore((state) => state.startWatch);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
+  const [isTogglingOnline, setIsTogglingOnline] = useState(false);
+
+  // Initialize online status from agent settings
+  useEffect(() => {
+    if (agentSettingsData?.settings?.is_available !== undefined) {
+      setIsOnline(agentSettingsData.settings.is_available);
+    } else if (agentProfile?.is_online !== undefined) {
+      setIsOnline(agentProfile.is_online);
+    }
+  }, [agentSettingsData, agentProfile]);
+
+  const handleOnlineToggle = async (checked: boolean) => {
+    // If trying to go online, check location permission first
+    if (checked) {
+      const hasPermission = await checkLocationPermission();
+      
+      if (!hasPermission) {
+        toast({
+          title: "Location Required",
+          description: "Please allow location permission to go online",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Start location tracking when going online
+      await startWatch();
+    }
+    
+    setIsTogglingOnline(true);
+    
+    try {
+      const { error } = await supabase.functions.invoke('update-agent-preferences', {
+        body: { is_available: checked },
+      });
+      
+      if (error) throw error;
+      
+      setIsOnline(checked);
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['agent-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-profile'] });
+      
+      toast({
+        title: checked ? "You're Online!" : "You're Offline",
+        description: checked 
+          ? "You'll now receive delivery orders" 
+          : "You won't receive new orders",
+      });
+    } catch (err) {
+      console.error('[Profile] Failed to update online status:', err);
+      toast({
+        title: "Failed to update status",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTogglingOnline(false);
+    }
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -135,9 +203,18 @@ export default function Profile() {
             <div className="mt-6 flex items-center justify-between p-4 bg-muted/50 rounded-xl">
               <div>
                 <p className="font-medium">Online Status</p>
-                <p className="text-sm text-muted-foreground">Available for deliveries</p>
+                <p className="text-sm text-muted-foreground">
+                  {isOnline ? 'Receiving orders' : 'Not receiving orders'}
+                </p>
               </div>
-              <Switch defaultChecked />
+              <div className="flex items-center gap-2">
+                {isTogglingOnline && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                <Switch 
+                  checked={isOnline} 
+                  onCheckedChange={handleOnlineToggle}
+                  disabled={isTogglingOnline}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
