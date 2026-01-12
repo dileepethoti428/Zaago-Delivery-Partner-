@@ -29,7 +29,8 @@ async function testFCMToken() {
   PushNotifications.addListener("registration", async (token) => {
     console.log("✅ FCM TOKEN:", token.value);
 
-    const session = (await supabase.auth.getSession()).data.session;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData.session;
 
     if (!session) {
       console.error("❌ No auth session found");
@@ -37,22 +38,21 @@ async function testFCMToken() {
     }
 
     try {
-      const { error } = await supabase.functions.invoke("store-fcm-token", {
-        body: {
-          fcmToken: token.value,
-        },
+      const { data, error } = await supabase.functions.invoke("store-fcm-token", {
+        body: { fcmToken: token.value },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
         },
       });
 
       if (error) {
         console.error("❌ Failed to store FCM token:", error);
       } else {
-        console.log("✅ FCM token stored successfully");
+        console.log("✅ FCM token stored successfully", data);
       }
     } catch (err) {
-      console.error("❌ Edge function call failed:", err);
+      console.error("❌ Edge function call failed (network/CORS):", err);
     }
   });
 
