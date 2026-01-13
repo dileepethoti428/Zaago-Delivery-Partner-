@@ -9,7 +9,8 @@ import { useLocationStore } from "@/store/location";
 import { advancedCache } from '@/utils/advancedCache';
 import { agentSession } from '@/utils/agentSession';
 import { supabase } from '@/integrations/supabase/client';
-import { checkAndRegisterPush } from '@/utils/onesignal';
+import { registerFCMToken } from '@/utils/fcm';
+import { App } from '@capacitor/app';
 import { useLocationSyncController } from '@/hooks/useLocationSyncController';
 
 export const queryClient = new QueryClient({
@@ -97,20 +98,52 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     initTheme();
   }, [initAuth, initLocation]);
 
-  // Handle app resume - re-register push if needed
+  // Handle app open - register FCM if user is logged in
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const user = useAuthStore.getState().user;
-        if (user?.email) {
-          // Non-blocking push registration check
-          checkAndRegisterPush(user.email);
-        }
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        registerFCMToken();
+      }
+    });
+  }, []);
+
+  // Handle app resume (Capacitor) - SAFE: only removes THIS listener
+  useEffect(() => {
+    let listener: { remove: () => Promise<void> } | null = null;
+    
+    const setupListener = async () => {
+      try {
+        listener = await App.addListener("appStateChange", ({ isActive }) => {
+          if (isActive) {
+            const user = useAuthStore.getState().user;
+            if (user) {
+              registerFCMToken();
+            }
+          }
+        });
+      } catch (e) {
+        // Not in Capacitor environment - use visibility fallback
+        const handleVisibility = () => {
+          if (document.visibilityState === 'visible') {
+            const user = useAuthStore.getState().user;
+            if (user) {
+              registerFCMToken();
+            }
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
       }
     };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    
+    setupListener();
+    
+    // SAFE: Only remove THIS specific listener, not all listeners
+    return () => {
+      if (listener) {
+        listener.remove();
+      }
+    };
   }, []);
 
   return <>{children}</>;

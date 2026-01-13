@@ -6,7 +6,7 @@ import { useOrdersStore } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
 import { useAppStore } from '@/store/app';
 import { agentSession } from '@/utils/agentSession';
-import { onesignalLogout } from '@/utils/onesignal';
+import { resetFCMState } from '@/utils/fcm';
 
 // All known localStorage keys to clear on logout
 const STORAGE_KEYS_TO_CLEAR = [
@@ -47,11 +47,11 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 3. Logout from OneSignal
-    onesignalLogout();
-    console.log('✅ OneSignal logged out');
+    // 3. Reset FCM state for next login
+    resetFCMState();
+    console.log('✅ FCM state reset');
   } catch (e) {
-    console.warn('Failed to logout from OneSignal:', e);
+    console.warn('Failed to reset FCM state:', e);
   }
 
   try {
