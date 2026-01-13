@@ -17,38 +17,9 @@ import { agentSession } from "@/utils/agentSession";
 import { cache } from "@/utils/cache";
 import { advancedCache } from "@/utils/advancedCache";
 import { queryClient } from "@/providers/AppProviders";
-import { registerPushNotifications } from "@/utils/onesignal";
-import { PushNotifications } from "@capacitor/push-notifications";
+import { registerFCMToken } from "@/utils/fcm";
 
 type Mode = "login" | "signup" | "reset";
-
-// 🔥 TEMPORARY: FCM token test + store (REMOVE LATER)
-async function testFCMToken() {
-  await PushNotifications.removeAllListeners();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user?.email) {
-    console.error("❌ No authenticated user found");
-    return;
-  }
-
-  PushNotifications.addListener("registration", async (token) => {
-    console.log("✅ FCM TOKEN:", token.value);
-
-    const { error } = await supabase.from("delivery_agents").update({ fcm_token: token.value }).eq("email", user.email);
-
-    if (error) {
-      console.error("❌ Failed to store FCM token:", error);
-    } else {
-      console.log("✅ FCM token stored in DB");
-    }
-  });
-
-  await PushNotifications.register();
-}
 
 // Helper function to ensure agent exists in delivery_agents table
 async function ensureAgentExists() {
@@ -221,22 +192,8 @@ export default function Login() {
       // Sync location immediately after login (non-blocking)
       syncLocationAfterAuth();
 
-      // Register push notifications (non-blocking)
-      if (authData.user?.email) {
-        registerPushNotifications(authData.user.email)
-          .then((result) => {
-            if (result.success) {
-              toast({
-                title: "Push notifications enabled",
-                description: "You will receive delivery alerts",
-              });
-            }
-          })
-          .catch(() => {}); // Silent error handling
-      }
-
-      // 🔥 TEMPORARY: Test FCM token
-      testFCMToken();
+      // Register FCM token (non-blocking, safe to call multiple times)
+      registerFCMToken();
 
       // Navigation handled by useEffect
     }
@@ -301,19 +258,8 @@ export default function Login() {
       // Sync location immediately after signup (non-blocking)
       syncLocationAfterAuth();
 
-      // Register push notifications (non-blocking)
-      if (authData.user?.email) {
-        registerPushNotifications(authData.user.email)
-          .then((result) => {
-            if (result.success) {
-              toast({
-                title: "Push notifications enabled",
-                description: "You will receive delivery alerts",
-              });
-            }
-          })
-          .catch(() => {}); // Silent error handling
-      }
+      // Register FCM token (non-blocking)
+      registerFCMToken();
 
       navigate("/upload-documents");
     }

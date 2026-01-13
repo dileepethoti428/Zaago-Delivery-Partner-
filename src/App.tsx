@@ -1,30 +1,13 @@
-import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { RouterProvider } from "react-router-dom";
+import AppProviders from "@/providers/AppProviders";
+import { router } from "@/router";
 
-useEffect(() => {
-  const handler = async (event: any) => {
-    const fcmToken = event.detail;
-    console.log("📲 FCM TOKEN FROM NATIVE:", fcmToken);
+function App() {
+  return (
+    <AppProviders>
+      <RouterProvider router={router} />
+    </AppProviders>
+  );
+}
 
-    const { data } = await supabase.auth.getSession();
-    const accessToken = data.session?.access_token;
-
-    if (!accessToken) {
-      console.error("❌ Supabase access token missing");
-      return;
-    }
-
-    const { error } = await supabase.functions.invoke("store-fcm-token", {
-      body: { fcmToken },
-    });
-
-    if (error) {
-      console.error("❌ Failed to store FCM token:", error);
-    } else {
-      console.log("✅ FCM token stored in database");
-    }
-  };
-
-  window.addEventListener("FCM_TOKEN", handler);
-  return () => window.removeEventListener("FCM_TOKEN", handler);
-}, []);
+export default App;
