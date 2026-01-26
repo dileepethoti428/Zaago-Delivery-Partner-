@@ -10,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { getOrderDetails, type OrderDetails } from '@/services/orderDetails';
 import { openGoogleMapsAddress, openGoogleMapsCoordinates } from '@/utils/maps';
 import { useAuthStore } from '@/store/auth';
+import { useResumeGuard } from '@/hooks/useResumeGuard';
 import { 
   ArrowLeft, 
   Phone, 
@@ -46,6 +47,13 @@ export default function ManageDelivery() {
 
   // Determine order type from URL params
   const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
+
+  // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
+  useResumeGuard(() => {
+    setLoading(false);
+    setIsCompleting(false);
+    setIsGeneratingQR(false);
+  });
 
   // Memoized calculations
   const itemsTotal = useMemo(() => 

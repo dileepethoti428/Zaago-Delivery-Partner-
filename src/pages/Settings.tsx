@@ -17,12 +17,18 @@ import { useAuthStore } from '@/store/auth';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useResumeGuard } from '@/hooks/useResumeGuard';
 
 export default function Settings() {
   const navigate = useNavigate();
   const { signOut, user } = useAuthStore();
   const { data: settings, isLoading } = useAgentSettings();
   const [testingNotification, setTestingNotification] = useState(false);
+
+  // Reset stuck loading states when returning from external apps
+  useResumeGuard(() => {
+    setTestingNotification(false);
+  });
 
   const handleTestNotification = async () => {
     if (!user?.email) {

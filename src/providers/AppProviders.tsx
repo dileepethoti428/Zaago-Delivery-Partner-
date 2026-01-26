@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { registerFCMToken } from '@/utils/fcm';
 import { App } from '@capacitor/app';
 import { useLocationSyncController } from '@/hooks/useLocationSyncController';
+import { setupAppLifecycleListeners, setQueryClientRef, onAppResume } from '@/utils/appLifecycle';
+import { GlobalLoader } from '@/components/layout/GlobalLoader';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,6 +72,10 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     // Initialize location services
     initLocation();
     
+    // Initialize global app lifecycle listeners (reset stuck states on resume)
+    setQueryClientRef(queryClient);
+    setupAppLifecycleListeners();
+    
     // Initialize theme from user settings (system default with override)
     const initTheme = async () => {
       try {
@@ -115,6 +121,9 @@ function AuthInitializer({ children }: { children: ReactNode }) {
       try {
         listener = await App.addListener("appStateChange", ({ isActive }) => {
           if (isActive) {
+            // Run app resume handler to reset stuck states
+            onAppResume();
+            
             const user = useAuthStore.getState().user;
             if (user) {
               registerFCMToken();
@@ -169,6 +178,7 @@ export default function AppProviders({ children }: { children: ReactNode }) {
         richColors
         theme="light"
       />
+      <GlobalLoader />
     </PersistQueryClientProvider>
   );
 }
