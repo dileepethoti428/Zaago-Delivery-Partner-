@@ -28,6 +28,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { checkLocationPermission } from '@/utils/checkLocationPermission';
 import { useQueryClient } from '@tanstack/react-query';
+import { useResumeGuard } from '@/hooks/useResumeGuard';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -41,6 +42,12 @@ export default function Profile() {
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
+
+  // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
+  useResumeGuard(() => {
+    setIsSavingLocation(false);
+    setIsTogglingOnline(false);
+  });
 
   // Initialize online status from agent settings
   useEffect(() => {
