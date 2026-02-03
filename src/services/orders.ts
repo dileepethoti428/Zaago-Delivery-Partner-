@@ -40,6 +40,10 @@ export type ZaagoOrder = {
     rate_per_km: number;
   };
   roadDistance?: boolean; // Flag indicating backend calculated road distance
+  // Scheduled order fields
+  deliveryType?: 'immediate' | 'scheduled' | 'subscription';
+  deliveryTimeSlot?: string;  // e.g., "10:00-12:00"
+  deliveryDate?: string;      // e.g., "2025-02-04"
 };
 
 function coerceStatus(s?: string | null): ZaagoOrder['status'] {
@@ -110,6 +114,10 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
       payoutBreakdown: o.payout_breakdown || undefined,
       // Flag indicating road distance was used (not Haversine)
       roadDistance: o.road_distance === true,
+      // Scheduled order fields
+      deliveryType: o.calculated_delivery_type || o.delivery_type || 'immediate',
+      deliveryTimeSlot: o.delivery_time_slot || undefined,
+      deliveryDate: o.delivery_date || undefined,
     };
   }) as ZaagoOrder[];
 

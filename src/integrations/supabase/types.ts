@@ -1119,6 +1119,47 @@ export type Database = {
         }
         Relationships: []
       }
+      compensation_logs: {
+        Row: {
+          action: string
+          compensation_id: string
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          new_status: string | null
+          performed_by: string | null
+          previous_status: string | null
+        }
+        Insert: {
+          action: string
+          compensation_id: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          new_status?: string | null
+          performed_by?: string | null
+          previous_status?: string | null
+        }
+        Update: {
+          action?: string
+          compensation_id?: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          new_status?: string | null
+          performed_by?: string | null
+          previous_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compensation_logs_compensation_id_fkey"
+            columns: ["compensation_id"]
+            isOneToOne: false
+            referencedRelation: "vacation_compensations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_messages: {
         Row: {
           created_at: string
@@ -3044,6 +3085,7 @@ export type Database = {
           pickup_address: string | null
           pickup_location: Json | null
           pickup_status: string | null
+          price_breakdown: Json | null
           seller_accepted_at: string | null
           seller_id: string | null
           seller_latitude: number | null
@@ -3102,6 +3144,7 @@ export type Database = {
           pickup_address?: string | null
           pickup_location?: Json | null
           pickup_status?: string | null
+          price_breakdown?: Json | null
           seller_accepted_at?: string | null
           seller_id?: string | null
           seller_latitude?: number | null
@@ -3160,6 +3203,7 @@ export type Database = {
           pickup_address?: string | null
           pickup_location?: Json | null
           pickup_status?: string | null
+          price_breakdown?: Json | null
           seller_accepted_at?: string | null
           seller_id?: string | null
           seller_latitude?: number | null
@@ -3618,6 +3662,54 @@ export type Database = {
           user_data?: Json | null
           verified?: boolean | null
           whatsapp_message_id?: string | null
+        }
+        Relationships: []
+      }
+      pricing_config: {
+        Row: {
+          created_at: string | null
+          delivery_charge_enabled: boolean | null
+          delivery_fee: number | null
+          free_delivery_above: number | null
+          gst_enabled: boolean | null
+          gst_percentage: number | null
+          handling_fee: number | null
+          handling_fee_enabled: boolean | null
+          id: string
+          minimum_cart_value: number | null
+          small_cart_fee: number | null
+          small_cart_fee_enabled: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          delivery_charge_enabled?: boolean | null
+          delivery_fee?: number | null
+          free_delivery_above?: number | null
+          gst_enabled?: boolean | null
+          gst_percentage?: number | null
+          handling_fee?: number | null
+          handling_fee_enabled?: boolean | null
+          id?: string
+          minimum_cart_value?: number | null
+          small_cart_fee?: number | null
+          small_cart_fee_enabled?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          delivery_charge_enabled?: boolean | null
+          delivery_fee?: number | null
+          free_delivery_above?: number | null
+          gst_enabled?: boolean | null
+          gst_percentage?: number | null
+          handling_fee?: number | null
+          handling_fee_enabled?: boolean | null
+          id?: string
+          minimum_cart_value?: number | null
+          small_cart_fee?: number | null
+          small_cart_fee_enabled?: boolean | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -5803,10 +5895,22 @@ export type Database = {
       vacation_compensations: {
         Row: {
           assigned_agent_id: string | null
+          cancelled_at: string | null
+          cancelled_reason: string | null
           compensation_delivery_date: string
+          compensation_type: string | null
           created_at: string | null
+          customer_id: string | null
+          daily_order_id: string | null
+          delivered_at: string | null
+          delivery_failed_at: string | null
           id: string
+          notes: string | null
+          order_id: string | null
           original_vacation_date: string
+          product_id: string | null
+          quantity: number | null
+          reason: string | null
           seller_id: string
           status: string | null
           subscription_id: string
@@ -5815,10 +5919,22 @@ export type Database = {
         }
         Insert: {
           assigned_agent_id?: string | null
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
           compensation_delivery_date: string
+          compensation_type?: string | null
           created_at?: string | null
+          customer_id?: string | null
+          daily_order_id?: string | null
+          delivered_at?: string | null
+          delivery_failed_at?: string | null
           id?: string
+          notes?: string | null
+          order_id?: string | null
           original_vacation_date: string
+          product_id?: string | null
+          quantity?: number | null
+          reason?: string | null
           seller_id: string
           status?: string | null
           subscription_id: string
@@ -5827,10 +5943,22 @@ export type Database = {
         }
         Update: {
           assigned_agent_id?: string | null
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
           compensation_delivery_date?: string
+          compensation_type?: string | null
           created_at?: string | null
+          customer_id?: string | null
+          daily_order_id?: string | null
+          delivered_at?: string | null
+          delivery_failed_at?: string | null
           id?: string
+          notes?: string | null
+          order_id?: string | null
           original_vacation_date?: string
+          product_id?: string | null
+          quantity?: number | null
+          reason?: string | null
           seller_id?: string
           status?: string | null
           subscription_id?: string
@@ -5843,6 +5971,55 @@ export type Database = {
             columns: ["assigned_agent_id"]
             isOneToOne: false
             referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_daily_order_id_fkey"
+            columns: ["daily_order_id"]
+            isOneToOne: false
+            referencedRelation: "customer_next_delivery"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_daily_order_id_fkey"
+            columns: ["daily_order_id"]
+            isOneToOne: false
+            referencedRelation: "daily_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vacation_compensations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_with_sellers"
             referencedColumns: ["id"]
           },
           {
@@ -7635,6 +7812,29 @@ export type Database = {
         Args: { target_seller_id: string }
         Returns: Json
       }
+      get_seller_performance_summary: {
+        Args: { seller_user_id: string; time_range?: string }
+        Returns: {
+          avg_daily_orders: number
+          completion_rate: number
+          delivered_orders: number
+          failed_orders: number
+          total_orders: number
+          total_revenue: number
+        }[]
+      }
+      get_seller_performance_trends: {
+        Args: { seller_user_id: string; time_range?: string }
+        Returns: {
+          completion_rate: number
+          delivered_orders: number
+          failed_orders: number
+          period_label: string
+          period_start: string
+          total_orders: number
+          total_revenue: number
+        }[]
+      }
       get_seller_sales_analytics: {
         Args: { target_seller_id: string; time_period?: string }
         Returns: Json
@@ -7682,6 +7882,23 @@ export type Database = {
           pending_orders: number
           total_orders: number
           unassigned_orders: number
+        }[]
+      }
+      get_seller_top_products_analytics: {
+        Args: {
+          limit_count?: number
+          seller_user_id: string
+          sort_by?: string
+          time_period?: string
+        }
+        Returns: {
+          period_label: string
+          product_id: string
+          product_image_url: string
+          product_name: string
+          total_orders: number
+          total_quantity: number
+          total_revenue: number
         }[]
       }
       get_seller_unassigned_orders: {
