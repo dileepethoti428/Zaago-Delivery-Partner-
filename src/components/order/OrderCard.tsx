@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { CardContent } from '@/components/ui/card';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { Clock, IndianRupee, MapPin } from 'lucide-react';
+import { ScheduledBadge } from '@/components/order/ScheduledBadge';
+import { Clock, IndianRupee } from 'lucide-react';
 import type { ZaagoOrder } from '@/services/orders';
+import { cn } from '@/lib/utils';
 
 interface OrderCardProps {
   order: ZaagoOrder & { distanceKm?: number };
@@ -51,6 +53,8 @@ export const OrderCard = memo(function OrderCard({
 
   const isAssignedToCurrentAgent = order.agentId === currentAgentId;
   const isAssignedToOtherAgent = !!(order.agentId && order.agentId !== currentAgentId);
+  const isScheduled = order.deliveryType === 'scheduled';
+  const isSubscription = order.deliveryType === 'subscription';
 
   // Determine button state: 
   // 1. Assigned to me → Manage Delivery
@@ -107,7 +111,13 @@ export const OrderCard = memo(function OrderCard({
 
   return (
     <AnimatedCard delay={index * 0.05} onClick={handleView}>
-      <CardContent className="p-4">
+      <CardContent 
+        className={cn(
+          "p-4",
+          isScheduled && "border-l-4 border-l-blue-500",
+          isSubscription && "border-l-4 border-l-purple-500"
+        )}
+      >
         <div className="space-y-3">
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -117,6 +127,16 @@ export const OrderCard = memo(function OrderCard({
                 </span>
                 <StatusPill status={order.status} />
               </div>
+
+              {/* Scheduled order time slot */}
+              {isScheduled && order.deliveryTimeSlot && (
+                <div className="mb-3">
+                  <ScheduledBadge 
+                    timeSlot={order.deliveryTimeSlot} 
+                    date={order.deliveryDate} 
+                  />
+                </div>
+              )}
               
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
@@ -167,6 +187,9 @@ export const OrderCard = memo(function OrderCard({
     prevProps.order.status === nextProps.order.status &&
     prevProps.order.distanceKm === nextProps.order.distanceKm &&
     prevProps.order.agentId === nextProps.order.agentId &&
+    prevProps.order.deliveryType === nextProps.order.deliveryType &&
+    prevProps.order.deliveryTimeSlot === nextProps.order.deliveryTimeSlot &&
+    prevProps.order.deliveryDate === nextProps.order.deliveryDate &&
     prevProps.isProcessing === nextProps.isProcessing &&
     prevProps.currentAgentId === nextProps.currentAgentId &&
     prevProps.index === nextProps.index
