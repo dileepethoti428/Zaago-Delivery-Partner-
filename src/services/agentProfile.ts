@@ -10,24 +10,30 @@ function resolvePhotoUrl(url: string | null | undefined): string | null {
 }
 
 export async function fetchAgentProfile(email: string) {
+  // Step 1: Fetch agent record by email
   const { data, error } = await supabase
     .from('delivery_agents')
-    .select('*, agent_documents(profile_photo_url)')
+    .select('*')
     .eq('email', email)
     .maybeSingle();
 
   if (error) throw error;
+  if (!data) return data;
 
-  if (data) {
-    const agentDocs = data.agent_documents as { profile_photo_url?: string | null } | null;
-    const fallbackPhoto = agentDocs?.profile_photo_url ?? null;
+  // Step 2: Separately fetch agent_documents using user_id = agent_id (UUID match)
+  // The broken join used agent_documents.agent_id (integer FK, NULL for most agents)
+  // The correct field is agent_documents.user_id which stores the auth UUID
+  const { data: docData } = await supabase
+    .from('agent_documents')
+    .select('profile_photo_url')
+    .eq('user_id', data.agent_id)
+    .maybeSingle();
 
-    return {
-      ...data,
-      profile_image:
-        resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
-    };
-  }
+  const fallbackPhoto = docData?.profile_photo_url ?? null;
 
-  return data;
+  return {
+    ...data,
+    profile_image:
+      resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
+  };
 }
