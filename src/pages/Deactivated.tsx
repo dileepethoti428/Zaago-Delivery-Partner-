@@ -1,0 +1,75 @@
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ShieldOff, LogOut, MessageCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuthStore } from '@/store/auth';
+
+export default function Deactivated() {
+  const navigate = useNavigate();
+  const { signOut } = useAuthStore();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <Card className="rounded-2xl shadow-xl border-0 bg-card/50 backdrop-blur">
+          <CardHeader className="text-center">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: 'spring' }}
+              className="mx-auto p-6 bg-destructive/10 rounded-2xl mb-4"
+            >
+              <ShieldOff className="h-16 w-16 text-destructive" />
+            </motion.div>
+            <CardTitle className="text-2xl">Account Deactivated</CardTitle>
+            <CardDescription>
+              Your delivery agent account has been deactivated by the administrator
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="p-4 bg-muted/50 border border-border rounded-xl">
+              <p className="text-sm text-muted-foreground text-center">
+                You cannot access the app until your account is reactivated. Please contact support for more information.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <a
+                href="https://wa.me/917842343642"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-[hsl(142,76%,36%)] hover:bg-[hsl(142,76%,30%)] text-white font-medium transition-colors"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Contact Support on WhatsApp
+              </a>
+
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="w-full rounded-xl h-11"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+
+            <p className="text-xs text-center text-muted-foreground">
+              If you believe this is a mistake, please reach out to our support team
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}

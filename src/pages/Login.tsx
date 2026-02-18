@@ -186,6 +186,19 @@ export default function Login() {
 
       await fetchProfile();
 
+      // Block deactivated agents immediately at login
+      const currentProfile = useAuthStore.getState().profile;
+      if (currentProfile?.approval_status === 'deactivated') {
+        toast({
+          title: "Account Deactivated",
+          description: "Your account has been deactivated. Please contact support on WhatsApp.",
+          variant: "destructive",
+        });
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
       // Ensure agent exists in delivery_agents table (non-blocking)
       ensureAgentExists();
 
