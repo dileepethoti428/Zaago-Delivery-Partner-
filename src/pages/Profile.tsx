@@ -5,7 +5,7 @@ import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
@@ -182,6 +182,10 @@ export default function Profile() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
+                <AvatarImage
+                  src={agentProfile?.profile_image || undefined}
+                  alt={agentProfile?.name || 'Agent'}
+                />
                 <AvatarFallback className="bg-primary text-primary-foreground text-xl">
                   {agentProfile?.name ? agentProfile.name.split(' ').map(n => n[0]).join('') : 'DA'}
                 </AvatarFallback>
