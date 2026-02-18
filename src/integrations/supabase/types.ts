@@ -1139,6 +1139,7 @@ export type Database = {
           is_active: boolean
           name: string
           phone: string | null
+          rate_per_litre: number | null
           updated_at: string
           village_or_area: string | null
         }
@@ -1150,6 +1151,7 @@ export type Database = {
           is_active?: boolean
           name: string
           phone?: string | null
+          rate_per_litre?: number | null
           updated_at?: string
           village_or_area?: string | null
         }
@@ -1161,8 +1163,107 @@ export type Database = {
           is_active?: boolean
           name?: string
           phone?: string | null
+          rate_per_litre?: number | null
           updated_at?: string
           village_or_area?: string | null
+        }
+        Relationships: []
+      }
+      collection_partner_bank_details: {
+        Row: {
+          account_holder_name: string
+          account_number: string
+          account_type: string
+          bank_branch: string | null
+          bank_name: string
+          center_id: string
+          created_at: string
+          id: string
+          ifsc_code: string
+          is_primary: boolean
+          is_verified: boolean
+          pan_number: string | null
+          updated_at: string
+          upi_id: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number: string
+          account_type?: string
+          bank_branch?: string | null
+          bank_name: string
+          center_id: string
+          created_at?: string
+          id?: string
+          ifsc_code: string
+          is_primary?: boolean
+          is_verified?: boolean
+          pan_number?: string | null
+          updated_at?: string
+          upi_id?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string
+          account_type?: string
+          bank_branch?: string | null
+          bank_name?: string
+          center_id?: string
+          created_at?: string
+          id?: string
+          ifsc_code?: string
+          is_primary?: boolean
+          is_verified?: boolean
+          pan_number?: string | null
+          updated_at?: string
+          upi_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_partner_bank_details_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "collection_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collection_partners: {
+        Row: {
+          area: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          is_active: boolean
+          partner_code: string | null
+          phone: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean
+          partner_code?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          partner_code?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1689,6 +1790,51 @@ export type Database = {
           processing_status?: string
           started_at?: string
           subscriptions_processed?: number
+        }
+        Relationships: []
+      }
+      dairy_partner_applications: {
+        Row: {
+          contact_number: string
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_number: string
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          is_active?: boolean
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_number?: string
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

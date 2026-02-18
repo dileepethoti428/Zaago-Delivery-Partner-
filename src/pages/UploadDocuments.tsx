@@ -136,6 +136,7 @@ export default function UploadDocuments() {
         verification_status: 'pending',
         documents_verified: false,
         is_active: false,
+        profile_image: profilePhotoUrl,
       }, { 
         onConflict: 'agent_id',
         ignoreDuplicates: false 
