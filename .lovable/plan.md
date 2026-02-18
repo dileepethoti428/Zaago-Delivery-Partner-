@@ -1,120 +1,93 @@
 
-# Fix: Profile Photo Not Showing for Delivery Agents
+# Fix: Profile Photos Not Loading for Most Delivery Agents
 
-## Root Cause Analysis
+## Root Cause Found
 
-Three separate problems are causing profile photos to not appear:
+After querying the database directly, two distinct bugs were identified:
 
-### Problem 1: Profile page never renders the photo
-In `src/pages/Profile.tsx`, the `<Avatar>` component only renders `<AvatarFallback>` (initials). `<AvatarImage>` is never included, so even agents who have a photo stored in the database see only initials.
+### Bug 1: The Supabase join is silently broken for almost all agents
 
-```tsx
-// Current — broken
-<Avatar className="h-16 w-16">
-  <AvatarFallback className="bg-primary text-primary-foreground text-xl">
-    {agentProfile?.name ? agentProfile.name.split(' ').map(n => n[0]).join('') : 'DA'}
-  </AvatarFallback>
-</Avatar>
+In `src/services/agentProfile.ts`, the code uses:
+```typescript
+.select('*, agent_documents(profile_photo_url)')
 ```
 
-### Problem 2: `delivery_agents.profile_image` not set on signup
-In `src/pages/UploadDocuments.tsx`, the profile photo is uploaded to the `agent-photos` storage bucket and its URL is saved in `agent_documents.profile_photo_url`. However, the `delivery_agents` table upsert (lines 131–142) does **not** include the `profile_image` field. So the agent's profile record has no photo URL.
+This tells Supabase PostgREST to JOIN `delivery_agents` to `agent_documents` using the existing foreign key relationship. The `agent_documents` table has a column `agent_id` which is a FK to `delivery_agents.id` (the integer primary key), NOT to `delivery_agents.agent_id` (the UUID).
 
-### Problem 3: `fetchAgentProfile` uses only `delivery_agents`
-`src/services/agentProfile.ts` only queries `delivery_agents` — so even if the photo exists in `agent_documents`, it is never fetched.
+For almost every agent in the database, `agent_documents.agent_id` is NULL — so the join returns nothing, and `agent_documents` comes back as `null`. Only `mani@gmail.com` happens to work because their `delivery_agents.profile_image` column is already populated.
+
+**Database proof:**
+- `agent_documents.agent_id` is FK → `delivery_agents.id` (integer PK)
+- But agents' user UUIDs are stored in `agent_documents.user_id`
+- The join `agent_documents(profile_photo_url)` matches zero rows for agents where `agent_documents.agent_id` is NULL
+
+### Bug 2: Wrong storage bucket in `resolvePhotoUrl`
+
+When partial paths exist (e.g. `517990b0.../profile-photo.png`), the `resolvePhotoUrl` function constructs URLs pointing to the `agent-documents` bucket:
+```
+/storage/v1/object/public/agent-documents/{path}
+```
+But the actual photos for most agents are in the `agent-photos` bucket. This means even if the path is found, the resolved URL points to the wrong bucket.
 
 ---
 
-## Data State (From DB)
+## What the Data Actually Looks Like
 
-- Agents with `delivery_agents.profile_image` set: Some (those who updated via settings)
-- Agents with only `agent_documents.profile_photo_url` set: Most new signups
-- Some `agent_documents.profile_photo_url` values are **partial paths** (e.g., `uuid/profile-photo.png`) without the full Supabase URL prefix — these need to be constructed correctly
+From the database:
+
+| Agent | `delivery_agents.profile_image` | `agent_documents.profile_photo_url` |
+|-------|------|------|
+| mani@gmail.com | Full URL (agent-documents bucket) | Full URL (agent-photos bucket) |
+| sesh673@gmail.com | NULL | Full URL (agent-photos bucket) |
+| nani@gmail.com | NULL | Full URL (agent-photos bucket) |
+| man@gmail.com | NULL | Full URL (agent-photos bucket) |
+| sesh2@gmail.com | Full URL (agent-documents) | Partial path (wrong bucket in resolver) |
+
+Most agents have their photo ONLY in `agent_documents.profile_photo_url`, as a full URL pointing to the `agent-photos` bucket. The current join never fetches this.
 
 ---
 
 ## Fix Plan
 
-### Step 1: Fix `UploadDocuments.tsx` — Save photo URL to `delivery_agents`
+### Step 1: Fix `src/services/agentProfile.ts` — Use a separate query instead of a broken join
 
-When upserting the `delivery_agents` row (lines 131–142), also include `profile_image: profilePhotoUrl` so the photo URL is stored in the main agent table immediately at signup time.
-
-```typescript
-const { error: agentError } = await supabase.from('delivery_agents').upsert({
-  agent_id: user.id,
-  email: user.email,
-  name: data.fullName,
-  phone: data.phone,
-  verification_status: 'pending',
-  documents_verified: false,
-  is_active: false,
-  profile_image: profilePhotoUrl,  // ← ADD THIS
-}, { 
-  onConflict: 'agent_id',
-  ignoreDuplicates: false 
-});
-```
-
-### Step 2: Fix `fetchAgentProfile` — Also join `agent_documents` for photo fallback
-
-Update `src/services/agentProfile.ts` to also fetch `profile_photo_url` from `agent_documents` as a fallback when `delivery_agents.profile_image` is empty. This fixes existing agents whose `profile_image` column is not populated.
+Replace the broken join with a two-step fetch:
+1. Fetch the agent from `delivery_agents` by email
+2. Separately fetch `agent_documents` using `user_id = agent.agent_id` (UUID match)
 
 ```typescript
 export async function fetchAgentProfile(email: string) {
+  // Step 1: Fetch agent record
   const { data, error } = await supabase
     .from('delivery_agents')
-    .select('*, agent_documents(profile_photo_url)')
+    .select('*')
     .eq('email', email)
     .maybeSingle();
 
   if (error) throw error;
-  
-  if (data) {
-    // Use profile_image if set, otherwise fall back to agent_documents photo
-    const agentDocs = data.agent_documents as any;
-    const fallbackPhoto = agentDocs?.profile_photo_url;
-    
-    // Build full URL if it's a partial path
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const resolvePhotoUrl = (url: string | null | undefined) => {
-      if (!url) return null;
-      if (url.startsWith('http')) return url;
-      // Partial path — construct full URL
-      return `${supabaseUrl}/storage/v1/object/public/agent-documents/${url}`;
-    };
+  if (!data) return data;
 
-    return {
-      ...data,
-      profile_image: resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
-    };
-  }
-  
-  return data;
+  // Step 2: Separately fetch agent_documents using user_id = agent_id (UUID)
+  const { data: docData } = await supabase
+    .from('agent_documents')
+    .select('profile_photo_url')
+    .eq('user_id', data.agent_id)
+    .maybeSingle();
+
+  const fallbackPhoto = docData?.profile_photo_url ?? null;
+
+  return {
+    ...data,
+    profile_image: resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
+  };
 }
 ```
 
-### Step 3: Fix `Profile.tsx` — Render `<AvatarImage>` with the photo URL
+### Step 2: Fix `resolvePhotoUrl` — Handle both buckets
 
-Update the Avatar in `src/pages/Profile.tsx` to include `<AvatarImage>` so the actual photo is displayed. The `<AvatarFallback>` remains as backup for agents without a photo.
+The current resolver always uses `agent-documents` bucket for partial paths. But partial paths like `517990b0.../profile-photo.png` are actually in `agent-documents` (uploaded via the old flow), while full URLs already contain the correct bucket name. Since full URLs already start with `http` and get returned as-is, and partial paths are only from the old `agent-documents` upload flow, the bucket for partial paths is correct (`agent-documents`). However we must also verify that the full URL from `agent-photos` (the newer flow) passes through correctly — which it does since `url.startsWith('http')` returns it as-is.
 
-```tsx
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
-// In JSX:
-<Avatar className="h-16 w-16">
-  <AvatarImage 
-    src={agentProfile?.profile_image || undefined} 
-    alt={agentProfile?.name || 'Agent'} 
-  />
-  <AvatarFallback className="bg-primary text-primary-foreground text-xl">
-    {agentProfile?.name ? agentProfile.name.split(' ').map(n => n[0]).join('') : 'DA'}
-  </AvatarFallback>
-</Avatar>
-```
-
-This way:
-- If `profile_image` URL exists → shows the actual photo
-- If URL is missing or broken → shows initials fallback automatically (Radix UI `Avatar` handles this natively)
+No change needed to `resolvePhotoUrl` — it handles both cases correctly once the separate query returns the right data.
 
 ---
 
@@ -122,17 +95,17 @@ This way:
 
 | File | Change |
 |------|--------|
-| `src/pages/UploadDocuments.tsx` | Add `profile_image: profilePhotoUrl` to the `delivery_agents` upsert |
-| `src/services/agentProfile.ts` | Join `agent_documents` and resolve partial photo URLs |
-| `src/pages/Profile.tsx` | Add `<AvatarImage>` to render the actual profile photo |
+| `src/services/agentProfile.ts` | Replace broken Supabase join with a separate `agent_documents` query using `user_id = agent.agent_id` |
+
+That is the only change needed. The Profile UI (`Profile.tsx`) already has `<AvatarImage>` correctly implemented, and `UploadDocuments.tsx` already saves `profile_image`. The single root cause is the silently failing join.
 
 ---
 
-## How It Works After Fix
+## End-to-End After Fix
 
-1. **New agent signs up** → uploads photo → `delivery_agents.profile_image` gets the full public URL immediately
-2. **Existing agents** without `profile_image` → `fetchAgentProfile` falls back to `agent_documents.profile_photo_url` and resolves partial paths to full URLs
-3. **Profile page** → `<AvatarImage>` renders the photo; falls back to initials if no photo exists
-4. **Settings page** (edit profile) → already uses `update-agent-profile` edge function which also sets `profile_image` — no change needed there
-
-No database schema changes required — just reading existing data correctly and saving it in the right place on signup.
+1. Agent logs in → `useProfile(email)` calls `fetchAgentProfile(email)`
+2. Step 1 fetches `delivery_agents` row by email → gets `agent_id` (UUID) and `profile_image`
+3. Step 2 fetches `agent_documents` row where `user_id = agent_id` → gets `profile_photo_url`
+4. `profile_image` = first non-null of: `delivery_agents.profile_image`, `agent_documents.profile_photo_url`
+5. `<AvatarImage src={agentProfile.profile_image}>` renders the photo
+6. If no photo exists anywhere → `<AvatarFallback>` shows initials
