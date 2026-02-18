@@ -1,5 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
+function resolvePhotoUrl(url: string | null | undefined, supabaseUrl: string): string | null {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${supabaseUrl}/storage/v1/object/public/agent-documents/${url}`;
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -148,6 +154,20 @@ Deno.serve(async (req) => {
         settings = newSettings;
       }
     }
+
+    // Fetch profile photo fallback from agent_documents
+    const { data: photoDoc } = await serviceClient
+      .from('agent_documents')
+      .select('profile_photo_url')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const resolvedPhoto =
+      resolvePhotoUrl(agent.profile_image, supabaseUrl) ||
+      resolvePhotoUrl(photoDoc?.profile_photo_url, supabaseUrl);
+
+    agent = { ...agent, profile_image: resolvedPhoto };
 
     // Fetch bank details
     const { data: bankDetails } = await serviceClient
