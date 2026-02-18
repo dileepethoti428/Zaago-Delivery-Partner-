@@ -1,111 +1,83 @@
 
-# Fix: Profile Photos Not Loading for Most Delivery Agents
+# Fix: Profile Photo Not Showing in Settings / Edit Profile
 
-## Root Cause Found
+## Root Cause
 
-After querying the database directly, two distinct bugs were identified:
+The Settings page already has `<AvatarImage>` rendering correctly at line 224:
 
-### Bug 1: The Supabase join is silently broken for almost all agents
+```tsx
+<Avatar className="h-24 w-24">
+  <AvatarImage src={profileForm.watch('profile_image_url')} />
+  <AvatarFallback ...>
+```
 
-In `src/services/agentProfile.ts`, the code uses:
+The form value `profile_image_url` is populated from:
 ```typescript
-.select('*, agent_documents(profile_photo_url)')
+profile_image_url: settings?.profile?.profile_image || '',
 ```
 
-This tells Supabase PostgREST to JOIN `delivery_agents` to `agent_documents` using the existing foreign key relationship. The `agent_documents` table has a column `agent_id` which is a FK to `delivery_agents.id` (the integer primary key), NOT to `delivery_agents.agent_id` (the UUID).
+And `settings.profile` comes from the `get-agent-settings` edge function, which fetches `delivery_agents` but **stops there** — it never falls back to `agent_documents.profile_photo_url` if `delivery_agents.profile_image` is NULL.
 
-For almost every agent in the database, `agent_documents.agent_id` is NULL — so the join returns nothing, and `agent_documents` comes back as `null`. Only `mani@gmail.com` happens to work because their `delivery_agents.profile_image` column is already populated.
+This is the exact same bug that was fixed in `fetchAgentProfile` for the Profile page. The Settings page uses a different data path (an edge function) and needs the same fix applied there.
 
-**Database proof:**
-- `agent_documents.agent_id` is FK → `delivery_agents.id` (integer PK)
-- But agents' user UUIDs are stored in `agent_documents.user_id`
-- The join `agent_documents(profile_photo_url)` matches zero rows for agents where `agent_documents.agent_id` is NULL
+## Data Flow Comparison
 
-### Bug 2: Wrong storage bucket in `resolvePhotoUrl`
-
-When partial paths exist (e.g. `517990b0.../profile-photo.png`), the `resolvePhotoUrl` function constructs URLs pointing to the `agent-documents` bucket:
 ```
-/storage/v1/object/public/agent-documents/{path}
+Profile page:
+  fetchAgentProfile() → delivery_agents + agent_documents fallback ✓ FIXED
+
+Settings page (Edit Profile):
+  get-agent-settings edge function → delivery_agents only ✗ MISSING FALLBACK
 ```
-But the actual photos for most agents are in the `agent-photos` bucket. This means even if the path is found, the resolved URL points to the wrong bucket.
 
----
+## Fix — One File Change
 
-## What the Data Actually Looks Like
+### `supabase/functions/get-agent-settings/index.ts`
 
-From the database:
+After fetching the agent row (line 43–55), add a second query to `agent_documents` using `user_id = user.id` to get `profile_photo_url`, then resolve and merge it into the `agent.profile_image` field before building the response.
 
-| Agent | `delivery_agents.profile_image` | `agent_documents.profile_photo_url` |
-|-------|------|------|
-| mani@gmail.com | Full URL (agent-documents bucket) | Full URL (agent-photos bucket) |
-| sesh673@gmail.com | NULL | Full URL (agent-photos bucket) |
-| nani@gmail.com | NULL | Full URL (agent-photos bucket) |
-| man@gmail.com | NULL | Full URL (agent-photos bucket) |
-| sesh2@gmail.com | Full URL (agent-documents) | Partial path (wrong bucket in resolver) |
-
-Most agents have their photo ONLY in `agent_documents.profile_photo_url`, as a full URL pointing to the `agent-photos` bucket. The current join never fetches this.
-
----
-
-## Fix Plan
-
-### Step 1: Fix `src/services/agentProfile.ts` — Use a separate query instead of a broken join
-
-Replace the broken join with a two-step fetch:
-1. Fetch the agent from `delivery_agents` by email
-2. Separately fetch `agent_documents` using `user_id = agent.agent_id` (UUID match)
+The `resolvePhotoUrl` helper logic (same as in `agentProfile.ts`) needs to be replicated in the edge function (Deno):
 
 ```typescript
-export async function fetchAgentProfile(email: string) {
-  // Step 1: Fetch agent record
-  const { data, error } = await supabase
-    .from('delivery_agents')
-    .select('*')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!data) return data;
-
-  // Step 2: Separately fetch agent_documents using user_id = agent_id (UUID)
-  const { data: docData } = await supabase
-    .from('agent_documents')
-    .select('profile_photo_url')
-    .eq('user_id', data.agent_id)
-    .maybeSingle();
-
-  const fallbackPhoto = docData?.profile_photo_url ?? null;
-
-  return {
-    ...data,
-    profile_image: resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
-  };
+function resolvePhotoUrl(url: string | null | undefined, supabaseUrl: string): string | null {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${supabaseUrl}/storage/v1/object/public/agent-documents/${url}`;
 }
 ```
 
-### Step 2: Fix `resolvePhotoUrl` — Handle both buckets
+Then after fetching `agent`, before building the `response`:
 
-The current resolver always uses `agent-documents` bucket for partial paths. But partial paths like `517990b0.../profile-photo.png` are actually in `agent-documents` (uploaded via the old flow), while full URLs already contain the correct bucket name. Since full URLs already start with `http` and get returned as-is, and partial paths are only from the old `agent-documents` upload flow, the bucket for partial paths is correct (`agent-documents`). However we must also verify that the full URL from `agent-photos` (the newer flow) passes through correctly — which it does since `url.startsWith('http')` returns it as-is.
+```typescript
+// Fetch profile photo fallback from agent_documents
+const { data: photoDoc } = await serviceClient
+  .from('agent_documents')
+  .select('profile_photo_url')
+  .eq('user_id', user.id)
+  .maybeSingle();
 
-No change needed to `resolvePhotoUrl` — it handles both cases correctly once the separate query returns the right data.
+const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+const resolvedPhoto =
+  resolvePhotoUrl(agent.profile_image, supabaseUrl) ||
+  resolvePhotoUrl(photoDoc?.profile_photo_url, supabaseUrl);
 
----
+// Merge resolved photo back into agent object
+agent = { ...agent, profile_image: resolvedPhoto };
+```
+
+This means `settings.profile.profile_image` will now contain a fully resolved URL for all agents — exactly what `profileForm.watch('profile_image_url')` needs to display the avatar in the Settings edit profile section.
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/services/agentProfile.ts` | Replace broken Supabase join with a separate `agent_documents` query using `user_id = agent.agent_id` |
+| `supabase/functions/get-agent-settings/index.ts` | Add `resolvePhotoUrl` helper + separate `agent_documents` query + merge resolved photo into agent before response |
 
-That is the only change needed. The Profile UI (`Profile.tsx`) already has `<AvatarImage>` correctly implemented, and `UploadDocuments.tsx` already saves `profile_image`. The single root cause is the silently failing join.
+No frontend changes needed — the Settings page Avatar is already wired up correctly, it just needs the data to arrive populated.
 
----
+## Result After Fix
 
-## End-to-End After Fix
-
-1. Agent logs in → `useProfile(email)` calls `fetchAgentProfile(email)`
-2. Step 1 fetches `delivery_agents` row by email → gets `agent_id` (UUID) and `profile_image`
-3. Step 2 fetches `agent_documents` row where `user_id = agent_id` → gets `profile_photo_url`
-4. `profile_image` = first non-null of: `delivery_agents.profile_image`, `agent_documents.profile_photo_url`
-5. `<AvatarImage src={agentProfile.profile_image}>` renders the photo
-6. If no photo exists anywhere → `<AvatarFallback>` shows initials
+- All agents whose photo is stored only in `agent_documents.profile_photo_url` will now see it in the Settings edit profile avatar
+- Full URL photos pass through unchanged (`startsWith('http')` check)
+- Partial path photos get resolved to the correct public storage URL
+- Agents with no photo at all see the initials fallback (unchanged behaviour)
