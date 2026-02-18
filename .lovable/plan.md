@@ -1,196 +1,168 @@
 
+# Fix: Deactivated Agent Account Blocking
 
-# Scheduled Order Differentiation - Visual UI/UX Enhancement
+## Root Cause
 
-## Overview
+The delivery agent app's `RequireApproval.tsx` only handles three `approval_status` values: `pending`, `approved`, and `rejected`. When an admin deactivates an already-approved agent by setting `approval_status = 'deactivated'` (or a similar status), it falls through the guard and the agent retains full access to the app.
 
-Scheduled orders (orders with specific delivery time slots or future dates) need a visually distinct UI compared to immediate orders so agents can quickly identify and plan their deliveries.
-
-## Current State Analysis
-
-### Backend Already Returns (lines 627-631 in get-available-orders)
-```typescript
-calculated_delivery_type: 'immediate' | 'scheduled' | 'subscription'
-delivery_time_slot: '10:00-12:00' // format: HH:MM-HH:MM
-delivery_date: '2025-02-04' // if future date
-immediate_timing_config: { max_duration_minutes, slot_name } // for immediate only
-```
-
-### Frontend Gap
-The `ZaagoOrder` type in `src/services/orders.ts` does NOT include these fields - they're being dropped during mapping.
+There is currently:
+- No `deactivated` route or page
+- No check in `RequireApproval.tsx` for deactivated status
+- No session restore guard (so a deactivated agent returning with a valid session also gets in)
+- No login-time check
 
 ---
 
 ## Implementation Plan
 
-### Step 1: Extend ZaagoOrder Type
+### Step 1: Create the Deactivated Page
 
-**File:** `src/services/orders.ts`
+**Create:** `src/pages/Deactivated.tsx`
 
-Add new fields to the ZaagoOrder type:
+A full-screen page matching the seller app's design (image reference), adapted for delivery agents:
+
+- Dark-themed card with a ShieldOff icon (red, on dark background)
+- Title: **"Account Deactivated"**
+- Description: "Your delivery agent account has been deactivated by the administrator. You cannot access the app until your account is reactivated."
+- WhatsApp contact link: `https://wa.me/917842343642` (matching the existing WhatsApp support number used throughout the app)
+- Sign Out button (calls `signOut()` and redirects to `/login`)
+
+The design will follow the existing app styling (`bg-gradient-to-br from-primary/10 via-background to-primary/5`, `Card` with `rounded-2xl shadow-xl border-0 bg-card/50 backdrop-blur`) while visually communicating deactivation severity.
+
+---
+
+### Step 2: Add Route
+
+**Update:** `src/router/index.tsx`
+
+Add `/deactivated` as a protected route under `RequireAuth` (agent must be logged in to see this page):
+
+```
+RequireAuth
+  ├── /upload-documents
+  ├── /pending-approval
+  ├── /rejected
+  ├── /deactivated      ← NEW
+  └── RequireApproval
+      └── ...app routes
+```
+
+---
+
+### Step 3: Update RequireApproval Guard
+
+**Update:** `src/components/auth/RequireApproval.tsx`
+
+Add a deactivated check before the existing approval_status checks:
 
 ```typescript
-export type ZaagoOrder = {
-  // ... existing fields
-  deliveryType?: 'immediate' | 'scheduled' | 'subscription';
-  deliveryTimeSlot?: string;      // e.g., "10:00-12:00"
-  deliveryDate?: string;          // e.g., "2025-02-04"
-};
+// Check if account is deactivated (after rejection check)
+if (profile.approval_status === 'deactivated') {
+  return <Navigate to="/deactivated" replace />;
+}
 ```
 
-### Step 2: Map Backend Fields in fetchAvailableOrders
+This blocks access to all protected app routes when status is `deactivated`.
 
-**File:** `src/services/orders.ts`
+---
 
-Update the mapping in `fetchAvailableOrders` (around line 94-114) to include:
+### Step 4: Block at Login Time
+
+**Update:** `src/pages/Login.tsx`
+
+After `fetchProfile()` resolves in `handleLogin`, check if the profile is deactivated before navigation proceeds:
 
 ```typescript
-deliveryType: o.calculated_delivery_type || o.delivery_type || 'immediate',
-deliveryTimeSlot: o.delivery_time_slot || undefined,
-deliveryDate: o.delivery_date || undefined,
+await fetchProfile();
+
+// Check deactivated status immediately after fetching profile
+const currentProfile = useAuthStore.getState().profile;
+if (currentProfile?.approval_status === 'deactivated') {
+  toast({
+    title: "Account Deactivated",
+    description: "Your account has been deactivated. Please contact support.",
+    variant: "destructive",
+  });
+  await supabase.auth.signOut(); // Sign them out
+  setLoading(false);
+  return; // Stop, don't navigate
+}
 ```
 
-### Step 3: Create ScheduledBadge Component
-
-**Create:** `src/components/order/ScheduledBadge.tsx`
-
-A badge that shows for scheduled orders with time slot info:
-
-```text
-┌─────────────────────────────────┐
-│ 📅 10:00 - 12:00               │
-└─────────────────────────────────┘
-```
-
-Visual Design:
-- Background: `bg-blue-50` (light mode) / `bg-blue-950` (dark mode)
-- Border: `border border-blue-200`
-- Text: `text-blue-700`
-- Icon: Calendar icon from lucide-react
-
-If future date, show date too:
-```text
-┌─────────────────────────────────┐
-│ 📅 Tomorrow, 10:00 - 12:00     │
-└─────────────────────────────────┘
-```
-
-### Step 4: Update OrderCard Component
-
-**File:** `src/components/order/OrderCard.tsx`
-
-Visual changes for scheduled orders:
-
-1. **Left Border Accent**
-   - Scheduled: `border-l-4 border-l-blue-500`
-   - Immediate: No border (default look)
-   - Subscription: `border-l-4 border-l-purple-500`
-
-2. **Time Slot Display**
-   - Show ScheduledBadge between customer name row and address section
-   - Only visible for scheduled orders
-
-3. **Card Layout Update**
-
-```text
-IMMEDIATE ORDER (current look):
-┌────────────────────────────────────────────────────┐
-│ Customer Name          [Open]           2.5 km    │
-│                                                    │
-│ 🔵 Pickup: Seller Address                          │
-│ 🟢 Drop: Customer Address                          │
-│                                                    │
-│ ⏱ 15 min                               ₹30        │
-│ [    Accept    ] [Reject]                          │
-└────────────────────────────────────────────────────┘
-
-SCHEDULED ORDER (new look):
-┌─────────────────────────────────────────────────────┐
-│ ▏Customer Name          [Open]           2.5 km    │
-│ ▏                                                   │
-│ ▏ 📅 10:00 - 12:00  (or "Tomorrow, 10:00-12:00")   │
-│ ▏                                                   │
-│ ▏ 🔵 Pickup: Seller Address                         │
-│ ▏ 🟢 Drop: Customer Address                         │
-│ ▏                                                   │
-│ ▏ ⏱ 15 min                              ₹30        │
-│ ▏ [    Accept    ] [Reject]                         │
-└─────────────────────────────────────────────────────┘
-   ↑
-   Blue left border accent
-```
-
-### Step 5: Update memo comparison
-
-**File:** `src/components/order/OrderCard.tsx`
-
-Add `deliveryType` and `deliveryTimeSlot` to the memo comparison function to ensure re-renders when these change.
+This prevents deactivated agents from even entering the app at login.
 
 ---
 
-## Technical Details
+### Step 5: Block on Session Restore
 
-### Files to Create
+**Update:** `src/store/auth.ts`
 
-| File | Purpose |
-|------|---------|
-| `src/components/order/ScheduledBadge.tsx` | Time slot badge for scheduled orders |
+In the `fetchProfile` function, after fetching the profile, check if it's deactivated and sign out if so. This handles the case where an agent is deactivated **while** actively using the app or returns with an existing session:
 
-### Files to Modify
+```typescript
+fetchProfile: async () => {
+  // ... existing fetch logic ...
 
-| File | Changes |
-|------|---------|
-| `src/services/orders.ts` | Add deliveryType, deliveryTimeSlot, deliveryDate to type + mapping |
-| `src/components/order/OrderCard.tsx` | Add left border styling + ScheduledBadge display |
+  if (!error && data) {
+    const profile = data as Profile;
+    
+    // If agent was deactivated while using the app, force sign out
+    if (profile.approval_status === 'deactivated') {
+      console.warn('[Auth] Agent account is deactivated, signing out');
+      await cleanupOnLogout();
+      set({ session: null, user: null, profile: null, loading: false });
+      // Navigation handled by RequireApproval
+      return;
+    }
+    
+    set({ profile });
+  }
+}
+```
 
-### Time Slot Formatting
+Actually, a cleaner approach: just set the profile normally and let `RequireApproval` redirect them. The `initialize()` function's `onAuthStateChange` already calls `fetchProfile()` on every session event, so the guard will catch it. Only the Login page needs the explicit block.
 
-Format the time slot for better readability:
-- Raw: `10:00-12:00`
-- Display: `10:00 AM - 12:00 PM`
+---
 
-Date formatting:
-- Today: Just show time slot
-- Tomorrow: "Tomorrow, 10:00 AM - 12:00 PM"
-- Other dates: "Feb 5, 10:00 AM - 12:00 PM"
+## Files Summary
 
-### Border Color Reference
+| Action | File | Purpose |
+|--------|------|---------|
+| **Create** | `src/pages/Deactivated.tsx` | Deactivated account screen with WhatsApp contact + Sign Out |
+| **Update** | `src/router/index.tsx` | Add `/deactivated` route |
+| **Update** | `src/components/auth/RequireApproval.tsx` | Block deactivated agents from app routes |
+| **Update** | `src/pages/Login.tsx` | Block deactivated agents at login |
 
-```css
-/* Scheduled Orders */
-border-l-4 border-l-blue-500
+---
 
-/* Subscription Orders */
-border-l-4 border-l-purple-500
+## Profile Type Update
 
-/* Immediate Orders */
-No special border (default card)
+**Update:** `src/store/auth.ts`
+
+The `Profile` interface's `approval_status` union type needs to include `'deactivated'`:
+
+```typescript
+approval_status: 'pending' | 'approved' | 'rejected' | 'deactivated';
 ```
 
 ---
 
-## UX Benefits
+## How It Works End-to-End
 
-| Before | After |
-|--------|-------|
-| All orders look identical | Scheduled orders have blue accent + time slot |
-| Agent must tap to see delivery time | Time slot visible at a glance |
-| No visual hierarchy | Immediate orders feel "urgent", scheduled feel "planned" |
-
-This helps agents:
-1. **Plan their route** - See which orders have specific time windows
-2. **Prioritize correctly** - Immediate orders need attention now, scheduled can wait
-3. **Avoid missed windows** - Time slot is visible without tapping into details
+1. **Admin deactivates agent** → sets `profiles.approval_status = 'deactivated'`
+2. **Agent tries to login** → `handleLogin` fetches profile → sees `deactivated` → signs out + shows error toast → stays on login
+3. **Agent has existing session and opens app** → `initialize()` → `fetchProfile()` → `RequireApproval` reads profile → redirects to `/deactivated`
+4. **Agent gets deactivated mid-session** → next route navigation → `RequireApproval` checks profile → redirects to `/deactivated`
+5. **Agent on `/deactivated` page** → sees "Account Deactivated" UI with WhatsApp contact link → taps Sign Out → goes to `/login`
 
 ---
 
-## Summary
+## Design Reference (from screenshot)
 
-| Step | Action | File |
-|------|--------|------|
-| 1 | Extend ZaagoOrder type | `src/services/orders.ts` |
-| 2 | Map backend fields | `src/services/orders.ts` |
-| 3 | Create ScheduledBadge | `src/components/order/ScheduledBadge.tsx` |
-| 4 | Update OrderCard styling | `src/components/order/OrderCard.tsx` |
-| 5 | Update memo comparison | `src/components/order/OrderCard.tsx` |
-
+The deactivated page will mirror the seller app screenshot:
+- Full dark-background screen
+- Circular icon container with red ShieldOff icon
+- Bold title "Account Deactivated"
+- Subtext explaining admin deactivation and inability to access until reactivated
+- Green WhatsApp contact link with icon
+- Sign Out button (full width)
