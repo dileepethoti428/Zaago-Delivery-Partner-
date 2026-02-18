@@ -30,7 +30,7 @@ export function RequireApproval() {
     return <Navigate to="/rejected" replace />;
   }
 
-  if (profile.approval_status === 'deactivated') {
+  if (profile.approval_status === 'deactivated' || profile.isActive === false) {
     return <Navigate to="/deactivated" replace />;
   }
 

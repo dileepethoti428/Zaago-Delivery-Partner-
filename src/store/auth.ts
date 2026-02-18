@@ -13,6 +13,7 @@ interface Profile {
   documents_submitted: boolean;
   submission_date: string | null;
   rejection_reason: string | null;
+  isActive?: boolean; // from delivery_agents.is_active
 }
 
 interface AuthState {
@@ -54,7 +55,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       .single();
 
     if (!error && data) {
-      set({ profile: data as Profile });
+      // Also check delivery_agents.is_active (admin deactivation via dashboard)
+      const { data: agentData } = await supabase
+        .from('delivery_agents')
+        .select('is_active')
+        .eq('agent_id', user.id)
+        .maybeSingle();
+
+      set({
+        profile: {
+          ...(data as Profile),
+          isActive: agentData?.is_active ?? true, // default true if agent row not yet created
+        }
+      });
     } else {
       set({ profile: null });
     }

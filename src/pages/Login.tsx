@@ -122,6 +122,8 @@ export default function Login() {
         navigate("/pending-approval");
       } else if (profile.approval_status === "rejected") {
         navigate("/rejected");
+      } else if (profile.approval_status === "deactivated" || profile.isActive === false) {
+        navigate("/deactivated");
       } else if (profile.approval_status === "approved") {
         navigate("/my-deliveries");
       }
@@ -188,7 +190,7 @@ export default function Login() {
 
       // Block deactivated agents immediately at login
       const currentProfile = useAuthStore.getState().profile;
-      if (currentProfile?.approval_status === 'deactivated') {
+      if (currentProfile?.approval_status === 'deactivated' || currentProfile?.isActive === false) {
         toast({
           title: "Account Deactivated",
           description: "Your account has been deactivated. Please contact support on WhatsApp.",
