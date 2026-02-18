@@ -330,6 +330,41 @@ export type Database = {
           },
         ]
       }
+      agent_handover_confirmations: {
+        Row: {
+          agent_id: string
+          confirmed_at: string | null
+          created_at: string | null
+          handover_date: string
+          id: string
+          seller_id: string
+        }
+        Insert: {
+          agent_id: string
+          confirmed_at?: string | null
+          created_at?: string | null
+          handover_date: string
+          id?: string
+          seller_id: string
+        }
+        Update: {
+          agent_id?: string
+          confirmed_at?: string | null
+          created_at?: string | null
+          handover_date?: string
+          id?: string
+          seller_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_handover_confirmations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["agent_id"]
+          },
+        ]
+      }
       agent_notifications: {
         Row: {
           agent_id: string
@@ -1095,6 +1130,42 @@ export type Database = {
         }
         Relationships: []
       }
+      collection_centers: {
+        Row: {
+          address: string | null
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          updated_at: string
+          village_or_area: string | null
+        }
+        Insert: {
+          address?: string | null
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          updated_at?: string
+          village_or_area?: string | null
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          updated_at?: string
+          village_or_area?: string | null
+        }
+        Relationships: []
+      }
       commission_config: {
         Row: {
           commission_rate: number
@@ -1196,6 +1267,130 @@ export type Database = {
         }
         Relationships: []
       }
+      coupon_assignments: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          coupon_id: string
+          created_at: string | null
+          id: string
+          is_used: boolean | null
+          order_id: string | null
+          updated_at: string | null
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          coupon_id: string
+          created_at?: string | null
+          id?: string
+          is_used?: boolean | null
+          order_id?: string | null
+          updated_at?: string | null
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          coupon_id?: string
+          created_at?: string | null
+          id?: string
+          is_used?: boolean | null
+          order_id?: string | null
+          updated_at?: string | null
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_assignments_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_assignments_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "user_eligible_coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_assignments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_assignments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupon_usage: {
+        Row: {
+          coupon_id: string
+          created_at: string | null
+          id: string
+          order_id: string | null
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          coupon_id: string
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          coupon_id?: string
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_usage_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_usage_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "user_eligible_coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_usage_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_usage_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           birthday_month_target: boolean | null
@@ -1208,6 +1403,7 @@ export type Database = {
           high_spenders_only: boolean | null
           id: string
           is_active: boolean
+          is_compensation: boolean | null
           is_hidden: boolean
           low_spenders_only: boolean | null
           maximum_discount_amount: number | null
@@ -1215,6 +1411,7 @@ export type Database = {
           minimum_user_spending: number | null
           name: string
           new_users_only: boolean | null
+          reason: string | null
           returning_users_only: boolean | null
           target_audience: Json | null
           updated_at: string
@@ -1234,6 +1431,7 @@ export type Database = {
           high_spenders_only?: boolean | null
           id?: string
           is_active?: boolean
+          is_compensation?: boolean | null
           is_hidden?: boolean
           low_spenders_only?: boolean | null
           maximum_discount_amount?: number | null
@@ -1241,6 +1439,7 @@ export type Database = {
           minimum_user_spending?: number | null
           name: string
           new_users_only?: boolean | null
+          reason?: string | null
           returning_users_only?: boolean | null
           target_audience?: Json | null
           updated_at?: string
@@ -1260,6 +1459,7 @@ export type Database = {
           high_spenders_only?: boolean | null
           id?: string
           is_active?: boolean
+          is_compensation?: boolean | null
           is_hidden?: boolean
           low_spenders_only?: boolean | null
           maximum_discount_amount?: number | null
@@ -1267,6 +1467,7 @@ export type Database = {
           minimum_user_spending?: number | null
           name?: string
           new_users_only?: boolean | null
+          reason?: string | null
           returning_users_only?: boolean | null
           target_audience?: Json | null
           updated_at?: string
@@ -2179,6 +2380,187 @@ export type Database = {
         }
         Relationships: []
       }
+      farmer_bank_details: {
+        Row: {
+          account_holder_name: string
+          account_number: string
+          account_type: string | null
+          bank_branch: string | null
+          bank_name: string
+          created_at: string
+          farmer_id: string
+          id: string
+          ifsc_code: string
+          is_primary: boolean | null
+          is_verified: boolean | null
+          pan_number: string | null
+          updated_at: string
+          upi_id: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number: string
+          account_type?: string | null
+          bank_branch?: string | null
+          bank_name: string
+          created_at?: string
+          farmer_id: string
+          id?: string
+          ifsc_code: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          pan_number?: string | null
+          updated_at?: string
+          upi_id?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string
+          account_type?: string | null
+          bank_branch?: string | null
+          bank_name?: string
+          created_at?: string
+          farmer_id?: string
+          id?: string
+          ifsc_code?: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          pan_number?: string | null
+          updated_at?: string
+          upi_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "farmer_bank_details_farmer_id_fkey"
+            columns: ["farmer_id"]
+            isOneToOne: false
+            referencedRelation: "farmers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      farmer_earnings: {
+        Row: {
+          created_at: string
+          farmer_id: string
+          id: string
+          order_id: string | null
+          product_id: string | null
+          quantity: number | null
+          settlement_id: string | null
+          status: string
+          total_amount: number | null
+          unit_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          farmer_id: string
+          id?: string
+          order_id?: string | null
+          product_id?: string | null
+          quantity?: number | null
+          settlement_id?: string | null
+          status?: string
+          total_amount?: number | null
+          unit_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          farmer_id?: string
+          id?: string
+          order_id?: string | null
+          product_id?: string | null
+          quantity?: number | null
+          settlement_id?: string | null
+          status?: string
+          total_amount?: number | null
+          unit_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "farmer_earnings_farmer_id_fkey"
+            columns: ["farmer_id"]
+            isOneToOne: false
+            referencedRelation: "farmers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "farmer_earnings_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "money_settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      farmers: {
+        Row: {
+          address: string | null
+          bank_account_holder_name: string | null
+          bank_account_number: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
+          center_id: string
+          created_at: string
+          created_by: string | null
+          farmer_code: string
+          full_name: string
+          id: string
+          is_active: boolean
+          milk_type: Database["public"]["Enums"]["milk_type"] | null
+          phone: string
+          updated_at: string
+          village: string | null
+        }
+        Insert: {
+          address?: string | null
+          bank_account_holder_name?: string | null
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          center_id: string
+          created_at?: string
+          created_by?: string | null
+          farmer_code: string
+          full_name: string
+          id?: string
+          is_active?: boolean
+          milk_type?: Database["public"]["Enums"]["milk_type"] | null
+          phone: string
+          updated_at?: string
+          village?: string | null
+        }
+        Update: {
+          address?: string | null
+          bank_account_holder_name?: string | null
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          center_id?: string
+          created_at?: string
+          created_by?: string | null
+          farmer_code?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          milk_type?: Database["public"]["Enums"]["milk_type"] | null
+          phone?: string
+          updated_at?: string
+          village?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "farmers_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "collection_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorites: {
         Row: {
           created_at: string
@@ -2402,6 +2784,82 @@ export type Database = {
         }
         Relationships: []
       }
+      milk_entries: {
+        Row: {
+          center_id: string | null
+          created_at: string
+          entry_date: string
+          farmer_id: string
+          fat_percentage: number | null
+          id: string
+          is_locked: boolean
+          quantity_liters: number
+          rate_per_litre: number | null
+          recorded_by: string | null
+          session: string | null
+          settlement_id: string | null
+          snf_percentage: number | null
+          total_amount: number | null
+          updated_at: string
+        }
+        Insert: {
+          center_id?: string | null
+          created_at?: string
+          entry_date?: string
+          farmer_id: string
+          fat_percentage?: number | null
+          id?: string
+          is_locked?: boolean
+          quantity_liters: number
+          rate_per_litre?: number | null
+          recorded_by?: string | null
+          session?: string | null
+          settlement_id?: string | null
+          snf_percentage?: number | null
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Update: {
+          center_id?: string | null
+          created_at?: string
+          entry_date?: string
+          farmer_id?: string
+          fat_percentage?: number | null
+          id?: string
+          is_locked?: boolean
+          quantity_liters?: number
+          rate_per_litre?: number | null
+          recorded_by?: string | null
+          session?: string | null
+          settlement_id?: string | null
+          snf_percentage?: number | null
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "milk_entries_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "collection_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "milk_entries_farmer_id_fkey"
+            columns: ["farmer_id"]
+            isOneToOne: false
+            referencedRelation: "farmers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "milk_entries_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       milk_transactions: {
         Row: {
           created_at: string
@@ -2465,6 +2923,119 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      money_settlement_items: {
+        Row: {
+          commission: number | null
+          created_at: string
+          description: string | null
+          earning_amount: number | null
+          id: string
+          order_amount: number | null
+          order_date: string | null
+          order_id: string | null
+          settlement_id: string
+        }
+        Insert: {
+          commission?: number | null
+          created_at?: string
+          description?: string | null
+          earning_amount?: number | null
+          id?: string
+          order_amount?: number | null
+          order_date?: string | null
+          order_id?: string | null
+          settlement_id: string
+        }
+        Update: {
+          commission?: number | null
+          created_at?: string
+          description?: string | null
+          earning_amount?: number | null
+          id?: string
+          order_amount?: number | null
+          order_date?: string | null
+          order_id?: string | null
+          settlement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_settlement_items_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "money_settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_settlements: {
+        Row: {
+          bank_details_id: string | null
+          commission_deducted: number | null
+          created_at: string
+          gross_amount: number
+          id: string
+          net_amount: number
+          notes: string | null
+          orders_count: number | null
+          other_deductions: number | null
+          party_id: string
+          party_type: string
+          period_end_date: string
+          period_start_date: string
+          settled_at: string | null
+          settled_by: string | null
+          settlement_period: string
+          status: string
+          tds_deducted: number | null
+          transaction_ref: string | null
+          updated_at: string
+        }
+        Insert: {
+          bank_details_id?: string | null
+          commission_deducted?: number | null
+          created_at?: string
+          gross_amount?: number
+          id?: string
+          net_amount?: number
+          notes?: string | null
+          orders_count?: number | null
+          other_deductions?: number | null
+          party_id: string
+          party_type: string
+          period_end_date: string
+          period_start_date: string
+          settled_at?: string | null
+          settled_by?: string | null
+          settlement_period: string
+          status?: string
+          tds_deducted?: number | null
+          transaction_ref?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bank_details_id?: string | null
+          commission_deducted?: number | null
+          created_at?: string
+          gross_amount?: number
+          id?: string
+          net_amount?: number
+          notes?: string | null
+          orders_count?: number | null
+          other_deductions?: number | null
+          party_id?: string
+          party_type?: string
+          period_end_date?: string
+          period_start_date?: string
+          settled_at?: string | null
+          settled_by?: string | null
+          settlement_period?: string
+          status?: string
+          tds_deducted?: number | null
+          transaction_ref?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       non_delivery_days: {
         Row: {
@@ -3679,6 +4250,11 @@ export type Database = {
           minimum_cart_value: number | null
           small_cart_fee: number | null
           small_cart_fee_enabled: boolean | null
+          subscription_deliveries_per_day: number
+          subscription_payout_enabled: boolean
+          subscription_payout_per_day: number
+          subscription_per_order_payout: number | null
+          subscription_per_order_payout_enabled: boolean | null
           updated_at: string | null
         }
         Insert: {
@@ -3694,6 +4270,11 @@ export type Database = {
           minimum_cart_value?: number | null
           small_cart_fee?: number | null
           small_cart_fee_enabled?: boolean | null
+          subscription_deliveries_per_day?: number
+          subscription_payout_enabled?: boolean
+          subscription_payout_per_day?: number
+          subscription_per_order_payout?: number | null
+          subscription_per_order_payout_enabled?: boolean | null
           updated_at?: string | null
         }
         Update: {
@@ -3709,7 +4290,130 @@ export type Database = {
           minimum_cart_value?: number | null
           small_cart_fee?: number | null
           small_cart_fee_enabled?: boolean | null
+          subscription_deliveries_per_day?: number
+          subscription_payout_enabled?: boolean
+          subscription_payout_per_day?: number
+          subscription_per_order_payout?: number | null
+          subscription_per_order_payout_enabled?: boolean | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pricing_formula: {
+        Row: {
+          collection_center_id: string | null
+          constant_value: number
+          created_at: string
+          fat_multiplier: number
+          id: string
+          is_active: boolean
+          mode: string
+          snf_multiplier: number
+          updated_at: string
+        }
+        Insert: {
+          collection_center_id?: string | null
+          constant_value?: number
+          created_at?: string
+          fat_multiplier?: number
+          id?: string
+          is_active?: boolean
+          mode?: string
+          snf_multiplier?: number
+          updated_at?: string
+        }
+        Update: {
+          collection_center_id?: string | null
+          constant_value?: number
+          created_at?: string
+          fat_multiplier?: number
+          id?: string
+          is_active?: boolean
+          mode?: string
+          snf_multiplier?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_formula_collection_center_id_fkey"
+            columns: ["collection_center_id"]
+            isOneToOne: false
+            referencedRelation: "collection_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_settings: {
+        Row: {
+          collection_center_id: string | null
+          created_at: string
+          fat_multiplier: number
+          id: string
+          mode: string
+          snf_multiplier: number
+          updated_at: string
+        }
+        Insert: {
+          collection_center_id?: string | null
+          created_at?: string
+          fat_multiplier?: number
+          id?: string
+          mode?: string
+          snf_multiplier?: number
+          updated_at?: string
+        }
+        Update: {
+          collection_center_id?: string | null
+          created_at?: string
+          fat_multiplier?: number
+          id?: string
+          mode?: string
+          snf_multiplier?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_settings_collection_center_id_fkey"
+            columns: ["collection_center_id"]
+            isOneToOne: true
+            referencedRelation: "collection_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_slabs: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          max_fat: number
+          max_snf: number | null
+          min_fat: number
+          min_snf: number | null
+          rate_per_litre: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_fat: number
+          max_snf?: number | null
+          min_fat: number
+          min_snf?: number | null
+          rate_per_litre: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_fat?: number
+          max_snf?: number | null
+          min_fat?: number
+          min_snf?: number | null
+          rate_per_litre?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -4541,6 +5245,113 @@ export type Database = {
         }
         Relationships: []
       }
+      seller_bank_details: {
+        Row: {
+          account_holder_name: string
+          account_number: string
+          account_type: string | null
+          bank_branch: string | null
+          bank_name: string
+          created_at: string
+          gst_number: string | null
+          id: string
+          ifsc_code: string
+          is_primary: boolean | null
+          is_verified: boolean | null
+          pan_number: string | null
+          seller_id: string
+          updated_at: string
+          upi_id: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number: string
+          account_type?: string | null
+          bank_branch?: string | null
+          bank_name: string
+          created_at?: string
+          gst_number?: string | null
+          id?: string
+          ifsc_code: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          pan_number?: string | null
+          seller_id: string
+          updated_at?: string
+          upi_id?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string
+          account_type?: string | null
+          bank_branch?: string | null
+          bank_name?: string
+          created_at?: string
+          gst_number?: string | null
+          id?: string
+          ifsc_code?: string
+          is_primary?: boolean | null
+          is_verified?: boolean | null
+          pan_number?: string | null
+          seller_id?: string
+          updated_at?: string
+          upi_id?: string | null
+        }
+        Relationships: []
+      }
+      seller_earnings: {
+        Row: {
+          commission_amount: number | null
+          commission_rate: number | null
+          created_at: string
+          id: string
+          net_earning: number | null
+          order_amount: number | null
+          order_id: string | null
+          payment_method: string | null
+          seller_id: string
+          settlement_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          commission_amount?: number | null
+          commission_rate?: number | null
+          created_at?: string
+          id?: string
+          net_earning?: number | null
+          order_amount?: number | null
+          order_id?: string | null
+          payment_method?: string | null
+          seller_id: string
+          settlement_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          commission_amount?: number | null
+          commission_rate?: number | null
+          created_at?: string
+          id?: string
+          net_earning?: number | null
+          order_amount?: number | null
+          order_id?: string | null
+          payment_method?: string | null
+          seller_id?: string
+          settlement_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seller_earnings_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "money_settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seller_product_suggestion_status: {
         Row: {
           created_at: string
@@ -4698,6 +5509,7 @@ export type Database = {
           id: string
           ifsc_code: string | null
           is_bank_verified: boolean | null
+          is_deactivated: boolean | null
           is_deleted: boolean | null
           latitude: number | null
           location_id: number | null
@@ -4736,6 +5548,7 @@ export type Database = {
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
+          is_deactivated?: boolean | null
           is_deleted?: boolean | null
           latitude?: number | null
           location_id?: number | null
@@ -4774,6 +5587,7 @@ export type Database = {
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
+          is_deactivated?: boolean | null
           is_deleted?: boolean | null
           latitude?: number | null
           location_id?: number | null
@@ -4815,6 +5629,65 @@ export type Database = {
           value?: string
         }
         Relationships: []
+      }
+      settlements: {
+        Row: {
+          center_id: string
+          created_at: string
+          created_by: string | null
+          end_date: string
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+          paid_at: string | null
+          paid_by: string | null
+          start_date: string
+          status: string
+          total_amount: number | null
+          total_litres: number | null
+          updated_at: string
+        }
+        Insert: {
+          center_id: string
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          start_date: string
+          status?: string
+          total_amount?: number | null
+          total_litres?: number | null
+          updated_at?: string
+        }
+        Update: {
+          center_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          start_date?: string
+          status?: string
+          total_amount?: number | null
+          total_litres?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settlements_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "collection_centers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       spatial_ref_sys: {
         Row: {
@@ -5439,6 +6312,36 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_editable: boolean | null
+          setting_key: string
+          setting_value: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_editable?: boolean | null
+          setting_key: string
+          setting_value?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_editable?: boolean | null
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       todays_best_deals: {
         Row: {
           created_at: string | null
@@ -5600,6 +6503,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_center_assignments: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          center_id: string
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          center_id: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          center_id?: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_center_assignments_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "collection_centers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_devices: {
         Row: {
@@ -5897,7 +6841,7 @@ export type Database = {
           assigned_agent_id: string | null
           cancelled_at: string | null
           cancelled_reason: string | null
-          compensation_delivery_date: string
+          compensation_delivery_date: string | null
           compensation_type: string | null
           created_at: string | null
           customer_id: string | null
@@ -5915,13 +6859,13 @@ export type Database = {
           status: string | null
           subscription_id: string
           updated_at: string | null
-          vacation_period_id: string
+          vacation_period_id: string | null
         }
         Insert: {
           assigned_agent_id?: string | null
           cancelled_at?: string | null
           cancelled_reason?: string | null
-          compensation_delivery_date: string
+          compensation_delivery_date?: string | null
           compensation_type?: string | null
           created_at?: string | null
           customer_id?: string | null
@@ -5939,13 +6883,13 @@ export type Database = {
           status?: string | null
           subscription_id: string
           updated_at?: string | null
-          vacation_period_id: string
+          vacation_period_id?: string | null
         }
         Update: {
           assigned_agent_id?: string | null
           cancelled_at?: string | null
           cancelled_reason?: string | null
-          compensation_delivery_date?: string
+          compensation_delivery_date?: string | null
           compensation_type?: string | null
           created_at?: string | null
           customer_id?: string | null
@@ -5963,7 +6907,7 @@ export type Database = {
           status?: string | null
           subscription_id?: string
           updated_at?: string | null
-          vacation_period_id?: string
+          vacation_period_id?: string | null
         }
         Relationships: [
           {
@@ -6667,19 +7611,14 @@ export type Database = {
             }
             Returns: string
           }
-      apply_coupon:
-        | {
-            Args: { p_coupon_code: string; p_order_total: number }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_coupon_code: string
-              p_order_total: number
-              p_user_id?: string
-            }
-            Returns: Json
-          }
+      apply_coupon: {
+        Args: {
+          p_coupon_code: string
+          p_order_total: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
       apply_targeted_coupon: {
         Args: { p_coupon_code: string; p_order_total?: number }
         Returns: Json
@@ -7874,6 +8813,21 @@ export type Database = {
           total_revenue: number
         }[]
       }
+      get_seller_subscription_handover_data: {
+        Args: { handover_date: string; seller_user_id: string }
+        Returns: {
+          agent_id: string
+          agent_name: string
+          agent_phone: string
+          agent_profile_image: string
+          product_id: string
+          product_image: string
+          product_name: string
+          product_unit: string
+          total_orders: number
+          total_quantity: number
+        }[]
+      }
       get_seller_subscription_orders_overview: {
         Args: { p_date: string; p_seller_user_id: string }
         Returns: {
@@ -7984,6 +8938,30 @@ export type Database = {
         }[]
       }
       get_user_category_stats: { Args: never; Returns: Json }
+      get_user_center: { Args: { p_user_id: string }; Returns: string }
+      get_user_coupons: {
+        Args: { p_user_id: string }
+        Returns: {
+          code: string
+          description: string
+          discount_type: string
+          discount_value: number
+          id: string
+          is_active: boolean
+          is_assigned: boolean
+          is_compensation: boolean
+          is_hidden: boolean
+          maximum_discount_amount: number
+          maximum_user_spending: number
+          minimum_user_spending: number
+          name: string
+          reason: string
+          usage_limit: number
+          used_count: number
+          valid_from: string
+          valid_until: string
+        }[]
+      }
       get_user_eligible_coupons: {
         Args: { p_user_id: string }
         Returns: {
@@ -8085,6 +9063,10 @@ export type Database = {
         Args: { p_coupon_id: string; p_user_id: string }
         Returns: boolean
       }
+      lock_settlement: {
+        Args: { p_settlement_id: string; p_user_id: string }
+        Returns: boolean
+      }
       log_secret_code_usage: {
         Args: {
           input_code: string
@@ -8141,6 +9123,10 @@ export type Database = {
         Returns: undefined
       }
       mark_payout_paid: { Args: { payout_id: string }; Returns: undefined }
+      mark_settlement_paid: {
+        Args: { p_settlement_id: string; p_user_id: string }
+        Returns: boolean
+      }
       notify_nearby_delivery_agents_for_order: {
         Args: { p_order_id: string }
         Returns: undefined
@@ -9009,6 +9995,10 @@ export type Database = {
             }
             Returns: Json
           }
+      update_settlement_totals: {
+        Args: { p_settlement_id: string }
+        Returns: undefined
+      }
       update_subscription_next_delivery: {
         Args: { p_subscription_id: string }
         Returns: Json
@@ -9041,6 +10031,10 @@ export type Database = {
         }
         Returns: string
       }
+      user_has_center_access: {
+        Args: { p_center_id: string; p_user_id: string }
+        Returns: boolean
+      }
       validate_bank_details_v2: {
         Args: {
           account_holder_name: string
@@ -9071,6 +10065,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user" | "agent" | "seller" | "rider"
+      milk_type: "cow" | "buffalo" | "both"
     }
     CompositeTypes: {
       geometry_dump: {
@@ -9207,6 +10202,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user", "agent", "seller", "rider"],
+      milk_type: ["cow", "buffalo", "both"],
     },
   },
 } as const

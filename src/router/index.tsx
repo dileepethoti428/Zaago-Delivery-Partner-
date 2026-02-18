@@ -13,6 +13,7 @@ import HelpSupport from '@/pages/HelpSupport';
 import UploadDocuments from '@/pages/UploadDocuments';
 import PendingApproval from '@/pages/PendingApproval';
 import Rejected from '@/pages/Rejected';
+import Deactivated from '@/pages/Deactivated';
 import MyDeliveries from '@/pages/MyDeliveries';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import TermsConditions from '@/pages/TermsConditions';
@@ -57,6 +58,10 @@ export const router = createBrowserRouter([
       {
         path: '/rejected',
         element: <Rejected />,
+      },
+      {
+        path: '/deactivated',
+        element: <Deactivated />,
       },
       {
         element: <RequireApproval />,

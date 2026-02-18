@@ -9,7 +9,7 @@ interface Profile {
   phone: string | null;
   date_of_birth: string | null;
   emergency_contact: string | null;
-  approval_status: 'pending' | 'approved' | 'rejected';
+  approval_status: 'pending' | 'approved' | 'rejected' | 'deactivated';
   documents_submitted: boolean;
   submission_date: string | null;
   rejection_reason: string | null;
