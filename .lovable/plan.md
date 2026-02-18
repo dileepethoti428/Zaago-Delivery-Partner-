@@ -1,134 +1,120 @@
 
-# Fix: Deactivated Agent Blocked by `is_active = false` in `delivery_agents` Table
+# Fix: Profile Photo Not Showing for Delivery Agents
 
-## Root Cause
+## Root Cause Analysis
 
-The admin dashboard deactivates delivery agents by setting `delivery_agents.is_active = false`. However, the agent app's authentication flow only reads from the `profiles` table (checking `approval_status`), which is **never updated** when the admin marks an agent inactive.
+Three separate problems are causing profile photos to not appear:
 
-```text
-Admin Action:          delivery_agents.is_active = false
-App Checks:            profiles.approval_status === 'deactivated'  ← never set, never triggered
-Result:                Agent logs in successfully, full app access
+### Problem 1: Profile page never renders the photo
+In `src/pages/Profile.tsx`, the `<Avatar>` component only renders `<AvatarFallback>` (initials). `<AvatarImage>` is never included, so even agents who have a photo stored in the database see only initials.
+
+```tsx
+// Current — broken
+<Avatar className="h-16 w-16">
+  <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+    {agentProfile?.name ? agentProfile.name.split(' ').map(n => n[0]).join('') : 'DA'}
+  </AvatarFallback>
+</Avatar>
 ```
 
-The `profiles.approval_status` column in the real database only ever has: `pending`, `approved`, `rejected` — **never** `'deactivated'`.
+### Problem 2: `delivery_agents.profile_image` not set on signup
+In `src/pages/UploadDocuments.tsx`, the profile photo is uploaded to the `agent-photos` storage bucket and its URL is saved in `agent_documents.profile_photo_url`. However, the `delivery_agents` table upsert (lines 131–142) does **not** include the `profile_image` field. So the agent's profile record has no photo URL.
+
+### Problem 3: `fetchAgentProfile` uses only `delivery_agents`
+`src/services/agentProfile.ts` only queries `delivery_agents` — so even if the photo exists in `agent_documents`, it is never fetched.
 
 ---
 
-## Fix Strategy
+## Data State (From DB)
 
-Check **both** fields — `profiles.approval_status === 'deactivated'` (future-proofing) **AND** `delivery_agents.is_active = false` — at every entry point:
-
-1. **Login time** — block immediately after credentials succeed
-2. **Session restore** — block when app opens with existing session
-3. **Route guard** — block mid-session if status changes
+- Agents with `delivery_agents.profile_image` set: Some (those who updated via settings)
+- Agents with only `agent_documents.profile_photo_url` set: Most new signups
+- Some `agent_documents.profile_photo_url` values are **partial paths** (e.g., `uuid/profile-photo.png`) without the full Supabase URL prefix — these need to be constructed correctly
 
 ---
 
-## Changes Required
+## Fix Plan
 
-### 1. Update `src/store/auth.ts` — Fetch `is_active` from `delivery_agents`
+### Step 1: Fix `UploadDocuments.tsx` — Save photo URL to `delivery_agents`
 
-Extend the `Profile` interface to include `isActive`:
+When upserting the `delivery_agents` row (lines 131–142), also include `profile_image: profilePhotoUrl` so the photo URL is stored in the main agent table immediately at signup time.
 
 ```typescript
-interface Profile {
-  // ... existing fields
-  isActive?: boolean; // from delivery_agents table
-}
+const { error: agentError } = await supabase.from('delivery_agents').upsert({
+  agent_id: user.id,
+  email: user.email,
+  name: data.fullName,
+  phone: data.phone,
+  verification_status: 'pending',
+  documents_verified: false,
+  is_active: false,
+  profile_image: profilePhotoUrl,  // ← ADD THIS
+}, { 
+  onConflict: 'agent_id',
+  ignoreDuplicates: false 
+});
 ```
 
-In `fetchProfile()`, after getting the `profiles` row, do a **second query** to `delivery_agents` to get `is_active` and merge it into the profile state:
+### Step 2: Fix `fetchAgentProfile` — Also join `agent_documents` for photo fallback
+
+Update `src/services/agentProfile.ts` to also fetch `profile_photo_url` from `agent_documents` as a fallback when `delivery_agents.profile_image` is empty. This fixes existing agents whose `profile_image` column is not populated.
 
 ```typescript
-fetchProfile: async () => {
-  const { user } = get();
-  if (!user) { set({ profile: null }); return; }
-
+export async function fetchAgentProfile(email: string) {
   const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .single();
+    .from('delivery_agents')
+    .select('*, agent_documents(profile_photo_url)')
+    .eq('email', email)
+    .maybeSingle();
 
-  if (!error && data) {
-    // Also check delivery_agents.is_active
-    const { data: agentData } = await supabase
-      .from('delivery_agents')
-      .select('is_active')
-      .eq('agent_id', user.id)
-      .maybeSingle();
+  if (error) throw error;
+  
+  if (data) {
+    // Use profile_image if set, otherwise fall back to agent_documents photo
+    const agentDocs = data.agent_documents as any;
+    const fallbackPhoto = agentDocs?.profile_photo_url;
+    
+    // Build full URL if it's a partial path
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const resolvePhotoUrl = (url: string | null | undefined) => {
+      if (!url) return null;
+      if (url.startsWith('http')) return url;
+      // Partial path — construct full URL
+      return `${supabaseUrl}/storage/v1/object/public/agent-documents/${url}`;
+    };
 
-    set({
-      profile: {
-        ...data as Profile,
-        isActive: agentData?.is_active ?? true, // default true if not found yet
-      }
-    });
-  } else {
-    set({ profile: null });
+    return {
+      ...data,
+      profile_image: resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
+    };
   }
-},
-```
-
----
-
-### 2. Update `src/pages/Login.tsx` — Block `is_active = false` at Login
-
-In `handleLogin`, after `fetchProfile()`, extend the deactivation check:
-
-```typescript
-const currentProfile = useAuthStore.getState().profile;
-
-// Block if approval_status is deactivated OR delivery_agents.is_active is false
-if (
-  currentProfile?.approval_status === 'deactivated' ||
-  currentProfile?.isActive === false
-) {
-  toast({
-    title: "Account Deactivated",
-    description: "Your account has been deactivated. Please contact support on WhatsApp.",
-    variant: "destructive",
-  });
-  await supabase.auth.signOut();
-  setLoading(false);
-  return;
+  
+  return data;
 }
 ```
 
-Also fix the redirect `useEffect` to handle deactivated status:
+### Step 3: Fix `Profile.tsx` — Render `<AvatarImage>` with the photo URL
 
-```typescript
-useEffect(() => {
-  if (session && profile) {
-    if (!profile.documents_submitted) {
-      navigate("/upload-documents");
-    } else if (profile.approval_status === "pending") {
-      navigate("/pending-approval");
-    } else if (profile.approval_status === "rejected") {
-      navigate("/rejected");
-    } else if (profile.approval_status === "deactivated" || profile.isActive === false) {
-      navigate("/deactivated");  // ← ADD THIS
-    } else if (profile.approval_status === "approved") {
-      navigate("/my-deliveries");
-    }
-  }
-}, [session, profile, navigate]);
+Update the Avatar in `src/pages/Profile.tsx` to include `<AvatarImage>` so the actual photo is displayed. The `<AvatarFallback>` remains as backup for agents without a photo.
+
+```tsx
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+// In JSX:
+<Avatar className="h-16 w-16">
+  <AvatarImage 
+    src={agentProfile?.profile_image || undefined} 
+    alt={agentProfile?.name || 'Agent'} 
+  />
+  <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+    {agentProfile?.name ? agentProfile.name.split(' ').map(n => n[0]).join('') : 'DA'}
+  </AvatarFallback>
+</Avatar>
 ```
 
----
-
-### 3. Update `src/components/auth/RequireApproval.tsx` — Block Mid-Session
-
-Add a check for `isActive === false` alongside the existing `deactivated` check:
-
-```typescript
-if (profile.approval_status === 'deactivated' || profile.isActive === false) {
-  return <Navigate to="/deactivated" replace />;
-}
-```
-
-This handles the case where an agent is deactivated **while** already using the app — next navigation will redirect them to the deactivated screen.
+This way:
+- If `profile_image` URL exists → shows the actual photo
+- If URL is missing or broken → shows initials fallback automatically (Radix UI `Avatar` handles this natively)
 
 ---
 
@@ -136,18 +122,17 @@ This handles the case where an agent is deactivated **while** already using the 
 
 | File | Change |
 |------|--------|
-| `src/store/auth.ts` | Add `isActive` to Profile type + fetch from `delivery_agents` in `fetchProfile()` |
-| `src/pages/Login.tsx` | Check `isActive === false` at login + add deactivated redirect in useEffect |
-| `src/components/auth/RequireApproval.tsx` | Check `isActive === false` in route guard |
+| `src/pages/UploadDocuments.tsx` | Add `profile_image: profilePhotoUrl` to the `delivery_agents` upsert |
+| `src/services/agentProfile.ts` | Join `agent_documents` and resolve partial photo URLs |
+| `src/pages/Profile.tsx` | Add `<AvatarImage>` to render the actual profile photo |
 
 ---
 
-## End-to-End Flow After Fix
+## How It Works After Fix
 
-1. **Admin sets** `delivery_agents.is_active = false`
-2. **Agent opens app** → `fetchProfile()` queries both tables → `isActive = false` stored in profile state
-3. **At login** → deactivation check triggers → toast shown → sign out → stays on `/login`
-4. **Mid-session** → `RequireApproval` detects `isActive === false` → redirects to `/deactivated`
-5. **On `/deactivated` page** → WhatsApp contact link + Sign Out button (already built)
+1. **New agent signs up** → uploads photo → `delivery_agents.profile_image` gets the full public URL immediately
+2. **Existing agents** without `profile_image` → `fetchAgentProfile` falls back to `agent_documents.profile_photo_url` and resolves partial paths to full URLs
+3. **Profile page** → `<AvatarImage>` renders the photo; falls back to initials if no photo exists
+4. **Settings page** (edit profile) → already uses `update-agent-profile` edge function which also sets `profile_image` — no change needed there
 
-No database schema changes needed — only reading the existing `delivery_agents.is_active` column that the admin already controls.
+No database schema changes required — just reading existing data correctly and saving it in the right place on signup.
