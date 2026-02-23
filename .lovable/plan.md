@@ -1,83 +1,60 @@
 
-# Fix: Profile Photo Not Showing in Settings / Edit Profile
+
+# Fix: Cancel Delivery Edge Function Error After Accepting Order
 
 ## Root Cause
 
-The Settings page already has `<AvatarImage>` rendering correctly at line 224:
+There is an **ID mismatch** between the accept and cancel flows:
 
-```tsx
-<Avatar className="h-24 w-24">
-  <AvatarImage src={profileForm.watch('profile_image_url')} />
-  <AvatarFallback ...>
-```
+1. **accept-order** looks up the delivery agent by auth user ID (`agent_id` column), then stores `agentData.id` (the `delivery_agents` table's own UUID, e.g., `c4b29233-...`) into `orders.agent_id`
+2. **ManageDelivery page** passes `profile.user_id` (the auth user ID, e.g., `17578977-...`) to `cancel-delivery`
+3. **cancel-delivery** compares `order.agent_id` (`c4b29233-...`) with the passed `agent_id` (`17578977-...`) -- they never match
+4. Result: the function hits line 203 (`order.agent_id !== agent_id`) and returns **403 "Order is assigned to another agent"**
 
-The form value `profile_image_url` is populated from:
-```typescript
-profile_image_url: settings?.profile?.profile_image || '',
-```
+This is why cancellation fails for every agent -- the two IDs are from different tables and will never be equal.
 
-And `settings.profile` comes from the `get-agent-settings` edge function, which fetches `delivery_agents` but **stops there** — it never falls back to `agent_documents.profile_photo_url` if `delivery_agents.profile_image` is NULL.
+## Fix
 
-This is the exact same bug that was fixed in `fetchAgentProfile` for the Profile page. The Settings page uses a different data path (an edge function) and needs the same fix applied there.
+Update `cancel-delivery/index.ts` to resolve the auth user ID to the delivery agent's table ID before comparing, just like `accept-order` does.
 
-## Data Flow Comparison
+### Changes to `supabase/functions/cancel-delivery/index.ts`
 
-```
-Profile page:
-  fetchAgentProfile() → delivery_agents + agent_documents fallback ✓ FIXED
-
-Settings page (Edit Profile):
-  get-agent-settings edge function → delivery_agents only ✗ MISSING FALLBACK
-```
-
-## Fix — One File Change
-
-### `supabase/functions/get-agent-settings/index.ts`
-
-After fetching the agent row (line 43–55), add a second query to `agent_documents` using `user_id = user.id` to get `profile_photo_url`, then resolve and merge it into the `agent.profile_image` field before building the response.
-
-The `resolvePhotoUrl` helper logic (same as in `agentProfile.ts`) needs to be replicated in the edge function (Deno):
+After validating `order_id` and `agent_id` are present (line 35), and before any order queries, add a lookup step:
 
 ```typescript
-function resolvePhotoUrl(url: string | null | undefined, supabaseUrl: string): string | null {
-  if (!url) return null;
-  if (url.startsWith('http')) return url;
-  return `${supabaseUrl}/storage/v1/object/public/agent-documents/${url}`;
-}
-```
-
-Then after fetching `agent`, before building the `response`:
-
-```typescript
-// Fetch profile photo fallback from agent_documents
-const { data: photoDoc } = await serviceClient
-  .from('agent_documents')
-  .select('profile_photo_url')
-  .eq('user_id', user.id)
+// Resolve auth user ID to delivery_agents.id
+const { data: agentData, error: agentError } = await supabase
+  .from('delivery_agents')
+  .select('id')
+  .eq('agent_id', agent_id)
   .maybeSingle();
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-const resolvedPhoto =
-  resolvePhotoUrl(agent.profile_image, supabaseUrl) ||
-  resolvePhotoUrl(photoDoc?.profile_photo_url, supabaseUrl);
-
-// Merge resolved photo back into agent object
-agent = { ...agent, profile_image: resolvedPhoto };
+const resolvedAgentId = agentData?.id || agent_id;
 ```
 
-This means `settings.profile.profile_image` will now contain a fully resolved URL for all agents — exactly what `profileForm.watch('profile_image_url')` needs to display the avatar in the Settings edit profile section.
+Then use `resolvedAgentId` instead of `agent_id` in all comparisons and database operations throughout the function:
+- Line 59: `dailyOrder.assigned_agent_id !== resolvedAgentId`
+- Line 77: `.eq('assigned_agent_id', resolvedAgentId)`
+- Line 100: `.eq('agent_id', resolvedAgentId)`
+- Line 159-168: rejection insert with `resolvedAgentId`
+- Line 203: `order.agent_id !== resolvedAgentId`
+- Line 222: `.eq('agent_id', resolvedAgentId)`
+- Line 257: `.eq('agent_id', resolvedAgentId)`
+- Lines 269, 289: log/rejection inserts with `resolvedAgentId`
+
+This ensures that whether the frontend passes an auth user ID or a delivery agent ID, the cancel function will correctly match against `orders.agent_id`.
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `supabase/functions/get-agent-settings/index.ts` | Add `resolvePhotoUrl` helper + separate `agent_documents` query + merge resolved photo into agent before response |
+| `supabase/functions/cancel-delivery/index.ts` | Add delivery_agents lookup to resolve auth user ID to agent table ID before all comparisons |
 
-No frontend changes needed — the Settings page Avatar is already wired up correctly, it just needs the data to arrive populated.
+No frontend changes needed -- the fix is entirely in the edge function.
 
-## Result After Fix
+## After Fix
 
-- All agents whose photo is stored only in `agent_documents.profile_photo_url` will now see it in the Settings edit profile avatar
-- Full URL photos pass through unchanged (`startsWith('http')` check)
-- Partial path photos get resolved to the correct public storage URL
-- Agents with no photo at all see the initials fallback (unchanged behaviour)
+- Agent accepts order (stores `delivery_agents.id` as `orders.agent_id`)
+- Agent cancels order (passes auth user ID, edge function resolves it to `delivery_agents.id`)
+- IDs now match, cancellation succeeds
+
