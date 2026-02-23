@@ -34,6 +34,20 @@ serve(async (req) => {
       );
     }
 
+    // Resolve auth user ID to delivery_agents.id
+    const { data: agentData, error: agentError } = await supabase
+      .from('delivery_agents')
+      .select('id')
+      .eq('agent_id', agent_id)
+      .maybeSingle();
+
+    if (agentError) {
+      console.warn('Failed to resolve agent ID:', agentError);
+    }
+
+    const resolvedAgentId = agentData?.id || agent_id;
+    console.log('Resolved agent ID:', agent_id, '->', resolvedAgentId);
+
     // Handle subscription (daily) orders differently
     if (order_type === 'daily') {
       console.log('Processing daily order cancellation');
@@ -56,7 +70,7 @@ serve(async (req) => {
       }
 
       // Check if assigned to this agent
-      if (dailyOrder.assigned_agent_id && dailyOrder.assigned_agent_id !== agent_id) {
+      if (dailyOrder.assigned_agent_id && dailyOrder.assigned_agent_id !== resolvedAgentId) {
         return new Response(
           JSON.stringify({ success: false, error: 'Order is assigned to another agent' }),
           { 
@@ -74,7 +88,7 @@ serve(async (req) => {
           assigned_agent_id: null
         })
         .eq('id', order_id)
-        .eq('assigned_agent_id', agent_id);
+        .eq('assigned_agent_id', resolvedAgentId);
 
       if (updateError) {
         console.error('Failed to update daily order:', updateError);
@@ -97,7 +111,7 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         })
         .eq('daily_order_id', order_id)
-        .eq('agent_id', agent_id)
+        .eq('agent_id', resolvedAgentId)
         .eq('payout_status', 'pending');
 
       if (trackingError) {
@@ -112,7 +126,7 @@ serve(async (req) => {
           .from('delivery_logs')
           .insert({
             order_id,
-            agent_id,
+            agent_id: resolvedAgentId,
             action: 'cancelled',
             details: {
               reason: cancellation_reason || 'Agent cancelled delivery',
@@ -162,7 +176,7 @@ serve(async (req) => {
         .from('agent_order_rejections')
         .insert({
           order_id,
-          agent_id,
+          agent_id: resolvedAgentId,
           rejection_reason: cancellation_reason || 'Agent rejected delivery',
           rejection_type: 'manual'
         });
@@ -178,7 +192,7 @@ serve(async (req) => {
         .from('delivery_logs')
         .insert({
           order_id,
-          agent_id,
+            agent_id: resolvedAgentId,
           action: 'rejected',
           details: {
             reason: cancellation_reason || 'Agent rejected delivery',
@@ -200,7 +214,7 @@ serve(async (req) => {
     }
 
     // If assigned to a different agent, reject the request
-    if (order.agent_id !== agent_id) {
+    if (order.agent_id !== resolvedAgentId) {
       return new Response(
         JSON.stringify({ success: false, error: 'Order is assigned to another agent' }),
         { 
@@ -219,7 +233,7 @@ serve(async (req) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', order_id)
-      .eq('agent_id', agent_id)
+      .eq('agent_id', resolvedAgentId)
       .select();
 
     if (orderError) {
@@ -254,7 +268,7 @@ serve(async (req) => {
         updated_at: new Date().toISOString()
       })
       .eq('order_id', order_id)
-      .eq('agent_id', agent_id)
+      .eq('agent_id', resolvedAgentId)
       .eq('payout_status', 'pending');
 
     if (trackingError) {
@@ -268,7 +282,7 @@ serve(async (req) => {
       .from('delivery_logs')
       .insert({
         order_id,
-        agent_id,
+        agent_id: resolvedAgentId,
         action: 'cancelled',
         details: {
           reason: cancellation_reason || 'Agent cancelled delivery',
@@ -285,7 +299,7 @@ serve(async (req) => {
       .from('agent_order_rejections')
       .insert({
         order_id,
-        agent_id,
+        agent_id: resolvedAgentId,
         rejection_reason: cancellation_reason || 'Agent cancelled delivery',
         rejection_type: 'cancelled'
       });
