@@ -36,8 +36,6 @@ export default function Home() {
   
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const permission = useLocationStore((state) => state.permission);
-  const startWatch = useLocationStore((state) => state.startWatch);
-  const stopWatch = useLocationStore((state) => state.stopWatch);
 
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
@@ -109,13 +107,8 @@ export default function Home() {
   // Realtime invalidation for React Query cache
   useOrdersRealtimeInvalidate(profile?.id);
 
-  useEffect(() => {
-    startWatch();
-    
-    return () => {
-      stopWatch();
-    };
-  }, [startWatch, stopWatch]);
+  // Location watching is handled by useLocationSyncController in AppProviders
+  // No duplicate watcher needed here
 
   const handleRefresh = useCallback(async () => {
     // Refresh location first to get fresh coordinates
