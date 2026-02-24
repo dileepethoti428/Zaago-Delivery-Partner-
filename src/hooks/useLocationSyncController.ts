@@ -1,8 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth';
+import { getDistanceKm } from '@/utils/geo';
 
 const SYNC_INTERVAL_MS = 15000; // 15 seconds between syncs
+const MIN_MOVEMENT_KM = 0.02; // 20 meters - skip sync if agent hasn't moved
 
 /**
  * Unified location sync controller that:
@@ -15,6 +17,7 @@ export function useLocationSyncController() {
   const { session } = useAuthStore();
   const watchIdRef = useRef<number | null>(null);
   const lastSyncTimeRef = useRef<number>(0);
+  const lastSyncedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const isMountedRef = useRef<boolean>(true);
 
   // Throttled sync to backend
@@ -23,8 +26,19 @@ export function useLocationSyncController() {
     if (now - lastSyncTimeRef.current < SYNC_INTERVAL_MS) return;
     
     if (!session?.access_token) return;
+
+    // Skip if agent hasn't moved more than 20 meters
+    const prev = lastSyncedCoordsRef.current;
+    if (prev) {
+      const dist = getDistanceKm(
+        { lat: prev.lat, lng: prev.lng },
+        { lat: coords.latitude, lng: coords.longitude }
+      );
+      if (dist < MIN_MOVEMENT_KM) return;
+    }
     
     lastSyncTimeRef.current = now;
+    lastSyncedCoordsRef.current = { lat: coords.latitude, lng: coords.longitude };
     console.log('[LocationSync] Syncing:', coords.latitude.toFixed(4), coords.longitude.toFixed(4));
 
     try {
