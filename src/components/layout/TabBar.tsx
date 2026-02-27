@@ -1,6 +1,5 @@
 import { Home, History, DollarSign, User, Truck } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 const tabs = [
@@ -23,18 +22,17 @@ export function TabBar() {
           const isActive = location.pathname === tab.path;
           
           return (
-            <motion.button
+            <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
               className={cn(
-                'flex flex-col items-center gap-1 px-4 py-2 transition-colors',
+                'flex flex-col items-center gap-1 px-4 py-2 transition-all duration-100 active:scale-95',
                 isActive ? 'text-primary' : 'text-muted-foreground'
               )}
-              whileTap={{ scale: 0.95 }}
             >
               <Icon className="h-5 w-5" />
               <span className="text-xs font-medium">{tab.label}</span>
-            </motion.button>
+            </button>
           );
         })}
       </div>
