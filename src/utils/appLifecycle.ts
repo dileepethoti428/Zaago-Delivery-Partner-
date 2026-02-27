@@ -125,7 +125,15 @@ export function refreshQueries() {
  * Setup global event listeners for app resume
  * Call once during app initialization
  */
+let listenersInitialized = false;
+
 export function setupAppLifecycleListeners() {
+  if (listenersInitialized) {
+    console.log('[AppLifecycle] Listeners already initialized, skipping');
+    return;
+  }
+  listenersInitialized = true;
+
   // Visibility change (tab focus, app resume)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
