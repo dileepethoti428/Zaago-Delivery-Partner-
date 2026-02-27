@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth';
+import { useLocationStore } from '@/store/location';
 import { getDistanceKm } from '@/utils/geo';
 
 const SYNC_INTERVAL_MS = 15000; // 15 seconds between syncs
@@ -66,9 +67,37 @@ export function useLocationSyncController() {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
-        if (isMountedRef.current) {
-          syncToBackend(position.coords);
-        }
+        if (!isMountedRef.current) return;
+
+        // Update the location store so UI (Home, LocationChip) gets coordinates
+        const store = useLocationStore.getState();
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: position.timestamp,
+        };
+
+        useLocationStore.setState({
+          lastKnown: location,
+          permission: 'granted',
+          isWatching: true,
+          error: null,
+        });
+
+        // Persist to localStorage
+        try {
+          localStorage.setItem('zaago_last_loc', JSON.stringify({
+            location,
+            label: store.label,
+          }));
+        } catch {}
+
+        // Trigger debounced label refresh
+        store.refreshLabel();
+
+        // Sync to backend (throttled, movement-gated)
+        syncToBackend(position.coords);
       },
       (error) => {
         console.warn('[LocationSync] Watch error:', error.message);
