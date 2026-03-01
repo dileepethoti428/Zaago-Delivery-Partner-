@@ -1,81 +1,80 @@
 
-Root cause analysis from current code:
 
-1) The “timeout” in `ManageDelivery` is ineffective  
-- `completeDelivery()` and `handleQRPaymentComplete()` create an `AbortController`, but the signal is never passed into the request.  
-- In this Supabase version (`@supabase/functions-js`), `FunctionInvokeOptions` does not support `signal`, so this pattern cannot abort `supabase.functions.invoke(...)`.  
-- Result: when WebView networking is stale after returning from Maps, the invoke promise can hang and `isCompleting` stays true for a long time.
+# Fix: Slow Orders Page + WhatsApp Button Error
 
-2) Resume recovery can stall before state refresh  
-- `onAppResume()` awaits `refreshSession()`. If token refresh is slow/stuck after background resume, query refresh is delayed.  
-- This creates a race where the user taps “Delivered” before session/network are truly healthy.
+## Issue 1: Orders Page Loading Slowly
 
-3) ManageDelivery does not actually refetch order data on resume  
-- `useResumeGuard` currently only resets local loading flags.  
-- It does not re-run `getOrderDetails(...)`, so the screen can remain stale after app resume.
+**Root Cause**: The loading is slow due to a waterfall of sequential network calls:
 
-4) Query invalidation mismatch exists  
-- App lifecycle invalidates `['order-details']`, but the query hook uses `['orderDetails', orderId]`.  
-- This reduces refresh reliability.
+1. `useProfile(user?.email)` -- fetches profile via direct DB query (fast)
+2. Only AFTER profile loads, `useOrders(profile?.agent_id)` fires -- calls `get-available-orders` edge function
+3. The edge function itself does 6+ sequential DB queries (agent lookup, location, completed orders, orders, rejections, user roles per order, delivery slots per order)
+4. When agent location IS available, it also makes **2 Google Distance Matrix API calls PER order** (agent-to-shop + shop-to-customer) -- this is the biggest bottleneck
+5. The Home page also waits for geolocation (`!lastKnown`) before showing any orders, even if orders are already fetched
 
-5) Android launch mode config cannot be edited in this repo right now  
-- There is no `android/` directory present here, so `AndroidManifest.xml` cannot be changed in-project at this moment.  
-- This still needs to be set in the native project (`singleTask`) to prevent activity/webview resume edge cases.
+**Fix**:
+- Show orders immediately when data arrives, don't block on `lastKnown` location
+- In the edge function, batch the Google Distance Matrix calls using the multi-destination feature (1 API call for all orders instead of 2N calls)
+- Run independent DB queries in parallel using `Promise.all` instead of sequentially
+- Add a loading placeholder that shows partial data while distance calculation runs
 
-Implementation plan (approved changes to apply next):
+### Changes:
 
-A. Harden app resume pipeline (`src/utils/appLifecycle.ts`)
-- Add a timeout-safe session refresh wrapper (Promise.race-based), so resume flow cannot block indefinitely.
-- Ensure `refreshQueries()` always runs even if refreshSession is slow/fails.
-- Add explicit realtime reconnection on resume (`supabase.realtime.disconnect(); supabase.realtime.connect();`) before invalidation/refetch.
-- Fix order details invalidation key to `orderDetails` (and keep existing order/assigned/earnings invalidations).
+**`src/pages/Home.tsx`**:
+- Change loading condition from `!lastKnown || loading` to just `loading` -- show orders even before geolocation resolves
+- Move the "Getting your location..." message to a non-blocking banner instead of replacing the entire order list
 
-B. Make ManageDelivery resume-aware (`src/pages/ManageDelivery.tsx`)
-- Extract a shared `loadOrderDetails()` function (used by initial load and resume).
-- Update `useResumeGuard` callback to do:
-  1) reset stuck loaders,
-  2) safe session refresh with timeout,
-  3) refetch current order details,
-  4) refetch active order caches (`orders`, `available-orders`, `assigned-orders`).
-- Add a short-lived `isResuming` guard state so “Delivered” can’t be tapped during reconnection window.
+**`supabase/functions/get-available-orders/index.ts`**:
+- Run `delivery_history`, `agent location`, `delivery_timings`, and `agent_order_rejections` queries in parallel using `Promise.all` (currently sequential = ~4 round trips)
+- Batch Google Distance Matrix API calls: instead of calling `calculateRoadDistance()` 2x per order in a loop, collect all origin-destination pairs and make 1-2 batch API calls (Google supports up to 25 origins x 25 destinations per request)
+- Run `user_roles` checks in parallel with `Promise.all` instead of awaiting each one sequentially inside `.map()`
 
-C. Replace fake abort timeout with real UI timeout behavior (`src/pages/ManageDelivery.tsx`)
-- Remove ineffective AbortController usage.
-- Wrap each critical async call with Promise.race timeout:
-  - `supabase.auth.refreshSession()`
-  - `supabase.functions.invoke('unified-complete-delivery', ...)`
-  - `supabase.functions.invoke('generate-payment-qr', ...)`
-- On timeout: fail fast, clear loading state, show actionable toast (“connection restored slowly, retry once”).
+---
 
-D. Add preflight reconnection before critical actions (`src/pages/ManageDelivery.tsx`)
-- Before `Delivered`/QR completion invoke:
-  - run timeout-safe `refreshSession()`,
-  - read fresh session with `getSession()`,
-  - only then call edge function.
-- This removes stale-token race after returning from external apps.
+## Issue 2: WhatsApp Button Shows Error
 
-E. Fix Capacitor fallback listener cleanup bug (`src/providers/AppProviders.tsx`)
-- Refactor the `App.addListener` fallback branch so visibility handler cleanup is guaranteed (current async return path can leak).
-- Keep `appStateChange` + `visibilitychange` behavior aligned.
+**Root Cause**: `window.open('https://wa.me/917842343642', '_blank')` does not work reliably in Capacitor/WebView environments. The `_blank` target tries to open a new browser tab, which WebViews typically block or handle incorrectly, causing an error.
 
-F. Android native config step (external native project)
-- In native Android project: set `launchMode="singleTask"` for `MainActivity` in `android/app/src/main/AndroidManifest.xml`.
-- Since `android/` is not present in this repo, include this as a required post-pull native step.
+**Fix**: Use `window.location.href` assignment instead, which works in both browser and Capacitor WebView. For external links in Capacitor, this triggers the system browser/app intent correctly.
 
-Validation plan (end-to-end):
-1) Login on device/emulator.
-2) Open assigned order → tap “Customer” to launch Maps.
-3) Return to app.
-4) Immediately tap “Delivered”.
-5) Expected:
-   - no infinite spinner,
-   - either success immediately, or clean timeout message within set limit and successful retry,
-   - no manual refresh required.
-6) Repeat with QR flow and COD flow.
-7) Verify logs show resume pipeline sequence and no stuck `isCompleting`.
+### Change:
 
-Acceptance criteria:
-- App resume is detected reliably via Capacitor + visibility fallback.
-- Session/API state is refreshed on resume without blocking UI indefinitely.
-- Active orders/order details are refreshed on resume.
-- “Delivered” works immediately after returning from Maps, without manual app refresh.
+**`src/pages/Profile.tsx`** (line 172):
+```
+// Before
+window.open('https://wa.me/917842343642', '_blank');
+
+// After  
+window.location.href = 'https://wa.me/917842343642';
+```
+
+However, this navigates away from the app. A better approach is to use `window.open` without `_blank`, or wrap in a try-catch with fallback:
+
+```typescript
+const handleWhatsAppClick = () => {
+  const url = 'https://wa.me/917842343642';
+  try {
+    // Try opening in system browser (works in Capacitor)
+    window.open(url, '_system');
+  } catch {
+    // Fallback: direct navigation
+    window.location.href = url;
+  }
+};
+```
+
+---
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/pages/Profile.tsx` | Fix WhatsApp link to use `_system` target with fallback |
+| `src/pages/Home.tsx` | Don't block order display on geolocation; show orders immediately |
+| `supabase/functions/get-available-orders/index.ts` | Parallelize DB queries with `Promise.all`; batch Google Distance Matrix calls |
+
+## Expected Results
+
+- **Orders page**: Loads significantly faster. DB queries run in parallel (saving ~1-2s). Google API calls batched (saving ~2-5s when orders exist). Orders show immediately without waiting for GPS.
+- **WhatsApp**: Opens WhatsApp correctly on both browser and native Capacitor without errors.
+
