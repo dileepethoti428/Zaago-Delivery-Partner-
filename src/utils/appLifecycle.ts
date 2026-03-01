@@ -3,7 +3,7 @@ import { useOrdersStore } from '@/store/orders';
 import { supabase } from '@/integrations/supabase/client';
 
 let lastResumeTime = 0;
-const RESUME_DEBOUNCE_MS = 500;
+const RESUME_DEBOUNCE_MS = 2000;
 
 // Import queryClient dynamically to avoid circular dependency
 let queryClientRef: any = null;
@@ -85,12 +85,16 @@ export function unlockAllButtons() {
  */
 export async function refreshSession() {
   try {
-    // Actually refresh the JWT token, not just read cached session
-    const { data, error } = await supabase.auth.refreshSession();
+    // Use Promise.race to prevent hanging on slow networks (4s timeout)
+    const refreshPromise = supabase.auth.refreshSession();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Session refresh timeout')), 4000)
+    );
+
+    const { data, error } = await Promise.race([refreshPromise, timeoutPromise]);
     
     if (error) {
       console.warn('[AppLifecycle] Session refresh error:', error);
-      // Fallback: check if we still have a valid cached session
       const { data: fallback } = await supabase.auth.getSession();
       if (!fallback.session) {
         console.log('[AppLifecycle] No active session');
@@ -105,7 +109,7 @@ export async function refreshSession() {
 
     console.log('[AppLifecycle] Session refreshed successfully');
   } catch (e) {
-    console.warn('[AppLifecycle] Session refresh failed:', e);
+    console.warn('[AppLifecycle] Session refresh failed (timeout or network):', e);
   }
 }
 
