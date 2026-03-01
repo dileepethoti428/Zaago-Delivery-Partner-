@@ -116,12 +116,12 @@ function AuthInitializer({ children }: { children: ReactNode }) {
   // Handle app resume (Capacitor) - SAFE: only removes THIS listener
   useEffect(() => {
     let listener: { remove: () => Promise<void> } | null = null;
+    let fallbackHandler: (() => void) | null = null;
     
     const setupListener = async () => {
       try {
         listener = await App.addListener("appStateChange", ({ isActive }) => {
           if (isActive) {
-            // Run app resume handler to reset stuck states
             onAppResume();
             
             const user = useAuthStore.getState().user;
@@ -132,7 +132,7 @@ function AuthInitializer({ children }: { children: ReactNode }) {
         });
       } catch (e) {
         // Not in Capacitor environment - use visibility fallback
-        const handleVisibility = () => {
+        fallbackHandler = () => {
           if (document.visibilityState === 'visible') {
             const user = useAuthStore.getState().user;
             if (user) {
@@ -140,17 +140,18 @@ function AuthInitializer({ children }: { children: ReactNode }) {
             }
           }
         };
-        document.addEventListener('visibilitychange', handleVisibility);
-        return () => document.removeEventListener('visibilitychange', handleVisibility);
+        document.addEventListener('visibilitychange', fallbackHandler);
       }
     };
     
     setupListener();
     
-    // SAFE: Only remove THIS specific listener, not all listeners
     return () => {
       if (listener) {
         listener.remove();
+      }
+      if (fallbackHandler) {
+        document.removeEventListener('visibilitychange', fallbackHandler);
       }
     };
   }, []);
