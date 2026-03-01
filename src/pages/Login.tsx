@@ -331,7 +331,7 @@ export default function Login() {
           <div className="p-4 bg-primary rounded-2xl shadow-lg">
             <Truck className="h-10 w-10 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-primary">Zaago Delivery Partner</h1>
+          <h1 className="text-2xl font-bold text-primary">Zaago Delivery Agent</h1>
         </div>
 
         <Card className="rounded-2xl shadow-xl border-0 bg-card/50 backdrop-blur">
@@ -342,8 +342,8 @@ export default function Login() {
               {mode === "reset" && "Reset password"}
             </CardTitle>
             <CardDescription>
-              {mode === "login" && "Sign in to your delivery partner account"}
-              {mode === "signup" && "Join as a delivery partner"}
+              {mode === "login" && "Sign in to your delivery agent account"}
+              {mode === "signup" && "Join as a delivery agent"}
               {mode === "reset" && "Enter your email to receive a reset link"}
             </CardDescription>
           </CardHeader>
@@ -355,7 +355,7 @@ export default function Login() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="partner@zaago.com"
+                    placeholder="agent@zaago.com"
                     className="rounded-xl"
                     {...loginForm.register("email")}
                   />
@@ -400,7 +400,7 @@ export default function Login() {
                   <Input
                     id="signup-email"
                     type="email"
-                    placeholder="partner@zaago.com"
+                    placeholder="agent@zaago.com"
                     className="rounded-xl"
                     {...signupForm.register("email")}
                   />
@@ -456,7 +456,7 @@ export default function Login() {
                   <Input
                     id="reset-email"
                     type="email"
-                    placeholder="partner@zaago.com"
+                    placeholder="agent@zaago.com"
                     className="rounded-xl"
                     {...loginForm.register("email")}
                   />

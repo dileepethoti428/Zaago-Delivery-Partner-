@@ -50,7 +50,7 @@ export function TermsCheckbox({ checked, onCheckedChange, disabled }: TermsCheck
             </SheetHeader>
             <LegalDocumentViewer
               title="Privacy Policy"
-              subtitle="Zaago Delivery Partner App"
+              subtitle="Zaago Delivery Agent App"
               version={LEGAL_VERSIONS.privacy}
               sections={PRIVACY_POLICY_SECTIONS}
             />
@@ -73,7 +73,7 @@ export function TermsCheckbox({ checked, onCheckedChange, disabled }: TermsCheck
             </SheetHeader>
             <LegalDocumentViewer
               title="Terms & Conditions"
-              subtitle="Zaago Delivery Partner App"
+              subtitle="Zaago Delivery Agent App"
               version={LEGAL_VERSIONS.terms}
               sections={TERMS_CONDITIONS_SECTIONS}
             />

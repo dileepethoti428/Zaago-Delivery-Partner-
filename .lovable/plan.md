@@ -1,81 +1,105 @@
 
-Root cause analysis from current code:
 
-1) The “timeout” in `ManageDelivery` is ineffective  
-- `completeDelivery()` and `handleQRPaymentComplete()` create an `AbortController`, but the signal is never passed into the request.  
-- In this Supabase version (`@supabase/functions-js`), `FunctionInvokeOptions` does not support `signal`, so this pattern cannot abort `supabase.functions.invoke(...)`.  
-- Result: when WebView networking is stale after returning from Maps, the invoke promise can hang and `isCompleting` stays true for a long time.
+# Fix: "Delivered" Button Hangs After Returning from Google Maps
 
-2) Resume recovery can stall before state refresh  
-- `onAppResume()` awaits `refreshSession()`. If token refresh is slow/stuck after background resume, query refresh is delayed.  
-- This creates a race where the user taps “Delivered” before session/network are truly healthy.
+## Root Cause
 
-3) ManageDelivery does not actually refetch order data on resume  
-- `useResumeGuard` currently only resets local loading flags.  
-- It does not re-run `getOrderDetails(...)`, so the screen can remain stale after app resume.
+The app already has resume detection (`onAppResume`, `useResumeGuard`, Capacitor `appStateChange`), and it already resets loading states. The actual problem is:
 
-4) Query invalidation mismatch exists  
-- App lifecycle invalidates `['order-details']`, but the query hook uses `['orderDetails', orderId]`.  
-- This reduces refresh reliability.
+1. **Stale Supabase session token**: `refreshSession()` in `appLifecycle.ts` calls `supabase.auth.getSession()` which only reads the cached session from memory -- it does NOT refresh the JWT token. After the WebView is backgrounded for a while, the token can expire or the connection can go stale, causing the `unified-complete-delivery` edge function call to hang.
 
-5) Android launch mode config cannot be edited in this repo right now  
-- There is no `android/` directory present here, so `AndroidManifest.xml` cannot be changed in-project at this moment.  
-- This still needs to be set in the native project (`singleTask`) to prevent activity/webview resume edge cases.
+2. **Supabase Realtime channel disconnection**: When the WebView goes to background, the Supabase realtime WebSocket connection drops. On resume, the client doesn't immediately reconnect, so any realtime-dependent features stall.
 
-Implementation plan (approved changes to apply next):
+3. **Race condition**: `onAppResume()` is async (refreshes session), but the user can click "Delivered" before the session refresh completes, hitting the edge function with a stale token.
 
-A. Harden app resume pipeline (`src/utils/appLifecycle.ts`)
-- Add a timeout-safe session refresh wrapper (Promise.race-based), so resume flow cannot block indefinitely.
-- Ensure `refreshQueries()` always runs even if refreshSession is slow/fails.
-- Add explicit realtime reconnection on resume (`supabase.realtime.disconnect(); supabase.realtime.connect();`) before invalidation/refetch.
-- Fix order details invalidation key to `orderDetails` (and keep existing order/assigned/earnings invalidations).
+## Fix Plan
 
-B. Make ManageDelivery resume-aware (`src/pages/ManageDelivery.tsx`)
-- Extract a shared `loadOrderDetails()` function (used by initial load and resume).
-- Update `useResumeGuard` callback to do:
-  1) reset stuck loaders,
-  2) safe session refresh with timeout,
-  3) refetch current order details,
-  4) refetch active order caches (`orders`, `available-orders`, `assigned-orders`).
-- Add a short-lived `isResuming` guard state so “Delivered” can’t be tapped during reconnection window.
+### 1. Use `refreshSession()` instead of `getSession()` in app lifecycle
 
-C. Replace fake abort timeout with real UI timeout behavior (`src/pages/ManageDelivery.tsx`)
-- Remove ineffective AbortController usage.
-- Wrap each critical async call with Promise.race timeout:
-  - `supabase.auth.refreshSession()`
-  - `supabase.functions.invoke('unified-complete-delivery', ...)`
-  - `supabase.functions.invoke('generate-payment-qr', ...)`
-- On timeout: fail fast, clear loading state, show actionable toast (“connection restored slowly, retry once”).
+**File**: `src/utils/appLifecycle.ts`
 
-D. Add preflight reconnection before critical actions (`src/pages/ManageDelivery.tsx`)
-- Before `Delivered`/QR completion invoke:
-  - run timeout-safe `refreshSession()`,
-  - read fresh session with `getSession()`,
-  - only then call edge function.
-- This removes stale-token race after returning from external apps.
+Change the `refreshSession` function to actually refresh the JWT token:
 
-E. Fix Capacitor fallback listener cleanup bug (`src/providers/AppProviders.tsx`)
-- Refactor the `App.addListener` fallback branch so visibility handler cleanup is guaranteed (current async return path can leak).
-- Keep `appStateChange` + `visibilitychange` behavior aligned.
+```typescript
+export async function refreshSession() {
+  try {
+    // Actually refresh the token, not just read cached session
+    const { data, error } = await supabase.auth.refreshSession();
+    
+    if (error) {
+      console.warn('[AppLifecycle] Session refresh error:', error);
+      // Fallback: try getSession to see if we still have a valid one
+      const { data: fallback } = await supabase.auth.getSession();
+      if (!fallback.session) {
+        console.log('[AppLifecycle] No active session');
+      }
+      return;
+    }
+    
+    console.log('[AppLifecycle] Session refreshed successfully');
+  } catch (e) {
+    console.warn('[AppLifecycle] Session refresh failed:', e);
+  }
+}
+```
 
-F. Android native config step (external native project)
-- In native Android project: set `launchMode="singleTask"` for `MainActivity` in `android/app/src/main/AndroidManifest.xml`.
-- Since `android/` is not present in this repo, include this as a required post-pull native step.
+### 2. Add order-details query invalidation on resume
 
-Validation plan (end-to-end):
-1) Login on device/emulator.
-2) Open assigned order → tap “Customer” to launch Maps.
-3) Return to app.
-4) Immediately tap “Delivered”.
-5) Expected:
-   - no infinite spinner,
-   - either success immediately, or clean timeout message within set limit and successful retry,
-   - no manual refresh required.
-6) Repeat with QR flow and COD flow.
-7) Verify logs show resume pipeline sequence and no stuck `isCompleting`.
+**File**: `src/utils/appLifecycle.ts`
 
-Acceptance criteria:
-- App resume is detected reliably via Capacitor + visibility fallback.
-- Session/API state is refreshed on resume without blocking UI indefinitely.
-- Active orders/order details are refreshed on resume.
-- “Delivered” works immediately after returning from Maps, without manual app refresh.
+Add `order-details` to the list of invalidated queries in `refreshQueries()` so ManageDelivery gets fresh data:
+
+```typescript
+queryClientRef.invalidateQueries({ queryKey: ['order-details'] });
+queryClientRef.invalidateQueries({ queryKey: ['earnings'] });
+```
+
+### 3. Pre-refresh session before edge function calls in ManageDelivery
+
+**File**: `src/pages/ManageDelivery.tsx`
+
+In `completeDelivery()`, before calling `getSession()`, add a proactive token refresh to ensure the token is fresh:
+
+```typescript
+// Ensure token is fresh (especially after returning from Maps)
+await supabase.auth.refreshSession();
+const { data: { session } } = await supabase.auth.getSession();
+```
+
+Apply the same fix to `generateAndShowQR()` and `handleQRPaymentComplete()`.
+
+### 4. Add timeout to edge function calls
+
+**File**: `src/pages/ManageDelivery.tsx`
+
+Wrap the `supabase.functions.invoke` calls with an AbortController timeout so they fail fast instead of hanging forever:
+
+```typescript
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+try {
+  const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+    body: { ... },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  // ... handle response
+} finally {
+  clearTimeout(timeout);
+}
+```
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/utils/appLifecycle.ts` | Use `supabase.auth.refreshSession()` instead of `getSession()`; add more query keys to invalidation |
+| `src/pages/ManageDelivery.tsx` | Pre-refresh session before edge function calls; add request timeout |
+
+## Result
+
+- Returning from Google Maps triggers `onAppResume` which now actually refreshes the JWT token
+- Clicking "Delivered" will have a fresh token ready, so the edge function call succeeds immediately
+- If the token refresh hasn't completed yet, the inline `refreshSession()` call in `completeDelivery()` ensures it happens before the request
+- 15-second timeout prevents infinite loading -- fails fast with a clear error instead of hanging
+

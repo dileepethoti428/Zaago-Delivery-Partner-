@@ -8,7 +8,7 @@ export function ZaagoHeader() {
           <Truck className="h-5 w-5 text-primary" />
         </div>
         
-        <h1 className="text-lg font-bold text-primary">Zaago Delivery Partner</h1>
+        <h1 className="text-lg font-bold text-primary">Zaago Delivery Agent</h1>
         
         <div className="flex items-center gap-2">
           <div className="relative">

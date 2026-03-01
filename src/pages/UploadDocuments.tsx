@@ -181,7 +181,7 @@ export default function UploadDocuments() {
               <div>
                 <CardTitle className="text-2xl">Upload Documents</CardTitle>
                 <CardDescription>
-                  Submit your documents to become a Zaago delivery partner
+                  Submit your documents to become a Zaago delivery agent
                 </CardDescription>
               </div>
               <AlertDialog>

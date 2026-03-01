@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 
 let lastResumeTime = 0;
 const RESUME_DEBOUNCE_MS = 500;
-const SESSION_REFRESH_TIMEOUT_MS = 4000;
 
 // Import queryClient dynamically to avoid circular dependency
 let queryClientRef: any = null;
@@ -14,68 +13,27 @@ export function setQueryClientRef(client: any) {
 }
 
 /**
- * Promise.race wrapper — resolves/rejects within timeoutMs no matter what.
- */
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`[AppLifecycle] ${label} timed out after ${timeoutMs}ms`)), timeoutMs)
-    ),
-  ]);
-}
-
-/**
- * Exported so ManageDelivery (and others) can do a safe session refresh
- * without blocking forever.
- */
-export async function safeRefreshSession(timeoutMs = SESSION_REFRESH_TIMEOUT_MS): Promise<boolean> {
-  try {
-    const { data, error } = await withTimeout(
-      supabase.auth.refreshSession(),
-      timeoutMs,
-      'refreshSession'
-    );
-    if (error || !data?.session) {
-      console.warn('[AppLifecycle] Session refresh issue:', error?.message ?? 'no session');
-      return false;
-    }
-    console.log('[AppLifecycle] Session refreshed OK');
-    return true;
-  } catch (e: any) {
-    console.warn('[AppLifecycle] Session refresh failed/timed out:', e?.message);
-    return false;
-  }
-}
-
-/**
- * Master function called when app resumes from background.
- * Resets all stuck states, refreshes session (with timeout), reconnects realtime, and invalidates queries.
+ * Master function called when app resumes from background
+ * Resets all stuck states and refreshes data
  */
 export async function onAppResume() {
+  // Debounce rapid resume events
   const now = Date.now();
   if (now - lastResumeTime < RESUME_DEBOUNCE_MS) return;
   lastResumeTime = now;
 
   console.log('[AppLifecycle] App resumed - resetting state');
 
-  // 1. Reset all loading states immediately (non-blocking)
+  // 1. Reset all loading states
   resetAllLoaders();
+
+  // 2. Unlock all buttons (force-enable)
   unlockAllButtons();
 
-  // 2. Session refresh with timeout — never blocks more than SESSION_REFRESH_TIMEOUT_MS
-  await safeRefreshSession();
+  // 3. Refresh session (check if still valid)
+  await refreshSession();
 
-  // 3. Reconnect realtime channels (they can go stale after background)
-  try {
-    supabase.realtime.disconnect();
-    supabase.realtime.connect();
-    console.log('[AppLifecycle] Realtime reconnected');
-  } catch (e) {
-    console.warn('[AppLifecycle] Realtime reconnect failed:', e);
-  }
-
-  // 4. Invalidate stale queries — always runs regardless of session outcome
+  // 4. Invalidate stale queries (soft refresh)
   refreshQueries();
 }
 
@@ -83,8 +41,10 @@ export async function onAppResume() {
  * Reset ALL loading states across the app
  */
 export function resetAllLoaders() {
+  // Reset global lifecycle store
   useLifecycleStore.getState().resetAllLoaders();
-
+  
+  // Reset orders store loading
   const ordersStore = useOrdersStore.getState();
   if (ordersStore.loading) {
     useOrdersStore.setState({ loading: false });
@@ -95,15 +55,22 @@ export function resetAllLoaders() {
 
 /**
  * Force-enable all disabled buttons
+ * Safety net for buttons stuck in disabled state
  */
 export function unlockAllButtons() {
   const buttons = document.querySelectorAll('button[disabled]');
   let unlocked = 0;
-
+  
   buttons.forEach((btn) => {
     const button = btn as HTMLButtonElement;
+    
+    // Skip navigation/tab buttons that should stay disabled
     if (button.getAttribute('data-state') === 'inactive') return;
+    
+    // Skip buttons with role="tab" as they manage their own state
     if (button.getAttribute('role') === 'tab') return;
+    
+    // Remove disabled attribute - React will re-disable if needed
     button.removeAttribute('disabled');
     unlocked++;
   });
@@ -114,25 +81,57 @@ export function unlockAllButtons() {
 }
 
 /**
+ * Refresh/validate the current session
+ */
+export async function refreshSession() {
+  try {
+    // Actually refresh the JWT token, not just read cached session
+    const { data, error } = await supabase.auth.refreshSession();
+    
+    if (error) {
+      console.warn('[AppLifecycle] Session refresh error:', error);
+      // Fallback: check if we still have a valid cached session
+      const { data: fallback } = await supabase.auth.getSession();
+      if (!fallback.session) {
+        console.log('[AppLifecycle] No active session');
+      }
+      return;
+    }
+    
+    if (!data.session) {
+      console.log('[AppLifecycle] No active session after refresh');
+      return;
+    }
+
+    console.log('[AppLifecycle] Session refreshed successfully');
+  } catch (e) {
+    console.warn('[AppLifecycle] Session refresh failed:', e);
+  }
+}
+
+/**
  * Soft-refresh React Query cache
+ * Marks queries as stale so they refetch when accessed
  */
 export function refreshQueries() {
   if (!queryClientRef) {
     console.warn('[AppLifecycle] QueryClient not initialized');
     return;
   }
-
+  
+  // Invalidate order-related queries (most likely to be stale)
   queryClientRef.invalidateQueries({ queryKey: ['orders'] });
   queryClientRef.invalidateQueries({ queryKey: ['available-orders'] });
   queryClientRef.invalidateQueries({ queryKey: ['assigned-orders'] });
-  queryClientRef.invalidateQueries({ queryKey: ['orderDetails'] }); // fixed key (was 'order-details')
+  queryClientRef.invalidateQueries({ queryKey: ['order-details'] });
   queryClientRef.invalidateQueries({ queryKey: ['earnings'] });
-
+  
   console.log('[AppLifecycle] Queries invalidated');
 }
 
 /**
  * Setup global event listeners for app resume
+ * Call once during app initialization
  */
 let listenersInitialized = false;
 
@@ -143,16 +142,19 @@ export function setupAppLifecycleListeners() {
   }
   listenersInitialized = true;
 
+  // Visibility change (tab focus, app resume)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       onAppResume();
     }
   });
 
+  // Window focus (returning from external apps)
   window.addEventListener('focus', () => {
     onAppResume();
   });
 
+  // Page show (back/forward navigation, bfcache restore)
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
       onAppResume();
