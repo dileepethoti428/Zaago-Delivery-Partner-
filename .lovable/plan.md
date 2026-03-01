@@ -1,73 +1,59 @@
 
 
-# Fix: "Delivered" Button Hangs and App Runs Slowly
+# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
 
-## Root Causes Found
+## Root Cause
 
-### 1. The 15-second timeout is a no-op
-The `AbortController` was added in the last fix, but `supabase.functions.invoke()` does NOT accept a `signal` option. The controller is created and cleared, but **never actually connected to the fetch request**. So when the edge function hangs, it hangs forever.
+The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
 
-**Fix**: Use `Promise.race` to implement an actual timeout:
-```typescript
-const result = await Promise.race([
-  supabase.functions.invoke('unified-complete-delivery', { ... }),
-  new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000))
-]);
+Current (broken):
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 ```
 
-### 2. Network storm on every resume causes slowness
-When the app resumes from background, **all of these fire simultaneously**:
-- `visibilitychange` listener calls `onAppResume()` -- refreshes session + invalidates queries
-- `window.focus` listener calls `onAppResume()` -- same thing again (500ms debounce may not catch both)
-- Capacitor `appStateChange` calls `onAppResume()` -- third time
-- React Query's `refetchOnWindowFocus: true` (global default) -- refetches ALL active queries automatically
-
-This means every single query in the app (orders, earnings, delivery history, order details, settings) refetches **twice** on every resume -- once from React Query's built-in mechanism and once from the manual `invalidateQueries` in `onAppResume()`. This network storm makes the app feel slow.
-
-**Fix**: Set `refetchOnWindowFocus: false` globally in QueryClient defaults. The manual `refreshQueries()` in `onAppResume()` already handles this. Increase debounce from 500ms to 2000ms.
-
-### 3. Pre-action `refreshSession()` can itself hang
-In `completeDelivery()`, `await supabase.auth.refreshSession()` is called before the edge function. If the network is slow after returning from Maps, this call can hang too, making the button appear unresponsive before the actual delivery request even starts.
-
-**Fix**: Wrap the session refresh in a 4-second timeout so it fails fast.
-
-## Changes
-
-### File: `src/providers/AppProviders.tsx`
-- Change `refetchOnWindowFocus: true` to `refetchOnWindowFocus: false` in global QueryClient config
-- This eliminates the double-refetch storm on resume
-
-### File: `src/utils/appLifecycle.ts`
-- Increase `RESUME_DEBOUNCE_MS` from 500 to 2000 to prevent triple-firing
-- Add a timeout wrapper to `refreshSession()` so it fails fast (4 seconds)
-- Add `supabase.removeAllChannels()` + re-subscribe pattern for realtime reconnection
-
-### File: `src/pages/ManageDelivery.tsx`
-- Replace the non-functional `AbortController` pattern with `Promise.race` for actual 15-second timeouts on all edge function calls
-- Wrap the pre-action `refreshSession()` calls in a 4-second `Promise.race` timeout so the button isn't blocked by a hanging session refresh
-- Apply the same fix to `completeDelivery`, `generateAndShowQR`, and `handleQRPaymentComplete`
-
-## Technical Details
-
-```text
-BEFORE (on resume from Maps):
-  visibilitychange  --> onAppResume() --> refreshSession + invalidate queries
-  window.focus      --> onAppResume() --> refreshSession + invalidate queries  (maybe)
-  Capacitor event   --> onAppResume() --> refreshSession + invalidate queries
-  React Query       --> auto-refetch ALL queries with refetchOnWindowFocus
-  = 6-8 session refresh attempts + all queries fetched 2x
-
-AFTER:
-  visibilitychange  --> onAppResume() --> refreshSession (4s timeout) + invalidate queries
-  window.focus      --> debounced out (2s window)
-  Capacitor event   --> debounced out (2s window)
-  React Query       --> refetchOnWindowFocus: false (no auto-refetch)
-  = 1 session refresh + queries fetched 1x
+Required:
 ```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
+```
+
+The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
+
+## Fix Plan
+
+### 1. Update CORS headers in `unified-complete-delivery`
+
+**File**: `supabase/functions/unified-complete-delivery/index.ts`
+- Update `corsHeaders` to include the full set of Supabase client headers
+- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
+
+### 2. Update CORS headers in `generate-payment-qr`
+
+**File**: `supabase/functions/generate-payment-qr/index.ts`
+- Same CORS header fix
+
+### 3. Update CORS headers in `cancel-delivery`
+
+**File**: `supabase/functions/cancel-delivery/index.ts`
+- Same CORS header fix
+
+### 4. Update CORS headers in `complete-delivery-v2`
+
+**File**: `supabase/functions/complete-delivery-v2/index.ts`
+- Same CORS header fix (this function also has outdated headers)
+
+## Why This Is the Fix
+
+- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
+- The browser sends an OPTIONS preflight request first to check if these headers are allowed
+- The edge function rejects the preflight because those headers aren't listed
+- The browser never sends the actual POST request
+- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
+- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
 
 ## Expected Result
-- "Delivered" button responds within 15 seconds or shows a clear timeout error
-- App no longer slows down after returning from Maps/Phone/WhatsApp
-- Session refresh doesn't block button clicks indefinitely
-- Single controlled refetch on resume instead of a network storm
+
+After updating the CORS headers and redeploying:
+- "Delivered" button will call the edge function successfully
+- Response will return in 1-3 seconds instead of timing out at 15 seconds
+- No more silent failures
 
