@@ -162,10 +162,8 @@ export default function ManageDelivery() {
   const generateAndShowQR = async () => {
     if (!order) return;
 
-    // Use the memoized effectiveTotal
     const amountToPay = effectiveTotal;
 
-    // Validate amount
     if (amountToPay <= 0) {
       toast({
         variant: 'destructive',
@@ -178,6 +176,9 @@ export default function ManageDelivery() {
     setIsGeneratingQR(true);
     try {
       const { supabase } = await import('@/integrations/supabase/client');
+      
+      // Ensure token is fresh
+      await supabase.auth.refreshSession();
       
       console.log('Generating QR for amount:', amountToPay);
       
@@ -194,10 +195,9 @@ export default function ManageDelivery() {
         throw new Error(data?.error || error?.message || 'Failed to generate QR code');
       }
 
-      // Transform field names to match component expectations
       const transformedData = {
-        qr_id: data.qr_code_id,        // Map qr_code_id -> qr_id
-        image_url: data.qr_code_url,   // Map qr_code_url -> image_url
+        qr_id: data.qr_code_id,
+        image_url: data.qr_code_url,
         qr_string: data.qr_string,
         amount: data.amount || amountToPay,
         expires_at: data.expires_at
@@ -225,64 +225,73 @@ export default function ManageDelivery() {
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
-      // Get session token for explicit Authorization header
+      // Ensure token is fresh (especially after returning from Maps)
+      await supabase.auth.refreshSession();
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('Session expired. Please login again.');
       }
+
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       
-      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
-        body: {
-          order_id: order.id,
-          payment_method: paymentMethod,
-          order_type: orderType,
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
+      try {
+        const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+          body: {
+            order_id: order.id,
+            payment_method: paymentMethod,
+            order_type: orderType,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
+        });
+
+        if (error || !data?.success) {
+          throw new Error(data?.error || 'Failed to complete delivery');
         }
-      });
 
-      if (error || !data?.success) {
-        throw new Error(data?.error || 'Failed to complete delivery');
-      }
-
-      // Handle already completed gracefully (Zepto-style idempotency)
-      if (data.already_completed) {
-        // Invalidate orders cache immediately to prevent stale data
+        // Handle already completed gracefully (Zepto-style idempotency)
+        if (data.already_completed) {
+          await queryClient.invalidateQueries({ queryKey: ['orders'] });
+          await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+          await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
+          
+          toast({
+            title: 'Already Delivered',
+            description: 'This order was already marked as delivered.',
+          });
+          
+          navigate('/my-deliveries');
+          return;
+        } else {
+          const successMessage = paymentMethod === 'COD' 
+            ? 'Product delivered successfully - COD ✓'
+            : 'Product delivered successfully - Paid Online ✓';
+          
+          toast({
+            title: 'Delivery Completed!',
+            description: successMessage,
+          });
+        }
+        
         await queryClient.invalidateQueries({ queryKey: ['orders'] });
         await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
         
-        toast({
-          title: 'Already Delivered',
-          description: 'This order was already marked as delivered.',
-        });
-        
-        // Navigate away immediately
-        navigate('/my-deliveries');
-        return;
-      } else {
-        const successMessage = paymentMethod === 'COD' 
-          ? 'Product delivered successfully - COD ✓'
-          : 'Product delivered successfully - Paid Online ✓';
-        
-        toast({
-          title: 'Delivery Completed!',
-          description: successMessage,
-        });
+        setTimeout(() => navigate(-1), 1500);
+      } finally {
+        clearTimeout(timeout);
       }
       
-      // Invalidate cache after successful completion too
-      await queryClient.invalidateQueries({ queryKey: ['orders'] });
-      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-      
-      setTimeout(() => navigate(-1), 1500);
-      
     } catch (error: any) {
+      const isTimeout = error?.name === 'AbortError';
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: error?.message || 'Failed to complete delivery',
+        title: isTimeout ? 'Request Timeout' : 'Error',
+        description: isTimeout 
+          ? 'Request timed out. Please check your connection and try again.'
+          : (error?.message || 'Failed to complete delivery'),
       });
     } finally {
       setIsCompleting(false);
@@ -297,68 +306,77 @@ export default function ManageDelivery() {
       
       const { supabase } = await import('@/integrations/supabase/client');
       
-      // Get session token for explicit Authorization header
+      // Ensure token is fresh
+      await supabase.auth.refreshSession();
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('Session expired. Please login again.');
       }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       
-      const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
-        body: {
-          order_id: order?.id,
-          payment_method: 'ONLINE',
-          qr_code_data: qrData?.qr_string,
-          payment_id: qrData?.qr_id,
-          order_type: orderType,
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
+      try {
+        const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+          body: {
+            order_id: order?.id,
+            payment_method: 'ONLINE',
+            qr_code_data: qrData?.qr_string,
+            payment_id: qrData?.qr_id,
+            order_type: orderType,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
+        });
+
+        if (error || !data?.success) {
+          throw new Error(data?.error || 'Payment completed but delivery marking failed');
         }
-      });
 
-      if (error || !data?.success) {
-        throw new Error(data?.error || 'Payment completed but delivery marking failed');
-      }
-
-      // Handle already completed gracefully (Zepto-style idempotency)
-      if (data.already_completed) {
-        // Invalidate orders cache immediately
+        if (data.already_completed) {
+          await queryClient.invalidateQueries({ queryKey: ['orders'] });
+          await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+          await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
+          
+          toast({
+            title: 'Already Delivered',
+            description: 'This order was already marked as delivered.',
+          });
+          
+          navigate('/my-deliveries');
+          return;
+        } else {
+          toast({
+            title: 'Delivery Completed!',
+            description: 'Product delivered successfully - Paid Online ✓',
+          });
+        }
+        
         await queryClient.invalidateQueries({ queryKey: ['orders'] });
         await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
         
-        toast({
-          title: 'Already Delivered',
-          description: 'This order was already marked as delivered.',
-        });
-        
-        navigate('/my-deliveries');
-        return;
-      } else {
-        toast({
-          title: 'Delivery Completed!',
-          description: 'Product delivered successfully - Paid Online ✓',
-        });
+        setTimeout(() => navigate(-1), 1500);
+      } finally {
+        clearTimeout(timeout);
       }
       
-      // Invalidate cache after successful completion
-      await queryClient.invalidateQueries({ queryKey: ['orders'] });
-      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-      
-      setTimeout(() => navigate(-1), 1500);
-      
     } catch (error: any) {
+      const isTimeout = error?.name === 'AbortError';
       console.error('Delivery completion failed:', {
         order_id: order?.id,
         payment_method: 'ONLINE',
         error: error.message,
+        isTimeout,
         timestamp: new Date().toISOString()
       });
       
       toast({
         variant: 'destructive',
-        title: 'Payment Completed, Delivery Failed',
-        description: error.message || 'Payment received but failed to mark delivered. Please retry or contact support.',
+        title: isTimeout ? 'Request Timeout' : 'Payment Completed, Delivery Failed',
+        description: isTimeout
+          ? 'Request timed out. Please check your connection and try again.'
+          : (error.message || 'Payment received but failed to mark delivered. Please retry or contact support.'),
         action: (
           <Button variant="outline" size="sm" onClick={() => handleQRPaymentComplete()}>
             Retry

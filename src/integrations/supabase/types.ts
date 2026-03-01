@@ -8453,6 +8453,10 @@ export type Database = {
         Args: { _customer_id: string; _seller_user_id: string }
         Returns: boolean
       }
+      delete_delivery_agent: {
+        Args: { agent_uuid: string }
+        Returns: undefined
+      }
       delete_orders_with_related_data: {
         Args: { order_ids: string[] }
         Returns: undefined

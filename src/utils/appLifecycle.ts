@@ -85,21 +85,27 @@ export function unlockAllButtons() {
  */
 export async function refreshSession() {
   try {
-    const { data, error } = await supabase.auth.getSession();
+    // Actually refresh the JWT token, not just read cached session
+    const { data, error } = await supabase.auth.refreshSession();
     
     if (error) {
       console.warn('[AppLifecycle] Session refresh error:', error);
+      // Fallback: check if we still have a valid cached session
+      const { data: fallback } = await supabase.auth.getSession();
+      if (!fallback.session) {
+        console.log('[AppLifecycle] No active session');
+      }
       return;
     }
     
     if (!data.session) {
-      console.log('[AppLifecycle] No active session');
+      console.log('[AppLifecycle] No active session after refresh');
       return;
     }
 
-    console.log('[AppLifecycle] Session valid');
+    console.log('[AppLifecycle] Session refreshed successfully');
   } catch (e) {
-    console.warn('[AppLifecycle] Session check failed:', e);
+    console.warn('[AppLifecycle] Session refresh failed:', e);
   }
 }
 
@@ -117,6 +123,8 @@ export function refreshQueries() {
   queryClientRef.invalidateQueries({ queryKey: ['orders'] });
   queryClientRef.invalidateQueries({ queryKey: ['available-orders'] });
   queryClientRef.invalidateQueries({ queryKey: ['assigned-orders'] });
+  queryClientRef.invalidateQueries({ queryKey: ['order-details'] });
+  queryClientRef.invalidateQueries({ queryKey: ['earnings'] });
   
   console.log('[AppLifecycle] Queries invalidated');
 }
