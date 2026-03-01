@@ -22,7 +22,7 @@ export const queryClient = new QueryClient({
       gcTime: 5 * 60 * 1000,
       retry: 2,
       retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,
       refetchOnMount: false,
     },
   },

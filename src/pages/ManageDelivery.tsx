@@ -177,18 +177,25 @@ export default function ManageDelivery() {
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
-      // Ensure token is fresh
-      await supabase.auth.refreshSession();
+      // Ensure token is fresh with 4s timeout
+      await Promise.race([
+        supabase.auth.refreshSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Session refresh timeout')), 4000))
+      ]).catch(() => console.warn('[ManageDelivery] Session refresh timed out, continuing with cached session'));
       
       console.log('Generating QR for amount:', amountToPay);
       
-      const { data, error } = await supabase.functions.invoke('generate-payment-qr', {
-        body: {
-          order_id: order.id,
-          amount: amountToPay,
-          customer_name: order.customer.name
-        }
-      });
+      // 15s timeout via Promise.race since supabase.functions.invoke doesn't support AbortController
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('generate-payment-qr', {
+          body: {
+            order_id: order.id,
+            amount: amountToPay,
+            customer_name: order.customer.name
+          }
+        }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
+      ]);
 
       if (error || !data?.success) {
         console.error('QR Generation Error:', { error, data, amountToPay });
@@ -225,19 +232,20 @@ export default function ManageDelivery() {
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
-      // Ensure token is fresh (especially after returning from Maps)
-      await supabase.auth.refreshSession();
+      // Ensure token is fresh with 4s timeout - don't block if it fails
+      await Promise.race([
+        supabase.auth.refreshSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Session refresh timeout')), 4000))
+      ]).catch(() => console.warn('[ManageDelivery] Session refresh timed out, continuing with cached session'));
+      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('Session expired. Please login again.');
       }
 
-      // Add timeout to prevent infinite loading
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      
-      try {
-        const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+      // 15s timeout via Promise.race since supabase.functions.invoke doesn't support AbortController
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('unified-complete-delivery', {
           body: {
             order_id: order.id,
             payment_method: paymentMethod,
@@ -246,52 +254,48 @@ export default function ManageDelivery() {
           headers: {
             Authorization: `Bearer ${session.access_token}`
           }
-        });
+        }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
+      ]);
 
-        if (error || !data?.success) {
-          throw new Error(data?.error || 'Failed to complete delivery');
-        }
+      if (error || !data?.success) {
+        throw new Error(data?.error || 'Failed to complete delivery');
+      }
 
-        // Handle already completed gracefully (Zepto-style idempotency)
-        if (data.already_completed) {
-          await queryClient.invalidateQueries({ queryKey: ['orders'] });
-          await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-          await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
-          
-          toast({
-            title: 'Already Delivered',
-            description: 'This order was already marked as delivered.',
-          });
-          
-          navigate('/my-deliveries');
-          return;
-        } else {
-          const successMessage = paymentMethod === 'COD' 
-            ? 'Product delivered successfully - COD ✓'
-            : 'Product delivered successfully - Paid Online ✓';
-          
-          toast({
-            title: 'Delivery Completed!',
-            description: successMessage,
-          });
-        }
-        
+      // Handle already completed gracefully
+      if (data.already_completed) {
         await queryClient.invalidateQueries({ queryKey: ['orders'] });
         await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
         
-        setTimeout(() => navigate(-1), 1500);
-      } finally {
-        clearTimeout(timeout);
+        toast({
+          title: 'Already Delivered',
+          description: 'This order was already marked as delivered.',
+        });
+        
+        navigate('/my-deliveries');
+        return;
+      } else {
+        const successMessage = paymentMethod === 'COD' 
+          ? 'Product delivered successfully - COD ✓'
+          : 'Product delivered successfully - Paid Online ✓';
+        
+        toast({
+          title: 'Delivery Completed!',
+          description: successMessage,
+        });
       }
       
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+      
+      setTimeout(() => navigate(-1), 1500);
+      
     } catch (error: any) {
-      const isTimeout = error?.name === 'AbortError';
       toast({
         variant: 'destructive',
-        title: isTimeout ? 'Request Timeout' : 'Error',
-        description: isTimeout 
-          ? 'Request timed out. Please check your connection and try again.'
-          : (error?.message || 'Failed to complete delivery'),
+        title: 'Error',
+        description: error?.message || 'Failed to complete delivery',
       });
     } finally {
       setIsCompleting(false);
@@ -306,18 +310,20 @@ export default function ManageDelivery() {
       
       const { supabase } = await import('@/integrations/supabase/client');
       
-      // Ensure token is fresh
-      await supabase.auth.refreshSession();
+      // Ensure token is fresh with 4s timeout
+      await Promise.race([
+        supabase.auth.refreshSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Session refresh timeout')), 4000))
+      ]).catch(() => console.warn('[ManageDelivery] Session refresh timed out, continuing with cached session'));
+      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         throw new Error('Session expired. Please login again.');
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      
-      try {
-        const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
+      // 15s timeout via Promise.race
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('unified-complete-delivery', {
           body: {
             order_id: order?.id,
             payment_method: 'ONLINE',
@@ -328,55 +334,50 @@ export default function ManageDelivery() {
           headers: {
             Authorization: `Bearer ${session.access_token}`
           }
-        });
+        }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
+      ]);
 
-        if (error || !data?.success) {
-          throw new Error(data?.error || 'Payment completed but delivery marking failed');
-        }
+      if (error || !data?.success) {
+        throw new Error(data?.error || 'Payment completed but delivery marking failed');
+      }
 
-        if (data.already_completed) {
-          await queryClient.invalidateQueries({ queryKey: ['orders'] });
-          await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-          await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
-          
-          toast({
-            title: 'Already Delivered',
-            description: 'This order was already marked as delivered.',
-          });
-          
-          navigate('/my-deliveries');
-          return;
-        } else {
-          toast({
-            title: 'Delivery Completed!',
-            description: 'Product delivered successfully - Paid Online ✓',
-          });
-        }
-        
+      if (data.already_completed) {
         await queryClient.invalidateQueries({ queryKey: ['orders'] });
         await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
         
-        setTimeout(() => navigate(-1), 1500);
-      } finally {
-        clearTimeout(timeout);
+        toast({
+          title: 'Already Delivered',
+          description: 'This order was already marked as delivered.',
+        });
+        
+        navigate('/my-deliveries');
+        return;
+      } else {
+        toast({
+          title: 'Delivery Completed!',
+          description: 'Product delivered successfully - Paid Online ✓',
+        });
       }
       
+      await queryClient.invalidateQueries({ queryKey: ['orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+      
+      setTimeout(() => navigate(-1), 1500);
+      
     } catch (error: any) {
-      const isTimeout = error?.name === 'AbortError';
       console.error('Delivery completion failed:', {
         order_id: order?.id,
         payment_method: 'ONLINE',
         error: error.message,
-        isTimeout,
         timestamp: new Date().toISOString()
       });
       
       toast({
         variant: 'destructive',
-        title: isTimeout ? 'Request Timeout' : 'Payment Completed, Delivery Failed',
-        description: isTimeout
-          ? 'Request timed out. Please check your connection and try again.'
-          : (error.message || 'Payment received but failed to mark delivered. Please retry or contact support.'),
+        title: 'Error',
+        description: error?.message || 'Payment received but failed to mark delivered. Please retry or contact support.',
         action: (
           <Button variant="outline" size="sm" onClick={() => handleQRPaymentComplete()}>
             Retry
