@@ -1,105 +1,73 @@
 
 
-# Fix: "Delivered" Button Hangs After Returning from Google Maps
+# Fix: "Delivered" Button Hangs and App Runs Slowly
 
-## Root Cause
+## Root Causes Found
 
-The app already has resume detection (`onAppResume`, `useResumeGuard`, Capacitor `appStateChange`), and it already resets loading states. The actual problem is:
+### 1. The 15-second timeout is a no-op
+The `AbortController` was added in the last fix, but `supabase.functions.invoke()` does NOT accept a `signal` option. The controller is created and cleared, but **never actually connected to the fetch request**. So when the edge function hangs, it hangs forever.
 
-1. **Stale Supabase session token**: `refreshSession()` in `appLifecycle.ts` calls `supabase.auth.getSession()` which only reads the cached session from memory -- it does NOT refresh the JWT token. After the WebView is backgrounded for a while, the token can expire or the connection can go stale, causing the `unified-complete-delivery` edge function call to hang.
-
-2. **Supabase Realtime channel disconnection**: When the WebView goes to background, the Supabase realtime WebSocket connection drops. On resume, the client doesn't immediately reconnect, so any realtime-dependent features stall.
-
-3. **Race condition**: `onAppResume()` is async (refreshes session), but the user can click "Delivered" before the session refresh completes, hitting the edge function with a stale token.
-
-## Fix Plan
-
-### 1. Use `refreshSession()` instead of `getSession()` in app lifecycle
-
-**File**: `src/utils/appLifecycle.ts`
-
-Change the `refreshSession` function to actually refresh the JWT token:
-
+**Fix**: Use `Promise.race` to implement an actual timeout:
 ```typescript
-export async function refreshSession() {
-  try {
-    // Actually refresh the token, not just read cached session
-    const { data, error } = await supabase.auth.refreshSession();
-    
-    if (error) {
-      console.warn('[AppLifecycle] Session refresh error:', error);
-      // Fallback: try getSession to see if we still have a valid one
-      const { data: fallback } = await supabase.auth.getSession();
-      if (!fallback.session) {
-        console.log('[AppLifecycle] No active session');
-      }
-      return;
-    }
-    
-    console.log('[AppLifecycle] Session refreshed successfully');
-  } catch (e) {
-    console.warn('[AppLifecycle] Session refresh failed:', e);
-  }
-}
+const result = await Promise.race([
+  supabase.functions.invoke('unified-complete-delivery', { ... }),
+  new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000))
+]);
 ```
 
-### 2. Add order-details query invalidation on resume
+### 2. Network storm on every resume causes slowness
+When the app resumes from background, **all of these fire simultaneously**:
+- `visibilitychange` listener calls `onAppResume()` -- refreshes session + invalidates queries
+- `window.focus` listener calls `onAppResume()` -- same thing again (500ms debounce may not catch both)
+- Capacitor `appStateChange` calls `onAppResume()` -- third time
+- React Query's `refetchOnWindowFocus: true` (global default) -- refetches ALL active queries automatically
 
-**File**: `src/utils/appLifecycle.ts`
+This means every single query in the app (orders, earnings, delivery history, order details, settings) refetches **twice** on every resume -- once from React Query's built-in mechanism and once from the manual `invalidateQueries` in `onAppResume()`. This network storm makes the app feel slow.
 
-Add `order-details` to the list of invalidated queries in `refreshQueries()` so ManageDelivery gets fresh data:
+**Fix**: Set `refetchOnWindowFocus: false` globally in QueryClient defaults. The manual `refreshQueries()` in `onAppResume()` already handles this. Increase debounce from 500ms to 2000ms.
 
-```typescript
-queryClientRef.invalidateQueries({ queryKey: ['order-details'] });
-queryClientRef.invalidateQueries({ queryKey: ['earnings'] });
+### 3. Pre-action `refreshSession()` can itself hang
+In `completeDelivery()`, `await supabase.auth.refreshSession()` is called before the edge function. If the network is slow after returning from Maps, this call can hang too, making the button appear unresponsive before the actual delivery request even starts.
+
+**Fix**: Wrap the session refresh in a 4-second timeout so it fails fast.
+
+## Changes
+
+### File: `src/providers/AppProviders.tsx`
+- Change `refetchOnWindowFocus: true` to `refetchOnWindowFocus: false` in global QueryClient config
+- This eliminates the double-refetch storm on resume
+
+### File: `src/utils/appLifecycle.ts`
+- Increase `RESUME_DEBOUNCE_MS` from 500 to 2000 to prevent triple-firing
+- Add a timeout wrapper to `refreshSession()` so it fails fast (4 seconds)
+- Add `supabase.removeAllChannels()` + re-subscribe pattern for realtime reconnection
+
+### File: `src/pages/ManageDelivery.tsx`
+- Replace the non-functional `AbortController` pattern with `Promise.race` for actual 15-second timeouts on all edge function calls
+- Wrap the pre-action `refreshSession()` calls in a 4-second `Promise.race` timeout so the button isn't blocked by a hanging session refresh
+- Apply the same fix to `completeDelivery`, `generateAndShowQR`, and `handleQRPaymentComplete`
+
+## Technical Details
+
+```text
+BEFORE (on resume from Maps):
+  visibilitychange  --> onAppResume() --> refreshSession + invalidate queries
+  window.focus      --> onAppResume() --> refreshSession + invalidate queries  (maybe)
+  Capacitor event   --> onAppResume() --> refreshSession + invalidate queries
+  React Query       --> auto-refetch ALL queries with refetchOnWindowFocus
+  = 6-8 session refresh attempts + all queries fetched 2x
+
+AFTER:
+  visibilitychange  --> onAppResume() --> refreshSession (4s timeout) + invalidate queries
+  window.focus      --> debounced out (2s window)
+  Capacitor event   --> debounced out (2s window)
+  React Query       --> refetchOnWindowFocus: false (no auto-refetch)
+  = 1 session refresh + queries fetched 1x
 ```
 
-### 3. Pre-refresh session before edge function calls in ManageDelivery
-
-**File**: `src/pages/ManageDelivery.tsx`
-
-In `completeDelivery()`, before calling `getSession()`, add a proactive token refresh to ensure the token is fresh:
-
-```typescript
-// Ensure token is fresh (especially after returning from Maps)
-await supabase.auth.refreshSession();
-const { data: { session } } = await supabase.auth.getSession();
-```
-
-Apply the same fix to `generateAndShowQR()` and `handleQRPaymentComplete()`.
-
-### 4. Add timeout to edge function calls
-
-**File**: `src/pages/ManageDelivery.tsx`
-
-Wrap the `supabase.functions.invoke` calls with an AbortController timeout so they fail fast instead of hanging forever:
-
-```typescript
-const controller = new AbortController();
-const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-try {
-  const { data, error } = await supabase.functions.invoke('unified-complete-delivery', {
-    body: { ... },
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  // ... handle response
-} finally {
-  clearTimeout(timeout);
-}
-```
-
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/utils/appLifecycle.ts` | Use `supabase.auth.refreshSession()` instead of `getSession()`; add more query keys to invalidation |
-| `src/pages/ManageDelivery.tsx` | Pre-refresh session before edge function calls; add request timeout |
-
-## Result
-
-- Returning from Google Maps triggers `onAppResume` which now actually refreshes the JWT token
-- Clicking "Delivered" will have a fresh token ready, so the edge function call succeeds immediately
-- If the token refresh hasn't completed yet, the inline `refreshSession()` call in `completeDelivery()` ensures it happens before the request
-- 15-second timeout prevents infinite loading -- fails fast with a clear error instead of hanging
+## Expected Result
+- "Delivered" button responds within 15 seconds or shows a clear timeout error
+- App no longer slows down after returning from Maps/Phone/WhatsApp
+- Session refresh doesn't block button clicks indefinitely
+- Single controlled refetch on resume instead of a network storm
 
