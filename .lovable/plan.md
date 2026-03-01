@@ -1,67 +1,81 @@
 
+Root cause analysis from current code:
 
-# Rename "Agent" to "Partner" in All User-Facing Text
+1) The “timeout” in `ManageDelivery` is ineffective  
+- `completeDelivery()` and `handleQRPaymentComplete()` create an `AbortController`, but the signal is never passed into the request.  
+- In this Supabase version (`@supabase/functions-js`), `FunctionInvokeOptions` does not support `signal`, so this pattern cannot abort `supabase.functions.invoke(...)`.  
+- Result: when WebView networking is stale after returning from Maps, the invoke promise can hang and `isCompleting` stays true for a long time.
 
-## Scope
+2) Resume recovery can stall before state refresh  
+- `onAppResume()` awaits `refreshSession()`. If token refresh is slow/stuck after background resume, query refresh is delayed.  
+- This creates a race where the user taps “Delivered” before session/network are truly healthy.
 
-Change all user-visible instances of "Agent" to "Partner" (and "agent" to "partner" where it appears in UI text). This does NOT change variable names, database columns, API endpoints, or internal code -- only what the user sees on screen.
+3) ManageDelivery does not actually refetch order data on resume  
+- `useResumeGuard` currently only resets local loading flags.  
+- It does not re-run `getOrderDetails(...)`, so the screen can remain stale after app resume.
 
-## Files to Modify
+4) Query invalidation mismatch exists  
+- App lifecycle invalidates `['order-details']`, but the query hook uses `['orderDetails', orderId]`.  
+- This reduces refresh reliability.
 
-### 1. `index.html` -- Page title and meta tags
-- "Zaago Delivery Agent" -> "Zaago Delivery Partner"
-- "Professional delivery agent app for drivers and couriers" -> "Professional delivery partner app for drivers and couriers"
+5) Android launch mode config cannot be edited in this repo right now  
+- There is no `android/` directory present here, so `AndroidManifest.xml` cannot be changed in-project at this moment.  
+- This still needs to be set in the native project (`singleTask`) to prevent activity/webview resume edge cases.
 
-### 2. `src/pages/Splash.tsx` -- Splash screen subtitle
-- "Delivery Agent" -> "Delivery Partner"
+Implementation plan (approved changes to apply next):
 
-### 3. `src/components/layout/ZaagoHeader.tsx` -- App header
-- "Zaago Delivery Agent" -> "Zaago Delivery Partner"
+A. Harden app resume pipeline (`src/utils/appLifecycle.ts`)
+- Add a timeout-safe session refresh wrapper (Promise.race-based), so resume flow cannot block indefinitely.
+- Ensure `refreshQueries()` always runs even if refreshSession is slow/fails.
+- Add explicit realtime reconnection on resume (`supabase.realtime.disconnect(); supabase.realtime.connect();`) before invalidation/refetch.
+- Fix order details invalidation key to `orderDetails` (and keep existing order/assigned/earnings invalidations).
 
-### 4. `src/pages/Login.tsx` -- Login/signup screen
-- "Zaago Delivery Agent" -> "Zaago Delivery Partner"
-- "Sign in to your delivery agent account" -> "Sign in to your delivery partner account"
-- "Join as a delivery agent" -> "Join as a delivery partner"
-- "agent@zaago.com" placeholders -> "partner@zaago.com"
+B. Make ManageDelivery resume-aware (`src/pages/ManageDelivery.tsx`)
+- Extract a shared `loadOrderDetails()` function (used by initial load and resume).
+- Update `useResumeGuard` callback to do:
+  1) reset stuck loaders,
+  2) safe session refresh with timeout,
+  3) refetch current order details,
+  4) refetch active order caches (`orders`, `available-orders`, `assigned-orders`).
+- Add a short-lived `isResuming` guard state so “Delivered” can’t be tapped during reconnection window.
 
-### 5. `src/pages/UploadDocuments.tsx` -- Document upload screen
-- "Submit your documents to become a Zaago delivery agent" -> "Submit your documents to become a Zaago delivery partner"
+C. Replace fake abort timeout with real UI timeout behavior (`src/pages/ManageDelivery.tsx`)
+- Remove ineffective AbortController usage.
+- Wrap each critical async call with Promise.race timeout:
+  - `supabase.auth.refreshSession()`
+  - `supabase.functions.invoke('unified-complete-delivery', ...)`
+  - `supabase.functions.invoke('generate-payment-qr', ...)`
+- On timeout: fail fast, clear loading state, show actionable toast (“connection restored slowly, retry once”).
 
-### 6. `src/pages/Home.tsx` -- Home page
-- "Your delivery agent profile is not set up" -> "Your delivery partner profile is not set up"
+D. Add preflight reconnection before critical actions (`src/pages/ManageDelivery.tsx`)
+- Before `Delivered`/QR completion invoke:
+  - run timeout-safe `refreshSession()`,
+  - read fresh session with `getSession()`,
+  - only then call edge function.
+- This removes stale-token race after returning from external apps.
 
-### 7. `src/pages/Profile.tsx` -- Profile page fallback name
-- Fallback text 'Delivery Agent' -> 'Delivery Partner'
+E. Fix Capacitor fallback listener cleanup bug (`src/providers/AppProviders.tsx`)
+- Refactor the `App.addListener` fallback branch so visibility handler cleanup is guaranteed (current async return path can leak).
+- Keep `appStateChange` + `visibilitychange` behavior aligned.
 
-### 8. `src/pages/Deactivated.tsx` -- Deactivated account page
-- "Your delivery agent account has been deactivated" -> "Your delivery partner account has been deactivated"
+F. Android native config step (external native project)
+- In native Android project: set `launchMode="singleTask"` for `MainActivity` in `android/app/src/main/AndroidManifest.xml`.
+- Since `android/` is not present in this repo, include this as a required post-pull native step.
 
-### 9. `src/pages/ManageDelivery.tsx` -- Cancel confirmation
-- "released back to other agents" -> "released back to other partners"
+Validation plan (end-to-end):
+1) Login on device/emulator.
+2) Open assigned order → tap “Customer” to launch Maps.
+3) Return to app.
+4) Immediately tap “Delivered”.
+5) Expected:
+   - no infinite spinner,
+   - either success immediately, or clean timeout message within set limit and successful retry,
+   - no manual refresh required.
+6) Repeat with QR flow and COD flow.
+7) Verify logs show resume pipeline sequence and no stuck `isCompleting`.
 
-### 10. `src/pages/PrivacyPolicy.tsx` -- Privacy policy subtitle
-- "Delivery Agent App" -> "Delivery Partner App"
-
-### 11. `src/pages/TermsConditions.tsx` -- Terms subtitle
-- "Delivery Agent App" -> "Delivery Partner App"
-
-### 12. `src/components/legal/TermsCheckbox.tsx` -- Legal dialog subtitles
-- "Zaago Delivery Agent App" -> "Zaago Delivery Partner App" (2 instances)
-
-### 13. `src/constants/legalContent.ts` -- Legal content
-- Comment line: "Zaago Delivery Agent App" -> "Zaago Delivery Partner App"
-- All user-facing legal text referencing "Agent" in display strings -> "Partner"
-- "Delivery Agent Application" -> "Delivery Partner Application"
-- "Delivery Agent App" -> "Delivery Partner App"
-
-### 14. `src/utils/dateUtils.ts` -- Comment only
-- "Delivery Agent App" -> "Delivery Partner App" (comment text)
-
-## What stays unchanged
-- All variable names (`agentId`, `agentProfile`, `currentAgentId`, etc.)
-- All database table/column names (`delivery_agents`, `agent_id`, `agent_documents`)
-- All Supabase Edge Function names and internal logic
-- All store names and hook names (`useAgentGuard`, `useAgentSettings`, etc.)
-- All file names (`agentSession.ts`, `agentProfile.ts`, etc.)
-- Code comments referencing internal logic
-
+Acceptance criteria:
+- App resume is detected reliably via Capacitor + visibility fallback.
+- Session/API state is refreshed on resume without blocking UI indefinitely.
+- Active orders/order details are refreshed on resume.
+- “Delivered” works immediately after returning from Maps, without manual app refresh.
