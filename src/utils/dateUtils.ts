@@ -1,5 +1,5 @@
 /**
- * IST-safe date utilities for the Delivery Agent App
+ * IST-safe date utilities for the Delivery Partner App
  * All dates displayed must be in IST (Asia/Kolkata)
  * Database stores UTC, we convert on display
  */

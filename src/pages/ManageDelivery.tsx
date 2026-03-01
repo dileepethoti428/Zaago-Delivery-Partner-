@@ -399,7 +399,7 @@ export default function ManageDelivery() {
     }
 
     const confirmed = window.confirm(
-      'Are you sure you want to cancel this delivery? It will be released back to other agents.'
+      'Are you sure you want to cancel this delivery? It will be released back to other partners.'
     );
     
     if (!confirmed) return;

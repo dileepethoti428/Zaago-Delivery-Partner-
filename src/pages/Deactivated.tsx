@@ -33,7 +33,7 @@ export default function Deactivated() {
             </motion.div>
             <CardTitle className="text-2xl">Account Deactivated</CardTitle>
             <CardDescription>
-              Your delivery agent account has been deactivated by the administrator
+              Your delivery partner account has been deactivated by the administrator
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
