@@ -256,30 +256,20 @@ export default function Home() {
             </Card>
           )}
 
-          {/* Location banner - non-blocking */}
-          {!lastKnown && permission !== 'denied' && permission !== 'unsupported' && (
-            <Card className="rounded-2xl border border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-900/10">
-              <CardContent className="p-3 flex items-center gap-2 text-sm text-yellow-700 dark:text-yellow-400">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                Getting your location for distance info...
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Loading State - Orders loading */}
-          {!error && permission !== 'denied' && permission !== 'unsupported' && loading && (
+          {/* Loading State - No Location Fix Yet or Loading Orders */}
+          {!error && permission !== 'denied' && permission !== 'unsupported' && (!lastKnown || loading) && (
             <div className="space-y-3">
               <Skeleton className="h-32 w-full rounded-2xl" />
               <Skeleton className="h-32 w-full rounded-2xl" />
               <Skeleton className="h-32 w-full rounded-2xl" />
               <p className="text-sm text-center text-muted-foreground py-4">
-                Loading orders...
+                {!lastKnown ? 'Getting your location...' : 'Loading orders...'}
               </p>
             </div>
           )}
 
           {/* Empty State - No Orders */}
-          {!error && !loading && nearbyOrders.length === 0 && otherOrders.length === 0 && (
+          {!error && !loading && lastKnown && nearbyOrders.length === 0 && otherOrders.length === 0 && (
             <Card className="rounded-2xl border-2">
               <CardContent className="p-6 space-y-3 text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -304,7 +294,7 @@ export default function Home() {
           )}
 
           {/* Nearby Orders List */}
-          {!error && !loading && nearbyOrders.length > 0 && (
+          {!error && !loading && lastKnown && nearbyOrders.length > 0 && (
             <PullToRefresh onRefresh={handleRefresh} pullingContent="" refreshingContent={<div className="text-center py-4 text-muted-foreground">Refreshing...</div>}>
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
@@ -341,7 +331,7 @@ export default function Home() {
           )}
 
           {/* Other Orders (Unknown Location or Outside Radius) */}
-          {!error && !loading && otherOrders.length > 0 && (
+          {!error && !loading && lastKnown && otherOrders.length > 0 && (
             <div className="space-y-3 mt-6">
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-medium text-muted-foreground">Other Orders</h3>
