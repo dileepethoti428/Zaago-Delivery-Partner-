@@ -23,7 +23,7 @@ export default function PrivacyPolicy() {
             </Button>
             <div>
               <h1 className="text-xl font-semibold text-foreground">Privacy Policy</h1>
-              <p className="text-xs text-muted-foreground">Delivery Agent App</p>
+              <p className="text-xs text-muted-foreground">Delivery Partner App</p>
             </div>
           </div>
         </div>

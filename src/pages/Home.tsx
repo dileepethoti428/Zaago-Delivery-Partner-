@@ -179,7 +179,7 @@ export default function Home() {
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold">Profile Not Found</h3>
                 <p className="text-sm text-muted-foreground">
-                  Your delivery agent profile is not set up. Please contact support or complete your registration.
+                  Your delivery partner profile is not set up. Please contact support or complete your registration.
                 </p>
               </div>
               <Button onClick={() => navigate('/upload-documents')} className="w-full">

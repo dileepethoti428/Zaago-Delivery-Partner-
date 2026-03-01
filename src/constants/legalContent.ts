@@ -1,4 +1,4 @@
-// Legal content constants for Zaago Delivery Agent App
+// Legal content constants for Zaago Delivery Partner App
 // Version tracking for consent management
 
 export const LEGAL_VERSIONS = {
@@ -29,7 +29,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
   {
     title: '1. Introduction & Scope',
     content: [
-      `This Privacy Policy ("Policy") applies specifically to the Zaago Delivery Agent Application ("App") operated by ${COMPANY_INFO.fullName} ("Company", "we", "us", or "our"). This Policy governs the collection, use, storage, and disclosure of personal information from delivery agents ("Delivery Partner", "Agent", "you", or "your") who use our platform.`,
+      `This Privacy Policy ("Policy") applies specifically to the Zaago Delivery Partner Application ("App") operated by ${COMPANY_INFO.fullName} ("Company", "we", "us", or "our"). This Policy governs the collection, use, storage, and disclosure of personal information from delivery partners ("Delivery Partner", "Partner", "you", or "your") who use our platform.`,
       'By registering as a Delivery Partner and using the App, you acknowledge that you have read, understood, and agree to be bound by this Privacy Policy.',
       'IMPORTANT: You are an independent contractor and NOT an employee of Zaago. This relationship is governed by the Terms & Conditions. This Policy covers only how we handle your personal data as an independent service provider on our platform.',
     ],
@@ -37,8 +37,8 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
   {
     title: '2. Definitions',
     content: [
-      '• "Delivery Agent/Partner" means any individual who has registered on the Zaago platform to provide delivery services as an independent contractor.',
-      '• "Platform" refers to the Zaago Delivery Agent Application, including all associated websites, mobile applications, and backend services.',
+      '• "Delivery Partner" means any individual who has registered on the Zaago platform to provide delivery services as an independent contractor.',
+      '• "Platform" refers to the Zaago Delivery Partner Application, including all associated websites, mobile applications, and backend services.',
       '• "Customer" means end-users who place orders through the Zaago customer application.',
       '• "Seller/Merchant" means businesses that list their products on Zaago for sale to Customers.',
       '• "Admin" refers to Zaago\'s internal operations and management team.',
@@ -298,7 +298,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
   {
     title: '11. Children\'s Privacy',
     content: [
-      'The Zaago Delivery Agent App is not intended for individuals under 18 years of age. We do not knowingly collect personal information from minors. If you are under 18, you are not permitted to register as a Delivery Partner.',
+      'The Zaago Delivery Partner App is not intended for individuals under 18 years of age. We do not knowingly collect personal information from minors. If you are under 18, you are not permitted to register as a Delivery Partner.',
     ],
   },
   {
@@ -360,7 +360,7 @@ export const TERMS_CONDITIONS_SECTIONS: LegalSection[] = [
       '',
       '1.5 SMARTPHONE REQUIREMENTS:',
       '• Smartphone with GPS and internet capability',
-      '• Ability to run the Zaago Delivery Agent App',
+      '• Ability to run the Zaago Delivery Partner App',
     ],
   },
   {
@@ -533,7 +533,7 @@ export const TERMS_CONDITIONS_SECTIONS: LegalSection[] = [
   {
     title: '8. Cancellations & Penalties',
     content: [
-      '8.1 AGENT-INITIATED CANCELLATION:',
+      '8.1 PARTNER-INITIATED CANCELLATION:',
       '• You may cancel an order before pickup in limited circumstances',
       '• Valid reasons: Customer unreachable, incorrect address, safety concerns',
       '• Excessive cancellations affect your performance score',
@@ -544,7 +544,7 @@ export const TERMS_CONDITIONS_SECTIONS: LegalSection[] = [
       '• Repeated cancellations may lead to suspension',
       '',
       '8.3 ORDER REASSIGNMENT:',
-      '• Cancelled orders may be reassigned to other agents',
+      '• Cancelled orders may be reassigned to other partners',
       '• You will not receive payout for cancelled orders',
       '',
       '8.4 CUSTOMER CANCELLATION:',

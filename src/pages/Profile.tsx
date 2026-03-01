@@ -192,7 +192,7 @@ export default function Profile() {
               </Avatar>
               
               <div className="flex-1">
-                <h2 className="text-xl font-bold">{agentProfile?.name || user?.email || 'Delivery Agent'}</h2>
+                <h2 className="text-xl font-bold">{agentProfile?.name || user?.email || 'Delivery Partner'}</h2>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
                 <div className="mt-2">
                   {agentProfile?.is_active && (
