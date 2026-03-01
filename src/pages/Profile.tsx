@@ -169,7 +169,12 @@ export default function Profile() {
   ];
 
   const handleWhatsAppClick = () => {
-    window.open('https://wa.me/917842343642', '_blank');
+    const url = 'https://wa.me/917842343642';
+    try {
+      window.open(url, '_system');
+    } catch {
+      window.location.href = url;
+    }
   };
 
   return (

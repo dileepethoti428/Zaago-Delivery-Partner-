@@ -13,53 +13,72 @@ const REGULAR_ORDER_PRICING = {
 };
 
 /**
- * Calculate road distance using Google Distance Matrix API
- * Returns distance in km, rounded UP to 1 decimal (Zepto style)
- * NO HAVERSINE FALLBACK - returns null if routing fails
+ * Batch calculate road distances using Google Distance Matrix API
+ * Supports up to 25 origins × 25 destinations per request
+ * Returns a flat array of distances in km (same order as origin-destination pairs)
  */
-async function calculateRoadDistance(
-  origin: { lat: number; lng: number },
-  destination: { lat: number; lng: number }
-): Promise<number | null> {
+async function batchCalculateRoadDistances(
+  pairs: Array<{ origin: { lat: number; lng: number }; destination: { lat: number; lng: number } }>
+): Promise<Array<number | null>> {
+  if (pairs.length === 0) return [];
+
   const googleApiKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
-  
   if (!googleApiKey) {
-    console.error('❌ GOOGLE_PLACES_API_KEY not configured - cannot calculate road distance');
-    return null;
+    console.error('❌ GOOGLE_PLACES_API_KEY not configured');
+    return pairs.map(() => null);
   }
 
-  try {
-    const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&mode=driving&key=${googleApiKey}`;
-    
-    const response = await fetch(apiUrl);
-    const data = await response.json();
-    
-    if (data.status !== 'OK' || !data.rows?.[0]?.elements?.[0]) {
-      console.error('Google Distance Matrix error:', data.status, data.error_message);
-      return null;
+  // Google allows max 25 origins × 25 destinations per request
+  // We use 1 origin at a time with multiple destinations for simplicity
+  // Group pairs by unique origin to minimize API calls
+  const originGroups = new Map<string, { origin: { lat: number; lng: number }; destIndices: number[]; destinations: Array<{ lat: number; lng: number }> }>();
+
+  pairs.forEach((pair, idx) => {
+    const key = `${pair.origin.lat},${pair.origin.lng}`;
+    if (!originGroups.has(key)) {
+      originGroups.set(key, { origin: pair.origin, destIndices: [], destinations: [] });
     }
-    
-    const element = data.rows[0].elements[0];
-    
-    if (element.status !== 'OK') {
-      console.error('Google element status error:', element.status);
-      return null;
+    const group = originGroups.get(key)!;
+    group.destIndices.push(idx);
+    group.destinations.push(pair.destination);
+  });
+
+  const results: Array<number | null> = new Array(pairs.length).fill(null);
+
+  // Make parallel API calls for each origin group (typically 1-2 groups)
+  const apiCalls = Array.from(originGroups.values()).map(async (group) => {
+    // Split destinations into chunks of 25
+    for (let i = 0; i < group.destinations.length; i += 25) {
+      const chunk = group.destinations.slice(i, i + 25);
+      const chunkIndices = group.destIndices.slice(i, i + 25);
+
+      const destinations = chunk.map(d => `${d.lat},${d.lng}`).join('|');
+      const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${group.origin.lat},${group.origin.lng}&destinations=${destinations}&mode=driving&key=${googleApiKey}`;
+
+      try {
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+
+        if (data.status !== 'OK' || !data.rows?.[0]?.elements) {
+          console.error('Google Distance Matrix batch error:', data.status);
+          return;
+        }
+
+        data.rows[0].elements.forEach((element: any, elemIdx: number) => {
+          if (element.status === 'OK') {
+            const rawKm = element.distance.value / 1000;
+            const rounded = Math.ceil(rawKm * 10) / 10;
+            results[chunkIndices[elemIdx]] = Math.max(0.1, rounded);
+          }
+        });
+      } catch (error) {
+        console.error('Google Distance Matrix batch API error:', error);
+      }
     }
-    
-    const distanceMeters = element.distance.value;
-    
-    // Convert meters to km
-    const rawDistanceKm = distanceMeters / 1000;
-    
-    // Zepto style: Round UP to 1 decimal place (ceil)
-    const roundedDistanceKm = Math.ceil(rawDistanceKm * 10) / 10;
-    
-    // Minimum distance of 0.1 km
-    return Math.max(0.1, roundedDistanceKm);
-  } catch (error) {
-    console.error('Google Distance Matrix API error:', error);
-    return null;
-  }
+  });
+
+  await Promise.all(apiCalls);
+  return results;
 }
 
 /**
@@ -125,154 +144,132 @@ serve(async (req) => {
     const deliveryAgentId = agentData.id;
     console.log('Resolved delivery agent ID:', deliveryAgentId);
 
-    // Get agent's current location
-    const { data: agentLocation, error: locationError } = await supabase
-      .from('driver_locations')
-      .select('latitude, longitude')
-      .eq('agent_id', agent_id)
-      .eq('is_active', true)
-      .order('recorded_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (locationError) {
-      console.warn('Failed to get agent location:', locationError);
-    }
-
-    // STEP 1: Fetch ALL completed order IDs from delivery_history FIRST
-    // delivery_history is the SOURCE OF TRUTH for completion (Zepto pattern)
+    // Run independent queries in PARALLEL instead of sequentially
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    
-    const { data: completedOrderIds, error: completedError } = await supabase
-      .from('delivery_history')
-      .select('order_id')
-      .gte('completed_at', sevenDaysAgo);
-    
-    if (completedError) {
-      console.warn('Failed to fetch completed orders from delivery_history:', completedError);
-    }
-    
-    const completedIds = new Set(completedOrderIds?.map(c => c.order_id) || []);
-    console.log(`[COMPLETION FILTER] Found ${completedIds.size} completed orders in delivery_history to exclude`);
-
-    // STEP 2: Reassign stale orders with HARDENED logic
-    // DO NOT reassign orders that:
-    // - Exist in delivery_history (already completed)
-    // - Have payment_status = 'paid' (money already collected)
-    // - Are subscription orders
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    
-    // Build list of order IDs to exclude from reassignment
+
+    const [locationResult, completedResult, timingsResult, rejectionsResult] = await Promise.all([
+      // Agent location
+      supabase
+        .from('driver_locations')
+        .select('latitude, longitude')
+        .eq('agent_id', agent_id)
+        .eq('is_active', true)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      // Completed orders from delivery_history (source of truth)
+      supabase
+        .from('delivery_history')
+        .select('order_id')
+        .gte('completed_at', sevenDaysAgo),
+      // Delivery timings
+      supabase
+        .from('delivery_timings')
+        .select('*')
+        .eq('is_active', true)
+        .order('priority'),
+      // Rejected orders for this agent
+      supabase
+        .from('agent_order_rejections')
+        .select('order_id')
+        .eq('agent_id', deliveryAgentId),
+    ]);
+
+    const agentLocation = locationResult.data;
+    if (locationResult.error) console.warn('Failed to get agent location:', locationResult.error);
+
+    const completedIds = new Set(completedResult.data?.map(c => c.order_id) || []);
+    if (completedResult.error) console.warn('Failed to fetch completed orders:', completedResult.error);
+    console.log(`[COMPLETION FILTER] Found ${completedIds.size} completed orders to exclude`);
+
+    const deliveryTimings = timingsResult.data;
+    const rejections = rejectionsResult.data;
+    if (rejectionsResult.error) console.warn('Failed to fetch rejected orders:', rejectionsResult.error);
+    console.log(`Agent ${deliveryAgentId} has ${rejections?.length || 0} rejected orders`);
+
+    // STEP 2: Reassign stale orders
     const completedIdsList = Array.from(completedIds);
     
-    // Only reassign if we have orders to exclude OR if the set is empty
+    const reassignQuery = supabase
+      .from('orders')
+      .update({ agent_id: null })
+      .eq('status', 'packed')
+      .is('subscription_id', null)
+      .not('agent_id', 'is', null)
+      .not('agent_id', 'eq', deliveryAgentId)
+      .neq('payment_status', 'paid')
+      .lt('updated_at', thirtyMinutesAgo);
+
     if (completedIdsList.length > 0) {
-      // Reassign stale packed orders, excluding completed ones
-      const { error: reassignError } = await supabase
-        .from('orders')
-        .update({ agent_id: null })
-        .eq('status', 'packed')
-        .is('subscription_id', null)  // Only regular orders
-        .not('agent_id', 'is', null)
-        .not('agent_id', 'eq', deliveryAgentId)
-        .neq('payment_status', 'paid')  // Don't reassign paid orders
-        .not('id', 'in', `(${completedIdsList.join(',')})`)  // Don't reassign completed orders
-        .lt('updated_at', thirtyMinutesAgo);
-
-      if (reassignError) {
-        console.warn('Failed to reassign stale orders:', reassignError);
-      } else {
-        console.log('✅ Reassigned stale orders (excluded completed, paid, subscription orders)');
-      }
-    } else {
-      // No completed orders to exclude
-      const { error: reassignError } = await supabase
-        .from('orders')
-        .update({ agent_id: null })
-        .eq('status', 'packed')
-        .is('subscription_id', null)
-        .not('agent_id', 'is', null)
-        .not('agent_id', 'eq', deliveryAgentId)
-        .neq('payment_status', 'paid')
-        .lt('updated_at', thirtyMinutesAgo);
-
-      if (reassignError) {
-        console.warn('Failed to reassign stale orders:', reassignError);
-      } else {
-        console.log('✅ Reassigned stale orders (no completed orders to exclude)');
-      }
+      reassignQuery.not('id', 'in', `(${completedIdsList.join(',')})`);
     }
 
-    // Get two types of orders:
-    // 1. Available orders (packed, unassigned) - for agent to accept
-    // 2. Agent's own active orders - to track their deliveries until completion
-    //    Include all active statuses: assigned, accepted, picked_up, out_for_delivery, payment_pending
-    
-    // Query: Get available orders (packed, unassigned) OR agent's active orders (multiple statuses)
-    // Check BOTH agent_id AND assigned_agent_id columns for robustness
-    // CRITICAL: Exclude terminal statuses at DATABASE LEVEL to prevent delivered orders from showing
+    const { error: reassignError } = await reassignQuery;
+    if (reassignError) console.warn('Failed to reassign stale orders:', reassignError);
+    else console.log('✅ Reassigned stale orders');
+
+    // STEP 3: Fetch orders
     const activeStatuses = ['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending'];
     const terminalStatusesForQuery = ['delivered', 'completed', 'cancelled', 'canceled'];
     
-    // STEP 3: Fetch orders (sevenDaysAgo already defined above)
-    
     const { data: orders, error } = await supabase
       .from('orders')
-      .select(`
-        *, 
-        delivery_time, 
-        delivery_time_slot, 
-        delivery_date, 
-        subscription_id
-      `)
-      .not('status', 'in', `(${terminalStatusesForQuery.join(',')})`)  // CRITICAL: Exclude terminal statuses at DB level
-      .gte('created_at', sevenDaysAgo)  // Only orders from last 7 days
+      .select(`*, delivery_time, delivery_time_slot, delivery_date, subscription_id`)
+      .not('status', 'in', `(${terminalStatusesForQuery.join(',')})`)
+      .gte('created_at', sevenDaysAgo)
       .or(`and(status.eq.packed,agent_id.is.null,assigned_agent_id.is.null),and(status.in.(${activeStatuses.join(',')}),or(agent_id.eq.${deliveryAgentId},assigned_agent_id.eq.${deliveryAgentId}))`)
-      .order('created_at', { ascending: true }); // Show oldest orders first
-    
-    console.log(`[DB FILTER] Excluded terminal statuses: ${terminalStatusesForQuery.join(', ')}, only orders since: ${sevenDaysAgo}`);
-
-    // NOTE: completedIds already fetched at the top (Step 1) - no need to fetch again
-
-    console.log('Raw query result:', orders?.map(o => ({ 
-      id: o.id, 
-      status: o.status, 
-      agent_id: o.agent_id,
-      updated_at: o.updated_at 
-    })) || []);
+      .order('created_at', { ascending: true });
 
     if (error) {
       console.error('Failed to fetch orders:', error);
       return new Response(
         JSON.stringify({ success: false, error: 'Failed to fetch orders' }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500 
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    console.log(`Found ${orders?.length || 0} orders before filtering for agent ${deliveryAgentId} (auth: ${agent_id})`);
-    console.log('Orders found:', orders?.map(o => ({ id: o.id, status: o.status, agent_id: o.agent_id })) || []);
+    console.log(`Found ${orders?.length || 0} orders before filtering`);
 
-    // Get delivery timings from database for consistent timing across frontend and backend
-    const { data: deliveryTimings } = await supabase
-      .from('delivery_timings')
-      .select('*')
-      .eq('is_active', true)
-      .order('priority');
-
-    // Get rejected order IDs for this agent
-    const { data: rejections, error: rejectionError } = await supabase
-      .from('agent_order_rejections')
-      .select('order_id')
-      .eq('agent_id', deliveryAgentId);
-
-    if (rejectionError) {
-      console.warn('Failed to fetch rejected orders:', rejectionError);
-    }
+    // Filter orders
+    const terminalStatuses = ['delivered', 'completed', 'cancelled', 'canceled'];
+    const activeStatusSet = new Set(['assigned', 'accepted', 'picked_up', 'out_for_delivery', 'payment_pending']);
     
-    console.log(`Agent ${deliveryAgentId} (auth: ${agent_id}) has ${rejections?.length || 0} rejected orders`);
+    let availableOrders = orders?.filter(order => {
+      if (completedIds.has(order.id)) return false;
+      const status = order.status?.toLowerCase();
+      if (terminalStatuses.includes(status)) return false;
+      const isOrphanedPaymentPending = order.status === 'payment_pending' && order.agent_id === null && order.assigned_agent_id === null;
+      if (isOrphanedPaymentPending) return false;
+      const isAvailable = order.agent_id === null && order.assigned_agent_id === null && order.status === 'packed';
+      const isAgentOrder = (order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) && activeStatusSet.has(order.status);
+      return isAvailable || isAgentOrder;
+    }) || [];
+
+    // Filter rejected orders
+    const rejectedOrderIds = new Set(rejections?.map(r => r.order_id) || []);
+    let filteredOrders = availableOrders.filter(order => {
+      if (order.agent_id === deliveryAgentId || order.assigned_agent_id === deliveryAgentId) return true;
+      return !rejectedOrderIds.has(order.id);
+    });
+
+    // Filter seller-only orders IN PARALLEL
+    const userOrdersResults = await Promise.all(
+      filteredOrders.map(async (order) => {
+        try {
+          const { data: userRoles } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', order.user_id);
+          const hasSellerRole = userRoles?.some(ur => ur.role === 'seller') || false;
+          const hasOtherRoles = userRoles?.some(ur => ur.role !== 'seller') || false;
+          return hasSellerRole && !hasOtherRoles ? null : order;
+        } catch {
+          return order;
+        }
+      })
+    );
+    filteredOrders = userOrdersResults.filter(order => order !== null);
 
     // Filter: Keep available orders (both columns null) OR orders assigned to current agent (either column)
     // CRITICAL: Use delivery_history as THE SOURCE OF TRUTH for completion (Zepto pattern)
@@ -446,24 +443,20 @@ serve(async (req) => {
 
     // Apply 10km radius filtering if agent location is available
     if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
-      console.log('Applying 10km radius filter for agent location:', {
-        lat: agentLocation.latitude,
-        lng: agentLocation.longitude
-      });
+      console.log('Applying 10km radius filter with BATCHED distance calculation');
 
-      const nearbyOrders = [];
-      
-      for (const order of filteredOrders) {
+      // PHASE 1: Pre-compute delivery type and fetch seller info IN PARALLEL
+      const orderMeta = await Promise.all(filteredOrders.map(async (order) => {
         const orderCreatedAt = new Date(order.created_at);
         const now = new Date();
         const today = now.toISOString().split('T')[0];
         const minutesSinceCreated = Math.floor((now.getTime() - orderCreatedAt.getTime()) / (1000 * 60));
-        
+
         let calculatedType: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later' = 'immediate';
         let properTimeSlot = order.delivery_time_slot;
         let immediateTimingConfig = null;
-        
-        // Determine delivery type
+
+        // Determine delivery type (same logic as before)
         if (order.subscription_id) {
           calculatedType = 'subscription';
           const subscriptionTiming = deliveryTimings?.find(t => t.delivery_type === 'subscription');
@@ -479,19 +472,13 @@ serve(async (req) => {
           calculatedType = 'scheduled';
           if (!properTimeSlot) {
             const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
-            if (scheduledTiming) {
-              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
-            } else {
-              properTimeSlot = '09:00-12:00';
-            }
+            properTimeSlot = scheduledTiming ? `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}` : '09:00-12:00';
           }
         } else if (order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim()) {
           calculatedType = 'scheduled';
         } else if (order.payment_status && order.payment_status.toLowerCase().includes('paid_subscription')) {
           calculatedType = 'subscription';
-          if (!properTimeSlot) {
-            properTimeSlot = '06:00-10:00';
-          }
+          if (!properTimeSlot) properTimeSlot = '06:00-10:00';
         } else if (
           !order.subscription_id &&
           (!order.delivery_time_slot || order.delivery_time_slot === null || order.delivery_time_slot === '' || order.delivery_time_slot.trim() === '') &&
@@ -501,157 +488,138 @@ serve(async (req) => {
         ) {
           calculatedType = 'immediate';
           const immediateTiming = deliveryTimings?.find(t => t.delivery_type === 'immediate');
-          if (immediateTiming) {
-            immediateTimingConfig = {
-              max_duration_minutes: immediateTiming.max_duration_minutes,
-              time_slot_start: immediateTiming.time_slot_start,
-              time_slot_end: immediateTiming.time_slot_end,
-              slot_name: immediateTiming.slot_name
-            };
-          } else {
-            immediateTimingConfig = {
-              max_duration_minutes: 20,
-              time_slot_start: '00:00:00',
-              time_slot_end: '23:59:59',
-              slot_name: 'Immediate Delivery'
-            };
-          }
+          immediateTimingConfig = immediateTiming ? {
+            max_duration_minutes: immediateTiming.max_duration_minutes,
+            time_slot_start: immediateTiming.time_slot_start,
+            time_slot_end: immediateTiming.time_slot_end,
+            slot_name: immediateTiming.slot_name
+          } : { max_duration_minutes: 20, time_slot_start: '00:00:00', time_slot_end: '23:59:59', slot_name: 'Immediate Delivery' };
         } else if (order.payment_status === 'pending') {
           calculatedType = 'book_now_pay_later';
         } else {
           calculatedType = 'scheduled';
           if (!properTimeSlot) {
             const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
-            if (scheduledTiming) {
-              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
-            } else {
-              properTimeSlot = '09:00-12:00';
-            }
+            properTimeSlot = scheduledTiming ? `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}` : '09:00-12:00';
           }
         }
-        
-        // Check if order has address with coordinates
-        if (order.address && order.address.coordinates && order.address.coordinates.lat && order.address.coordinates.lng) {
-          try {
-            // Get pickup location from seller
-            let pickupLocation = null;
-            let pickupAddress = null;
-            let sellerName = null;
-            let sellerPhone = null;
-            
-            if (order.items && order.items.length > 0) {
-              const sellerId = order.items[0].seller_id;
-              if (sellerId) {
-                const { data: seller } = await supabase
-                  .from('sellers')
-                  .select('name, phone, latitude, longitude, address, business_name')
-                  .eq('user_id', sellerId)
-                  .single();
-                  
-                if (seller && seller.latitude && seller.longitude) {
-                  pickupLocation = {
-                    lat: seller.latitude,
-                    lng: seller.longitude
-                  };
-                  pickupAddress = seller.address || `${seller.business_name || seller.name}`;
-                  sellerName = seller.business_name || seller.name;
-                  sellerPhone = seller.phone;
-                }
+
+        // Fetch seller info
+        let pickupLocation = null;
+        let pickupAddress = null;
+        let sellerName = null;
+        let sellerPhone = null;
+
+        if (order.items && order.items.length > 0) {
+          const sellerId = order.items[0].seller_id;
+          if (sellerId) {
+            try {
+              const { data: seller } = await supabase
+                .from('sellers')
+                .select('name, phone, latitude, longitude, address, business_name')
+                .eq('user_id', sellerId)
+                .single();
+              if (seller && seller.latitude && seller.longitude) {
+                pickupLocation = { lat: seller.latitude, lng: seller.longitude };
+                pickupAddress = seller.address || `${seller.business_name || seller.name}`;
+                sellerName = seller.business_name || seller.name;
+                sellerPhone = seller.phone;
               }
-            }
-            
-            // Calculate ROAD distance using Mapbox (NO Haversine fallback)
-            let shopToCustomerDistance: number | null = null;
-            let agentToShopDistance: number | null = null;
-            
-            if (pickupLocation) {
-              // Leg 1: Agent to pickup location (for filtering only)
-              agentToShopDistance = await calculateRoadDistance(
-                { lat: agentLocation.latitude, lng: agentLocation.longitude },
-                { lat: pickupLocation.lat, lng: pickupLocation.lng }
-              );
-              
-              // Leg 2: Pickup to customer location (for payout calculation)
-              shopToCustomerDistance = await calculateRoadDistance(
-                { lat: pickupLocation.lat, lng: pickupLocation.lng },
-                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-              );
-              
-              if (agentToShopDistance !== null && shopToCustomerDistance !== null) {
-                console.log(`✅ Order ${order.id} road distances - Agent→Shop: ${agentToShopDistance}km, Shop→Customer: ${shopToCustomerDistance}km`);
-              } else {
-                console.warn(`⚠️ Order ${order.id} - Could not calculate road distance, skipping`);
-                continue; // Skip orders where road distance cannot be calculated
-              }
-            } else {
-              // Direct distance to customer if no pickup location
-              shopToCustomerDistance = await calculateRoadDistance(
-                { lat: agentLocation.latitude, lng: agentLocation.longitude },
-                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-              );
-              agentToShopDistance = shopToCustomerDistance;
-              
-              if (shopToCustomerDistance === null) {
-                console.warn(`⚠️ Order ${order.id} - Could not calculate road distance, skipping`);
-                continue;
-              }
-            }
-            
-            const totalDistance = (agentToShopDistance || 0) + (shopToCustomerDistance || 0);
-            
-            // Include orders within 10km radius
-            if (totalDistance <= 10) {
-              // Minimum distance for payout
-              const payoutDistance = Math.max(0.1, shopToCustomerDistance || 0.1);
-              
-              // Calculate payout using Zepto/Blinkit formula: ₹10 base + ₹8/km
-              const agentPayout = calculateAgentPayout(payoutDistance);
-              const estimatedTime = Math.max(5, Math.ceil(payoutDistance * 2));
-              
-              console.log(`✅ Order ${order.id} - Distance: ${payoutDistance}km, Payout: ₹${agentPayout} (₹10 + ${payoutDistance}×₹8)`);
-              
-              nearbyOrders.push({
-                ...order,
-                distance_km: payoutDistance,
-                agent_to_shop_distance: agentToShopDistance,
-                total_distance: totalDistance,
-                agent_payout: agentPayout,
-                estimated_delivery_time: estimatedTime,
-                backend_calculated: true,
-                road_distance: true, // Flag indicating this is road distance, not Haversine
-                pickup_location: pickupLocation,
-                pickup_address: pickupAddress,
-                pickup_status: 'pending',
-                seller_name: sellerName,
-                seller_phone: sellerPhone,
-                calculated_delivery_type: calculatedType,
-                delivery_type: calculatedType,
-                delivery_time_slot: properTimeSlot || order.delivery_time_slot,
-                original_created_at: order.created_at,
-                immediate_timing_config: immediateTimingConfig,
-                // Include payout breakdown for transparency
-                payout_breakdown: {
-                  base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
-                  distance_pay: Math.round((payoutDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE) * 10) / 10,
-                  distance_km: payoutDistance,
-                  rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
-                }
-              });
-            } else {
-              console.log(`❌ Order ${order.id} too far: ${totalDistance}km > 10km`);
-            }
-          } catch (distanceError) {
-            console.error(`Failed to calculate distance for order ${order.id}:`, distanceError);
-            // DO NOT include orders if road distance cannot be calculated
+            } catch {}
           }
+        }
+
+        const hasCoords = order.address?.coordinates?.lat && order.address?.coordinates?.lng;
+
+        return { order, calculatedType, properTimeSlot, immediateTimingConfig, pickupLocation, pickupAddress, sellerName, sellerPhone, hasCoords };
+      }));
+
+      // PHASE 2: Build ALL distance pairs for batch Google API call
+      const distancePairs: Array<{ origin: { lat: number; lng: number }; destination: { lat: number; lng: number } }> = [];
+      // Track which pair indices map to which order (agentToShop, shopToCustomer)
+      const pairMapping: Array<{ orderIdx: number; type: 'agentToShop' | 'shopToCustomer' | 'direct' }> = [];
+
+      orderMeta.forEach((meta, idx) => {
+        if (!meta.hasCoords) return;
+        const customerCoord = { lat: meta.order.address.coordinates.lat, lng: meta.order.address.coordinates.lng };
+
+        if (meta.pickupLocation) {
+          // Leg 1: Agent → Shop
+          distancePairs.push({ origin: { lat: agentLocation.latitude, lng: agentLocation.longitude }, destination: meta.pickupLocation });
+          pairMapping.push({ orderIdx: idx, type: 'agentToShop' });
+          // Leg 2: Shop → Customer
+          distancePairs.push({ origin: meta.pickupLocation, destination: customerCoord });
+          pairMapping.push({ orderIdx: idx, type: 'shopToCustomer' });
         } else {
-          console.warn(`Order ${order.id} has no coordinates, skipping (road distance required)`);
-          // DO NOT include orders without coordinates
+          // Direct: Agent → Customer
+          distancePairs.push({ origin: { lat: agentLocation.latitude, lng: agentLocation.longitude }, destination: customerCoord });
+          pairMapping.push({ orderIdx: idx, type: 'direct' });
         }
-      }
-      
+      });
+
+      console.log(`📦 Batching ${distancePairs.length} distance calculations for ${orderMeta.length} orders (was ${distancePairs.length} sequential API calls before)`);
+
+      // PHASE 3: Single batched API call instead of 2N sequential calls
+      const batchResults = await batchCalculateRoadDistances(distancePairs);
+
+      // PHASE 4: Assemble results
+      const orderDistances = new Map<number, { agentToShop: number | null; shopToCustomer: number | null }>();
+      pairMapping.forEach((mapping, pairIdx) => {
+        if (!orderDistances.has(mapping.orderIdx)) {
+          orderDistances.set(mapping.orderIdx, { agentToShop: null, shopToCustomer: null });
+        }
+        const entry = orderDistances.get(mapping.orderIdx)!;
+        if (mapping.type === 'agentToShop') entry.agentToShop = batchResults[pairIdx];
+        else if (mapping.type === 'shopToCustomer') entry.shopToCustomer = batchResults[pairIdx];
+        else { entry.agentToShop = batchResults[pairIdx]; entry.shopToCustomer = batchResults[pairIdx]; }
+      });
+
+      const nearbyOrders: any[] = [];
+      orderMeta.forEach((meta, idx) => {
+        if (!meta.hasCoords) return;
+        const distances = orderDistances.get(idx);
+        if (!distances || distances.agentToShop === null || distances.shopToCustomer === null) return;
+
+        const totalDistance = distances.agentToShop + distances.shopToCustomer;
+        if (totalDistance > 10) {
+          console.log(`❌ Order ${meta.order.id} too far: ${totalDistance}km > 10km`);
+          return;
+        }
+
+        const payoutDistance = Math.max(0.1, distances.shopToCustomer);
+        const agentPayout = calculateAgentPayout(payoutDistance);
+        const estimatedTime = Math.max(5, Math.ceil(payoutDistance * 2));
+
+        nearbyOrders.push({
+          ...meta.order,
+          distance_km: payoutDistance,
+          agent_to_shop_distance: distances.agentToShop,
+          total_distance: totalDistance,
+          agent_payout: agentPayout,
+          estimated_delivery_time: estimatedTime,
+          backend_calculated: true,
+          road_distance: true,
+          pickup_location: meta.pickupLocation,
+          pickup_address: meta.pickupAddress,
+          pickup_status: 'pending',
+          seller_name: meta.sellerName,
+          seller_phone: meta.sellerPhone,
+          calculated_delivery_type: meta.calculatedType,
+          delivery_type: meta.calculatedType,
+          delivery_time_slot: meta.properTimeSlot || meta.order.delivery_time_slot,
+          original_created_at: meta.order.created_at,
+          immediate_timing_config: meta.immediateTimingConfig,
+          payout_breakdown: {
+            base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
+            distance_pay: Math.round((payoutDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE) * 10) / 10,
+            distance_km: payoutDistance,
+            rate_per_km: REGULAR_ORDER_PRICING.DISTANCE_RATE
+          }
+        });
+      });
+
       filteredOrders = nearbyOrders;
-      console.log(`After 10km filtering with road distance: ${filteredOrders.length} orders remain`);
+      console.log(`After 10km filtering with BATCHED road distance: ${filteredOrders.length} orders remain`);
     } else {
       console.log('No agent location available - using stored distance for payout calculation');
       
