@@ -177,12 +177,6 @@ export default function ManageDelivery() {
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
-      // Ensure token is fresh with 4s timeout
-      await Promise.race([
-        supabase.auth.refreshSession(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Session refresh timeout')), 4000))
-      ]).catch(() => console.warn('[ManageDelivery] Session refresh timed out, continuing with cached session'));
-      
       console.log('Generating QR for amount:', amountToPay);
       
       // 15s timeout via Promise.race since supabase.functions.invoke doesn't support AbortController
@@ -231,18 +225,8 @@ export default function ManageDelivery() {
     
     try {
       const { supabase } = await import('@/integrations/supabase/client');
-      
-      // Ensure token is fresh with 4s timeout - don't block if it fails
-      await Promise.race([
-        supabase.auth.refreshSession(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Session refresh timeout')), 4000))
-      ]).catch(() => console.warn('[ManageDelivery] Session refresh timed out, continuing with cached session'));
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Session expired. Please login again.');
-      }
 
+      // Let SDK auto-attach the session token — no manual header override
       // 15s timeout via Promise.race since supabase.functions.invoke doesn't support AbortController
       const { data, error } = await Promise.race([
         supabase.functions.invoke('unified-complete-delivery', {
@@ -251,9 +235,6 @@ export default function ManageDelivery() {
             payment_method: paymentMethod,
             order_type: orderType,
           },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`
-          }
         }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
       ]);
@@ -309,18 +290,8 @@ export default function ManageDelivery() {
       setIsCompleting(true);
       
       const { supabase } = await import('@/integrations/supabase/client');
-      
-      // Ensure token is fresh with 4s timeout
-      await Promise.race([
-        supabase.auth.refreshSession(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Session refresh timeout')), 4000))
-      ]).catch(() => console.warn('[ManageDelivery] Session refresh timed out, continuing with cached session'));
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Session expired. Please login again.');
-      }
 
+      // Let SDK auto-attach the session token — no manual header override
       // 15s timeout via Promise.race
       const { data, error } = await Promise.race([
         supabase.functions.invoke('unified-complete-delivery', {
@@ -331,9 +302,6 @@ export default function ManageDelivery() {
             payment_id: qrData?.qr_id,
             order_type: orderType,
           },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`
-          }
         }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
       ]);
