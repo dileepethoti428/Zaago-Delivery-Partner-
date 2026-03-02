@@ -103,14 +103,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (session?.user) {
           // Skip fetchProfile if we already have a profile for this user
           if (get().profile?.user_id !== session.user.id) {
+            if (event === 'INITIAL_SESSION') {
+              // Block loading until profile is ready (with 4s safety timeout)
+              await Promise.race([
+                get().fetchProfile(),
+                new Promise<void>(r => setTimeout(r, 4000)),
+              ]).catch(console.warn);
+              set({ loading: false });
+              return;
+            }
             get().fetchProfile().catch(console.warn);
           }
         } else {
           set({ profile: null });
         }
 
-        // INITIAL_SESSION: mark loading done after profile is ready
-        // This is the primary path for session restoration on app open
         if (event === 'INITIAL_SESSION') {
           set({ loading: false });
         }
