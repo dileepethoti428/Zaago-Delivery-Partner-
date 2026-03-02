@@ -14,7 +14,8 @@ import { EarningsTabContent } from '@/components/earnings/EarningsTabContent';
 import { SubscriptionTabContent } from '@/components/earnings/SubscriptionTabContent';
 
 export default function Earnings() {
-  const { data: earningsData, isLoading: loading } = useEarnings();
+  const { data: earningsData, isLoading: loading, isFetching } = useEarnings();
+  const showLoader = loading && isFetching;
   const [activeTab, setActiveTab] = useState('all');
 
   return (
@@ -23,7 +24,7 @@ export default function Earnings() {
         <div className="space-y-4 py-4">
           <h1 className="text-2xl font-bold">Earnings</h1>
 
-          {loading ? (
+          {showLoader ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>

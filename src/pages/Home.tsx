@@ -166,8 +166,8 @@ export default function Home() {
     navigate(`/manage-delivery/${orderId}`);
   }, [navigate]);
 
-  // Show loading while profile loads
-  if (profileLoading) {
+  // Show loading while profile loads — only block if email is known and query is actually running
+  if (user?.email && profileLoading) {
     return (
       <AppShell>
         <div className="flex items-center justify-center min-h-[60vh]">

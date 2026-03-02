@@ -1,73 +1,166 @@
 
-## The Real Problem: `useProfile` Fires With `undefined` Email, Then Never Retries
+I understand how frustrating this has been. I reviewed your auth flow, splash flow, router, and the latest logs.
 
-### What's happening
+Do I know what the issue is? Yes.
 
-1. `Home.tsx` calls `useProfile(user?.email)` where `user` comes from `useAuthStore`
-2. On refresh, `user` is initially `null` → `user?.email` is `undefined` → `enabled: !!email` = `false` → query doesn't fire
-3. `SIGNED_IN` event fires and sets `user` in the store
-4. BUT — React Query has already registered the query with key `['profile', undefined]` and `enabled: false`. When `email` becomes defined, the key changes to `['profile', 'agentd@gmail.com']` — this is a NEW query that React Query must now fire
-5. However, `Home.tsx` is stuck at `profileLoading` = `true` because React Query counts a query as "loading" when `enabled` is `false` AND no data exists yet — `isLoading` is `true` for a disabled query with no cached data in React Query v5
+Root cause summary (from current code):
+1) `main.tsx` mounts correctly and router is initialized correctly.  
+2) The real “blank after splash” lock is in guard logic:
+   - `RequireApproval.tsx` starts an 8s bypass timer on every `profileState` change.
+   - `fetchProfile()` retries flip `profileState` between `loading` and `error` every few seconds.
+   - That keeps resetting the timer, so bypass may never trigger, leaving the app on skeleton/blank forever.
+3) `Splash.tsx` currently has competing timers and can route to protected pages on partial/stale session state (`/my-deliveries`) instead of reliably sending unauthenticated users to `/login`.
+4) No wildcard route (`*`) + no global error boundary means unmatched routes/runtime crashes can appear as a white screen.
+5) Startup is slower than needed because auth/profile boot path still waits on network races before route settles.
 
-**This is a React Query v5 behavior**: `isLoading` is `true` for queries that are `enabled: false` AND have no cached data. The component sees `profileLoading = true` → renders "Loading profile..." → forever, because the query is disabled.
+Implementation plan (step-by-step fix)
 
-### The Fix
+1. Stabilize app boot + add crash visibility
+Files:
+- `src/App.tsx`
+- `src/main.tsx`
+- `src/components/system/AppErrorBoundary.tsx` (new)
+- `src/utils/startupDiagnostics.ts` (new)
 
-**Two-part fix:**
+Changes:
+- Replace `App.tsx` (currently `return null`) with actual root composition:
+  - `<AppErrorBoundary>`
+    - `<AppProviders>`
+      - `<NetworkStatusWrapper>`
+        - `<RouterProvider router={router} />`
+- Update `main.tsx` to render `<App />` only.
+- Add startup diagnostics once on app boot:
+  - `window.onerror`
+  - `window.onunhandledrejection`
+  - console markers for boot phase transitions.
+- Add a user-safe fallback UI in error boundary (“Something went wrong”, Retry, Go to Login).
 
-**Part 1 — `src/hooks/useProfile.ts`**: Change from `isLoading` to `isPending` OR add `enabled` directly. In React Query v5, `isPending` = true only when actually fetching. `isLoading` = true even when disabled with no data.
+Why:
+- Prevent silent white screens.
+- Makes runtime failures visible and recoverable.
 
-Actually the correct React Query v5 pattern: use `status === 'pending'` only when `enabled` is true. The real fix is to use `isFetching` OR check `enabled` separately.
+2. Fix routing safety (404/catch-all)
+File:
+- `src/router/index.tsx`
 
-**Simplest fix**: In `Home.tsx`, change the loading check to:
+Changes:
+- Add final fallback route:
+  - `path: '*'`
+  - `element: <Navigate to="/login" replace />`
+- Keep `/`, `/splash`, `/login` explicit and unchanged in intent.
 
-```ts
-const isProfileLoading = !!user?.email && profileLoading;
-```
+Why:
+- Any unmatched path will never render blank again.
 
-This way, if `email` isn't available yet, we don't show "Loading profile..." — we wait for auth to resolve first.
+3. Fix auth guard deadlock (main blank-screen bug)
+Files:
+- `src/components/auth/RequireApproval.tsx`
+- `src/components/auth/RequireAuth.tsx`
 
-**Part 2 — `src/store/auth.ts`**: The `fetchProfile` in the auth store sets `profileState: 'ready'` when it succeeds. `Home.tsx` should use `useAuthStore`'s `profileState` instead of `useProfile`'s `isLoading` to gate the "Loading profile..." screen. But `Home.tsx` uses `profile?.agent_id` from `useProfile` (the delivery_agents row), not from the auth store profile.
+Changes:
+- In `RequireApproval.tsx`, change bypass timer to depend on unresolved boolean, not raw `profileState` transitions.
+  - Use `isUnresolved = ['idle','loading','error'].includes(profileState)`.
+  - Start 1 timer when unresolved begins; do not reset while unresolved stays true.
+  - After timeout, stop blocking and render recovery path.
+- In `RequireAuth.tsx`, add boot deadline behavior:
+  - If auth still loading past deadline and no valid session => redirect `/login`.
+  - Keep retry controls but never allow infinite skeleton.
+- Add token staleness safety check (`session.expires_at`) before granting protected outlet.
 
-### Cleanest minimal fix (one file change)
+Why:
+- Eliminates the loading/error timer-reset loop that causes endless blank/skeleton.
 
-**`src/pages/Home.tsx`** — change line 170:
+4. Make splash deterministic and faster
+File:
+- `src/pages/Splash.tsx`
 
-```ts
-// BEFORE — stuck forever when user?.email is briefly undefined
-if (profileLoading) {
+Changes:
+- Replace current multi-timer behavior with one deterministic boot deadline flow:
+  - If `loading` resolves quickly: route immediately based on session/profile.
+  - If deadline hits:
+    - no session => `/login`
+    - session exists => protected landing (`/my-deliveries`) with guards handling profile.
+- Remove redundant/competing timers that can conflict with auth transitions.
+- Ensure no repeated navigation loops.
 
-// AFTER — only show loading when email is known and query is actually running
-if (user?.email && profileLoading) {
-```
+Why:
+- Splash always exits predictably.
+- Unauthenticated users reliably reach Login.
 
-This single change unblocks the "Loading profile..." forever hang.
+5. Reduce auth initialization blocking time
+File:
+- `src/store/auth.ts`
 
-For the **Orders/Earnings blank screens** — the logs show `useTodayOrders Fetching via RPC...` IS firing. But the screens show skeleton loaders. This means the RPC is running but returning empty or erroring silently. The issue is the same `useProfile` problem — `profile` is `undefined` so `profile?.agent_id` is `undefined` → `useOrders(undefined, true)` → `enabled: !!agentId` = `false` → orders never load.
+Changes:
+- Keep listener-first pattern.
+- Decouple “auth loading” from slow profile calls:
+  - mark `loading=false` once session state is known.
+  - continue profile fetch/retry in background via `profileState`.
+- Keep existing retry backoff; avoid long blocking path at boot.
+- Preserve current error classification (`PGRST116` vs transient errors).
 
-The chain:
-1. `user?.email` undefined → `useProfile` disabled → `profile` undefined
-2. `profile?.agent_id` undefined → `useOrders(undefined)` → disabled → blank orders
+Why:
+- Faster perceived launch.
+- Prevents splash waiting on slow profile/API calls.
 
-### Complete fix plan (minimal, 2 files)
+6. Capacitor splash handling (native-safe)
+Files:
+- `package.json` (if missing plugin)
+- `src/pages/Splash.tsx` or a bootstrap helper
 
-**File 1: `src/pages/Home.tsx`**
-- Line 170: Change `if (profileLoading)` → `if (user?.email && profileLoading)`
-- This prevents the infinite "Loading profile..." screen when `email` is undefined
+Changes:
+- Add guarded native splash hide:
+  - `if (Capacitor.isNativePlatform()) SplashScreen.hide().catch(...)`
+- Call hide only after app readiness decision (not before router/auth state is settled).
+- Never block UI waiting for hide.
 
-**File 2: `src/pages/Earnings.tsx`**  
-- The earnings spinner is from `useEarnings` which is gated on `session?.access_token`. If session is available but earnings still spin, the edge function call is failing silently. Add a fallback to show "No data" instead of infinite spinner:
-- Change `{loading ? <Loader2 spin /> : ...}` to also handle `!loading && !earningsData`
+Why:
+- Prevents native splash freeze on Android/iOS.
+- Keeps web behavior unaffected.
 
-### Why MyDeliveries shows (0) counts
+7. Safe render guard to force login when session/auth fails
+Files:
+- `src/components/auth/RequireAuth.tsx`
+- `src/pages/Splash.tsx`
 
-The RPCs ARE firing (logs confirm), returning empty arrays — correct behavior as those are `daily_orders` with no assigned orders for today. The 0 counts are accurate, not a bug.
+Changes:
+- If session is missing/expired or auth check fails beyond deadline, always navigate to `/login`.
+- No protected route rendering without a valid usable session.
 
-### Summary of changes
+Why:
+- Matches your expected behavior: after splash, login must appear when auth isn’t valid.
 
-| File | Change |
-|------|--------|
-| `src/pages/Home.tsx` | Fix `profileLoading` guard: only block if `user?.email` is known |
-| `src/pages/Earnings.tsx` | Add error/empty state instead of infinite spinner |
+8. Performance tuning (quick wins for slow startup)
+Files:
+- `src/store/auth.ts`
+- `src/router/index.tsx` (optional phase-2 lazy loading)
 
-No auth store changes needed — the auth store is working correctly (SIGNED_IN fires, session set). The problem is purely in how the pages consume the auth state.
+Changes:
+- Remove unnecessary blocking `await`s before first route paint.
+- Optional: lazy-load heavy protected pages (`Home`, `Earnings`, `MyDeliveries`) with fallback skeleton.
+
+Why:
+- Faster time-to-interactive on mobile/webview.
+
+Exact files to modify
+- `src/App.tsx`
+- `src/main.tsx`
+- `src/router/index.tsx`
+- `src/pages/Splash.tsx`
+- `src/components/auth/RequireAuth.tsx`
+- `src/components/auth/RequireApproval.tsx`
+- `src/store/auth.ts`
+- `src/components/system/AppErrorBoundary.tsx` (new)
+- `src/utils/startupDiagnostics.ts` (new)
+- `package.json` (only if adding `@capacitor/splash-screen`)
+
+Validation checklist after implementation
+1) Cold start with no session => Splash briefly shows, then `/login` always appears.  
+2) Signed-in user on slow network => no white/blank lock; app exits splash deterministically.  
+3) Force profile API errors => guard never gets stuck forever; recovery path is shown.  
+4) Unknown route (e.g. `/abc`) => redirects to `/login` (no blank page).  
+5) Simulate runtime throw => ErrorBoundary fallback appears (not white screen).  
+6) Measure startup timing before/after to confirm speed improvement.
+
+Technical note
+- `App.tsx` is currently unused (`return null`), which is risky for maintainability and debugging. I will make it the true app root so startup instrumentation and error boundary are guaranteed in one place.
