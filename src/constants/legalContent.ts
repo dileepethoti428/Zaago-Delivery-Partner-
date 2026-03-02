@@ -360,7 +360,7 @@ export const TERMS_CONDITIONS_SECTIONS: LegalSection[] = [
       '',
       '1.5 SMARTPHONE REQUIREMENTS:',
       '• Smartphone with GPS and internet capability',
-      '• Ability to run the Zaago Delivery Agent App',
+      '• Ability to run the Zaago Delivery Partner App',
     ],
   },
   {

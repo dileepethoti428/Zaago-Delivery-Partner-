@@ -77,7 +77,7 @@ export default function Splash() {
           transition={{ delay: 0.25, duration: 0.18, ease: "easeOut" }}
           className="text-muted-foreground"
         >
-          Delivery Agent
+          Delivery Partner
         </motion.p>
       </motion.div>
     </div>
