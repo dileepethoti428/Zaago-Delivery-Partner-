@@ -138,9 +138,8 @@ export default function Home() {
     setProcessingOrder(orderId);
     
     try {
-      const result = await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
-      // Small delay to allow backend to sync before navigating
-      await new Promise(r => setTimeout(r, 300));
+      await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
+      // Instantly clear stale orders cache then navigate — no arbitrary delay needed
       navigate(`/manage-delivery/${orderId}`);
     } catch (error) {
       // Error already handled in mutation onError - don't navigate on failure
