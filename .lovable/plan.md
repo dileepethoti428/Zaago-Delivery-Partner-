@@ -1,41 +1,59 @@
 
-## Two targeted changes to `src/utils/appLifecycle.ts`
 
-### Fix 1 — Auth guard at the top of `onAppResume` (lines 23–62)
-Import `useAuthStore` and add an early-return guard at the top of `onAppResume`. If `authStore.loading` is true (login in progress) OR there is no active session, skip all lifecycle work — including `resetAllLoaders()` and `unlockAllButtons()`. This prevents the lifecycle handler from interfering with in-flight login network requests.
+# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
 
-```typescript
-import { useAuthStore } from '@/store/auth';
+## Root Cause
 
-export async function onAppResume() {
-  // Guard: skip all lifecycle work if auth is in progress or no session
-  const { loading: authLoading, session } = useAuthStore.getState();
-  if (authLoading || !session) {
-    console.log('[AppLifecycle] Resume ignored — auth in progress or no session');
-    return;
-  }
+The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
 
-  // ... rest of existing function unchanged
-}
+Current (broken):
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 ```
 
-### Fix 2 — 500ms delay on Capacitor `appStateChange` listener (in `AppProviders.tsx`)
-Wrap the `onAppResume()` call inside the Capacitor `appStateChange` handler with `setTimeout(..., 500)` to absorb WebView transition noise (keyboard open, permission dialogs, focus events during login).
-
-This change is in `src/providers/AppProviders.tsx`, inside the `setupListener` async function:
-
-```typescript
-// Before
-if (isActive) {
-  onAppResume();
-}
-
-// After
-if (isActive) {
-  setTimeout(() => { onAppResume(); }, 500);
-}
+Required:
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
 ```
 
-### Files changed: `src/utils/appLifecycle.ts` and `src/providers/AppProviders.tsx`
+The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
 
-**Why this is safe**: The existing `supabase.auth.getSession()` check at line 49 already handles the "no session" case for heavy operations. The new guard at the very top extends this protection to also skip the lightweight-but-destructive `resetAllLoaders()` and `unlockAllButtons()` calls that were running unconditionally even during login. The 500ms delay gives the WebView time to settle after a focus/keyboard event before lifecycle fires.
+## Fix Plan
+
+### 1. Update CORS headers in `unified-complete-delivery`
+
+**File**: `supabase/functions/unified-complete-delivery/index.ts`
+- Update `corsHeaders` to include the full set of Supabase client headers
+- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
+
+### 2. Update CORS headers in `generate-payment-qr`
+
+**File**: `supabase/functions/generate-payment-qr/index.ts`
+- Same CORS header fix
+
+### 3. Update CORS headers in `cancel-delivery`
+
+**File**: `supabase/functions/cancel-delivery/index.ts`
+- Same CORS header fix
+
+### 4. Update CORS headers in `complete-delivery-v2`
+
+**File**: `supabase/functions/complete-delivery-v2/index.ts`
+- Same CORS header fix (this function also has outdated headers)
+
+## Why This Is the Fix
+
+- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
+- The browser sends an OPTIONS preflight request first to check if these headers are allowed
+- The edge function rejects the preflight because those headers aren't listed
+- The browser never sends the actual POST request
+- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
+- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
+
+## Expected Result
+
+After updating the CORS headers and redeploying:
+- "Delivered" button will call the edge function successfully
+- Response will return in 1-3 seconds instead of timing out at 15 seconds
+- No more silent failures
+

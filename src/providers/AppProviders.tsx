@@ -133,8 +133,8 @@ function AuthInitializer({ children }: { children: ReactNode }) {
       try {
         listener = await App.addListener("appStateChange", ({ isActive }) => {
           if (isActive) {
-            // Run app resume handler to reset stuck states
-            onAppResume();
+            // Delay to absorb WebView transition noise (keyboard, permission dialogs)
+            setTimeout(() => { onAppResume(); }, 500);
             
             const user = useAuthStore.getState().user;
             if (user) {

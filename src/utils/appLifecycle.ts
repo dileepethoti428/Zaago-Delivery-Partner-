@@ -1,6 +1,7 @@
 import { useLifecycleStore } from '@/store/lifecycle';
 import { useOrdersStore } from '@/store/orders';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuthStore } from '@/store/auth';
 
 const RESUME_DEBOUNCE_MS = 30000; // 30 seconds — prevents double-fire from visibilitychange + focus
 const SHORT_BACKGROUND_MS = 5 * 60 * 1000; // 5 minutes — skip heavy resume for quick nav-app trips
@@ -21,6 +22,13 @@ export function setQueryClientRef(client: any) {
  * Resets all stuck states and refreshes data
  */
 export async function onAppResume() {
+  // Guard: skip all lifecycle work if auth is in progress or no session
+  const { loading: authLoading, session } = useAuthStore.getState();
+  if (authLoading || !session) {
+    console.log('[AppLifecycle] Resume ignored — auth in progress or no session');
+    return;
+  }
+
   // Debounce rapid resume events (30s — prevents visibilitychange + focus double-fire)
   const now = Date.now();
   if (now - lastResumeTime < RESUME_DEBOUNCE_MS) {
