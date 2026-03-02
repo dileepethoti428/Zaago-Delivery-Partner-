@@ -16,9 +16,8 @@ export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
 
-  // Start location sync and lifecycle on this screen
+  // Start location sync on this screen
   useScreenLocationSync();
-  useAppLifecycle();
 
   // Use separate RPC hooks for each tab - NO FRONTEND DATE LOGIC
   const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders();

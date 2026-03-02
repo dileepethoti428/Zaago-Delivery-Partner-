@@ -37,7 +37,6 @@ export default function Home() {
   
   // Start location sync on this screen
   useScreenLocationSync();
-  useAppLifecycle();
 
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const permission = useLocationStore((state) => state.permission);
