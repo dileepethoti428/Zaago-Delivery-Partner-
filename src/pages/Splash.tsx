@@ -1,63 +1,54 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Truck } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 
+const BOOT_DEADLINE_MS = 5000;
+
 export default function Splash() {
   const navigate = useNavigate();
   const { session, profile, profileState, loading, initialize } = useAuthStore();
+  const hasNavigated = useRef(false);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
-  // Hard fallback: if auth hangs beyond 5.5s
+  // Single deterministic deadline — always exit splash
   useEffect(() => {
-    const fallback = setTimeout(() => {
-      const current = useAuthStore.getState();
-      if (current.session) {
-        // Session exists — don't bounce to login, go to app (route guards handle the rest)
-        navigate('/my-deliveries');
+    const timer = setTimeout(() => {
+      if (hasNavigated.current) return;
+      hasNavigated.current = true;
+      const state = useAuthStore.getState();
+      if (state.session) {
+        navigateByProfile(state.profile, state.profileState, navigate);
       } else {
         navigate('/login');
       }
-    }, 5500);
-    return () => clearTimeout(fallback);
-  }, []);
+    }, BOOT_DEADLINE_MS);
+    return () => clearTimeout(timer);
+  }, [navigate]);
 
+  // Fast path — navigate as soon as auth resolves
   useEffect(() => {
-    if (loading) return;
+    if (loading || hasNavigated.current) return;
 
-    // Not authenticated
+    hasNavigated.current = true;
+
     if (!session) {
       navigate('/login');
       return;
     }
 
-    // Profile still resolving — wait for it
-    if (profileState === 'idle' || profileState === 'loading') return;
-
-    // Profile had an error — give retries 6s then navigate to app
-    if (profileState === 'error') {
-      const errorTimer = setTimeout(() => {
-        navigate('/my-deliveries');
-      }, 6000);
-      return () => clearTimeout(errorTimer);
+    // Session exists — wait briefly for profile if still loading
+    if (profileState === 'idle' || profileState === 'loading') {
+      // Will be handled by deadline or next state change
+      hasNavigated.current = false;
+      return;
     }
 
-    // profileState is 'ready' or 'missing' — route accordingly
-    if (!profile || !profile.documents_submitted) {
-      navigate('/upload-documents');
-    } else if (profile.approval_status === 'deactivated' || profile.isActive === false) {
-      navigate('/deactivated');
-    } else if (profile.approval_status === 'pending') {
-      navigate('/pending-approval');
-    } else if (profile.approval_status === 'rejected') {
-      navigate('/rejected');
-    } else if (profile.approval_status === 'approved') {
-      navigate('/home');
-    }
+    navigateByProfile(profile, profileState, navigate);
   }, [session, profile, profileState, loading, navigate]);
 
   return (
@@ -69,19 +60,12 @@ export default function Splash() {
         className="flex flex-col items-center gap-4"
       >
         <motion.div
-          animate={{
-            scale: [1, 1.05, 1],
-          }}
-          transition={{
-            duration: 2,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           className="p-6 bg-primary rounded-3xl shadow-2xl"
         >
           <Truck className="h-16 w-16 text-primary-foreground" />
         </motion.div>
-        
         <motion.h1
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -90,7 +74,6 @@ export default function Splash() {
         >
           Zaago
         </motion.h1>
-        
         <motion.p
           initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -102,4 +85,30 @@ export default function Splash() {
       </motion.div>
     </div>
   );
+}
+
+function navigateByProfile(
+  profile: any,
+  profileState: string,
+  navigate: ReturnType<typeof useNavigate>,
+) {
+  // If profile errored or still loading, go to app and let guards handle it
+  if (profileState === 'error' || profileState === 'loading' || profileState === 'idle') {
+    navigate('/my-deliveries');
+    return;
+  }
+
+  if (!profile || !profile.documents_submitted) {
+    navigate('/upload-documents');
+  } else if (profile.approval_status === 'deactivated' || profile.isActive === false) {
+    navigate('/deactivated');
+  } else if (profile.approval_status === 'pending') {
+    navigate('/pending-approval');
+  } else if (profile.approval_status === 'rejected') {
+    navigate('/rejected');
+  } else if (profile.approval_status === 'approved') {
+    navigate('/home');
+  } else {
+    navigate('/my-deliveries');
+  }
 }
