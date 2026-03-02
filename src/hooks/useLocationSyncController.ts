@@ -23,7 +23,7 @@ export function useLocationSyncController() {
   const lastPersistRef = useRef<number>(0);
 
   // Throttled sync to backend
-  const syncToBackend = useCallback(async (coords: GeolocationCoordinates) => {
+  const syncToBackend = useCallback((coords: GeolocationCoordinates) => {
     const now = Date.now();
     if (now - lastSyncTimeRef.current < SYNC_INTERVAL_MS) return;
     
