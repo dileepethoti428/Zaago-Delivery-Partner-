@@ -183,7 +183,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     // Reset module flags so the next login cycle re-initializes cleanly
     initialized = false;
-    initialSessionReceived = false;
     // listenerRegistered stays true — listener persists across sign-out/sign-in
 
     await cleanupOnLogout();
