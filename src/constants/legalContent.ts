@@ -1,4 +1,4 @@
-// Legal content constants for Zaago Delivery Agent App
+// Legal content constants for Zaago Delivery Partner App
 // Version tracking for consent management
 
 export const LEGAL_VERSIONS = {
