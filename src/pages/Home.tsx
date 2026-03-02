@@ -119,11 +119,18 @@ export default function Home() {
 
   // Location watching is handled by useScreenLocationSync above
 
+  // Throttle guard — prevents duplicate refresh calls from pull+realtime firing together
+  const refreshingRef = useRef(false);
+
   const handleRefresh = useCallback(async () => {
-    // Refresh location first to get fresh coordinates
-    await useLocationStore.getState().refreshLocation();
-    // Then refetch orders with updated location
-    await refetch();
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    try {
+      await useLocationStore.getState().refreshLocation();
+      await refetch();
+    } finally {
+      refreshingRef.current = false;
+    }
   }, [refetch]);
 
   const handleAcceptOrder = useCallback(async (orderId: string) => {
