@@ -10,6 +10,12 @@ let fcmInitialized = false;
  * Safe to call multiple times - will only initialize once
  */
 export async function registerFCMToken() {
+  // Only run on native platforms (iOS/Android) — PushNotifications plugin unavailable on web
+  if (!Capacitor.isNativePlatform()) {
+    console.log('[FCM] Skipping — not a native platform');
+    return;
+  }
+
   // Prevent duplicate listeners
   if (fcmInitialized) return;
   fcmInitialized = true;
