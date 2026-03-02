@@ -65,8 +65,7 @@ export async function onAppResume() {
   // 3. Refresh session only if token is expiring soon
   await refreshSession();
 
-  // 4. Invalidate stale queries (soft refresh)
-  refreshQueries();
+  // Lifecycle NEVER triggers data fetching — screens refresh on their own via realtime/manual pull
 }
 
 /**
