@@ -2,8 +2,12 @@ import { useLifecycleStore } from '@/store/lifecycle';
 import { useOrdersStore } from '@/store/orders';
 import { supabase } from '@/integrations/supabase/client';
 
+const RESUME_DEBOUNCE_MS = 30000; // 30 seconds — prevents double-fire from visibilitychange + focus
+const SHORT_BACKGROUND_MS = 5 * 60 * 1000; // 5 minutes — skip heavy resume for quick nav-app trips
+const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000; // 60 seconds — only refresh if token expires within 1 min
+
 let lastResumeTime = 0;
-const RESUME_DEBOUNCE_MS = 2000;
+let lastBackgroundTime = 0; // Track when app went to background
 
 // Import queryClient dynamically to avoid circular dependency
 let queryClientRef: any = null;
@@ -17,31 +21,52 @@ export function setQueryClientRef(client: any) {
  * Resets all stuck states and refreshes data
  */
 export async function onAppResume() {
-  // Debounce rapid resume events
+  // Debounce rapid resume events (30s — prevents visibilitychange + focus double-fire)
   const now = Date.now();
-  if (now - lastResumeTime < RESUME_DEBOUNCE_MS) return;
+  if (now - lastResumeTime < RESUME_DEBOUNCE_MS) {
+    console.log('[AppLifecycle] Resume debounced, skipping');
+    return;
+  }
   lastResumeTime = now;
 
-  // Guard: only run resume logic when a session is active
+  // Calculate how long the app was in the background
+  const backgroundDuration = lastBackgroundTime > 0 ? now - lastBackgroundTime : SHORT_BACKGROUND_MS + 1;
+  const isShortResume = backgroundDuration < SHORT_BACKGROUND_MS;
+
+  console.log(`[AppLifecycle] App resumed (background: ${Math.round(backgroundDuration / 1000)}s, short: ${isShortResume})`);
+
+  // Always unstick the UI — safe and fast, no network calls
+  resetAllLoaders();
+  unlockAllButtons();
+
+  // For short resumes (e.g. returning from Google Maps), skip heavy operations
+  if (isShortResume) {
+    console.log('[AppLifecycle] Short resume — skipping session refresh and query invalidation');
+    return;
+  }
+
+  // Guard: only run heavy resume logic when a session is active
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData?.session) {
     console.log('[AppLifecycle] App resumed - no session, skipping reset');
     return;
   }
 
-  console.log('[AppLifecycle] App resumed - resetting state');
+  console.log('[AppLifecycle] Long resume — running full resume logic');
 
-  // 1. Reset all loading states
-  resetAllLoaders();
-
-  // 2. Unlock all buttons (force-enable)
-  unlockAllButtons();
-
-  // 3. Refresh session (check if still valid)
+  // 3. Refresh session only if token is expiring soon
   await refreshSession();
 
   // 4. Invalidate stale queries (soft refresh)
   refreshQueries();
+}
+
+/**
+ * Record when app goes to background — used for short-resume detection
+ */
+export function onAppBackground() {
+  lastBackgroundTime = Date.now();
+  console.log('[AppLifecycle] App backgrounded');
 }
 
 /**
@@ -88,10 +113,31 @@ export function unlockAllButtons() {
 }
 
 /**
- * Refresh/validate the current session
+ * Smart session refresh — only refresh if token is expiring soon
+ * Avoids unnecessary network calls on every resume
  */
 export async function refreshSession() {
   try {
+    // Check current session first — no network call
+    const { data: sessionData } = await supabase.auth.getSession();
+    
+    if (!sessionData?.session) {
+      console.log('[AppLifecycle] No active session');
+      return;
+    }
+
+    // Only refresh if token expires within 60 seconds
+    const expiresAt = sessionData.session.expires_at; // Unix timestamp in seconds
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const secondsUntilExpiry = expiresAt ? expiresAt - nowSeconds : 0;
+
+    if (secondsUntilExpiry > TOKEN_EXPIRY_BUFFER_MS / 1000) {
+      console.log(`[AppLifecycle] Token valid for ${secondsUntilExpiry}s — skipping refresh`);
+      return;
+    }
+
+    console.log(`[AppLifecycle] Token expires in ${secondsUntilExpiry}s — refreshing`);
+
     // Use Promise.race to prevent hanging on slow networks (4s timeout)
     const refreshPromise = supabase.auth.refreshSession();
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -102,10 +148,6 @@ export async function refreshSession() {
     
     if (error) {
       console.warn('[AppLifecycle] Session refresh error:', error);
-      const { data: fallback } = await supabase.auth.getSession();
-      if (!fallback.session) {
-        console.log('[AppLifecycle] No active session');
-      }
       return;
     }
     
@@ -157,6 +199,9 @@ export function setupAppLifecycleListeners() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       onAppResume();
+    } else {
+      // Record background time for short-resume detection
+      onAppBackground();
     }
   });
 
