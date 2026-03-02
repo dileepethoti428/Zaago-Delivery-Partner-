@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { supabase } from "@/integrations/supabase/client";
 

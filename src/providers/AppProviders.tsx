@@ -76,42 +76,35 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     setQueryClientRef(queryClient);
     setupAppLifecycleListeners();
     
-    // Initialize theme from user settings (system default with override)
-    const initTheme = async () => {
-      try {
-        const { data } = await supabase.functions.invoke('get-agent-settings');
-        const themePref = data?.settings?.theme_preference; // 'system' | 'light' | 'dark'
-        
-        if (themePref === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else if (themePref === 'light') {
-          document.documentElement.classList.remove('dark');
-        } else {
-          // Default: follow system preference
-          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (systemDark) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        }
-      } catch (error) {
-        // Fallback to system preference
-        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.classList.toggle('dark', systemDark);
-      }
-    };
-    initTheme();
-  }, [initAuth, initLocation]);
+    // Apply system theme immediately while waiting for session
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', systemDark);
 
-  // Handle app open - register FCM if user is logged in
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
+    // Listen for auth state changes to gate theme + FCM on valid session
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        // Fetch theme preference only after session is confirmed
+        try {
+          const { data } = await supabase.functions.invoke('get-agent-settings');
+          const themePref = data?.settings?.theme_preference;
+          if (themePref === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else if (themePref === 'light') {
+            document.documentElement.classList.remove('dark');
+          } else {
+            document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
+          }
+        } catch {
+          // Keep system preference on error
+        }
+
+        // Register FCM only after session exists
         registerFCMToken();
       }
     });
-  }, []);
+
+    return () => subscription.unsubscribe();
+  }, [initAuth, initLocation]);
 
   // Handle app resume (Capacitor) - SAFE: only removes THIS listener
   useEffect(() => {
