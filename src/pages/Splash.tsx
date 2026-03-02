@@ -25,28 +25,26 @@ export default function Splash() {
   useEffect(() => {
     if (loading) return;
 
-    const delay = hasCache ? 200 : 1500;
-    const timer = setTimeout(() => {
-      if (!session) {
-        navigate('/login');
-        return;
-      }
+    // Navigate immediately — no artificial delay
+    if (!session) {
+      navigate('/login');
+      return;
+    }
 
-      // User is authenticated, check profile status
-      // Location sync will happen in AppShell when /home loads
-      if (!profile || !profile.documents_submitted) {
-        navigate('/upload-documents');
-      } else if (profile.approval_status === 'pending') {
-        navigate('/pending-approval');
-      } else if (profile.approval_status === 'rejected') {
-        navigate('/rejected');
-      } else if (profile.approval_status === 'approved') {
-        navigate('/home');
-      }
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [session, profile, loading, navigate, hasCache]);
+    // User is authenticated, check profile status
+    // Location sync will happen in AppShell when /home loads
+    if (!profile || !profile.documents_submitted) {
+      navigate('/upload-documents');
+    } else if (profile.approval_status === 'deactivated' || profile.isActive === false) {
+      navigate('/deactivated');
+    } else if (profile.approval_status === 'pending') {
+      navigate('/pending-approval');
+    } else if (profile.approval_status === 'rejected') {
+      navigate('/rejected');
+    } else if (profile.approval_status === 'approved') {
+      navigate('/home');
+    }
+  }, [session, profile, loading, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5">
