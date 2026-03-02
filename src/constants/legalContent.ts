@@ -298,7 +298,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
   {
     title: '11. Children\'s Privacy',
     content: [
-      'The Zaago Delivery Agent App is not intended for individuals under 18 years of age. We do not knowingly collect personal information from minors. If you are under 18, you are not permitted to register as a Delivery Partner.',
+      'The Zaago Delivery Partner App is not intended for individuals under 18 years of age. We do not knowingly collect personal information from minors. If you are under 18, you are not permitted to register as a Delivery Partner.',
     ],
   },
   {
