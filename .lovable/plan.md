@@ -1,35 +1,60 @@
 
 
-## Fix Service Worker Supabase Bypass
+## Fix session restoration redirect on refresh
 
-**File:** `public/sw.js`
+**Root cause**: When `INITIAL_SESSION` fires, the auth store calls `fetchProfile()` non-blocking (line 106) then immediately sets `loading: false` (line 115). The route guards (`RequireApproval`) see `loading=false` + `profile=null` and redirect to `/upload-documents` before the profile has loaded.
 
-**Problem:** Line 69 uses `event.respondWith(fetch(request))` for Supabase requests. This forces the service worker to handle the request — if the fetch promise rejects for any reason (timeout, CORS, network blip), the SW converts it into a `FetchEvent resulted in a network error response`, killing auth requests. The same issue exists on line 75 for edge function routes.
+**Solution**: Wait for `fetchProfile` to complete before setting `loading: false` in the `INITIAL_SESSION` handler. No new state fields needed — the existing `loading` flag is sufficient if we just await the profile fetch.
 
-**Fix:** Replace `event.respondWith(fetch(request))` with a plain `return` on both Supabase and edge function bypass paths. This tells the service worker "I'm not handling this request" and lets the browser's native fetch handle it directly — no SW involvement at all.
+### File: `src/store/auth.ts`
 
-### Changes (lines 67-76)
+Change the INITIAL_SESSION block (lines 96-116) so that:
+1. When `INITIAL_SESSION` fires with a session, await `fetchProfile()` (with a 4s timeout to prevent hangs) before setting `loading: false`
+2. When `INITIAL_SESSION` fires without a session, set `loading: false` immediately
 
 ```text
-BEFORE:
-  if (url.hostname.includes('supabase.co')) {
-    event.respondWith(fetch(request));
-    return;
+BEFORE (lines 96-116):
+  if (event === 'INITIAL_SESSION') {
+    initialSessionReceived = true;
   }
-
-  if (url.pathname.includes('/functions/v1/') || url.pathname.includes('/rest/v1/')) {
-    event.respondWith(fetch(request));
-    return;
+  set({ session, user: session?.user ?? null });
+  if (session?.user) {
+    if (get().profile?.user_id !== session.user.id) {
+      get().fetchProfile().catch(console.warn);  // <-- non-blocking!
+    }
+  } else {
+    set({ profile: null });
+  }
+  if (event === 'INITIAL_SESSION') {
+    set({ loading: false });  // <-- fires before profile is ready
   }
 
 AFTER:
-  if (url.hostname.includes('supabase.co')) {
-    return; // Let browser handle natively
+  if (event === 'INITIAL_SESSION') {
+    initialSessionReceived = true;
   }
-
-  if (url.pathname.includes('/functions/v1/') || url.pathname.includes('/rest/v1/')) {
-    return; // Let browser handle natively
+  set({ session, user: session?.user ?? null });
+  if (session?.user) {
+    if (get().profile?.user_id !== session.user.id) {
+      if (event === 'INITIAL_SESSION') {
+        // Block loading until profile is ready (with 4s safety timeout)
+        await Promise.race([
+          get().fetchProfile(),
+          new Promise<void>(r => setTimeout(r, 4000)),
+        ]).catch(console.warn);
+        set({ loading: false });
+        return;
+      }
+      get().fetchProfile().catch(console.warn);
+    }
+  } else {
+    set({ profile: null });
+  }
+  if (event === 'INITIAL_SESSION') {
+    set({ loading: false });
   }
 ```
 
-After this change, users must unregister the old service worker (DevTools > Application > Service Workers > Unregister, then refresh) or the cached SW will still run the old code.
+This ensures `RequireApproval` only evaluates `profile` after it has been fetched, preventing the false redirect to `/upload-documents` on refresh. Other events (SIGNED_IN, USER_UPDATED) continue to fetch profile non-blocking since `loading` is already false by then.
+
+Only one file changes: `src/store/auth.ts`.
