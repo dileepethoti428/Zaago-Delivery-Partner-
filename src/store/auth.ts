@@ -71,8 +71,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           },
           profileState: 'ready',
         });
+      } else if (profileRes.error) {
+        // Distinguish "no row" (PGRST116) from real errors (network/RLS/5xx)
+        const isNoRow = profileRes.error.code === 'PGRST116';
+        if (isNoRow) {
+          console.warn('[Auth] Profile not found (no row)');
+          set({ profile: null, profileState: 'missing' });
+        } else {
+          console.warn('[Auth] Profile fetch API error:', profileRes.error.message, profileRes.error.code);
+          set({ profileState: 'error' });
+          throw new Error(profileRes.error.message);
+        }
       } else {
-        console.warn('[Auth] Profile fetch returned no data:', profileRes.error?.message);
+        // No error but no data — treat as missing
         set({ profile: null, profileState: 'missing' });
       }
     } catch (err) {
