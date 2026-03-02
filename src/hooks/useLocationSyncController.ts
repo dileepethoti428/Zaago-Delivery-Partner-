@@ -123,23 +123,24 @@ export function useLocationSyncController() {
     }
   }, []);
 
-  // Handle auth state changes — start/stop based on login only, not visibility
+  // Start watcher once on mount when session is available.
+  // Never stop/restart on visibility or route changes — GPS watcher is already low-power.
   useEffect(() => {
     isMountedRef.current = true;
 
     if (!session?.access_token) {
-      // Logged out — stop watching
       stopSync();
       return;
     }
 
-    // Logged in — start watching immediately, keep running in background
-    // (watchPosition is low-power in background; syncToBackend is session-gated)
+    // Guard inside startSync (watchIdRef.current !== null) prevents duplicate watchers.
     startSync();
 
     return () => {
       isMountedRef.current = false;
-      stopSync();
+      // Do NOT call stopSync here — watcher must persist across route changes.
+      // It is only stopped when the session ends (access_token becomes null above).
     };
-  }, [session?.access_token, startSync, stopSync]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.access_token]);
 }

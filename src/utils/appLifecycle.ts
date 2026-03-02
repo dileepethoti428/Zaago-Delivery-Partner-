@@ -10,7 +10,7 @@ const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000; // 60 seconds — only refresh if toke
 let lastResumeTime = 0;
 let lastBackgroundTime = 0; // Track when app went to background
 
-// Import queryClient dynamically to avoid circular dependency
+// queryClientRef kept for backward compat but NO invalidation is done from lifecycle
 let queryClientRef: any = null;
 
 export function setQueryClientRef(client: any) {
@@ -65,8 +65,7 @@ export async function onAppResume() {
   // 3. Refresh session only if token is expiring soon
   await refreshSession();
 
-  // 4. Invalidate stale queries (soft refresh)
-  refreshQueries();
+  // Lifecycle NEVER triggers data fetching — screens refresh on their own via realtime/manual pull
 }
 
 /**
@@ -170,25 +169,8 @@ export async function refreshSession() {
   }
 }
 
-/**
- * Soft-refresh React Query cache
- * Marks queries as stale so they refetch when accessed
- */
-export function refreshQueries() {
-  if (!queryClientRef) {
-    console.warn('[AppLifecycle] QueryClient not initialized');
-    return;
-  }
-  
-  // Invalidate order-related queries (most likely to be stale)
-  queryClientRef.invalidateQueries({ queryKey: ['orders'] });
-  queryClientRef.invalidateQueries({ queryKey: ['available-orders'] });
-  queryClientRef.invalidateQueries({ queryKey: ['assigned-orders'] });
-  queryClientRef.invalidateQueries({ queryKey: ['order-details'] });
-  queryClientRef.invalidateQueries({ queryKey: ['earnings'] });
-  
-  console.log('[AppLifecycle] Queries invalidated');
-}
+// refreshQueries intentionally removed — lifecycle must NEVER trigger data fetching.
+// Orders refresh only via: realtime subscription, manual pull-to-refresh, or screen mount.
 
 /**
  * Setup global event listeners for app resume
