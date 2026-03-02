@@ -1,59 +1,52 @@
 
+## Plan: Fix Authentication Lifecycle & Performance Issues
 
-# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
+### Problems to Fix
 
-## Root Cause
+1. **FCM crashes on web** — `PushNotifications` called without `Capacitor.isNativePlatform()` guard
+2. **`onAppResume` resets state even when no session** — resets loaders and invalidates queries on every focus/visibility change regardless of auth state
+3. **`initTheme` calls `get-agent-settings` before session exists** — fires immediately on mount, causes 401
+4. **`useAssignedOrders` hooks have no session guard** — queries run without `enabled: !!session` check
+5. **`useEarnings` hook has no session guard** — same issue
+6. **`auth.initialize()` sets `loading: false` before `onAuthStateChange` listener fires** — causes brief unauthenticated flash
+7. **`AuthInitializer` calls `getUser()` immediately on mount** to register FCM — fires before session is ready
 
-The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
+### Changes
 
-Current (broken):
-```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-```
+#### 1. `src/utils/fcm.ts`
+- Add `Capacitor.isNativePlatform()` guard at the top of `registerFCMToken`
+- If not native: log and return early — no PushNotifications calls on web
 
-Required:
-```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
-```
+#### 2. `src/utils/appLifecycle.ts`
+- In `onAppResume`: **check session first** before doing anything
+  - `const { data } = await supabase.auth.getSession()`
+  - If no session → skip `resetAllLoaders`, `unlockAllButtons`, `refreshSession`, `refreshQueries`
+  - Only run the full resume flow when a session exists
 
-The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
+#### 3. `src/providers/AppProviders.tsx`
+- Move `initTheme()` call **inside** the `onAuthStateChange` callback (or gate it with `session?.user`) — not on raw mount
+- Gate the FCM `getUser()` check to only run after auth initializes
 
-## Fix Plan
+#### 4. `src/hooks/useAssignedOrders.ts`
+- Add `const { session } = useAuthStore()` to each hook
+- Add `enabled: !!session?.access_token` to all 5 query hooks (`useTodayOrders`, `useTomorrowOrders`, `useUpcomingOrders`, `useDeliveredOrders`, `useAssignedOrders`)
 
-### 1. Update CORS headers in `unified-complete-delivery`
+#### 5. `src/hooks/useEarnings.ts`
+- Add `const { session } = useAuthStore()` 
+- Add `enabled: !!session?.access_token`
 
-**File**: `supabase/functions/unified-complete-delivery/index.ts`
-- Update `corsHeaders` to include the full set of Supabase client headers
-- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
+### What is NOT changed
+- Business logic, UI rendering, navigation
+- `useSettings.ts` already has `enabled: !!session?.access_token` ✓
+- `useOrders.ts` already has `enabled: !!agentId` ✓
+- `useLocationSyncController.ts` already guards on `session?.access_token` ✓
+- Auth store `initialize()` logic — it's correct, the issue is upstream callers
 
-### 2. Update CORS headers in `generate-payment-qr`
-
-**File**: `supabase/functions/generate-payment-qr/index.ts`
-- Same CORS header fix
-
-### 3. Update CORS headers in `cancel-delivery`
-
-**File**: `supabase/functions/cancel-delivery/index.ts`
-- Same CORS header fix
-
-### 4. Update CORS headers in `complete-delivery-v2`
-
-**File**: `supabase/functions/complete-delivery-v2/index.ts`
-- Same CORS header fix (this function also has outdated headers)
-
-## Why This Is the Fix
-
-- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
-- The browser sends an OPTIONS preflight request first to check if these headers are allowed
-- The edge function rejects the preflight because those headers aren't listed
-- The browser never sends the actual POST request
-- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
-- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
-
-## Expected Result
-
-After updating the CORS headers and redeploying:
-- "Delivered" button will call the edge function successfully
-- Response will return in 1-3 seconds instead of timing out at 15 seconds
-- No more silent failures
-
+### File Summary
+| File | Change |
+|------|--------|
+| `src/utils/fcm.ts` | Add `Capacitor.isNativePlatform()` guard |
+| `src/utils/appLifecycle.ts` | Gate `onAppResume` on session existence |
+| `src/providers/AppProviders.tsx` | Gate `initTheme` and FCM on session; remove early `getUser()` call |
+| `src/hooks/useAssignedOrders.ts` | Add `enabled: !!session` to all 5 hooks |
+| `src/hooks/useEarnings.ts` | Add `enabled: !!session` |
