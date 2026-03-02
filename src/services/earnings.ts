@@ -4,13 +4,12 @@ import { supabase } from '@/integrations/supabase/client';
  * Payout breakdown for transparent Zepto/Blinkit style pricing
  */
 export interface PayoutBreakdown {
-  base_pay: number;      // Fixed ₹10 per order
-  distance_pay: number;  // distance_km × ₹8
-  distance_km: number;   // Actual distance rounded to 1 decimal
-  rate_per_km: number;   // ₹8 per km
+  base_pay: number;
+  distance_pay: number;
+  distance_km: number;
+  rate_per_km: number;
 }
 
-// Period earnings breakdown
 export interface PeriodEarnings {
   pending: number;
   confirmed: number;
@@ -21,7 +20,6 @@ export interface PeriodEarnings {
   total_orders: number;
 }
 
-// Individual earning record
 export interface EarningRecord {
   order_id: string | null;
   daily_order_id?: string | null;
@@ -37,12 +35,39 @@ export interface EarningRecord {
   order_type: 'regular' | 'subscription';
 }
 
-// Earnings by order type
 export interface EarningsByType {
   today: PeriodEarnings;
   week: PeriodEarnings;
   month: PeriodEarnings;
   recent_earnings: EarningRecord[];
+}
+
+export interface LiveEarningsData {
+  today: PeriodEarnings;
+  week: PeriodEarnings;
+  month: PeriodEarnings;
+  recent_earnings: EarningRecord[];
+  live_payout: number;
+  deliveries_in_progress: number;
+  regular: EarningsByType;
+  subscription: EarningsByType;
+}
+
+export async function fetchLiveEarnings(): Promise<LiveEarningsData> {
+  const { data, error } = await supabase.functions.invoke('get-agent-live-earnings', {
+    method: 'POST'
+  });
+
+  if (error) {
+    console.error('Error fetching live earnings:', error);
+    throw error;
+  }
+
+  if (!data?.success) {
+    throw new Error(data?.error || 'Failed to fetch earnings');
+  }
+
+  return data.data;
 }
 
 export function formatCurrency(amount: number | null | undefined): string {
@@ -66,17 +91,14 @@ export function computeEarningsTotals(rows: { expected_payout: number | null; cr
   const now = new Date();
   
   const todayIST = now.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
-
   const weekStart = new Date(now);
   weekStart.setDate(weekStart.getDate() - 7);
 
   const currentMonthIST = parseInt(now.toLocaleDateString('en-CA', { 
-    timeZone: IST_TIMEZONE, 
-    month: 'numeric' 
+    timeZone: IST_TIMEZONE, month: 'numeric' 
   })) - 1;
   const currentYearIST = parseInt(now.toLocaleDateString('en-CA', { 
-    timeZone: IST_TIMEZONE, 
-    year: 'numeric' 
+    timeZone: IST_TIMEZONE, year: 'numeric' 
   }));
 
   let today = 0;
@@ -86,28 +108,13 @@ export function computeEarningsTotals(rows: { expected_payout: number | null; cr
   rows.forEach(r => {
     const d = new Date(r.created_at);
     const amt = Number(r.expected_payout) || 0;
-
     const rowDateIST = d.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
-    const rowMonthIST = parseInt(d.toLocaleDateString('en-CA', { 
-      timeZone: IST_TIMEZONE, 
-      month: 'numeric' 
-    })) - 1;
-    const rowYearIST = parseInt(d.toLocaleDateString('en-CA', { 
-      timeZone: IST_TIMEZONE, 
-      year: 'numeric' 
-    }));
+    const rowMonthIST = parseInt(d.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE, month: 'numeric' })) - 1;
+    const rowYearIST = parseInt(d.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE, year: 'numeric' }));
 
-    if (rowDateIST === todayIST) {
-      today += amt;
-    }
-
-    if (d >= weekStart) {
-      week += amt;
-    }
-
-    if (rowMonthIST === currentMonthIST && rowYearIST === currentYearIST) {
-      month += amt;
-    }
+    if (rowDateIST === todayIST) today += amt;
+    if (d >= weekStart) week += amt;
+    if (rowMonthIST === currentMonthIST && rowYearIST === currentYearIST) month += amt;
   });
 
   return { today, week, month };
