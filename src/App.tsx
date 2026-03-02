@@ -1,21 +1,17 @@
 import { RouterProvider } from "react-router-dom";
 import { router } from "./router";
-import AppProviders from "./providers/AppProviders";
-import { NetworkStatusWrapper } from "./components/layout/NetworkStatusWrapper";
 import { AppErrorBoundary } from "./components/system/AppErrorBoundary";
+import { useEffect } from "react";
 import { initStartupDiagnostics } from "./utils/startupDiagnostics";
 
-// Run once on module load
-initStartupDiagnostics();
-
 export default function App() {
+  useEffect(() => {
+    initStartupDiagnostics();
+  }, []);
+
   return (
     <AppErrorBoundary>
-      <AppProviders>
-        <NetworkStatusWrapper>
-          <RouterProvider router={router} />
-        </NetworkStatusWrapper>
-      </AppProviders>
+      <RouterProvider router={router} />
     </AppErrorBoundary>
   );
 }
