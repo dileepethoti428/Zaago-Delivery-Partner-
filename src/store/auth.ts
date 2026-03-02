@@ -124,8 +124,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         if (session?.user) {
-          // Skip fetchProfile if we already have a profile for this user
-          if (get().profile?.user_id !== session.user.id) {
+          // Fetch profile whenever session exists and profile isn't already ready
+          if (get().profileState !== 'ready') {
             const scheduleRetry = (attempt: number) => {
               const retryDelays = [2000, 4000, 8000];
               if (attempt >= retryDelays.length) return;
