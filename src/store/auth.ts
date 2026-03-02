@@ -6,7 +6,6 @@ import { cleanupOnLogout } from '@/utils/logoutCleanup';
 // Module-level guards — persist across React StrictMode double-mounts
 let listenerRegistered = false;
 let initialized = false;
-let initialSessionReceived = false;
 
 interface Profile {
   user_id: string;
