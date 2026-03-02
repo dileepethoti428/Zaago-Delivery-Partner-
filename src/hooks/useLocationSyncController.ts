@@ -120,35 +120,23 @@ export function useLocationSyncController() {
     }
   }, []);
 
-  // Handle visibility changes and auth state
+  // Handle auth state changes — start/stop based on login only, not visibility
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Don't start if not logged in
     if (!session?.access_token) {
+      // Logged out — stop watching
       stopSync();
       return;
     }
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        startSync();
-      } else {
-        stopSync();
-      }
-    };
-
-    // Start immediately if visible and logged in
-    if (document.visibilityState === 'visible') {
-      startSync();
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Logged in — start watching immediately, keep running in background
+    // (watchPosition is low-power in background; syncToBackend is session-gated)
+    startSync();
 
     return () => {
       isMountedRef.current = false;
       stopSync();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [session?.access_token, startSync, stopSync]);
 }
