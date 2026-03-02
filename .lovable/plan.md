@@ -1,59 +1,33 @@
 
+## Two targeted changes to `src/store/auth.ts`
 
-# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
+### Fix 1 — Parallel DB queries in fetchProfile (lines 54–75)
+Replace the sequential `profiles` → `delivery_agents` queries with `Promise.all([...])`. Both queries fire simultaneously, cutting 1 round-trip from the login/resume path.
 
-## Root Cause
+**Lines 54–75 replacement:**
+```typescript
+const [profileRes, agentRes] = await Promise.all([
+  supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+  supabase.from('delivery_agents').select('is_active').eq('agent_id', user.id).maybeSingle(),
+]);
 
-The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
-
-Current (broken):
+if (!profileRes.error && profileRes.data) {
+  set({
+    profile: {
+      ...(profileRes.data as Profile),
+      isActive: agentRes.data?.is_active ?? true,
+    }
+  });
+} else {
+  set({ profile: null });
+}
 ```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-```
 
-Required:
-```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
-```
+### Fix 2 — Non-blocking profile fetch in auth listener (line 113)
+Change `await get().fetchProfile()` → `get().fetchProfile().catch(console.warn)`.
 
-The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
+**Why it's safe**: the `loading: false` on line 122 is set after the profile call anyway for `INITIAL_SESSION`. For `SIGNED_IN`/`USER_UPDATED`, the Splash screen already watches `profile` reactively — it will navigate once profile resolves. Removing `await` here means the auth event handler returns instantly, unblocking all other queued Supabase auth listeners and lifecycle handlers.
 
-## Fix Plan
+**Note on the `getSession` fallback path (line 148)**: This path already has its own `Promise.race` with a 4s timeout and is not in the hot path (only fires if `INITIAL_SESSION` never arrives). We leave it as `await` — it's intentionally blocking there since it directly controls `loading: false`.
 
-### 1. Update CORS headers in `unified-complete-delivery`
-
-**File**: `supabase/functions/unified-complete-delivery/index.ts`
-- Update `corsHeaders` to include the full set of Supabase client headers
-- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
-
-### 2. Update CORS headers in `generate-payment-qr`
-
-**File**: `supabase/functions/generate-payment-qr/index.ts`
-- Same CORS header fix
-
-### 3. Update CORS headers in `cancel-delivery`
-
-**File**: `supabase/functions/cancel-delivery/index.ts`
-- Same CORS header fix
-
-### 4. Update CORS headers in `complete-delivery-v2`
-
-**File**: `supabase/functions/complete-delivery-v2/index.ts`
-- Same CORS header fix (this function also has outdated headers)
-
-## Why This Is the Fix
-
-- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
-- The browser sends an OPTIONS preflight request first to check if these headers are allowed
-- The edge function rejects the preflight because those headers aren't listed
-- The browser never sends the actual POST request
-- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
-- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
-
-## Expected Result
-
-After updating the CORS headers and redeploying:
-- "Delivered" button will call the edge function successfully
-- Response will return in 1-3 seconds instead of timing out at 15 seconds
-- No more silent failures
-
+### Only file changed: `src/store/auth.ts`
