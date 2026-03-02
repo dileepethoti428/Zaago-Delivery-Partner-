@@ -7,9 +7,11 @@ import {
   fetchAssignedOrders,
   type AssignedOrder 
 } from '@/services/assignedOrders';
+import { useAuthStore } from '@/store/auth';
 
 // Hook for TODAY's orders (uses IST-aware date from Postgres)
 export function useTodayOrders() {
+  const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'today'],
     queryFn: async () => {
@@ -18,13 +20,14 @@ export function useTodayOrders() {
       console.log('[useTodayOrders] Received:', orders.length, 'orders');
       return orders;
     },
+    enabled: !!session?.access_token,
     staleTime: 30 * 1000,
-    // Removed refetchInterval - realtime handles updates
   });
 }
 
 // Hook for TOMORROW's orders (uses Postgres CURRENT_DATE + 1)
 export function useTomorrowOrders() {
+  const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'tomorrow'],
     queryFn: async () => {
@@ -33,13 +36,14 @@ export function useTomorrowOrders() {
       console.log('[useTomorrowOrders] Received:', orders.length, 'orders');
       return orders;
     },
+    enabled: !!session?.access_token,
     staleTime: 30 * 1000,
-    // Removed refetchInterval - realtime handles updates
   });
 }
 
 // Hook for UPCOMING orders (uses Postgres CURRENT_DATE + 1)
 export function useUpcomingOrders() {
+  const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'upcoming'],
     queryFn: async () => {
@@ -48,13 +52,14 @@ export function useUpcomingOrders() {
       console.log('[useUpcomingOrders] Received:', orders.length, 'orders');
       return orders;
     },
+    enabled: !!session?.access_token,
     staleTime: 30 * 1000,
-    // Removed refetchInterval - realtime handles updates
   });
 }
 
 // Hook for DELIVERED orders today (uses Postgres CURRENT_DATE)
 export function useDeliveredOrders() {
+  const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'delivered'],
     queryFn: async () => {
@@ -63,13 +68,14 @@ export function useDeliveredOrders() {
       console.log('[useDeliveredOrders] Received:', orders.length, 'orders');
       return orders;
     },
+    enabled: !!session?.access_token,
     staleTime: 30 * 1000,
-    // Removed refetchInterval - realtime handles updates
   });
 }
 
 // Legacy hook - kept for backward compatibility
 export function useAssignedOrders() {
+  const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'all'],
     queryFn: async () => {
@@ -78,7 +84,7 @@ export function useAssignedOrders() {
       console.log('[useAssignedOrders] Received orders:', orders.length);
       return orders;
     },
+    enabled: !!session?.access_token,
     staleTime: 30 * 1000,
-    // Removed refetchInterval - realtime handles updates
   });
 }

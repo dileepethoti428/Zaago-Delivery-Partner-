@@ -22,6 +22,13 @@ export async function onAppResume() {
   if (now - lastResumeTime < RESUME_DEBOUNCE_MS) return;
   lastResumeTime = now;
 
+  // Guard: only run resume logic when a session is active
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData?.session) {
+    console.log('[AppLifecycle] App resumed - no session, skipping reset');
+    return;
+  }
+
   console.log('[AppLifecycle] App resumed - resetting state');
 
   // 1. Reset all loading states
