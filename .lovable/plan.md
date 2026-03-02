@@ -1,93 +1,59 @@
 
-## Analysis Summary
 
-After deep inspection of all source files, imports, edge function references, and service calls, here is what is genuinely unused vs. what is active.
+# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
 
-### UNUSED FILES (safe to delete)
+## Root Cause
 
-**src/utils/**
-- `src/utils/pricing.ts` — zero imports from any src file (pricing is done server-side in edge functions)
-- `src/utils/orders.ts` — zero imports from any src file (`annotateAndFilterOrders` is never called)
+The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
 
-**src/store/**
-- `src/store/app.ts` — only used in `logoutCleanup.ts` to reset a stub state; the real auth/orders state is in `auth.ts` and `orders.ts`. Contains dummy seed data for a prototype version of the app.
+Current (broken):
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+```
 
-**Edge Functions (not called from any frontend code):**
-- `direct-qr-complete` — never invoked from src
-- `qr-complete-delivery` — never invoked from src
-- `complete-delivery-v2` — never invoked from src (replaced by `unified-complete-delivery`)
-- `google-places-autocomplete` — never invoked from src
-- `google-places-geocode` — never invoked from src
-- `calculate-delivery-pricing` — never invoked from src
-- `calculate-distance-eta` — never invoked from src
-- `notify-delivery-agents` — never invoked from src
-- `send-order-update-notification` — never invoked from src
-- `agent-autopay-monitor` — never invoked from src
-- `agent-bank-transfer` — never invoked from src
-- `agent-topup-razorpay` — never invoked from src
-- `agent-topup-verify` — never invoked from src
-- `approve-agent` — never invoked from src
-- `mark-order-as-packed` — never invoked from src
-- `qr-scan-order` — never invoked from src
-- `settle-cod-amount` — never invoked from src
-- `send-apology-message` — never invoked from src
-- `store-player-id` — never invoked from src
-- `get-agent-live-earnings` — called only from `src/services/earnings.ts`, but that service function `fetchLiveEarnings` is never called from any hook or page
+Required:
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
+```
 
-**Note:** `generate-payment-qr` IS used (ManageDelivery.tsx). `check-payment-status` IS used (RazorpayQRDisplay.tsx). `get-mapbox-token` function exists but mapbox-gl is installed — keeping it safe. `complete-delivery-v2` and `direct-qr-complete` and `qr-complete-delivery` are dead code duplicates of `unified-complete-delivery`.
+The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
 
-### CLEANUP IN EXISTING FILES
+## Fix Plan
 
-**`src/store/app.ts`** → Replace dummy orders data with a minimal stub (keep the file since `logoutCleanup.ts` imports `useAppStore`). Remove the 8 dummy `dummyOrders` objects and the prototype `Order`/`Agent` interfaces that duplicate what's in `services/orders.ts`.
+### 1. Update CORS headers in `unified-complete-delivery`
 
-**`src/utils/logoutCleanup.ts`** → Remove the `useAppStore` reset block since the store is now a stub.
+**File**: `supabase/functions/unified-complete-delivery/index.ts`
+- Update `corsHeaders` to include the full set of Supabase client headers
+- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
 
-**`src/services/earnings.ts`** → Remove the unused `fetchLiveEarnings` function and its `LiveEarningsData` type (the `get-agent-live-earnings` edge function it calls is also being deleted).
+### 2. Update CORS headers in `generate-payment-qr`
 
-### WHAT IS KEPT (actively used)
+**File**: `supabase/functions/generate-payment-qr/index.ts`
+- Same CORS header fix
 
-All of these are confirmed active via import tracing:
-- All pages in the router
-- `src/utils/pricing.ts` — wait, confirmed unused, deleting
-- `src/utils/computationCache.ts` — used by `geo.ts` and `pricing.ts` (pricing deleted, but geo.ts still uses it — KEEP)
-- All hooks: `useOrders`, `useAssignedOrders`, `useDeliveryHistory`, `useProfile`, `useSettings`, `useResumeGuard`, `useAgentGuard`, `useNetworkStatus`, `useOrderDetails`, `useLocationSyncController`, `useOrdersRealtimeInvalidate`, `useEarnings`
-- All stores: `auth`, `orders`, `location`, `lifecycle`
-- All UI components under `src/components/`
-- All active edge functions: `unified-complete-delivery`, `accept-order`, `cancel-delivery`, `get-available-orders`, `get-agent-assigned-orders`, `get-delivery-history`, `get-order-details`, `get-agent-earnings`, `get-agent-settings`, `update-agent-*`, `update-agent-location`, `ensure-agent-exists`, `send-contact-email`, `send-push-notification`, `generate-payment-qr`, `check-payment-status`, `verify-delivery-otp`, `generate-delivery-otp`, `delete-agent-account`
+### 3. Update CORS headers in `cancel-delivery`
 
----
+**File**: `supabase/functions/cancel-delivery/index.ts`
+- Same CORS header fix
 
-## Plan
+### 4. Update CORS headers in `complete-delivery-v2`
 
-### 1. Delete unused utility files
-- Delete `src/utils/pricing.ts`
-- Delete `src/utils/orders.ts`
+**File**: `supabase/functions/complete-delivery-v2/index.ts`
+- Same CORS header fix (this function also has outdated headers)
 
-### 2. Clean `src/store/app.ts`
-- Remove the 8 dummy order objects
-- Remove the old prototype `Order` and `Agent` interfaces
-- Keep a minimal `useAppStore` stub that `logoutCleanup.ts` can still reset
+## Why This Is the Fix
 
-### 3. Clean `src/services/earnings.ts`
-- Remove `fetchLiveEarnings` function and `LiveEarningsData` interface (unused)
+- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
+- The browser sends an OPTIONS preflight request first to check if these headers are allowed
+- The edge function rejects the preflight because those headers aren't listed
+- The browser never sends the actual POST request
+- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
+- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
 
-### 4. Clean `src/utils/logoutCleanup.ts`
-- Remove the `useAppStore` setState block that resets the now-simplified store
+## Expected Result
 
-### 5. Delete unused edge functions (19 functions)
-Remove these from `supabase/functions/`:
-`direct-qr-complete`, `qr-complete-delivery`, `complete-delivery-v2`, `google-places-autocomplete`, `google-places-geocode`, `calculate-delivery-pricing`, `calculate-distance-eta`, `notify-delivery-agents`, `send-order-update-notification`, `agent-autopay-monitor`, `agent-bank-transfer`, `agent-topup-razorpay`, `agent-topup-verify`, `approve-agent`, `mark-order-as-packed`, `qr-scan-order`, `settle-cod-amount`, `send-apology-message`, `store-player-id`, `get-agent-live-earnings`
+After updating the CORS headers and redeploying:
+- "Delivered" button will call the edge function successfully
+- Response will return in 1-3 seconds instead of timing out at 15 seconds
+- No more silent failures
 
-### 6. Deploy updated edge functions
-Redeploy the 4 CORS-fixed functions that were previously blocked: `unified-complete-delivery`, `generate-payment-qr`, `cancel-delivery`, `complete-delivery-v2` (wait — `complete-delivery-v2` is being deleted, so only 3: `unified-complete-delivery`, `generate-payment-qr`, `cancel-delivery`).
-
-### Files modified
-| Action | Target |
-|--------|--------|
-| Delete | `src/utils/pricing.ts` |
-| Delete | `src/utils/orders.ts` |
-| Edit | `src/store/app.ts` — remove dummy data |
-| Edit | `src/services/earnings.ts` — remove unused function |
-| Edit | `src/utils/logoutCleanup.ts` — remove stale reset |
-| Delete folders | 20 edge function directories |
-| Deploy | 3 CORS-fixed edge functions |

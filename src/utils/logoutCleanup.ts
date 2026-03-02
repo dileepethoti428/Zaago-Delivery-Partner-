@@ -4,13 +4,11 @@ import { advancedCache } from '@/utils/advancedCache';
 import { queryClient } from '@/providers/AppProviders';
 import { useOrdersStore } from '@/store/orders';
 import { useLocationStore } from '@/store/location';
-import { useAppStore } from '@/store/app';
 import { agentSession } from '@/utils/agentSession';
 import { resetFCMState } from '@/utils/fcm';
 
 // All known localStorage keys to clear on logout
 const STORAGE_KEYS_TO_CLEAR = [
-  // Profile and agent data
   'agent_profile_cache',
   'assigned_orders_cache',
   'earnings_cache',
@@ -21,9 +19,7 @@ const STORAGE_KEYS_TO_CLEAR = [
   'auth_session',
   'inflight_flags',
   'last_api_call_timestamps',
-  // Location keys
   'zaago_last_loc',
-  // Any other app-specific keys
   'sb-auth-token',
 ] as const;
 
@@ -35,11 +31,7 @@ const STORAGE_KEYS_TO_CLEAR = [
 export async function cleanupOnLogout(): Promise<void> {
   console.log('🧹 Starting logout cleanup...');
 
-  // Note: Realtime cleanup is now handled automatically by React Query hooks
-  // via useOrdersRealtimeInvalidate cleanup in useEffect return
-
   try {
-    // 2. Stop geolocation watch
     useLocationStore.getState().stopWatch();
     console.log('✅ Geolocation watch stopped');
   } catch (e) {
@@ -47,7 +39,6 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 3. Reset FCM state for next login
     resetFCMState();
     console.log('✅ FCM state reset');
   } catch (e) {
@@ -55,14 +46,10 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 4. Clear all localStorage caches
-    cache.clearAll(); // Clears all zaago_cache_* keys (agent-aware)
-    advancedCache.clear(); // Clears zaago_v2_* keys
-    
-    // Clear agent session tracking
+    cache.clearAll();
+    advancedCache.clear();
     agentSession.clearCurrentAgentId();
     
-    // Clear additional specific keys
     STORAGE_KEYS_TO_CLEAR.forEach(key => {
       try {
         localStorage.removeItem(key);
@@ -71,7 +58,6 @@ export async function cleanupOnLogout(): Promise<void> {
       }
     });
     
-    // Clear ALL zaago-prefixed keys (safety net)
     Object.keys(localStorage)
       .filter(key => key.startsWith('zaago'))
       .forEach(key => {
@@ -87,7 +73,6 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 5. Clear TanStack Query cache
     queryClient.clear();
     console.log('✅ Query cache cleared');
   } catch (e) {
@@ -95,21 +80,14 @@ export async function cleanupOnLogout(): Promise<void> {
   }
 
   try {
-    // 6. Reset Zustand stores to initial state
     useOrdersStore.getState().reset();
     useLocationStore.getState().reset();
-    useAppStore.setState({
-      isAuthed: false,
-      agent: null,
-      orders: [],
-    });
     console.log('✅ Zustand stores reset');
   } catch (e) {
     console.warn('Failed to reset stores:', e);
   }
 
   try {
-    // 7. Sign out from Supabase (clears auth tokens)
     await supabase.auth.signOut();
     console.log('✅ Supabase auth signed out');
   } catch (e) {
