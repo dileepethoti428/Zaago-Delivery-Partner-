@@ -31,7 +31,7 @@ export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { data: profile, isLoading: profileLoading } = useProfile(user?.email);
-  const { data: orders = [], isLoading: loading, error, refetch } = useOrders(profile?.agent_id);
+  const { data: orders = [], isLoading: loading, error, refetch } = useOrders(profile?.agent_id, true);
   const acceptOrderMutation = useAcceptOrder();
   const rejectOrderMutation = useRejectOrder();
   

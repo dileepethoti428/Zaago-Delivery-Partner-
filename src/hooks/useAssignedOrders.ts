@@ -9,8 +9,8 @@ import {
 } from '@/services/assignedOrders';
 import { useAuthStore } from '@/store/auth';
 
-// Hook for TODAY's orders (uses IST-aware date from Postgres)
-export function useTodayOrders() {
+// Hook for TODAY's orders — only fetches when screen is active
+export function useTodayOrders(isScreenActive = false) {
   const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'today'],
@@ -20,13 +20,13 @@ export function useTodayOrders() {
       console.log('[useTodayOrders] Received:', orders.length, 'orders');
       return orders;
     },
-    enabled: !!session?.access_token,
+    enabled: !!session?.access_token && isScreenActive,
     staleTime: 30 * 1000,
   });
 }
 
-// Hook for TOMORROW's orders (uses Postgres CURRENT_DATE + 1)
-export function useTomorrowOrders() {
+// Hook for TOMORROW's orders — only fetches when screen is active
+export function useTomorrowOrders(isScreenActive = false) {
   const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'tomorrow'],
@@ -36,13 +36,13 @@ export function useTomorrowOrders() {
       console.log('[useTomorrowOrders] Received:', orders.length, 'orders');
       return orders;
     },
-    enabled: !!session?.access_token,
+    enabled: !!session?.access_token && isScreenActive,
     staleTime: 30 * 1000,
   });
 }
 
-// Hook for UPCOMING orders (uses Postgres CURRENT_DATE + 1)
-export function useUpcomingOrders() {
+// Hook for UPCOMING orders — only fetches when screen is active
+export function useUpcomingOrders(isScreenActive = false) {
   const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'upcoming'],
@@ -52,13 +52,13 @@ export function useUpcomingOrders() {
       console.log('[useUpcomingOrders] Received:', orders.length, 'orders');
       return orders;
     },
-    enabled: !!session?.access_token,
+    enabled: !!session?.access_token && isScreenActive,
     staleTime: 30 * 1000,
   });
 }
 
-// Hook for DELIVERED orders today (uses Postgres CURRENT_DATE)
-export function useDeliveredOrders() {
+// Hook for DELIVERED orders today — only fetches when screen is active
+export function useDeliveredOrders(isScreenActive = false) {
   const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'delivered'],
@@ -68,13 +68,13 @@ export function useDeliveredOrders() {
       console.log('[useDeliveredOrders] Received:', orders.length, 'orders');
       return orders;
     },
-    enabled: !!session?.access_token,
+    enabled: !!session?.access_token && isScreenActive,
     staleTime: 30 * 1000,
   });
 }
 
-// Legacy hook - kept for backward compatibility
-export function useAssignedOrders() {
+// Legacy hook - kept for backward compatibility — only fetches when screen is active
+export function useAssignedOrders(isScreenActive = false) {
   const session = useAuthStore((s) => s.session);
   return useQuery<AssignedOrder[], Error>({
     queryKey: ['assigned-orders', 'all'],
@@ -84,7 +84,7 @@ export function useAssignedOrders() {
       console.log('[useAssignedOrders] Received orders:', orders.length);
       return orders;
     },
-    enabled: !!session?.access_token,
+    enabled: !!session?.access_token && isScreenActive,
     staleTime: 30 * 1000,
   });
 }

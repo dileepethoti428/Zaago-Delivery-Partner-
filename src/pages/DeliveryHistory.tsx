@@ -6,7 +6,7 @@ import { useDeliveryHistory } from '@/hooks/useDeliveryHistory';
 import { DeliveryHistoryCard } from '@/components/delivery/DeliveryHistoryCard';
 
 export default function DeliveryHistory() {
-  const { data, isLoading: loading } = useDeliveryHistory(50, 0);
+  const { data, isLoading: loading } = useDeliveryHistory(50, 0, undefined, true);
   const history = data?.data || [];
 
   if (loading) {
