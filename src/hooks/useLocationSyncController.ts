@@ -20,6 +20,7 @@ export function useLocationSyncController() {
   const lastSyncTimeRef = useRef<number>(0);
   const lastSyncedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const isMountedRef = useRef<boolean>(true);
+  const lastPersistRef = useRef<number>(0);
 
   // Throttled sync to backend
   const syncToBackend = useCallback(async (coords: GeolocationCoordinates) => {
