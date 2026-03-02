@@ -3,6 +3,10 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { cleanupOnLogout } from '@/utils/logoutCleanup';
 
+// Module-level guard: ensures onAuthStateChange is registered only once
+// across React StrictMode double-mounts and hot reloads
+let listenerRegistered = false;
+
 interface Profile {
   user_id: string;
   full_name: string | null;
@@ -76,6 +80,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     set({ loading: true });
 
+    // Register listener FIRST (before getSession) — required by Supabase docs to catch INITIAL_SESSION.
+    // Guard prevents duplicate listeners from React StrictMode double-mounts.
+    if (!listenerRegistered) {
+      listenerRegistered = true;
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('[Auth] State change:', event);
+
+        if (event === 'SIGNED_OUT') {
+          // Only clear state on explicit sign-out — never on resume or token refresh
+          set({ session: null, user: null, profile: null });
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED') {
+          // Silently update session object — no profile fetch needed
+          set({ session, user: session?.user ?? null });
+          return;
+        }
+
+        // INITIAL_SESSION, SIGNED_IN, USER_UPDATED
+        set({ session, user: session?.user ?? null });
+        if (session?.user) {
+          await get().fetchProfile();
+        } else {
+          set({ profile: null });
+        }
+      });
+    }
+
     try {
       // Race getSession against a 5s timeout to prevent indefinite hang
       const sessionResult = await Promise.race([
@@ -104,18 +137,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Always mark loading as done — splash will always exit
       set({ loading: false });
     }
-
-    // Set up listener AFTER session is resolved
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] State change:', event);
-      set({ session, user: session?.user ?? null });
-
-      if (session?.user) {
-        await get().fetchProfile();
-      } else {
-        set({ profile: null });
-      }
-    });
   },
 
   signOut: async () => {

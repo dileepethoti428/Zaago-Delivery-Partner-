@@ -1,103 +1,59 @@
 
-## Root Causes
 
-1. **`onAuthStateChange` listener set up AFTER awaited calls in `initialize()`** — Supabase requires the listener to be registered BEFORE `getSession()` to reliably catch the `INITIAL_SESSION` event. Current placement misses it on fast network, causing an extra profile fetch cycle.
+# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
 
-2. **Listener registered inside `initialize()` with no guard** — every call to `initialize()` (React StrictMode double-mounts) registers a new listener. Duplicate listeners cause double profile fetches and cascading state updates, making login feel slow.
+## Root Cause
 
-3. **`onAuthStateChange` handler calls `fetchProfile()` on every event** — including `TOKEN_REFRESHED`, which fires on every token refresh (every ~hour and on resume). Each one triggers two DB queries, blocking the UI.
+The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
 
-4. **`logoutCleanup` clears `'sb-auth-token'` from localStorage** — this key doesn't match Supabase's actual storage keys. However, the `advancedCache.clear()` wipes the entire in-memory cache including persisted query state, and calling `supabase.auth.signOut()` in cleanup correctly clears the real session. This is fine as-is — not the bug.
+Current (broken):
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+```
 
-5. **The real session persistence bug**: `getSession()` with a 5s timeout returning `null` on slow networks causes the auth store to set `session: null` and `user: null`. When `onAuthStateChange` later fires with the real session, it triggers `fetchProfile()` — but the Splash's `loading === false` has already fired and navigated to `/login`. The user sees login then gets redirected, or stays on login with a valid session.
+Required:
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
+```
+
+The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
 
 ## Fix Plan
 
-### `src/store/auth.ts`
+### 1. Update CORS headers in `unified-complete-delivery`
 
-**Register `onAuthStateChange` listener ONCE, at module level (outside `initialize()`)**:
+**File**: `supabase/functions/unified-complete-delivery/index.ts`
+- Update `corsHeaders` to include the full set of Supabase client headers
+- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
 
-```typescript
-// Module-level listener guard
-let listenerRegistered = false;
+### 2. Update CORS headers in `generate-payment-qr`
 
-// Inside create(), register listener once:
-initialize: async () => {
-  set({ loading: true });
+**File**: `supabase/functions/generate-payment-qr/index.ts`
+- Same CORS header fix
 
-  // Register listener FIRST (required by Supabase docs)
-  if (!listenerRegistered) {
-    listenerRegistered = true;
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] State change:', event);
-      
-      // Only update session state for meaningful events
-      if (event === 'SIGNED_OUT') {
-        set({ session: null, user: null, profile: null });
-        return;
-      }
-      
-      if (event === 'TOKEN_REFRESHED') {
-        // Just update the session object silently — no profile fetch needed
-        set({ session, user: session?.user ?? null });
-        return;
-      }
-      
-      // SIGNED_IN, INITIAL_SESSION, USER_UPDATED
-      set({ session, user: session?.user ?? null });
-      if (session?.user) {
-        await get().fetchProfile();
-      } else {
-        set({ profile: null });
-      }
-    });
-  }
+### 3. Update CORS headers in `cancel-delivery`
 
-  try {
-    // getSession() is now just a fast local read (session already in memory from listener)
-    const sessionResult = await Promise.race([
-      supabase.auth.getSession(),
-      new Promise<{ data: { session: null } }>(resolve =>
-        setTimeout(() => resolve({ data: { session: null } }), 5000)
-      ),
-    ]);
+**File**: `supabase/functions/cancel-delivery/index.ts`
+- Same CORS header fix
 
-    const session = (sessionResult as any).data?.session ?? null;
-    set({ session, user: session?.user ?? null });
+### 4. Update CORS headers in `complete-delivery-v2`
 
-    if (session?.user) {
-      await Promise.race([
-        get().fetchProfile(),
-        new Promise<void>(resolve => setTimeout(resolve, 4000)),
-      ]);
-    }
-  } catch (err) {
-    console.warn('[Auth] Initialize error:', err);
-    set({ session: null, user: null, profile: null });
-    try { await supabase.auth.signOut(); } catch { /* ignore */ }
-  } finally {
-    set({ loading: false });
-  }
-},
-```
+**File**: `supabase/functions/complete-delivery-v2/index.ts`
+- Same CORS header fix (this function also has outdated headers)
 
-Key changes:
-- Listener registered **once with a guard** — no duplicate listeners from StrictMode
-- `TOKEN_REFRESHED` → only update session object, **no `fetchProfile()` call**
-- `SIGNED_OUT` → clear state only, **no `fetchProfile()` call**
-- `INITIAL_SESSION` / `SIGNED_IN` → full profile fetch as before
+## Why This Is the Fix
 
-### `src/utils/logoutCleanup.ts`
+- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
+- The browser sends an OPTIONS preflight request first to check if these headers are allowed
+- The edge function rejects the preflight because those headers aren't listed
+- The browser never sends the actual POST request
+- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
+- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
 
-Remove `'sb-auth-token'` from `STORAGE_KEYS_TO_CLEAR`. Supabase manages its own auth storage keys internally and `signOut()` at the end of cleanup already handles clearing them. Manually removing potentially wrong key names is risky.
+## Expected Result
 
-Also add a comment making clear this function must ONLY be called from explicit logout paths.
+After updating the CORS headers and redeploying:
+- "Delivered" button will call the edge function successfully
+- Response will return in 1-3 seconds instead of timing out at 15 seconds
+- No more silent failures
 
-### Summary
-
-| File | Change |
-|------|--------|
-| `src/store/auth.ts` | Register `onAuthStateChange` once with guard; skip `fetchProfile` on `TOKEN_REFRESHED`; skip state clear on non-logout events |
-| `src/utils/logoutCleanup.ts` | Remove `'sb-auth-token'` from manual clear list; add explicit-logout-only warning comment |
-
-No changes to `appLifecycle.ts`, `Login.tsx`, or any other files — the lifecycle already correctly avoids calling `cleanupOnLogout`.
