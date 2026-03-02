@@ -23,7 +23,7 @@ export default function PrivacyPolicy() {
             </Button>
             <div>
               <h1 className="text-xl font-semibold text-foreground">Privacy Policy</h1>
-              <p className="text-xs text-muted-foreground">Delivery Agent App</p>
+              <p className="text-xs text-muted-foreground">Delivery Partner App</p>
             </div>
           </div>
         </div>
@@ -33,7 +33,7 @@ export default function PrivacyPolicy() {
       <div className="container max-w-2xl mx-auto px-4 py-6 pb-20">
         <LegalDocumentViewer
           title="Privacy Policy"
-          subtitle="Zaago Delivery Agent App"
+          subtitle="Zaago Delivery Partner App"
           version={LEGAL_VERSIONS.privacy}
           sections={PRIVACY_POLICY_SECTIONS}
         />
