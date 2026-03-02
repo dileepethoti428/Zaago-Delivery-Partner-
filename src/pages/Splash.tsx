@@ -14,6 +14,14 @@ export default function Splash() {
     initialize();
   }, [initialize]);
 
+  // Hard fallback: if auth hangs beyond 6s, force navigate to login
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      navigate('/login');
+    }, 6000);
+    return () => clearTimeout(fallback);
+  }, []);
+
   useEffect(() => {
     if (loading) return;
 
