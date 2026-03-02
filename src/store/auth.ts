@@ -104,12 +104,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('[Auth] State change:', event);
 
-        // TOKEN_REFRESHED: silently update session only if token changed, skip everything else
+        // TOKEN_REFRESHED: always sync session+user so downstream queries (e.g. useProfile) can fire
         if (event === 'TOKEN_REFRESHED') {
-          const current = get().session;
-          if (current?.access_token !== session?.access_token) {
-            set({ session, user: session?.user ?? null });
-          }
+          set({ session, user: session?.user ?? null });
           return;
         }
 
@@ -127,8 +124,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         if (session?.user) {
-          // Skip fetchProfile if we already have a profile for this user
-          if (get().profile?.user_id !== session.user.id) {
+          // Fetch profile whenever session exists and profile isn't already ready
+          if (get().profileState !== 'ready') {
             const scheduleRetry = (attempt: number) => {
               const retryDelays = [2000, 4000, 8000];
               if (attempt >= retryDelays.length) return;
