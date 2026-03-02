@@ -20,9 +20,10 @@ export function useLocationSyncController() {
   const lastSyncTimeRef = useRef<number>(0);
   const lastSyncedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const isMountedRef = useRef<boolean>(true);
+  const lastPersistRef = useRef<number>(0);
 
   // Throttled sync to backend
-  const syncToBackend = useCallback(async (coords: GeolocationCoordinates) => {
+  const syncToBackend = useCallback((coords: GeolocationCoordinates) => {
     const now = Date.now();
     if (now - lastSyncTimeRef.current < SYNC_INTERVAL_MS) return;
     
@@ -42,19 +43,16 @@ export function useLocationSyncController() {
     lastSyncedCoordsRef.current = { lat: coords.latitude, lng: coords.longitude };
     console.log('[LocationSync] Syncing:', coords.latitude.toFixed(4), coords.longitude.toFixed(4));
 
-    try {
-      await supabase.functions.invoke('update-agent-location', {
-        body: {
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          accuracy: coords.accuracy,
-          heading: coords.heading ?? undefined,
-          speed: coords.speed ?? undefined,
-        },
-      });
-    } catch (error) {
-      console.warn('[LocationSync] Sync failed (non-blocking):', error);
-    }
+    // Fix 1: Fire-and-forget — never block the GPS callback on network
+    supabase.functions.invoke('update-agent-location', {
+      body: {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy,
+        heading: coords.heading ?? undefined,
+        speed: coords.speed ?? undefined,
+      },
+    }).catch((error) => console.warn('[LocationSync] Sync failed:', error));
   }, [session?.access_token]);
 
   // Start watching location
@@ -85,13 +83,17 @@ export function useLocationSyncController() {
           error: null,
         });
 
-        // Persist to localStorage
-        try {
-          localStorage.setItem('zaago_last_loc', JSON.stringify({
-            location,
-            label: store.label,
-          }));
-        } catch {}
+        // Fix 3: Throttle localStorage writes to max once per 30 seconds
+        const persistNow = Date.now();
+        if (persistNow - lastPersistRef.current > 30000) {
+          lastPersistRef.current = persistNow;
+          try {
+            localStorage.setItem('zaago_last_loc', JSON.stringify({
+              location,
+              label: store.label,
+            }));
+          } catch {}
+        }
 
         // Trigger debounced label refresh
         store.refreshLabel();
@@ -103,9 +105,10 @@ export function useLocationSyncController() {
         console.warn('[LocationSync] Watch error:', error.message);
       },
       {
-        enableHighAccuracy: true,
-        maximumAge: 5000,
-        timeout: 10000,
+        // Fix 2: Smart accuracy — high precision only when app is visible
+        enableHighAccuracy: document.visibilityState === 'visible',
+        maximumAge: 10000,
+        timeout: 15000,
       }
     );
     console.log('[LocationSync] Started');
