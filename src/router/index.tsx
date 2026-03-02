@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createHashRouter, Navigate } from 'react-router-dom';
 import Splash from '@/pages/Splash';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
@@ -19,7 +19,7 @@ import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import TermsConditions from '@/pages/TermsConditions';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RequireApproval } from '@/components/auth/RequireApproval';
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: '/',
     element: <Navigate to="/splash" replace />,
@@ -69,10 +69,6 @@ export const router = createBrowserRouter([
           {
             path: '/my-deliveries',
             element: <MyDeliveries />,
-            // Keep this route alive - preload and maintain state (default landing)
-            loader: async () => {
-              return { keepAlive: true, preload: true };
-            },
           },
           {
             path: '/home',
