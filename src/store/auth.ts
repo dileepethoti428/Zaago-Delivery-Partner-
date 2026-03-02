@@ -51,23 +51,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
+    const [profileRes, agentRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('delivery_agents').select('is_active').eq('agent_id', user.id).maybeSingle(),
+    ]);
 
-    if (!error && data) {
-      const { data: agentData } = await supabase
-        .from('delivery_agents')
-        .select('is_active')
-        .eq('agent_id', user.id)
-        .maybeSingle();
-
+    if (!profileRes.error && profileRes.data) {
       set({
         profile: {
-          ...(data as Profile),
-          isActive: agentData?.is_active ?? true,
+          ...(profileRes.data as Profile),
+          isActive: agentRes.data?.is_active ?? true,
         }
       });
     } else {
