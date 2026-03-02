@@ -1,28 +1,25 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useEffect, useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { toast } from '@/hooks/use-toast';
-import { getOrderDetails, type OrderDetails } from '@/services/orderDetails';
+import { supabase } from '@/integrations/supabase/client';
+import { getOrderDetails } from '@/services/orderDetails';
 import { openGoogleMapsAddress, openGoogleMapsCoordinates } from '@/utils/maps';
 import { useAuthStore } from '@/store/auth';
-import { useResumeGuard } from '@/hooks/useResumeGuard';
+import { useState } from 'react';
 import { 
   ArrowLeft, 
   Phone, 
-  MapPin, 
   Package, 
   CheckCircle, 
   XCircle, 
-  Clock,
-  IndianRupee,
   User,
   Store,
-  Copy,
   ExternalLink,
   Navigation
 } from 'lucide-react';
@@ -37,31 +34,30 @@ export default function ManageDelivery() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const profile = useAuthStore((state) => state.profile);
-  const [order, setOrder] = useState<OrderDetails | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [qrData, setQRData] = useState<any>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
 
-  // Determine order type from URL params
   const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
 
-  // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
-  useResumeGuard(() => {
-    setLoading(false);
-    setIsCompleting(false);
-    setIsGeneratingQR(false);
+  // ✅ React Query replaces manual fetchOrder + retry loop — pause/resume safe
+  const { data: order, isLoading: loading } = useQuery({
+    queryKey: ['order-details', id, orderType],
+    queryFn: () => getOrderDetails(id!, { type: orderType }),
+    enabled: !!id,
+    retry: 2,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
-  // Memoized calculations
-  const itemsTotal = useMemo(() => 
+  const itemsTotal = useMemo(() =>
     order?.items?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) ?? 0,
     [order?.items]
   );
 
-  const effectiveTotal = useMemo(() => 
+  const effectiveTotal = useMemo(() =>
     (order?.total_amount && order.total_amount > 0) ? order.total_amount : itemsTotal,
     [order?.total_amount, itemsTotal]
   );
@@ -77,52 +73,10 @@ export default function ManageDelivery() {
     );
   }, [order]);
 
-  // Check if order is in terminal state (delivered/cancelled/completed)
   const isTerminalState = useMemo(() => {
     if (!order) return false;
-    const terminalStatuses = ['delivered', 'cancelled', 'canceled', 'completed'];
-    return terminalStatuses.includes(order.status?.toLowerCase());
+    return ['delivered', 'cancelled', 'canceled', 'completed'].includes(order.status?.toLowerCase());
   }, [order?.status]);
-
-  useEffect(() => {
-    if (!id) return;
-
-    const fetchOrder = async (retryCount = 0) => {
-      try {
-        setLoading(true);
-        const data = await getOrderDetails(id, { type: orderType });
-        
-        if (data) {
-          setOrder(data);
-        } else if (retryCount < 2) {
-          // Order might not be synced yet after accept - retry with delay
-          console.log(`Order not found, retrying (${retryCount + 1}/2)...`);
-          await new Promise(r => setTimeout(r, 800));
-          return fetchOrder(retryCount + 1);
-        } else {
-          setOrder(null);
-        }
-      } catch (error: any) {
-        console.error('Failed to load order:', error);
-        if (retryCount < 2) {
-          // Retry on error as well
-          console.log(`Fetch error, retrying (${retryCount + 1}/2)...`);
-          await new Promise(r => setTimeout(r, 800));
-          return fetchOrder(retryCount + 1);
-        }
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: error?.message || 'Failed to load order details',
-        });
-        setOrder(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrder();
-  }, [id, orderType]);
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
@@ -130,89 +84,50 @@ export default function ManageDelivery() {
 
   const handleMarkAsDelivered = async () => {
     if (!order) return;
-
-    // Step 1: Check if already paid/prepaid - complete immediately
     if (order.payment_status === 'paid' || order.payment_method?.toUpperCase() === 'ONLINE') {
-      toast({
-        title: 'Product delivered successfully',
-      });
+      toast({ title: 'Product delivered successfully' });
       await completeDelivery('ONLINE');
       return;
     }
-
-    // Step 2: Show payment method selection dialog for COD orders
     setShowPaymentDialog(true);
   };
 
   const handlePaymentMethodSelect = async (method: 'COD' | 'ONLINE') => {
     setShowPaymentDialog(false);
-    
     if (method === 'COD') {
-      // Complete with COD immediately
-      toast({
-        title: 'Product delivered successfully - COD',
-      });
+      toast({ title: 'Product delivered successfully - COD' });
       await completeDelivery('COD');
     } else {
-      // Generate QR but DO NOT mark as delivered yet - wait for payment
       await generateAndShowQR();
     }
   };
 
   const generateAndShowQR = async () => {
     if (!order) return;
-
     const amountToPay = effectiveTotal;
-
     if (amountToPay <= 0) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Invalid order amount. Cannot generate QR code.',
-      });
+      toast({ variant: 'destructive', title: 'Error', description: 'Invalid order amount. Cannot generate QR code.' });
       return;
     }
-
     setIsGeneratingQR(true);
     try {
-      const { supabase } = await import('@/integrations/supabase/client');
-      
-      console.log('Generating QR for amount:', amountToPay);
-      
-      // 15s timeout via Promise.race since supabase.functions.invoke doesn't support AbortController
       const { data, error } = await Promise.race([
         supabase.functions.invoke('generate-payment-qr', {
-          body: {
-            order_id: order.id,
-            amount: amountToPay,
-            customer_name: order.customer.name
-          }
+          body: { order_id: order.id, amount: amountToPay, customer_name: order.customer.name }
         }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
       ]);
-
-      if (error || !data?.success) {
-        console.error('QR Generation Error:', { error, data, amountToPay });
-        throw new Error(data?.error || error?.message || 'Failed to generate QR code');
-      }
-
-      const transformedData = {
+      if (error || !data?.success) throw new Error(data?.error || error?.message || 'Failed to generate QR code');
+      setQRData({
         qr_id: data.qr_code_id,
         image_url: data.qr_code_url,
         qr_string: data.qr_string,
         amount: data.amount || amountToPay,
         expires_at: data.expires_at
-      };
-
-      setQRData(transformedData);
+      });
       setShowQRDialog(true);
     } catch (error: any) {
-      console.error('Failed to generate QR:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error?.message || 'Failed to generate payment QR',
-      });
+      toast({ variant: 'destructive', title: 'Error', description: error?.message || 'Failed to generate payment QR' });
     } finally {
       setIsGeneratingQR(false);
     }
@@ -220,64 +135,32 @@ export default function ManageDelivery() {
 
   const completeDelivery = async (paymentMethod: 'COD' | 'ONLINE') => {
     if (!order) return;
-
     setIsCompleting(true);
-    
     try {
-      const { supabase } = await import('@/integrations/supabase/client');
-
-      // Let SDK auto-attach the session token — no manual header override
-      // 15s timeout via Promise.race since supabase.functions.invoke doesn't support AbortController
       const { data, error } = await Promise.race([
         supabase.functions.invoke('unified-complete-delivery', {
-          body: {
-            order_id: order.id,
-            payment_method: paymentMethod,
-            order_type: orderType,
-          },
+          body: { order_id: order.id, payment_method: paymentMethod, order_type: orderType },
         }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
       ]);
 
-      if (error || !data?.success) {
-        throw new Error(data?.error || 'Failed to complete delivery');
-      }
+      if (error || !data?.success) throw new Error(data?.error || 'Failed to complete delivery');
 
-      // Handle already completed gracefully
-      if (data.already_completed) {
-        await queryClient.invalidateQueries({ queryKey: ['orders'] });
-        await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
-        
-        toast({
-          title: 'Already Delivered',
-          description: 'This order was already marked as delivered.',
-        });
-        
-        navigate('/my-deliveries');
-        return;
-      } else {
-        const successMessage = paymentMethod === 'COD' 
-          ? 'Product delivered successfully - COD ✓'
-          : 'Product delivered successfully - Paid Online ✓';
-        
-        toast({
-          title: 'Delivery Completed!',
-          description: successMessage,
-        });
-      }
-      
-      await queryClient.invalidateQueries({ queryKey: ['orders'] });
-      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-      
-      setTimeout(() => navigate(-1), 1500);
-      
-    } catch (error: any) {
+      // ✅ Clear cache instead of invalidating — no refetch needed, orders screen reloads fresh
+      queryClient.removeQueries({ queryKey: ['orders'] });
+      queryClient.removeQueries({ queryKey: ['assigned-orders'] });
+
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error?.message || 'Failed to complete delivery',
+        title: 'Delivery Completed!',
+        description: data.already_completed
+          ? 'This order was already marked as delivered.'
+          : paymentMethod === 'COD' ? 'Product delivered successfully - COD ✓' : 'Product delivered successfully - Paid Online ✓',
       });
+
+      // ✅ Instant navigation — no setTimeout delay
+      navigate('/my-deliveries', { replace: true });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error?.message || 'Failed to complete delivery' });
     } finally {
       setIsCompleting(false);
     }
@@ -285,14 +168,8 @@ export default function ManageDelivery() {
 
   const handleQRPaymentComplete = async () => {
     setShowQRDialog(false);
-    
+    setIsCompleting(true);
     try {
-      setIsCompleting(true);
-      
-      const { supabase } = await import('@/integrations/supabase/client');
-
-      // Let SDK auto-attach the session token — no manual header override
-      // 15s timeout via Promise.race
       const { data, error } = await Promise.race([
         supabase.functions.invoke('unified-complete-delivery', {
           body: {
@@ -306,42 +183,19 @@ export default function ManageDelivery() {
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
       ]);
 
-      if (error || !data?.success) {
-        throw new Error(data?.error || 'Payment completed but delivery marking failed');
-      }
+      if (error || !data?.success) throw new Error(data?.error || 'Payment completed but delivery marking failed');
 
-      if (data.already_completed) {
-        await queryClient.invalidateQueries({ queryKey: ['orders'] });
-        await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-        await queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
-        
-        toast({
-          title: 'Already Delivered',
-          description: 'This order was already marked as delivered.',
-        });
-        
-        navigate('/my-deliveries');
-        return;
-      } else {
-        toast({
-          title: 'Delivery Completed!',
-          description: 'Product delivered successfully - Paid Online ✓',
-        });
-      }
-      
-      await queryClient.invalidateQueries({ queryKey: ['orders'] });
-      await queryClient.invalidateQueries({ queryKey: ['available-orders'] });
-      
-      setTimeout(() => navigate(-1), 1500);
-      
-    } catch (error: any) {
-      console.error('Delivery completion failed:', {
-        order_id: order?.id,
-        payment_method: 'ONLINE',
-        error: error.message,
-        timestamp: new Date().toISOString()
+      // ✅ Clear cache + instant navigation
+      queryClient.removeQueries({ queryKey: ['orders'] });
+      queryClient.removeQueries({ queryKey: ['assigned-orders'] });
+
+      toast({
+        title: 'Delivery Completed!',
+        description: data.already_completed ? 'This order was already marked as delivered.' : 'Product delivered successfully - Paid Online ✓',
       });
-      
+
+      navigate('/my-deliveries', { replace: true });
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -359,47 +213,23 @@ export default function ManageDelivery() {
 
   const handleCancel = async () => {
     if (!order || !profile?.user_id) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'User profile not found',
-      });
+      toast({ variant: 'destructive', title: 'Error', description: 'User profile not found' });
       return;
     }
-
-    const confirmed = window.confirm(
-      'Are you sure you want to cancel this delivery? It will be released back to other agents.'
-    );
-    
+    const confirmed = window.confirm('Are you sure you want to cancel this delivery? It will be released back to other agents.');
     if (!confirmed) return;
 
     try {
-      const { supabase } = await import('@/integrations/supabase/client');
       const { data, error } = await supabase.functions.invoke('cancel-delivery', {
-        body: {
-          order_id: order.id,
-          agent_id: profile.user_id,
-          cancellation_reason: 'Agent cancelled from manage delivery page',
-          order_type: orderType
-        },
+        body: { order_id: order.id, agent_id: profile.user_id, cancellation_reason: 'Agent cancelled from manage delivery page', order_type: orderType },
       });
+      if (error || !data?.success) throw new Error(data?.error || error?.message || 'Failed to cancel delivery');
 
-      if (error || !data?.success) {
-        throw new Error(data?.error || error?.message || 'Failed to cancel delivery');
-      }
-
-      toast({
-        title: 'Delivery Cancelled',
-        description: 'Order has been cancelled successfully',
-      });
-      
+      toast({ title: 'Delivery Cancelled', description: 'Order has been cancelled successfully' });
+      queryClient.removeQueries({ queryKey: ['orders'] });
       navigate(-1);
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error?.message || 'Failed to cancel delivery',
-      });
+      toast({ variant: 'destructive', title: 'Error', description: error?.message || 'Failed to cancel delivery' });
     }
   };
 
@@ -428,10 +258,10 @@ export default function ManageDelivery() {
   }
 
   return (
-    <motion.div 
-      initial={pageTransition.initial} 
-      animate={pageTransition.animate} 
-      exit={pageTransition.exit} 
+    <motion.div
+      initial={pageTransition.initial}
+      animate={pageTransition.animate}
+      exit={pageTransition.exit}
       transition={pageTransitionConfig}
       className="h-full"
     >
@@ -439,12 +269,7 @@ export default function ManageDelivery() {
         <div className="space-y-4 py-4 pb-24">
           {/* Header */}
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate(-1)}
-              className="rounded-xl"
-            >
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="flex-1">
@@ -473,9 +298,7 @@ export default function ManageDelivery() {
               {order.subscription_id && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Order Type</span>
-                  <Badge variant="secondary" className="rounded-lg">
-                    Subscription Order
-                  </Badge>
+                  <Badge variant="secondary" className="rounded-lg">Subscription Order</Badge>
                 </div>
               )}
             </CardContent>
@@ -611,10 +434,8 @@ export default function ManageDelivery() {
 
           {/* Action Buttons */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t-2 space-y-3">
-            {/* Top row: Navigate + Mark as Delivered side by side */}
             {!isTerminalState && (
               <div className="flex gap-3">
-                {/* Navigate button */}
                 <Button
                   variant="outline"
                   className="flex-1 rounded-xl h-12 text-sm font-medium"
@@ -625,11 +446,7 @@ export default function ManageDelivery() {
                     } else if (displayAddress) {
                       openGoogleMapsAddress(displayAddress);
                     } else {
-                      toast({
-                        variant: 'destructive',
-                        title: 'Error',
-                        description: 'Delivery address not available',
-                      });
+                      toast({ variant: 'destructive', title: 'Error', description: 'Delivery address not available' });
                     }
                   }}
                 >
@@ -637,33 +454,22 @@ export default function ManageDelivery() {
                   Customer
                 </Button>
 
-                {/* Mark as Delivered button */}
                 <Button
                   className="flex-1 rounded-xl h-12 text-sm font-medium"
                   onClick={handleMarkAsDelivered}
                   disabled={isCompleting || isGeneratingQR}
                 >
                   {isCompleting ? (
-                    <>
-                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Completing...
-                    </>
+                    <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Completing...</>
                   ) : isGeneratingQR ? (
-                    <>
-                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Generating...
-                    </>
+                    <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Generating...</>
                   ) : (
-                    <>
-                      <CheckCircle className="h-5 w-5 mr-2" />
-                      Delivered
-                    </>
+                    <><CheckCircle className="h-5 w-5 mr-2" />Delivered</>
                   )}
                 </Button>
               </div>
             )}
 
-            {/* Cancel Delivery - full width below */}
             {!isTerminalState && (
               <Button
                 variant="destructive"
@@ -675,7 +481,6 @@ export default function ManageDelivery() {
               </Button>
             )}
 
-            {/* Show status indicator for terminal states */}
             {isTerminalState && (
               <div className="flex items-center justify-center gap-2 py-3 text-muted-foreground">
                 <CheckCircle className="h-5 w-5 text-green-500" />
@@ -687,7 +492,6 @@ export default function ManageDelivery() {
           </div>
         </div>
 
-        {/* Payment Method Selection Dialog */}
         <PaymentMethodDialog
           open={showPaymentDialog}
           onClose={() => setShowPaymentDialog(false)}
@@ -695,7 +499,6 @@ export default function ManageDelivery() {
           amount={effectiveTotal}
         />
 
-        {/* Razorpay QR Code Display */}
         <RazorpayQRDisplay
           open={showQRDialog}
           onClose={() => setShowQRDialog(false)}
