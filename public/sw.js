@@ -66,14 +66,12 @@ self.addEventListener('fetch', (event) => {
 
   // NEVER cache Supabase API calls - always fetch fresh
   if (url.hostname.includes('supabase.co')) {
-    event.respondWith(fetch(request));
-    return;
+    return; // Let browser handle natively
   }
 
-  // Handle API requests with network-first strategy (for edge functions)
+  // Handle API requests — let browser handle natively
   if (url.pathname.includes('/functions/v1/') || url.pathname.includes('/rest/v1/')) {
-    event.respondWith(fetch(request)); // Always fresh
-    return;
+    return; // Let browser handle natively
   }
 
   // Cache static assets aggressively
