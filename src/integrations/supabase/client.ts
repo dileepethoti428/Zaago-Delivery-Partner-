@@ -11,12 +11,12 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
  * WebView from reusing a cached QUIC/HTTP3 connection that may be unstable.
  * The x-client-info header nudges Supabase CDN to prefer HTTP/2.
  */
-const customFetch: typeof fetch = (input, init = {}) => {
+const customFetch: typeof fetch = (input, init?: RequestInit) => {
   return fetch(input, {
     ...init,
     cache: "no-store",
     headers: {
-      ...(init.headers || {}),
+      ...(init?.headers ?? {}),
       "x-client-info": "capacitor-app",
     },
   });
