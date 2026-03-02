@@ -103,7 +103,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (session?.user) {
           // Skip fetchProfile if we already have a profile for this user
           if (get().profile?.user_id !== session.user.id) {
-            await get().fetchProfile();
+            get().fetchProfile().catch(console.warn);
           }
         } else {
           set({ profile: null });
