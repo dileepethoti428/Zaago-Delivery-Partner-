@@ -21,17 +21,32 @@ import { registerFCMToken } from "@/utils/fcm";
 
 type Mode = "login" | "signup" | "reset";
 
+const PROFILE_TIMEOUT_MS = 7000;
+
+// Helper: timeout-protected fetchProfile
+async function fetchProfileWithTimeout(fetchProfile: () => Promise<void>): Promise<boolean> {
+  try {
+    await Promise.race([
+      fetchProfile(),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("profile_timeout")), PROFILE_TIMEOUT_MS)
+      ),
+    ]);
+    return true; // profile loaded
+  } catch {
+    return false; // timed out or errored
+  }
+}
+
 // Helper function to ensure agent exists in delivery_agents table
 async function ensureAgentExists() {
   try {
     console.log("[Login] Ensuring agent exists in delivery_agents...");
     const { data, error } = await supabase.functions.invoke("ensure-agent-exists");
-
     if (error) {
       console.error("[Login] Error ensuring agent exists:", error);
       return false;
     }
-
     console.log("[Login] Agent ensured:", data);
     return true;
   } catch (error) {
@@ -59,7 +74,6 @@ async function syncLocationAfterAuth(): Promise<void> {
         });
       });
     } catch (geoError) {
-      // Geolocation failed (user denied, timeout, etc.) - this is fine
       console.warn("[Login] Geolocation unavailable - continuing without location sync:", geoError);
       return;
     }
@@ -69,37 +83,27 @@ async function syncLocationAfterAuth(): Promise<void> {
 
     try {
       const { data, error } = await supabase.functions.invoke("update-agent-location", {
-        body: {
-          latitude,
-          longitude,
-          accuracy,
-          heading: heading ?? undefined,
-          speed: speed ?? undefined,
-        },
+        body: { latitude, longitude, accuracy, heading: heading ?? undefined, speed: speed ?? undefined },
       });
 
       if (error) {
-        // Edge function returned error - log and continue
         console.warn("[Login] Location sync edge function error (non-blocking):", error);
       } else if (data?.success === false) {
-        // Edge function returned success:false - log reason and continue
         console.warn("[Login] Location sync returned non-success (non-blocking):", data?.reason || "unknown");
       } else {
         console.log("[Login] Location synced successfully");
       }
     } catch (invokeError) {
-      // Network or other error calling edge function - log and continue
       console.warn("[Login] Location sync invoke failed (non-blocking):", invokeError);
     }
   } catch (unexpectedError) {
-    // Catch-all for any unexpected errors - never throw
     console.warn("[Login] Unexpected error in location sync (non-blocking):", unexpectedError);
   }
 }
 
 export default function Login() {
   const navigate = useNavigate();
-  const { session, profile, fetchProfile } = useAuthStore();
+  const { session, profile, profileState, fetchProfile } = useAuthStore();
   const [mode, setMode] = useState<Mode>("login");
   const [loading, setLoading] = useState(false);
 
@@ -113,9 +117,12 @@ export default function Login() {
     defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated — now state-aware
   useEffect(() => {
-    if (session && profile) {
+    if (!session) return;
+
+    // Profile is ready — route based on status
+    if (profile && profileState === "ready") {
       if (!profile.documents_submitted) {
         navigate("/upload-documents");
       } else if (profile.approval_status === "pending") {
@@ -127,8 +134,27 @@ export default function Login() {
       } else if (profile.approval_status === "approved") {
         navigate("/my-deliveries");
       }
+      return;
     }
-  }, [session, profile, navigate]);
+
+    // Profile missing — new user
+    if (profileState === "missing") {
+      navigate("/upload-documents");
+      return;
+    }
+
+    // Session exists but profile still resolving or errored — go to splash for retry
+    if (profileState === "error" || profileState === "loading" || profileState === "idle") {
+      // Small delay to avoid flashing — give auth store a moment
+      const timer = setTimeout(() => {
+        const current = useAuthStore.getState();
+        if (current.session && current.profileState !== "ready" && current.profileState !== "missing") {
+          navigate("/splash");
+        }
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [session, profile, profileState, navigate]);
 
   // Listen for PASSWORD_RECOVERY event from reset link
   useEffect(() => {
@@ -139,46 +165,36 @@ export default function Login() {
         navigate("/reset-password");
       }
     });
-
     return () => subscription.unsubscribe();
   }, [navigate]);
 
   const handleLogin = async (data: LoginFormData) => {
     setLoading(true);
-    const { data: authData, error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
+    try {
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
 
-    if (error) {
-      // Provide helpful error messages based on error type
-      const isInvalidCredentials = error.message.toLowerCase().includes("invalid");
-
-      if (isInvalidCredentials) {
+      if (error) {
+        const isInvalidCredentials = error.message.toLowerCase().includes("invalid");
         toast({
           title: "Login failed",
-          description: "Invalid email or password. If you don't have an account, please create one first.",
+          description: isInvalidCredentials
+            ? "Invalid email or password. If you don't have an account, please create one first."
+            : error.message,
           variant: "destructive",
         });
-      } else {
-        toast({
-          title: "Login failed",
-          description: error.message,
-          variant: "destructive",
-        });
+        return; // finally will clear loading
       }
-      setLoading(false);
-    } else {
+
       const newUserId = authData.user?.id;
       const previousAgentId = agentSession.getCurrentAgentId();
 
-      // CRITICAL: Set new agent ID IMMEDIATELY to prevent race condition with useAgentGuard
-      // This must happen before any async operations (like fetchProfile)
       if (newUserId) {
         agentSession.setCurrentAgentId(newUserId);
       }
 
-      // Now check if different agent was logged in and clear their caches
       if (previousAgentId && previousAgentId !== newUserId) {
         console.log("🔄 Different agent detected, clearing all caches...");
         cache.clearAll();
@@ -186,100 +202,113 @@ export default function Login() {
         queryClient.clear();
       }
 
-      await fetchProfile();
+      // Timeout-protected profile fetch
+      const profileLoaded = await fetchProfileWithTimeout(fetchProfile);
 
       // Block deactivated agents immediately at login
       const currentProfile = useAuthStore.getState().profile;
-      if (currentProfile?.approval_status === 'deactivated' || currentProfile?.isActive === false) {
+      if (currentProfile?.approval_status === "deactivated" || currentProfile?.isActive === false) {
         toast({
           title: "Account Deactivated",
           description: "Your account has been deactivated. Please contact support on WhatsApp.",
           variant: "destructive",
         });
         await supabase.auth.signOut();
-        setLoading(false);
         return;
       }
 
-      // Ensure agent exists in delivery_agents table (non-blocking)
+      // Non-blocking tasks
       ensureAgentExists();
-
-      // Sync location immediately after login (non-blocking)
       syncLocationAfterAuth();
-
-      // Register FCM token (non-blocking, safe to call multiple times)
       registerFCMToken();
 
-      // Stop spinner — navigation is handled by the useEffect watching session + profile
+      if (!profileLoaded) {
+        toast({
+          title: "Signed in",
+          description: "Loading your account details…",
+        });
+        // useEffect redirect will handle navigation to /splash
+      }
+      // If profileLoaded, useEffect redirect will handle navigation
+    } catch (err) {
+      console.error("[Login] Unexpected login error:", err);
+      toast({
+        title: "Login error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setLoading(false);
     }
   };
 
   const handleSignup = async (data: SignupFormData) => {
     setLoading(true);
-    const { data: authData, error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
-    });
+    try {
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
 
-    if (error) {
+      if (error) {
+        toast({
+          title: "Signup failed",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (authData.user) {
+        const newUserId = authData.user.id;
+        const previousAgentId = agentSession.getCurrentAgentId();
+
+        agentSession.setCurrentAgentId(newUserId);
+
+        if (previousAgentId && previousAgentId !== newUserId) {
+          console.log("🔄 Different agent detected during signup, clearing all caches...");
+          cache.clearAll();
+          advancedCache.clear();
+          queryClient.clear();
+        }
+
+        const { error: profileError } = await supabase.from("profiles").insert({
+          user_id: newUserId,
+          approval_status: "pending",
+          documents_submitted: false,
+        });
+
+        if (profileError) {
+          console.error("Profile creation error:", profileError);
+        }
+
+        toast({
+          title: "Account created",
+          description: "Please upload your documents to continue",
+        });
+
+        await fetchProfileWithTimeout(fetchProfile);
+
+        // Non-blocking tasks
+        ensureAgentExists();
+        syncLocationAfterAuth();
+        registerFCMToken();
+
+        navigate("/upload-documents");
+      }
+    } catch (err) {
+      console.error("[Login] Unexpected signup error:", err);
       toast({
-        title: "Signup failed",
-        description: error.message,
+        title: "Signup error",
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (authData.user) {
-      const newUserId = authData.user.id;
-      const previousAgentId = agentSession.getCurrentAgentId();
-
-      // CRITICAL: Set new agent ID IMMEDIATELY to prevent race condition with useAgentGuard
-      agentSession.setCurrentAgentId(newUserId);
-
-      // Clear any previous agent's cached data
-      if (previousAgentId && previousAgentId !== newUserId) {
-        console.log("🔄 Different agent detected during signup, clearing all caches...");
-        cache.clearAll();
-        advancedCache.clear();
-        queryClient.clear();
-      }
-
-      // Create profile
-      const { error: profileError } = await supabase.from("profiles").insert({
-        user_id: newUserId,
-        approval_status: "pending",
-        documents_submitted: false,
-      });
-
-      if (profileError) {
-        console.error("Profile creation error:", profileError);
-      }
-
-      toast({
-        title: "Account created",
-        description: "Please upload your documents to continue",
-      });
-
-      await fetchProfile();
-
-      // Ensure agent exists in delivery_agents table (non-blocking)
-      ensureAgentExists();
-
-      // Sync location immediately after signup (non-blocking)
-      syncLocationAfterAuth();
-
-      // Register FCM token (non-blocking)
-      registerFCMToken();
-
-      navigate("/upload-documents");
-    }
-    setLoading(false);
   };
 
   const handleResetPassword = async () => {
@@ -294,24 +323,20 @@ export default function Login() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://zaago-rider.vercel.app/login",
-    });
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://zaago-rider.vercel.app/login",
+      });
 
-    if (error) {
-      toast({
-        title: "Reset failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Check your email",
-        description: "Password reset link has been sent",
-      });
-      setMode("login");
+      if (error) {
+        toast({ title: "Reset failed", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Check your email", description: "Password reset link has been sent" });
+        setMode("login");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -353,43 +378,20 @@ export default function Login() {
               <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="partner@zaago.com"
-                    className="rounded-xl"
-                    {...loginForm.register("email")}
-                  />
-                  {loginForm.formState.errors.email && (
-                    <p className="text-sm text-destructive">{loginForm.formState.errors.email.message}</p>
-                  )}
+                  <Input id="email" type="email" placeholder="partner@zaago.com" className="rounded-xl" {...loginForm.register("email")} />
+                  {loginForm.formState.errors.email && <p className="text-sm text-destructive">{loginForm.formState.errors.email.message}</p>}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    className="rounded-xl"
-                    {...loginForm.register("password")}
-                  />
-                  {loginForm.formState.errors.password && (
-                    <p className="text-sm text-destructive">{loginForm.formState.errors.password.message}</p>
-                  )}
+                  <Input id="password" type="password" placeholder="••••••••" className="rounded-xl" {...loginForm.register("password")} />
+                  {loginForm.formState.errors.password && <p className="text-sm text-destructive">{loginForm.formState.errors.password.message}</p>}
                 </div>
-
                 <Button type="submit" className="w-full rounded-xl h-11 text-base font-medium" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
                 </Button>
-
                 <div className="flex justify-between text-sm">
-                  <button type="button" onClick={() => setMode("reset")} className="text-primary hover:underline">
-                    Forgot password?
-                  </button>
-                  <button type="button" onClick={() => setMode("signup")} className="text-primary hover:underline">
-                    Create account
-                  </button>
+                  <button type="button" onClick={() => setMode("reset")} className="text-primary hover:underline">Forgot password?</button>
+                  <button type="button" onClick={() => setMode("signup")} className="text-primary hover:underline">Create account</button>
                 </div>
               </form>
             )}
@@ -398,54 +400,24 @@ export default function Login() {
               <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="partner@zaago.com"
-                    className="rounded-xl"
-                    {...signupForm.register("email")}
-                  />
-                  {signupForm.formState.errors.email && (
-                    <p className="text-sm text-destructive">{signupForm.formState.errors.email.message}</p>
-                  )}
+                  <Input id="signup-email" type="email" placeholder="partner@zaago.com" className="rounded-xl" {...signupForm.register("email")} />
+                  {signupForm.formState.errors.email && <p className="text-sm text-destructive">{signupForm.formState.errors.email.message}</p>}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••••"
-                    className="rounded-xl"
-                    {...signupForm.register("password")}
-                  />
-                  {signupForm.formState.errors.password && (
-                    <p className="text-sm text-destructive">{signupForm.formState.errors.password.message}</p>
-                  )}
+                  <Input id="signup-password" type="password" placeholder="••••••••" className="rounded-xl" {...signupForm.register("password")} />
+                  {signupForm.formState.errors.password && <p className="text-sm text-destructive">{signupForm.formState.errors.password.message}</p>}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirm Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    placeholder="••••••••"
-                    className="rounded-xl"
-                    {...signupForm.register("confirmPassword")}
-                  />
-                  {signupForm.formState.errors.confirmPassword && (
-                    <p className="text-sm text-destructive">{signupForm.formState.errors.confirmPassword.message}</p>
-                  )}
+                  <Input id="confirm-password" type="password" placeholder="••••••••" className="rounded-xl" {...signupForm.register("confirmPassword")} />
+                  {signupForm.formState.errors.confirmPassword && <p className="text-sm text-destructive">{signupForm.formState.errors.confirmPassword.message}</p>}
                 </div>
-
                 <Button type="submit" className="w-full rounded-xl h-11 text-base font-medium" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
                 </Button>
-
                 <div className="text-center text-sm">
-                  <button type="button" onClick={() => setMode("login")} className="text-primary hover:underline">
-                    Already have an account? Sign in
-                  </button>
+                  <button type="button" onClick={() => setMode("login")} className="text-primary hover:underline">Already have an account? Sign in</button>
                 </div>
               </form>
             )}
@@ -454,27 +426,13 @@ export default function Login() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="reset-email">Email</Label>
-                  <Input
-                    id="reset-email"
-                    type="email"
-                    placeholder="partner@zaago.com"
-                    className="rounded-xl"
-                    {...loginForm.register("email")}
-                  />
+                  <Input id="reset-email" type="email" placeholder="partner@zaago.com" className="rounded-xl" {...loginForm.register("email")} />
                 </div>
-
-                <Button
-                  onClick={handleResetPassword}
-                  className="w-full rounded-xl h-11 text-base font-medium"
-                  disabled={loading}
-                >
+                <Button onClick={handleResetPassword} className="w-full rounded-xl h-11 text-base font-medium" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
                 </Button>
-
                 <div className="text-center text-sm">
-                  <button type="button" onClick={() => setMode("login")} className="text-primary hover:underline">
-                    Back to sign in
-                  </button>
+                  <button type="button" onClick={() => setMode("login")} className="text-primary hover:underline">Back to sign in</button>
                 </div>
               </div>
             )}
