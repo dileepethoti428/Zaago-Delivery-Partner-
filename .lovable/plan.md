@@ -1,59 +1,43 @@
 
+## Plan: Fix AppLifecycle on Return from External Navigation Apps
 
-# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
+### Root Causes
 
-## Root Cause
+1. **`RESUME_DEBOUNCE_MS = 2000`** — 2 seconds is too short. Returning from Google Maps fires both `visibilitychange` AND `focus` events in quick succession, but if there's a slight gap > 2s between them, both trigger full resume logic.
 
-The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
+2. **`refreshSession()` always force-calls `supabase.auth.refreshSession()`** — This makes a network call every single time you return from Maps, even if the token is fresh. This is what causes the 4s timeout error.
 
-Current (broken):
-```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-```
+3. **`refreshQueries()` always invalidates 5 query keys** — Called on every resume, causing cascading refetches that race against each other.
 
-Required:
-```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
-```
+4. **`useLocationSyncController` stops on `visibilitychange → hidden`** — Every time you open Maps, it stops. When you return, it restarts. This creates the start/stop churn.
 
-The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
+5. **No concept of "short background"** — The lifecycle has no awareness of how long the app was backgrounded. 5 seconds away in Maps should be treated differently than 10 minutes away.
 
-## Fix Plan
+### Changes
 
-### 1. Update CORS headers in `unified-complete-delivery`
+#### `src/utils/appLifecycle.ts`
+- Increase `RESUME_DEBOUNCE_MS` from **2000 → 30000** (30 seconds) — the key fix
+- Add `lastBackgroundTime` tracking: record when app goes to background via `visibilitychange → hidden`
+- In `onAppResume`: compute `backgroundDuration = now - lastBackgroundTime`
+  - If `backgroundDuration < 5 minutes (300_000ms)` → **skip `refreshSession()` and `refreshQueries()`**, only do `resetAllLoaders()` + `unlockAllButtons()`
+  - If `backgroundDuration >= 5 minutes` → run full resume (session check + query invalidation) — but still only refresh token if it's actually expired (check `session.expires_at`)
+- Replace `refreshSession()` logic: instead of always calling `supabase.auth.refreshSession()`, first check `session.expires_at` — only force refresh if token expires within 60 seconds
+- In `setupAppLifecycleListeners`: add `visibilitychange → hidden` listener to record `lastBackgroundTime`
 
-**File**: `supabase/functions/unified-complete-delivery/index.ts`
-- Update `corsHeaders` to include the full set of Supabase client headers
-- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
+#### `src/hooks/useLocationSyncController.ts`
+- Remove the `stopSync()` call from `handleVisibilityChange` when going to background
+- Instead: **keep the watch running** when going to background — geolocation `watchPosition` is already low-battery on background, and the sync throttle (15s) plus session guard prevents backend calls
+- Only `stopSync()` on unmount (component teardown) or when session is lost
+- This prevents the repeated start/stop cycles when switching to Maps and back
 
-### 2. Update CORS headers in `generate-payment-qr`
+### Summary of Changes
 
-**File**: `supabase/functions/generate-payment-qr/index.ts`
-- Same CORS header fix
+| File | Change |
+|------|--------|
+| `src/utils/appLifecycle.ts` | 30s debounce, background duration tracking, smart session refresh (only if expiring), skip queries on short resume |
+| `src/hooks/useLocationSyncController.ts` | Don't stop watch on background; only stop on logout/unmount |
 
-### 3. Update CORS headers in `cancel-delivery`
-
-**File**: `supabase/functions/cancel-delivery/index.ts`
-- Same CORS header fix
-
-### 4. Update CORS headers in `complete-delivery-v2`
-
-**File**: `supabase/functions/complete-delivery-v2/index.ts`
-- Same CORS header fix (this function also has outdated headers)
-
-## Why This Is the Fix
-
-- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
-- The browser sends an OPTIONS preflight request first to check if these headers are allowed
-- The edge function rejects the preflight because those headers aren't listed
-- The browser never sends the actual POST request
-- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
-- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
-
-## Expected Result
-
-After updating the CORS headers and redeploying:
-- "Delivered" button will call the edge function successfully
-- Response will return in 1-3 seconds instead of timing out at 15 seconds
-- No more silent failures
-
+### What stays unchanged
+- Business logic, UI, auth store
+- `resetAllLoaders()` and `unlockAllButtons()` still run on every resume (needed to unstick UI)
+- Full query invalidation still happens after long background (≥5 min)
