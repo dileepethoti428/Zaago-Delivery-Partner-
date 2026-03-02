@@ -22,6 +22,13 @@ export function setQueryClientRef(client: any) {
  * Resets all stuck states and refreshes data
  */
 export async function onAppResume() {
+  // Guard: skip all lifecycle work if auth is in progress or no session
+  const { loading: authLoading, session } = useAuthStore.getState();
+  if (authLoading || !session) {
+    console.log('[AppLifecycle] Resume ignored — auth in progress or no session');
+    return;
+  }
+
   // Debounce rapid resume events (30s — prevents visibilitychange + focus double-fire)
   const now = Date.now();
   if (now - lastResumeTime < RESUME_DEBOUNCE_MS) {
