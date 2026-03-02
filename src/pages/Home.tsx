@@ -18,7 +18,6 @@ import { useLocationStore } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
 import { useProfile } from '@/hooks/useProfile';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
-import { useAppLifecycle } from '@/hooks/useAppLifecycle';
 import { getDistanceKm } from '@/utils/geo';
 import { toast } from '@/hooks/use-toast';
 import LocationChip from '@/components/location/LocationChip';
@@ -38,7 +37,6 @@ export default function Home() {
   
   // Start location sync on this screen
   useScreenLocationSync();
-  useAppLifecycle();
 
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const permission = useLocationStore((state) => state.permission);
