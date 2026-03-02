@@ -105,9 +105,10 @@ export function useLocationSyncController() {
         console.warn('[LocationSync] Watch error:', error.message);
       },
       {
-        enableHighAccuracy: true,
-        maximumAge: 5000,
-        timeout: 10000,
+        // Fix 2: Smart accuracy — high precision only when app is visible
+        enableHighAccuracy: document.visibilityState === 'visible',
+        maximumAge: 10000,
+        timeout: 15000,
       }
     );
     console.log('[LocationSync] Started');
