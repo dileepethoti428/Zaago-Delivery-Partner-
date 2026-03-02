@@ -1,47 +1,59 @@
 
-## Analysis
 
-### Fix 1 — Heavy work on every auth state change (AppProviders.tsx lines 84-104)
-The `onAuthStateChange` listener fires on INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, app resume, network reconnect — and each time calls `get-agent-settings` edge function + `registerFCMToken()`. This is the exact cause of the "delivered button stuck / loader freeze on map return".
+# Fix: "Delivered" Button Not Completing (CORS Preflight Failure)
 
-**Fix**: Add a `let initializedUserId: string | null = null` module-level guard outside the `useEffect`. In the listener, skip all heavy work if `userId === initializedUserId`. Reset to `null` on `SIGNED_OUT`. Also filter out `TOKEN_REFRESHED` event explicitly.
+## Root Cause
 
-Note: `registerFCMToken()` already has its own `fcmInitialized` guard in `fcm.ts` — but the edge function call has no guard, so it fires every token refresh. The userId guard fixes both.
+The `unified-complete-delivery` edge function has **zero logs** during the time the user clicks "Delivered". This means the HTTP request never reaches the server. The cause is a **CORS preflight rejection**: the Supabase JS SDK sends headers that aren't in the function's `Access-Control-Allow-Headers` list, so the browser blocks the actual POST request after the OPTIONS preflight fails.
 
-### Fix 2 — Sync storage persister blocks UI thread (AppProviders.tsx lines 41-59)
-`createSyncStoragePersister` reads/writes JSON on the main thread during React Query hydration. On resume, this blocks renders.
+Current (broken):
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+```
 
-**Fix**: Switch to `createAsyncStoragePersister` from `@tanstack/query-async-storage-persister`. The `advancedCache` adapter already has async-compatible methods (it uses try/catch internally). The async persister defers the read/write off the critical render path.
+Required:
+```
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
+```
 
-However — `advancedCache.get()` and `advancedCache.set()` are **synchronous** (they call `localStorage` directly). The async persister needs Promises. We need to wrap them. The cleanest approach: keep the existing `advancedCache` but wrap the storage adapter methods in `Promise.resolve()`.
+The same issue likely affects `generate-payment-qr` and `cancel-delivery` since they're called from the same page.
 
-### Fix 3 — Location sync runs unconditionally (AppProviders.tsx line 66)
-`useLocationSyncController()` is called at the top of `AuthInitializer` regardless of auth state. On startup before login, it starts watching GPS immediately (wasted work + conflicts with maps).
+## Fix Plan
 
-**Fix**: The hook already checks `session?.access_token` internally and stops sync when not logged in — so it's actually safe. BUT calling the hook unconditionally means the hook mounts and subscribes to the auth store from the very first render. The real issue is that calling hooks conditionally is illegal in React. The correct fix is to keep the unconditional hook call but ensure the hook only does work when `session` is present — which it already does. The hook is already auth-gated.
+### 1. Update CORS headers in `unified-complete-delivery`
 
-Actually re-reading the hook: line 127 checks `if (!session?.access_token) { stopSync(); return; }` — so it already does nothing when not logged in. The user's suggested fix (`if (user) { useLocationSyncController(); }`) is invalid React (conditional hook call). We leave this hook call as-is since it's correctly guarded internally.
+**File**: `supabase/functions/unified-complete-delivery/index.ts`
+- Update `corsHeaders` to include the full set of Supabase client headers
+- Migrate from deprecated `serve()` import to `Deno.serve()` pattern for consistency
 
-## Plan
+### 2. Update CORS headers in `generate-payment-qr`
 
-### Changes to `src/providers/AppProviders.tsx`
+**File**: `supabase/functions/generate-payment-qr/index.ts`
+- Same CORS header fix
 
-**Fix 1**: Add `let initializedUserId: string | null = null;` at module level (outside component). In the `onAuthStateChange` callback:
-- Get `userId = session?.user?.id`
-- If `!userId` → set `initializedUserId = null` and return (handles sign-out reset)
-- If `userId === initializedUserId` → return early (skip all heavy work)
-- Set `initializedUserId = userId`, then proceed with settings fetch + FCM
+### 3. Update CORS headers in `cancel-delivery`
 
-**Fix 2**: Replace `createSyncStoragePersister` with `createAsyncStoragePersister` from `@tanstack/query-async-storage-persister`. Wrap storage adapter methods to return Promises.
+**File**: `supabase/functions/cancel-delivery/index.ts`
+- Same CORS header fix
 
-**Fix 3**: Leave `useLocationSyncController()` call unchanged — it's already internally auth-gated. No change needed.
+### 4. Update CORS headers in `complete-delivery-v2`
 
-### Package change
-Add `@tanstack/query-async-storage-persister` as a dependency.
+**File**: `supabase/functions/complete-delivery-v2/index.ts`
+- Same CORS header fix (this function also has outdated headers)
 
-### Summary table
+## Why This Is the Fix
 
-| File | Change |
-|------|--------|
-| `src/providers/AppProviders.tsx` | Add userId guard to auth listener; switch to async storage persister |
-| `package.json` | Add `@tanstack/query-async-storage-persister` |
+- The Supabase JS SDK (v2.56.0 in this project) sends platform-identifying headers with every request
+- The browser sends an OPTIONS preflight request first to check if these headers are allowed
+- The edge function rejects the preflight because those headers aren't listed
+- The browser never sends the actual POST request
+- The `Promise.race` 15-second timeout eventually fires, but the user perceives it as "not responding"
+- After refreshing the app, the browser may retry with a fresh CORS cache, which is why it sometimes works briefly
+
+## Expected Result
+
+After updating the CORS headers and redeploying:
+- "Delivered" button will call the edge function successfully
+- Response will return in 1-3 seconds instead of timing out at 15 seconds
+- No more silent failures
+

@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { QueryClient } from "@tanstack/react-query";
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
@@ -38,25 +38,33 @@ const shouldDehydrateQuery = (query: { queryKey: readonly unknown[] }) => {
   return true;
 };
 
-const persister = createSyncStoragePersister({
-  storage: {
-    getItem: (key) => {
-      const agentId = agentSession.getCurrentAgentId();
-      const fullKey = agentId ? `${key}_${agentId}` : key;
-      return advancedCache.get(fullKey);
-    },
-    setItem: (key, value) => {
-      const agentId = agentSession.getCurrentAgentId();
-      const fullKey = agentId ? `${key}_${agentId}` : key;
-      advancedCache.set(fullKey, value, 10 * 60 * 1000);
-    },
-    removeItem: (key) => {
-      const agentId = agentSession.getCurrentAgentId();
-      const fullKey = agentId ? `${key}_${agentId}` : key;
-      advancedCache.delete(fullKey);
-    },
+// Async-safe storage adapter wrapping advancedCache — defers reads/writes off the main thread
+const asyncStorageAdapter = {
+  getItem: (key: string): Promise<string | null> => {
+    const agentId = agentSession.getCurrentAgentId();
+    const fullKey = agentId ? `${key}_${agentId}` : key;
+    return Promise.resolve(advancedCache.get<string>(fullKey));
   },
+  setItem: (key: string, value: string): Promise<void> => {
+    const agentId = agentSession.getCurrentAgentId();
+    const fullKey = agentId ? `${key}_${agentId}` : key;
+    advancedCache.set(fullKey, value, 10 * 60 * 1000);
+    return Promise.resolve();
+  },
+  removeItem: (key: string): Promise<void> => {
+    const agentId = agentSession.getCurrentAgentId();
+    const fullKey = agentId ? `${key}_${agentId}` : key;
+    advancedCache.delete(fullKey);
+    return Promise.resolve();
+  },
+};
+
+const persister = createAsyncStoragePersister({
+  storage: asyncStorageAdapter,
 });
+
+// Module-level guard: run heavy init work only once per user login
+let initializedUserId: string | null = null;
 
 function AuthInitializer({ children }: { children: ReactNode }) {
   const initAuth = useAuthStore((state) => state.initialize);
@@ -80,27 +88,38 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     document.documentElement.classList.toggle('dark', systemDark);
 
-    // Listen for auth state changes to gate theme + FCM on valid session
+    // Listen for auth state changes — heavy init runs ONCE per user login
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        // Fetch theme preference only after session is confirmed
-        try {
-          const { data } = await supabase.functions.invoke('get-agent-settings');
-          const themePref = data?.settings?.theme_preference;
-          if (themePref === 'dark') {
-            document.documentElement.classList.add('dark');
-          } else if (themePref === 'light') {
-            document.documentElement.classList.remove('dark');
-          } else {
-            document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
-          }
-        } catch {
-          // Keep system preference on error
-        }
+      const userId = session?.user?.id ?? null;
 
-        // Register FCM only after session exists
-        registerFCMToken();
+      // Reset guard on sign-out so next login re-initializes
+      if (!userId) {
+        initializedUserId = null;
+        return;
       }
+
+      // Skip if we already ran heavy init for this user (token refresh, resume, etc.)
+      if (userId === initializedUserId) return;
+
+      initializedUserId = userId;
+
+      // Fetch theme preference only once per login
+      try {
+        const { data } = await supabase.functions.invoke('get-agent-settings');
+        const themePref = data?.settings?.theme_preference;
+        if (themePref === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else if (themePref === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else {
+          document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
+        }
+      } catch {
+        // Keep system preference on error
+      }
+
+      // Register FCM only once per login
+      registerFCMToken();
     });
 
     return () => subscription.unsubscribe();
