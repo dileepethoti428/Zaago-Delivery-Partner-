@@ -76,27 +76,46 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     set({ loading: true });
 
-    // Get initial session
-    const { data: { session } } = await supabase.auth.getSession();
-    set({ session, user: session?.user ?? null });
+    try {
+      // Race getSession against a 5s timeout to prevent indefinite hang
+      const sessionResult = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise<{ data: { session: null } }>(resolve =>
+          setTimeout(() => resolve({ data: { session: null } }), 5000)
+        ),
+      ]);
 
-    if (session?.user) {
-      await get().fetchProfile();
+      const session = (sessionResult as { data: { session: Session | null } }).data?.session ?? null;
+      set({ session, user: session?.user ?? null });
+
+      if (session?.user) {
+        // Race fetchProfile against a 4s timeout
+        await Promise.race([
+          get().fetchProfile(),
+          new Promise<void>(resolve => setTimeout(resolve, 4000)),
+        ]);
+      }
+    } catch (err) {
+      // Invalid refresh token or network error — clear state and redirect to login
+      console.warn('[Auth] Initialize error, clearing session:', err);
+      set({ session: null, user: null, profile: null });
+      try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    } finally {
+      // Always mark loading as done — splash will always exit
+      set({ loading: false });
     }
 
-    // Listen for auth changes
+    // Set up listener AFTER session is resolved
     supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] State change:', event);
       set({ session, user: session?.user ?? null });
-      
+
       if (session?.user) {
         await get().fetchProfile();
       } else {
         set({ profile: null });
       }
     });
-
-    set({ loading: false });
   },
 
   signOut: async () => {
