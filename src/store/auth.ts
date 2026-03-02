@@ -102,8 +102,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
 
         if (event === 'TOKEN_REFRESHED') {
-          // Silently update session — no profile fetch needed
-          set({ session, user: session?.user ?? null });
+          // Silently update session — only if token actually changed
+          const current = get().session;
+          if (current?.access_token !== session?.access_token) {
+            set({ session, user: session?.user ?? null });
+          }
           return;
         }
 
@@ -112,7 +115,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           initialSessionReceived = true;
         }
 
-        set({ session, user: session?.user ?? null });
+        // Only update state if session actually changed (prevents LocationSync restarts)
+        const currentSession = get().session;
+        if (currentSession?.access_token !== session?.access_token) {
+          set({ session, user: session?.user ?? null });
+        }
 
         if (session?.user) {
           // Skip fetchProfile if we already have a profile for this user
