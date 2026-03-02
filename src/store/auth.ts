@@ -71,7 +71,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           profileState: 'ready',
         });
       } else if (profileRes.error) {
-        // Distinguish "no row" (PGRST116) from real errors (network/RLS/5xx)
         const isNoRow = profileRes.error.code === 'PGRST116';
         if (isNoRow) {
           console.warn('[Auth] Profile not found (no row)');
@@ -82,13 +81,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           throw new Error(profileRes.error.message);
         }
       } else {
-        // No error but no data — treat as missing
         set({ profile: null, profileState: 'missing' });
       }
     } catch (err) {
       console.warn('[Auth] Profile fetch network error:', err);
       set({ profileState: 'error' });
-      throw err; // re-throw so callers can catch
+      throw err;
     }
   },
 
@@ -97,24 +95,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (initialized) return;
     initialized = true;
 
-    // loading stays TRUE until INITIAL_SESSION fires — never set it early
+    // loading stays TRUE until INITIAL_SESSION or SIGNED_IN fires
     set({ loading: true, profileState: 'idle' });
 
-    // Register listener FIRST (before getSession) — Supabase requirement.
-    // INITIAL_SESSION is the ONLY event that clears loading state.
     if (!listenerRegistered) {
       listenerRegistered = true;
 
       supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('[Auth] State change:', event);
 
-        if (event === 'SIGNED_OUT') {
-          set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
-          return;
-        }
-
+        // TOKEN_REFRESHED: silently update session only if token changed, skip everything else
         if (event === 'TOKEN_REFRESHED') {
-          // Silently update session — only if token actually changed
           const current = get().session;
           if (current?.access_token !== session?.access_token) {
             set({ session, user: session?.user ?? null });
@@ -122,22 +113,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return;
         }
 
-        // Only update state if session actually changed (prevents LocationSync restarts)
-        const currentSession = get().session;
-        if (currentSession?.access_token !== session?.access_token) {
-          set({ session, user: session?.user ?? null });
+        if (event === 'SIGNED_OUT') {
+          set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
+          return;
         }
 
-        // INITIAL_SESSION is the authoritative signal that auth is resolved.
-        // loading must remain true until this fires — no manual overrides.
-        if (event === 'INITIAL_SESSION') {
+        // Always sync session unconditionally for all other events
+        set({ session, user: session?.user ?? null });
+
+        // INITIAL_SESSION and SIGNED_IN are the authoritative signals that auth is resolved
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
           set({ loading: false });
         }
 
         if (session?.user) {
           // Skip fetchProfile if we already have a profile for this user
           if (get().profile?.user_id !== session.user.id) {
-            // Fire-and-forget profile fetch with retries — never block UI
             const scheduleRetry = (attempt: number) => {
               const retryDelays = [2000, 4000, 8000];
               if (attempt >= retryDelays.length) return;
@@ -163,21 +154,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     }
 
-    // Call getSession to trigger the INITIAL_SESSION event from the listener above.
-    // No timeout race — we trust Supabase to fire INITIAL_SESSION from localStorage synchronously.
-    try {
-      await supabase.auth.getSession();
-    } catch (err) {
-      // Network failure on getSession — INITIAL_SESSION may not fire.
-      // Clear loading so the app doesn't hang indefinitely.
-      console.warn('[Auth] getSession failed:', err);
-      if (!get().session) {
-        set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
-      } else {
-        // Preserve existing session (from a previous event), just unblock UI
-        set({ loading: false });
-      }
-    }
+    // No manual getSession() call — Supabase fires INITIAL_SESSION automatically
+    // when onAuthStateChange listener is registered, reading from localStorage.
   },
 
   signOut: async () => {
