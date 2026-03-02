@@ -85,7 +85,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ),
       ]);
 
-      const session = (sessionResult as { data: { session: typeof import('@supabase/supabase-js').Session | null } }).data?.session ?? null;
+      const session = (sessionResult as { data: { session: Session | null } }).data?.session ?? null;
       set({ session, user: session?.user ?? null });
 
       if (session?.user) {
