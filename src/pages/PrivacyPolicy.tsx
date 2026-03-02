@@ -33,7 +33,7 @@ export default function PrivacyPolicy() {
       <div className="container max-w-2xl mx-auto px-4 py-6 pb-20">
         <LegalDocumentViewer
           title="Privacy Policy"
-          subtitle="Zaago Delivery Agent App"
+          subtitle="Zaago Delivery Partner App"
           version={LEGAL_VERSIONS.privacy}
           sections={PRIVACY_POLICY_SECTIONS}
         />
