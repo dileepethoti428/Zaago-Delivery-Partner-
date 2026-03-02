@@ -16,7 +16,7 @@ export type LocationState = {
   label: string | null;
   isWatching: boolean;
   error: string | null;
-  
+
   // Actions
   init: () => Promise<void>;
   startWatch: () => Promise<void>;
@@ -27,12 +27,6 @@ export type LocationState = {
 };
 
 const STORAGE_KEY = 'zaago_last_loc';
-const UPDATE_THROTTLE_MS = 30000; // 30 seconds
-const LABEL_DEBOUNCE_MS = 60000; // 60 seconds
-
-let watchId: number | null = null;
-let lastUpdateTime = 0;
-let labelTimeoutId: NodeJS.Timeout | null = null;
 
 export const useLocationStore = create<LocationState>((set, get) => ({
   permission: 'prompt',
@@ -53,7 +47,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
-        set({ 
+        set({
           lastKnown: data.location,
           label: data.label || null,
         });
@@ -67,7 +61,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       // @ts-ignore - geolocation permission query not in all TS versions
       const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
       set({ permission: permissionStatus.state as PermissionState });
-      
+
       // Listen for permission changes
       permissionStatus.addEventListener('change', () => {
         set({ permission: permissionStatus.state as PermissionState });
@@ -78,98 +72,12 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     }
   },
 
+  // Fix 1: GPS watching is owned by useLocationSyncController — only toggle flag here
   startWatch: async () => {
-    if (!canUseGeolocation()) {
-      set({ error: 'Geolocation not supported', permission: 'unsupported' });
-      return;
-    }
-
-    if (get().isWatching) return;
-
     set({ isWatching: true, error: null });
-
-    const options: PositionOptions = {
-      enableHighAccuracy: true,
-      maximumAge: 10000,
-      timeout: 10000,
-    };
-
-    const onSuccess = (position: GeolocationPosition) => {
-      const now = Date.now();
-      
-      // Throttle updates
-      if (now - lastUpdateTime < UPDATE_THROTTLE_MS) {
-        return;
-      }
-      lastUpdateTime = now;
-
-      const location: LastKnownLocation = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        timestamp: position.timestamp,
-      };
-
-      set({ 
-        lastKnown: location,
-        permission: 'granted',
-        error: null,
-      });
-
-      // Persist to localStorage
-      try {
-        const data = {
-          location,
-          label: get().label,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      } catch (error) {
-        console.error('Failed to save location to storage:', error);
-      }
-
-      // Refresh label (debounced)
-      if (labelTimeoutId) {
-        clearTimeout(labelTimeoutId);
-      }
-      labelTimeoutId = setTimeout(() => {
-        get().refreshLabel();
-      }, LABEL_DEBOUNCE_MS);
-    };
-
-    const onError = (error: GeolocationPositionError) => {
-      let errorMsg = 'Location error';
-      let permission: PermissionState = get().permission;
-
-      switch (error.code) {
-        case error.PERMISSION_DENIED:
-          errorMsg = 'Location permission denied';
-          permission = 'denied';
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMsg = 'Location unavailable';
-          break;
-        case error.TIMEOUT:
-          errorMsg = 'Location request timeout';
-          break;
-      }
-
-      set({ error: errorMsg, permission });
-    };
-
-    watchId = navigator.geolocation.watchPosition(onSuccess, onError, options);
   },
 
   stopWatch: () => {
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-    }
-    
-    if (labelTimeoutId) {
-      clearTimeout(labelTimeoutId);
-      labelTimeoutId = null;
-    }
-
     set({ isWatching: false });
   },
 
@@ -189,7 +97,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
             timestamp: position.timestamp,
           };
 
-          set({ 
+          set({
             lastKnown: location,
             permission: 'granted',
             error: null,
@@ -206,9 +114,9 @@ export const useLocationStore = create<LocationState>((set, get) => ({
             console.error('Failed to save location to storage:', error);
           }
 
-          // Trigger label refresh in background
+          // Trigger label refresh in background (non-blocking)
           get().refreshLabel();
-          
+
           resolve();
         },
         (error) => {
@@ -216,11 +124,13 @@ export const useLocationStore = create<LocationState>((set, get) => ({
           set({ error: error.message });
           resolve(); // Resolve anyway so orders can still be fetched
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        // Fix 3: Adaptive accuracy — high precision only when app is visible
+        { enableHighAccuracy: document.visibilityState === 'visible', timeout: 10000 }
       );
     });
   },
 
+  // Fix 2: Non-blocking reverse geocode — returns immediately, label updates in background
   refreshLabel: async () => {
     const { lastKnown } = get();
     if (!lastKnown) return;
@@ -230,46 +140,30 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       lng: lastKnown.lng,
     };
 
-    const label = await reverseGeocode(point);
-    
-    if (label) {
-      set({ label });
-      
-      // Update storage with new label
-      try {
-        const data = {
-          location: lastKnown,
-          label,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      } catch (error) {
-        console.error('Failed to update label in storage:', error);
-      }
-    }
+    reverseGeocode(point)
+      .then((label) => {
+        if (!label) return;
+
+        set({ label });
+
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ location: get().lastKnown, label })
+          );
+        } catch {}
+      })
+      .catch(console.warn);
   },
 
   reset: () => {
-    // Stop any active watch
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-    }
-    
-    if (labelTimeoutId) {
-      clearTimeout(labelTimeoutId);
-      labelTimeoutId = null;
-    }
-    
-    // Reset module-level variables
-    lastUpdateTime = 0;
-    
     // Clear location storage
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
       console.warn('Failed to remove location storage:', e);
     }
-    
+
     // Reset state
     set({
       permission: 'prompt',
