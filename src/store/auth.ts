@@ -106,7 +106,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // TOKEN_REFRESHED: always sync session+user so downstream queries (e.g. useProfile) can fire
         if (event === 'TOKEN_REFRESHED') {
-          set({ session, user: session?.user ?? null });
+          set({ session, user: session?.user ?? null, loading: false });
           return;
         }
 
@@ -153,6 +153,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // No manual getSession() call — Supabase fires INITIAL_SESSION automatically
     // when onAuthStateChange listener is registered, reading from localStorage.
+
+    // Safety fallback — if no auth event fires within 4s, unlock UI
+    setTimeout(() => {
+      if (get().loading) {
+        console.warn('[Auth] Safety unlock triggered — no auth event received');
+        set({ loading: false });
+      }
+    }, 4000);
   },
 
   signOut: async () => {
