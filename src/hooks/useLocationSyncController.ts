@@ -83,13 +83,17 @@ export function useLocationSyncController() {
           error: null,
         });
 
-        // Persist to localStorage
-        try {
-          localStorage.setItem('zaago_last_loc', JSON.stringify({
-            location,
-            label: store.label,
-          }));
-        } catch {}
+        // Fix 3: Throttle localStorage writes to max once per 30 seconds
+        const persistNow = Date.now();
+        if (persistNow - lastPersistRef.current > 30000) {
+          lastPersistRef.current = persistNow;
+          try {
+            localStorage.setItem('zaago_last_loc', JSON.stringify({
+              location,
+              label: store.label,
+            }));
+          } catch {}
+        }
 
         // Trigger debounced label refresh
         store.refreshLabel();
