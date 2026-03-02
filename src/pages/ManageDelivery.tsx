@@ -177,12 +177,6 @@ export default function ManageDelivery() {
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
-      // Ensure token is fresh with 4s timeout
-      await Promise.race([
-        supabase.auth.refreshSession(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Session refresh timeout')), 4000))
-      ]).catch(() => console.warn('[ManageDelivery] Session refresh timed out, continuing with cached session'));
-      
       console.log('Generating QR for amount:', amountToPay);
       
       // 15s timeout via Promise.race since supabase.functions.invoke doesn't support AbortController
