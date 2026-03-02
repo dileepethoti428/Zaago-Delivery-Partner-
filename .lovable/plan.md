@@ -1,65 +1,59 @@
 
-Issue diagnosis from current code and logs:
-1. Login is succeeding at auth level (`[Auth] State change: SIGNED_IN` appears), so credentials are valid.
-2. The spinner gets stuck because `src/pages/Login.tsx` does `await fetchProfile()` without a protective timeout/finally path. If that promise hangs or throws, `setLoading(false)` is never reached.
-3. `fetchProfile` in `src/store/auth.ts` currently treats all `profileRes.error` cases as “missing profile”, which can convert transient/network/API errors into wrong routing state.
-4. Login page redirect logic only navigates when `session && profile`; it does not handle “session exists but profile still resolving/error”, so users can remain on login screen even after successful sign-in.
-5. The Tailwind CDN warning in `lovable.js` is non-blocking and not the cause of login hang.
 
-Implementation approach (safe, minimal, production-focused):
+## Fix Login-Splash Ping-Pong Loop
 
-1) Harden login submit flow so spinner cannot get stuck
-- File: `src/pages/Login.tsx`
-- Refactor `handleLogin` into `try/catch/finally` so `setLoading(false)` is guaranteed.
-- Add a bounded wait around profile loading during login:
-  - `Promise.race([fetchProfile(), timeout])` (example 6–8s).
-- If profile fetch times out/fails, do not keep user on endless spinner; route to `/splash` so central auth/profile retry logic continues there.
-- Keep non-blocking tasks (`ensureAgentExists`, location sync, FCM) fire-and-forget.
+**Root cause:** After successful sign-in, Login.tsx redirects to `/splash` when profileState is `error/loading/idle`. Splash then can't resolve the profile either and falls back to `/login` after 5.5s. This creates an infinite redirect cycle, making login appear broken.
 
-2) Apply same safety to signup flow
-- File: `src/pages/Login.tsx`
-- `handleSignup` also uses `await fetchProfile()` without robust timeout/finally.
-- Mirror the same timeout/finally pattern so signup never leaves button spinning forever.
+### The Fix: Stop bouncing between pages
 
-3) Make Login redirect state-aware (not profile-object-only)
-- File: `src/pages/Login.tsx`
-- Extend redirect effect to use `profileState`:
-  - If `session` exists and `profileState` is `idle/loading/error`, navigate to `/splash` (or show local loading state) instead of staying on login form.
-  - Route to `/upload-documents` only when state is definitively `missing` or ready with `documents_submitted=false`.
-  - Route approved/pending/rejected/deactivated as today.
-- This prevents “already signed in but still seeing login”.
+**Principle:** Login should handle its own post-auth state instead of delegating to Splash. Splash is only for cold app starts.
 
-4) Fix profile error classification in auth store
-- File: `src/store/auth.ts`
-- In `fetchProfile`, distinguish between:
-  - True “no row” case (`PGRST116` with `.single()`) => `profileState='missing'`
-  - Other errors (network/RLS/5xx/timeout) => `profileState='error'` and throw
-- Keep current success path (`profileState='ready'`) unchanged.
-- This prevents false “missing profile” state and wrong redirects.
+### Changes
 
-5) Preserve idempotence and avoid regressions
-- File: `src/store/auth.ts`
-- Keep the existing access_token equality guard intact (already preventing duplicate session churn).
-- Do not change current listener registration order or initialization guards; only strengthen failure handling.
+#### 1. `src/pages/Login.tsx` -- Remove splash redirect, handle post-login inline
 
-6) UX feedback improvements for poor network during login
-- File: `src/pages/Login.tsx`
-- On profile timeout after successful sign-in, show a friendly toast such as:
-  - “Signed in. Loading your account details…”
-- Then route to `/splash` for recovery retries.
-- This reduces perceived failure during slow Android WebView conditions.
+Remove the problematic redirect to `/splash` (lines 146-156). Instead, after a successful login where profile didn't load in time:
+- Navigate directly to the correct destination using explicit navigation in `handleLogin`
+- If profile loaded: route based on approval status (already works)
+- If profile timed out: navigate to `/my-deliveries` (approved users) or `/upload-documents` (fallback for new users) directly from `handleLogin`, skipping splash entirely
 
-Validation plan after implementation:
-1. Android Studio/WebView: login on slow network → spinner should always stop (or transition), never spin indefinitely.
-2. Successful login with healthy network → navigate quickly to correct page based on profile.
-3. Simulated slow profile fetch → user gets feedback and is moved to `/splash`, then resolves correctly.
-4. Transient profile API error → should become `profileState='error'` (not `missing`), no false upload-documents redirect.
-5. New/incomplete user → still routes to `/upload-documents` correctly.
-6. Confirm logs no longer show long login dead-end without UI recovery.
+The redirect `useEffect` (lines 121-157) should only handle the case where the user lands on `/login` already authenticated (e.g. browser back button). It should NOT redirect to splash -- instead navigate directly to the correct page or do nothing while profile resolves.
 
-Files to update in implementation phase:
+Updated logic:
+- `session + profileState === 'ready'` -> route based on approval status (keep as-is)
+- `session + profileState === 'missing'` -> route to `/upload-documents` (keep as-is)  
+- `session + profileState === 'error/loading/idle'` -> do nothing, let handleLogin's own navigation handle it (remove the splash redirect)
+
+In `handleLogin`, after profile timeout:
+```
+if (!profileLoaded) {
+  // Navigate directly instead of relying on useEffect -> splash
+  navigate('/my-deliveries');
+}
+```
+
+#### 2. `src/pages/Splash.tsx` -- Add error recovery instead of login fallback
+
+When `profileState === 'error'`, splash currently waits forever (until the 5.5s fallback kicks in and sends to login). Instead:
+- If session exists AND profileState is `error`, wait for auth store retries (already scheduled with exponential backoff)
+- After 8 seconds with session + error state, navigate to `/my-deliveries` instead of `/login` (the route guards will handle auth validation)
+- Only fall back to `/login` if there is truly no session
+
+Update the hard fallback (lines 16-20):
+- Only navigate to `/login` if `!session` after 5.5s
+- If session exists, navigate to `/my-deliveries` instead (RequireAuth + RequireApproval will handle the rest)
+
+Update the routing effect (line 36):
+- When `profileState === 'error'` and session exists, set a secondary timeout (e.g. 6s) to navigate to `/my-deliveries` rather than waiting indefinitely
+
+### Result
+
+- Login click -> auth succeeds -> profile loads -> navigate to correct page (fast path, no splash)
+- Login click -> auth succeeds -> profile times out -> navigate directly to `/my-deliveries` (no splash bounce)
+- Cold app open -> splash -> resolves normally OR falls through to `/my-deliveries` with session (no login bounce)
+- No more infinite redirect loop
+
+### Files to edit
 - `src/pages/Login.tsx`
-- `src/store/auth.ts`
+- `src/pages/Splash.tsx`
 
-Technical note:
-No DB migration or Edge Function change is required for this fix; this is frontend state and flow hardening.
