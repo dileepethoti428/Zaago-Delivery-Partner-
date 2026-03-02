@@ -3,9 +3,10 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { cleanupOnLogout } from '@/utils/logoutCleanup';
 
-// Module-level guard: ensures onAuthStateChange is registered only once
-// across React StrictMode double-mounts and hot reloads
+// Module-level guards — persist across React StrictMode double-mounts
 let listenerRegistered = false;
+let initialized = false;
+let initialSessionReceived = false;
 
 interface Profile {
   user_id: string;
@@ -40,9 +41,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
 
   setSession: (session) => set({ session, user: session?.user ?? null }),
-  
   setProfile: (profile) => set({ profile }),
-  
   setLoading: (loading) => set({ loading }),
 
   fetchProfile: async () => {
@@ -59,7 +58,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       .single();
 
     if (!error && data) {
-      // Also check delivery_agents.is_active (admin deactivation via dashboard)
       const { data: agentData } = await supabase
         .from('delivery_agents')
         .select('is_active')
@@ -69,7 +67,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         profile: {
           ...(data as Profile),
-          isActive: agentData?.is_active ?? true, // default true if agent row not yet created
+          isActive: agentData?.is_active ?? true,
         }
       });
     } else {
@@ -78,88 +76,107 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initialize: async () => {
+    // Idempotent — calling twice is a no-op
+    if (initialized) return;
+    initialized = true;
     set({ loading: true });
 
-    // Register listener FIRST (before getSession) — required by Supabase docs to catch INITIAL_SESSION.
-    // Guard prevents duplicate listeners from React StrictMode double-mounts.
+    // Register listener FIRST (before getSession) — Supabase docs requirement.
+    // INITIAL_SESSION fires synchronously from localStorage on most app opens.
     if (!listenerRegistered) {
       listenerRegistered = true;
+
       supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('[Auth] State change:', event);
 
         if (event === 'SIGNED_OUT') {
-          // Only clear state on explicit sign-out — never on resume or token refresh
           set({ session: null, user: null, profile: null });
           return;
         }
 
         if (event === 'TOKEN_REFRESHED') {
-          // Silently update session object — no profile fetch needed
+          // Silently update session — no profile fetch needed
           set({ session, user: session?.user ?? null });
           return;
         }
 
         // INITIAL_SESSION, SIGNED_IN, USER_UPDATED
+        if (event === 'INITIAL_SESSION') {
+          initialSessionReceived = true;
+        }
+
         set({ session, user: session?.user ?? null });
 
         if (session?.user) {
-          // Skip fetchProfile if we already have a profile for this user (e.g. Login.tsx fetched it directly)
-          // This prevents a double-fetch race when SIGNED_IN fires concurrently with handleLogin
+          // Skip fetchProfile if we already have a profile for this user
           if (get().profile?.user_id !== session.user.id) {
             await get().fetchProfile();
           }
         } else {
           set({ profile: null });
         }
+
+        // INITIAL_SESSION: mark loading done after profile is ready
+        // This is the primary path for session restoration on app open
+        if (event === 'INITIAL_SESSION') {
+          set({ loading: false });
+        }
       });
     }
 
     try {
-      // Race getSession against a 5s timeout to prevent indefinite hang.
-      // IMPORTANT: if the timeout wins, do NOT overwrite session state with null —
-      // the onAuthStateChange INITIAL_SESSION event will have already set the real session.
-      let timedOut = false;
-      const sessionResult = await Promise.race([
-        supabase.auth.getSession().then(r => ({ timedOut: false, result: r })),
-        new Promise<{ timedOut: true; result: null }>(resolve =>
-          setTimeout(() => resolve({ timedOut: true, result: null }), 5000)
+      // Race getSession vs 5s timeout.
+      // On most app opens getSession reads from localStorage instantly.
+      // On expired tokens it must make a network call to refresh.
+      const result = await Promise.race([
+        supabase.auth.getSession().then(r => ({
+          timedOut: false as const,
+          session: r.data.session ?? null,
+        })),
+        new Promise<{ timedOut: true; session: null }>(resolve =>
+          setTimeout(() => resolve({ timedOut: true, session: null }), 5000)
         ),
       ]);
 
-      if (!sessionResult.timedOut) {
-        // Only update state from getSession if the real call returned
-        const session = (sessionResult as { timedOut: false; result: { data: { session: Session | null } } }).result.data?.session ?? null;
-        // Only overwrite if we got a real session OR if onAuthStateChange hasn't set one yet
-        if (session || !get().session) {
+      if (!result.timedOut) {
+        // getSession returned — if INITIAL_SESSION already fired, do nothing
+        if (!initialSessionReceived) {
+          const session = result.session;
           set({ session, user: session?.user ?? null });
+          if (session?.user) {
+            await Promise.race([
+              get().fetchProfile(),
+              new Promise<void>(r => setTimeout(r, 4000)),
+            ]);
+          }
+          set({ loading: false });
         }
-
-        if (session?.user && get().profile?.user_id !== session.user.id) {
-          // Race fetchProfile against a 4s timeout
-          await Promise.race([
-            get().fetchProfile(),
-            new Promise<void>(resolve => setTimeout(resolve, 4000)),
-          ]);
-        }
+        // else: INITIAL_SESSION handler already set loading: false — nothing to do
       } else {
-        timedOut = true;
-        console.warn('[Auth] getSession timed out — relying on onAuthStateChange for session state');
+        // Timeout — if INITIAL_SESSION never arrived, auth is stuck: go to login
+        if (!initialSessionReceived) {
+          console.warn('[Auth] getSession timed out and INITIAL_SESSION never fired — clearing session');
+          set({ session: null, user: null, profile: null, loading: false });
+        }
+        // else: INITIAL_SESSION handler is in flight or done — don't interfere
       }
     } catch (err) {
-      // Invalid refresh token or network error — clear state and redirect to login
       console.warn('[Auth] Initialize error, clearing session:', err);
       set({ session: null, user: null, profile: null });
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
-    } finally {
-      // Always mark loading as done — splash will always exit
-      set({ loading: false });
+      if (!initialSessionReceived) {
+        set({ loading: false });
+      }
     }
   },
 
   signOut: async () => {
-    // Run comprehensive cleanup (includes Supabase signOut)
+    // Reset module flags so the next login cycle re-initializes cleanly
+    initialized = false;
+    initialSessionReceived = false;
+    // listenerRegistered stays true — listener persists across sign-out/sign-in
+
     await cleanupOnLogout();
-    // Reset auth store state
     set({ session: null, user: null, profile: null, loading: false });
   },
 }));
