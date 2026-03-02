@@ -19,10 +19,11 @@ export default function MyDeliveries() {
   // Start location sync on this screen
   useScreenLocationSync();
 
-  // Use separate RPC hooks for each tab - only fetch when this screen is mounted
-  const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders(true);
-  const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders(true);
-  const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders(true);
+  // Each query is enabled ONLY for its active tab — one RPC call at a time.
+  // Previously-fetched tabs remain cached (staleTime: 30s) so switching back is instant.
+  const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders(dateFilter === 'today' || dateFilter === 'all');
+  const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders(dateFilter === 'tomorrow' || dateFilter === 'all');
+  const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders(dateFilter === 'delivered');
 
   // Current orders based on selected tab - NO DATE FILTERING, just tab selection
   const currentOrders = useMemo(() => {
