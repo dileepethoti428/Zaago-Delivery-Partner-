@@ -29,7 +29,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
   {
     title: '1. Introduction & Scope',
     content: [
-      `This Privacy Policy ("Policy") applies specifically to the Zaago Delivery Agent Application ("App") operated by ${COMPANY_INFO.fullName} ("Company", "we", "us", or "our"). This Policy governs the collection, use, storage, and disclosure of personal information from delivery agents ("Delivery Partner", "Agent", "you", or "your") who use our platform.`,
+      `This Privacy Policy ("Policy") applies specifically to the Zaago Delivery Partner Application ("App") operated by ${COMPANY_INFO.fullName} ("Company", "we", "us", or "our"). This Policy governs the collection, use, storage, and disclosure of personal information from delivery agents ("Delivery Partner", "Agent", "you", or "your") who use our platform.`,
       'By registering as a Delivery Partner and using the App, you acknowledge that you have read, understood, and agree to be bound by this Privacy Policy.',
       'IMPORTANT: You are an independent contractor and NOT an employee of Zaago. This relationship is governed by the Terms & Conditions. This Policy covers only how we handle your personal data as an independent service provider on our platform.',
     ],
