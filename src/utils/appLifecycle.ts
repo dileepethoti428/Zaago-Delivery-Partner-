@@ -10,7 +10,7 @@ const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000; // 60 seconds — only refresh if toke
 let lastResumeTime = 0;
 let lastBackgroundTime = 0; // Track when app went to background
 
-// Import queryClient dynamically to avoid circular dependency
+// queryClientRef kept for backward compat but NO invalidation is done from lifecycle
 let queryClientRef: any = null;
 
 export function setQueryClientRef(client: any) {
