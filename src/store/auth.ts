@@ -106,7 +106,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // TOKEN_REFRESHED: always sync session+user so downstream queries (e.g. useProfile) can fire
         if (event === 'TOKEN_REFRESHED') {
-          set({ session, user: session?.user ?? null });
+          set({ session, user: session?.user ?? null, loading: false });
           return;
         }
 
