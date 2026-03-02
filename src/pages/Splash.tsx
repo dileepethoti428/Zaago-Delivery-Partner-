@@ -7,7 +7,6 @@ import { useAuthStore } from '@/store/auth';
 export default function Splash() {
   const navigate = useNavigate();
   const { session, profile, loading, initialize } = useAuthStore();
-  const hasCache = cache.hasCache();
 
   useEffect(() => {
     initialize();
