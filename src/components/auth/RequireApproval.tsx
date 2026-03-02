@@ -9,6 +9,17 @@ export function RequireApproval() {
   const { profile, profileState, loading, fetchProfile } = useAuthStore();
   const retryCountRef = useRef(0);
   const [exhaustedRetries, setExhaustedRetries] = useState(false);
+  const [bypassLoading, setBypassLoading] = useState(false);
+
+  // 8s escape timeout — never block authenticated users indefinitely
+  useEffect(() => {
+    if (profileState === 'ready' || profileState === 'missing') {
+      setBypassLoading(false);
+      return;
+    }
+    const timer = setTimeout(() => setBypassLoading(true), 8000);
+    return () => clearTimeout(timer);
+  }, [profileState]);
 
   // Auto-retry when profileState is 'error'
   useEffect(() => {
@@ -36,7 +47,7 @@ export function RequireApproval() {
   };
 
   // Auth session still loading
-  if (loading) {
+  if (loading && !bypassLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="space-y-4 w-full max-w-md px-4">
@@ -47,8 +58,11 @@ export function RequireApproval() {
     );
   }
 
-  // Profile is still resolving — wait, don't redirect
+  // Profile is still resolving — wait, but bypass after 8s
   if (profileState === 'idle' || profileState === 'loading' || profileState === 'error') {
+    if (bypassLoading) {
+      return <Outlet />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="space-y-4 w-full max-w-md px-4">
