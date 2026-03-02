@@ -1,11 +1,9 @@
-// App entry point - forces cache rebuild
-import { createRoot } from 'react-dom/client';
-import { StrictMode } from 'react';
-import { RouterProvider } from 'react-router-dom';
-import { router } from './router';
-import AppProviders from './providers/AppProviders';
-import { NetworkStatusWrapper } from './components/layout/NetworkStatusWrapper';
-import './index.css';
+import { createRoot } from "react-dom/client";
+import { RouterProvider } from "react-router-dom";
+import { router } from "./router";
+import AppProviders from "./providers/AppProviders";
+import { NetworkStatusWrapper } from "./components/layout/NetworkStatusWrapper";
+import "./index.css";
 
 const rootElement = document.getElementById("root");
 
@@ -14,11 +12,9 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  <StrictMode>
-    <AppProviders>
-      <NetworkStatusWrapper>
-        <RouterProvider router={router} />
-      </NetworkStatusWrapper>
-    </AppProviders>
-  </StrictMode>
+  <AppProviders>
+    <NetworkStatusWrapper>
+      <RouterProvider router={router} />
+    </NetworkStatusWrapper>
+  </AppProviders>,
 );
