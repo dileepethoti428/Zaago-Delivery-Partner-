@@ -148,8 +148,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } else {
         // Timeout — if INITIAL_SESSION never arrived, auth is stuck: go to login
         if (!initialSessionReceived) {
-          console.warn('[Auth] getSession timed out and INITIAL_SESSION never fired — clearing session');
-          set({ session: null, user: null, profile: null, loading: false });
+          console.warn('[Auth] getSession timed out — continuing with existing session');
+          set({ loading: false });
         }
         // else: INITIAL_SESSION handler is in flight or done — don't interfere
       }
