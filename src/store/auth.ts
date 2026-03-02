@@ -140,7 +140,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               try {
                 await Promise.race([
                   get().fetchProfile(),
-                  new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 4000)),
+                  new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 6000)),
                 ]);
               } catch (err: any) {
                 console.warn('[Auth] INITIAL_SESSION profile fetch issue:', err?.message);
@@ -197,7 +197,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             try {
               await Promise.race([
                 get().fetchProfile(),
-                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 4000)),
+                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 6000)),
               ]);
             } catch {
               if (get().profileState === 'loading') {

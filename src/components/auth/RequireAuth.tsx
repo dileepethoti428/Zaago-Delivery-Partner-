@@ -10,9 +10,20 @@ export function RequireAuth() {
   const { session, loading, profileState, fetchProfile } = useAuthStore();
   const retryCountRef = useRef(0);
   const [exhaustedRetries, setExhaustedRetries] = useState(false);
+  const [bypassLoading, setBypassLoading] = useState(false);
 
   // Run agent guard on every protected route
   useAgentGuard();
+
+  // 8s escape timeout — never block authenticated users indefinitely
+  useEffect(() => {
+    if (!loading) {
+      setBypassLoading(false);
+      return;
+    }
+    const timer = setTimeout(() => setBypassLoading(true), 8000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   // Auto-retry when profileState is stuck in 'error' and we have a session
   useEffect(() => {
@@ -39,7 +50,7 @@ export function RequireAuth() {
     fetchProfile().catch(() => {});
   };
 
-  if (loading) {
+  if (loading && !bypassLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="space-y-4 w-full max-w-md px-4">
@@ -65,6 +76,11 @@ export function RequireAuth() {
         </div>
       </div>
     );
+  }
+
+  // If bypass is active and we have a session, let through even if loading
+  if (bypassLoading && session) {
+    return <Outlet />;
   }
 
   if (!session) {
