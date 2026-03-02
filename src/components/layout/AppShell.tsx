@@ -9,7 +9,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, showTabBar = true }: AppShellProps) {
-  // Location sync is now handled centrally in AppProviders via useLocationSyncController
+  // Location sync is handled at screen level via useScreenLocationSync
 
   return (
     <div className="min-h-screen bg-background">

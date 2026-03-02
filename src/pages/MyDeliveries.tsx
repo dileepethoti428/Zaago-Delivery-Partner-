@@ -8,12 +8,18 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Package } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
+import { useAppLifecycle } from '@/hooks/useAppLifecycle';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 
 export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+
+  // Start location sync and lifecycle on this screen
+  useScreenLocationSync();
+  useAppLifecycle();
 
   // Use separate RPC hooks for each tab - NO FRONTEND DATE LOGIC
   const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders();

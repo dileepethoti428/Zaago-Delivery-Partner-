@@ -17,6 +17,8 @@ import { useOrdersRealtimeInvalidate } from '@/hooks/useOrdersRealtimeInvalidate
 import { useLocationStore } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
 import { useProfile } from '@/hooks/useProfile';
+import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
+import { useAppLifecycle } from '@/hooks/useAppLifecycle';
 import { getDistanceKm } from '@/utils/geo';
 import { toast } from '@/hooks/use-toast';
 import LocationChip from '@/components/location/LocationChip';
@@ -34,6 +36,10 @@ export default function Home() {
   const acceptOrderMutation = useAcceptOrder();
   const rejectOrderMutation = useRejectOrder();
   
+  // Start location sync on this screen
+  useScreenLocationSync();
+  useAppLifecycle();
+
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const permission = useLocationStore((state) => state.permission);
 
@@ -107,8 +113,7 @@ export default function Home() {
   // Realtime invalidation for React Query cache
   useOrdersRealtimeInvalidate(profile?.id);
 
-  // Location watching is handled by useLocationSyncController in AppProviders
-  // No duplicate watcher needed here
+  // Location watching is handled by useScreenLocationSync above
 
   const handleRefresh = useCallback(async () => {
     // Refresh location first to get fresh coordinates
