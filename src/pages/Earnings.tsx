@@ -14,7 +14,8 @@ import { EarningsTabContent } from '@/components/earnings/EarningsTabContent';
 import { SubscriptionTabContent } from '@/components/earnings/SubscriptionTabContent';
 
 export default function Earnings() {
-  const { data: earningsData, isLoading: loading } = useEarnings();
+  const { data: earningsData, isLoading: loading, isFetching } = useEarnings();
+  const showLoader = loading && isFetching;
   const [activeTab, setActiveTab] = useState('all');
 
   return (
