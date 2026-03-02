@@ -117,7 +117,7 @@ export default function Login() {
     defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
-  // Redirect if already authenticated — now state-aware
+  // Redirect if already authenticated (e.g. browser back button)
   useEffect(() => {
     if (!session) return;
 
@@ -143,17 +143,8 @@ export default function Login() {
       return;
     }
 
-    // Session exists but profile still resolving or errored — go to splash for retry
-    if (profileState === "error" || profileState === "loading" || profileState === "idle") {
-      // Small delay to avoid flashing — give auth store a moment
-      const timer = setTimeout(() => {
-        const current = useAuthStore.getState();
-        if (current.session && current.profileState !== "ready" && current.profileState !== "missing") {
-          navigate("/splash");
-        }
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+    // For error/loading/idle: do nothing here — let handleLogin's own navigation handle it
+    // This prevents the login -> splash -> login ping-pong loop
   }, [session, profile, profileState, navigate]);
 
   // Listen for PASSWORD_RECOVERY event from reset link
@@ -227,7 +218,8 @@ export default function Login() {
           title: "Signed in",
           description: "Loading your account details…",
         });
-        // useEffect redirect will handle navigation to /splash
+        // Navigate directly instead of bouncing to splash
+        navigate("/my-deliveries");
       }
       // If profileLoaded, useEffect redirect will handle navigation
     } catch (err) {
