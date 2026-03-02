@@ -166,23 +166,8 @@ export default function Home() {
     navigate(`/manage-delivery/${orderId}`);
   }, [navigate]);
 
-  // Show loading while profile loads — only block if email is known and query is actually running
-  if (user?.email && profileLoading) {
-    return (
-      <AppShell>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="space-y-3 text-center w-full max-w-sm px-4">
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-24 w-full rounded-2xl" />
-            <p className="text-sm text-muted-foreground">Loading profile...</p>
-          </div>
-        </div>
-      </AppShell>
-    );
-  }
-
-  // Show error if profile doesn't exist
-  if (!profileLoading && !profile) {
+  // Show error only when fetch definitively returned null (not undefined = not yet fetched)
+  if (user?.email && !profileLoading && profile === null) {
     return (
       <AppShell>
         <div className="flex items-center justify-center min-h-[60vh]">
