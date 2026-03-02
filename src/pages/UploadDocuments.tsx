@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Upload, FileText, Camera, Loader2, LogOut } from 'lucide-react';
@@ -26,9 +26,25 @@ import { documentUploadSchema, type DocumentUploadFormData } from '@/utils/valid
 
 export default function UploadDocuments() {
   const navigate = useNavigate();
-  const { user, fetchProfile, signOut } = useAuthStore();
+  const { user, profile, profileState, fetchProfile, signOut } = useAuthStore();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Self-correcting: if profile resolves as already submitted, redirect away
+  useEffect(() => {
+    if (profileState !== 'ready' || !profile) return;
+    if (!profile.documents_submitted) return;
+
+    if (profile.approval_status === 'approved') {
+      navigate('/home', { replace: true });
+    } else if (profile.approval_status === 'pending') {
+      navigate('/pending-approval', { replace: true });
+    } else if (profile.approval_status === 'rejected') {
+      navigate('/rejected', { replace: true });
+    } else if (profile.approval_status === 'deactivated') {
+      navigate('/deactivated', { replace: true });
+    }
+  }, [profile, profileState, navigate]);
 
   const handleLogout = async () => {
     await signOut();
