@@ -41,6 +41,9 @@ const capacitorStorage = {
 };
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
+  global: {
+    fetch: customFetch,
+  },
   auth: {
     storage: capacitorStorage,
     persistSession: true,
