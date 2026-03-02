@@ -1,65 +1,65 @@
 
+Issue diagnosis from current code and logs:
+1. Login is succeeding at auth level (`[Auth] State change: SIGNED_IN` appears), so credentials are valid.
+2. The spinner gets stuck because `src/pages/Login.tsx` does `await fetchProfile()` without a protective timeout/finally path. If that promise hangs or throws, `setLoading(false)` is never reached.
+3. `fetchProfile` in `src/store/auth.ts` currently treats all `profileRes.error` cases as “missing profile”, which can convert transient/network/API errors into wrong routing state.
+4. Login page redirect logic only navigates when `session && profile`; it does not handle “session exists but profile still resolving/error”, so users can remain on login screen even after successful sign-in.
+5. The Tailwind CDN warning in `lovable.js` is non-blocking and not the cause of login hang.
 
-## Fix blank screen on Android refresh — persistent profile retry
+Implementation approach (safe, minimal, production-focused):
 
-**Root cause**: When `fetchProfile()` times out during `INITIAL_SESSION` (4s limit), `profileState` is set to `'error'`. `RequireApproval` shows a skeleton for `'error'` state but has no mechanism to retry — the user is stuck on a blank/skeleton screen forever. The single 2s retry in the auth store often also fails on slow Android networks.
+1) Harden login submit flow so spinner cannot get stuck
+- File: `src/pages/Login.tsx`
+- Refactor `handleLogin` into `try/catch/finally` so `setLoading(false)` is guaranteed.
+- Add a bounded wait around profile loading during login:
+  - `Promise.race([fetchProfile(), timeout])` (example 6–8s).
+- If profile fetch times out/fails, do not keep user on endless spinner; route to `/splash` so central auth/profile retry logic continues there.
+- Keep non-blocking tasks (`ensureAgentExists`, location sync, FCM) fire-and-forget.
 
-### Changes
+2) Apply same safety to signup flow
+- File: `src/pages/Login.tsx`
+- `handleSignup` also uses `await fetchProfile()` without robust timeout/finally.
+- Mirror the same timeout/finally pattern so signup never leaves button spinning forever.
 
-#### 1. `src/store/auth.ts` — More resilient retry with exponential backoff
+3) Make Login redirect state-aware (not profile-object-only)
+- File: `src/pages/Login.tsx`
+- Extend redirect effect to use `profileState`:
+  - If `session` exists and `profileState` is `idle/loading/error`, navigate to `/splash` (or show local loading state) instead of staying on login form.
+  - Route to `/upload-documents` only when state is definitively `missing` or ready with `documents_submitted=false`.
+  - Route approved/pending/rejected/deactivated as today.
+- This prevents “already signed in but still seeing login”.
 
-In the `INITIAL_SESSION` catch block (lines 134-148), replace the single 2s retry with up to 3 retries at increasing intervals (2s, 4s, 8s). This gives Android WebView up to ~18 seconds total to resolve the profile.
+4) Fix profile error classification in auth store
+- File: `src/store/auth.ts`
+- In `fetchProfile`, distinguish between:
+  - True “no row” case (`PGRST116` with `.single()`) => `profileState='missing'`
+  - Other errors (network/RLS/5xx/timeout) => `profileState='error'` and throw
+- Keep current success path (`profileState='ready'`) unchanged.
+- This prevents false “missing profile” state and wrong redirects.
 
-```typescript
-// Replace single setTimeout retry with:
-const retryDelays = [2000, 4000, 8000];
-const scheduleRetry = (attempt: number) => {
-  if (attempt >= retryDelays.length) return;
-  setTimeout(() => {
-    if (get().profileState !== 'ready') {
-      console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
-      get().fetchProfile()
-        .catch(() => scheduleRetry(attempt + 1));
-    }
-  }, retryDelays[attempt]);
-};
-scheduleRetry(0);
-```
+5) Preserve idempotence and avoid regressions
+- File: `src/store/auth.ts`
+- Keep the existing access_token equality guard intact (already preventing duplicate session churn).
+- Do not change current listener registration order or initialization guards; only strengthen failure handling.
 
-Also apply the same retry pattern to the getSession fallback path (lines 187-195).
+6) UX feedback improvements for poor network during login
+- File: `src/pages/Login.tsx`
+- On profile timeout after successful sign-in, show a friendly toast such as:
+  - “Signed in. Loading your account details…”
+- Then route to `/splash` for recovery retries.
+- This reduces perceived failure during slow Android WebView conditions.
 
-#### 2. `src/components/auth/RequireApproval.tsx` — Add auto-retry for error state
+Validation plan after implementation:
+1. Android Studio/WebView: login on slow network → spinner should always stop (or transition), never spin indefinitely.
+2. Successful login with healthy network → navigate quickly to correct page based on profile.
+3. Simulated slow profile fetch → user gets feedback and is moved to `/splash`, then resolves correctly.
+4. Transient profile API error → should become `profileState='error'` (not `missing`), no false upload-documents redirect.
+5. New/incomplete user → still routes to `/upload-documents` correctly.
+6. Confirm logs no longer show long login dead-end without UI recovery.
 
-Instead of showing a static skeleton forever when `profileState === 'error'`, add a `useEffect` that calls `fetchProfile()` every 3 seconds while in error state (max 5 attempts), with a visible "Retry" button as fallback.
+Files to update in implementation phase:
+- `src/pages/Login.tsx`
+- `src/store/auth.ts`
 
-```typescript
-// Add inside RequireApproval:
-const { fetchProfile } = useAuthStore();
-const retryCountRef = useRef(0);
-
-useEffect(() => {
-  if (profileState !== 'error') {
-    retryCountRef.current = 0;
-    return;
-  }
-  if (retryCountRef.current >= 5) return; // give up after 5 tries
-  
-  const timer = setTimeout(() => {
-    retryCountRef.current++;
-    fetchProfile().catch(() => {});
-  }, 3000);
-  return () => clearTimeout(timer);
-}, [profileState, fetchProfile]);
-```
-
-For the UI: after 5 failed retries, show a "Retry" button instead of infinite skeleton, so the user can tap to try again rather than seeing a blank screen.
-
-#### 3. `src/components/auth/RequireAuth.tsx` — Same retry pattern
-
-Add the same auto-retry `useEffect` for the case where `loading` is false but session exists and profileState is stuck. This prevents the auth layer from being a dead-end.
-
-### Expected result after fix
-
-- Android refresh with slow network: skeleton shows briefly, retries automatically, resolves to `/home` within seconds
-- Very slow network: user sees a "Retry" button after ~15s instead of blank screen forever
-- Fast network: no change, works as before
+Technical note:
+No DB migration or Edge Function change is required for this fix; this is frontend state and flow hardening.
