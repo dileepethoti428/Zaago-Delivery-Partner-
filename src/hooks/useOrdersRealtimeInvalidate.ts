@@ -3,8 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Hook to subscribe to realtime order updates and invalidate React Query cache.
- * This ensures the orders list stays fresh when orders are assigned/updated.
+ * Realtime order updates — uses direct cache mutation (setQueryData) instead of
+ * invalidateQueries to prevent refetch loops and render storms on mobile.
  */
 export function useOrdersRealtimeInvalidate(agentId?: string) {
   const queryClient = useQueryClient();
@@ -12,48 +12,58 @@ export function useOrdersRealtimeInvalidate(agentId?: string) {
   useEffect(() => {
     if (!agentId) return;
 
-    // Use unique channel name per agent to avoid conflicts
     const channel = supabase
       .channel(`agent-orders-${agentId}`)
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'orders',
         },
         (payload) => {
           const newRecord = payload.new as any;
           const oldRecord = payload.old as any;
-          
+          const orderId = newRecord?.id || oldRecord?.id;
+
           console.log('🔄 Realtime order change:', {
             event: payload.eventType,
-            orderId: newRecord?.id || oldRecord?.id,
+            orderId,
             newStatus: newRecord?.status,
-            newAgentId: newRecord?.agent_id
           });
-          
-          // For UPDATE events, check if assignment or status changed
+
           if (payload.eventType === 'UPDATE') {
-            const assignmentChanged = 
+            const statusChanged = newRecord.status !== oldRecord.status;
+            const assignmentChanged =
               newRecord.agent_id !== oldRecord.agent_id ||
               newRecord.assigned_agent_id !== oldRecord.assigned_agent_id;
-            const statusChanged = newRecord.status !== oldRecord.status;
-            
-            if (assignmentChanged || statusChanged) {
-              // Immediately remove this order from cache if it's now assigned to someone else
-              if (newRecord.agent_id && newRecord.agent_id !== agentId) {
+
+            if (statusChanged || assignmentChanged) {
+              const terminalStatuses = ['delivered', 'completed', 'cancelled', 'canceled'];
+              const isTerminal = terminalStatuses.includes((newRecord.status ?? '').toLowerCase());
+              const takenByOther = newRecord.agent_id && newRecord.agent_id !== agentId;
+
+              // Directly remove from cache — no refetch needed for simple removals
+              if (isTerminal || takenByOther) {
                 queryClient.setQueriesData({ queryKey: ['orders'] }, (old: any) => {
                   if (!Array.isArray(old)) return old;
-                  return old.filter((o: any) => o.id !== newRecord.id);
+                  return old.filter((o: any) => o.id !== orderId);
                 });
+                return; // Skip invalidation — cache is already correct
               }
             }
           }
-          
-          // Invalidate to refetch fresh data for all order changes
+
+          if (payload.eventType === 'DELETE') {
+            queryClient.setQueriesData({ queryKey: ['orders'] }, (old: any) => {
+              if (!Array.isArray(old)) return old;
+              return old.filter((o: any) => o.id !== orderId);
+            });
+            return;
+          }
+
+          // For INSERT or complex UPDATEs — do a single targeted invalidation
           queryClient.invalidateQueries({ queryKey: ['orders', agentId] });
-          queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
         }
       )
       .subscribe((status) => {
@@ -61,8 +71,7 @@ export function useOrdersRealtimeInvalidate(agentId?: string) {
       });
 
     return () => {
-      console.log('📡 Cleaning up realtime channel for agent:', agentId);
-      supabase.removeChannel(channel); // 🔥 CRITICAL cleanup
+      supabase.removeChannel(channel);
     };
   }, [agentId, queryClient]);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
@@ -46,6 +46,9 @@ export default function Home() {
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
 
+  // Stable location key — prevents distance recalc on every minor GPS tick
+  const locationKey = lastKnown ? `${lastKnown.lat.toFixed(4)}-${lastKnown.lng.toFixed(4)}` : 'none';
+
   const ordersWithDistance = useMemo(() => {
     // Safety filter: exclude terminal statuses client-side as well
     const terminalStatuses = ['delivered', 'completed', 'cancelled', 'canceled'];
@@ -69,7 +72,8 @@ export default function Home() {
       
       return { order, distanceKm };
     });
-  }, [orders, lastKnown]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, locationKey]);
 
   const { nearbyOrders, otherOrders } = useMemo(() => {
     const nearby: Array<typeof orders[0] & { distanceKm: number }> = [];
@@ -115,11 +119,18 @@ export default function Home() {
 
   // Location watching is handled by useScreenLocationSync above
 
+  // Throttle guard — prevents duplicate refresh calls from pull+realtime firing together
+  const refreshingRef = useRef(false);
+
   const handleRefresh = useCallback(async () => {
-    // Refresh location first to get fresh coordinates
-    await useLocationStore.getState().refreshLocation();
-    // Then refetch orders with updated location
-    await refetch();
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    try {
+      await useLocationStore.getState().refreshLocation();
+      await refetch();
+    } finally {
+      refreshingRef.current = false;
+    }
   }, [refetch]);
 
   const handleAcceptOrder = useCallback(async (orderId: string) => {
@@ -127,9 +138,8 @@ export default function Home() {
     setProcessingOrder(orderId);
     
     try {
-      const result = await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
-      // Small delay to allow backend to sync before navigating
-      await new Promise(r => setTimeout(r, 300));
+      await acceptOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
+      // Instantly clear stale orders cache then navigate — no arbitrary delay needed
       navigate(`/manage-delivery/${orderId}`);
     } catch (error) {
       // Error already handled in mutation onError - don't navigate on failure
