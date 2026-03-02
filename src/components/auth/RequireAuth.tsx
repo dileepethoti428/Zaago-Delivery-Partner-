@@ -16,11 +16,16 @@ export function RequireAuth() {
   useAgentGuard();
 
   // 8s escape timeout — never block authenticated users indefinitely
+  // Uses a ref to track if timer was started, so profileState transitions don't reset it
+  const timerStarted = useRef(false);
   useEffect(() => {
     if (!loading) {
       setBypassLoading(false);
+      timerStarted.current = false;
       return;
     }
+    if (timerStarted.current) return;
+    timerStarted.current = true;
     const timer = setTimeout(() => setBypassLoading(true), 8000);
     return () => clearTimeout(timer);
   }, [loading]);
@@ -81,6 +86,11 @@ export function RequireAuth() {
   // If bypass is active and we have a session, let through even if loading
   if (bypassLoading && session) {
     return <Outlet />;
+  }
+
+  // Bypass active but no session — go to login
+  if (bypassLoading && !session) {
+    return <Navigate to="/login" replace />;
   }
 
   if (!session) {

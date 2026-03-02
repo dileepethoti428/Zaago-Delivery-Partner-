@@ -132,46 +132,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ session, user: session?.user ?? null });
         }
 
+        // Mark loading false as soon as session state is known (don't wait for profile)
+        if (event === 'INITIAL_SESSION') {
+          set({ loading: false });
+        }
+
         if (session?.user) {
           // Skip fetchProfile if we already have a profile for this user
           if (get().profile?.user_id !== session.user.id) {
-            if (event === 'INITIAL_SESSION') {
-              // Block loading until profile is ready (with 4s safety timeout)
-              try {
-                await Promise.race([
-                  get().fetchProfile(),
-                  new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 6000)),
-                ]);
-              } catch (err: any) {
-                console.warn('[Auth] INITIAL_SESSION profile fetch issue:', err?.message);
-                if (get().profileState === 'loading') {
-                  set({ profileState: 'error' });
-                }
-                // Exponential backoff retries: 2s, 4s, 8s
-                const retryDelays = [2000, 4000, 8000];
-                const scheduleRetry = (attempt: number) => {
-                  if (attempt >= retryDelays.length) return;
-                  setTimeout(() => {
-                    if (get().profileState !== 'ready') {
-                      console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
-                      get().fetchProfile()
-                        .catch(() => scheduleRetry(attempt + 1));
-                    }
-                  }, retryDelays[attempt]);
-                };
-                scheduleRetry(0);
+            // Fire-and-forget profile fetch with retries — never block UI
+            get().fetchProfile().catch((err: any) => {
+              console.warn('[Auth] Profile fetch issue:', err?.message);
+              if (get().profileState === 'loading') {
+                set({ profileState: 'error' });
               }
-              set({ loading: false });
-              return;
-            }
-            get().fetchProfile().catch(console.warn);
+              // Exponential backoff retries: 2s, 4s, 8s
+              const retryDelays = [2000, 4000, 8000];
+              const scheduleRetry = (attempt: number) => {
+                if (attempt >= retryDelays.length) return;
+                setTimeout(() => {
+                  if (get().profileState !== 'ready') {
+                    console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
+                    get().fetchProfile()
+                      .catch(() => scheduleRetry(attempt + 1));
+                  }
+                }, retryDelays[attempt]);
+              };
+              scheduleRetry(0);
+            });
           }
         } else {
           set({ profile: null, profileState: 'missing' });
-        }
-
-        if (event === 'INITIAL_SESSION') {
-          set({ loading: false });
         }
       });
     }
@@ -192,14 +183,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // getSession returned — if INITIAL_SESSION already fired, do nothing
         if (!initialSessionReceived) {
           const session = result.session;
-          set({ session, user: session?.user ?? null });
+          set({ session, user: session?.user ?? null, loading: false });
           if (session?.user) {
-            try {
-              await Promise.race([
-                get().fetchProfile(),
-                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 6000)),
-              ]);
-            } catch {
+            // Fire-and-forget — don't block UI
+            get().fetchProfile().catch(() => {
               if (get().profileState === 'loading') {
                 set({ profileState: 'error' });
               }
@@ -208,16 +195,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 if (attempt >= retryDelays.length) return;
                 setTimeout(() => {
                   if (get().profileState !== 'ready') {
-                    console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
-                    get().fetchProfile()
-                      .catch(() => scheduleRetry(attempt + 1));
+                    get().fetchProfile().catch(() => scheduleRetry(attempt + 1));
                   }
                 }, retryDelays[attempt]);
               };
               scheduleRetry(0);
-            }
+            });
           }
-          set({ loading: false });
         }
       } else {
         if (!initialSessionReceived) {

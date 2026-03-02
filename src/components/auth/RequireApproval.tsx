@@ -11,15 +11,21 @@ export function RequireApproval() {
   const [exhaustedRetries, setExhaustedRetries] = useState(false);
   const [bypassLoading, setBypassLoading] = useState(false);
 
-  // 8s escape timeout — never block authenticated users indefinitely
+  // 8s escape timeout — uses a stable flag so profileState flips don't reset the timer
+  const isUnresolved = profileState === 'idle' || profileState === 'loading' || profileState === 'error';
+  const timerStarted = useRef(false);
+
   useEffect(() => {
-    if (profileState === 'ready' || profileState === 'missing') {
+    if (!isUnresolved) {
       setBypassLoading(false);
+      timerStarted.current = false;
       return;
     }
+    if (timerStarted.current) return;
+    timerStarted.current = true;
     const timer = setTimeout(() => setBypassLoading(true), 8000);
     return () => clearTimeout(timer);
-  }, [profileState]);
+  }, [isUnresolved]);
 
   // Auto-retry when profileState is 'error'
   useEffect(() => {
@@ -59,7 +65,7 @@ export function RequireApproval() {
   }
 
   // Profile is still resolving — wait, but bypass after 8s
-  if (profileState === 'idle' || profileState === 'loading' || profileState === 'error') {
+  if (isUnresolved) {
     if (bypassLoading) {
       return <Outlet />;
     }
