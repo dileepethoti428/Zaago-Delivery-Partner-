@@ -400,7 +400,7 @@ export default function Login() {
                   <Input
                     id="signup-email"
                     type="email"
-                    placeholder="agent@zaago.com"
+                    placeholder="partner@zaago.com"
                     className="rounded-xl"
                     {...signupForm.register("email")}
                   />
