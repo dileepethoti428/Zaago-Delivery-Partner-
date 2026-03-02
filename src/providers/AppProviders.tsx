@@ -80,9 +80,15 @@ function AuthInitializer({ children }: { children: ReactNode }) {
     // Initialize location services
     initLocation();
     
-    // Initialize global app lifecycle listeners (reset stuck states on resume)
-    setQueryClientRef(queryClient);
-    setupAppLifecycleListeners();
+    // Delay lifecycle setup until auth is fully ready — prevents lifecycle from
+    // interrupting in-flight login/session-restore network requests
+    const unsubscribeLifecycle = useAuthStore.subscribe((state) => {
+      if (!state.loading) {
+        setQueryClientRef(queryClient);
+        setupAppLifecycleListeners();
+        unsubscribeLifecycle();
+      }
+    });
     
     // Apply system theme immediately while waiting for session
     const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
