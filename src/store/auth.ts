@@ -101,8 +101,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // INITIAL_SESSION, SIGNED_IN, USER_UPDATED
         set({ session, user: session?.user ?? null });
+
         if (session?.user) {
-          await get().fetchProfile();
+          // Skip fetchProfile if we already have a profile for this user (e.g. Login.tsx fetched it directly)
+          // This prevents a double-fetch race when SIGNED_IN fires concurrently with handleLogin
+          if (get().profile?.user_id !== session.user.id) {
+            await get().fetchProfile();
+          }
         } else {
           set({ profile: null });
         }
@@ -110,23 +115,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     try {
-      // Race getSession against a 5s timeout to prevent indefinite hang
+      // Race getSession against a 5s timeout to prevent indefinite hang.
+      // IMPORTANT: if the timeout wins, do NOT overwrite session state with null —
+      // the onAuthStateChange INITIAL_SESSION event will have already set the real session.
+      let timedOut = false;
       const sessionResult = await Promise.race([
-        supabase.auth.getSession(),
-        new Promise<{ data: { session: null } }>(resolve =>
-          setTimeout(() => resolve({ data: { session: null } }), 5000)
+        supabase.auth.getSession().then(r => ({ timedOut: false, result: r })),
+        new Promise<{ timedOut: true; result: null }>(resolve =>
+          setTimeout(() => resolve({ timedOut: true, result: null }), 5000)
         ),
       ]);
 
-      const session = (sessionResult as { data: { session: Session | null } }).data?.session ?? null;
-      set({ session, user: session?.user ?? null });
+      if (!sessionResult.timedOut) {
+        // Only update state from getSession if the real call returned
+        const session = (sessionResult as { timedOut: false; result: { data: { session: Session | null } } }).result.data?.session ?? null;
+        // Only overwrite if we got a real session OR if onAuthStateChange hasn't set one yet
+        if (session || !get().session) {
+          set({ session, user: session?.user ?? null });
+        }
 
-      if (session?.user) {
-        // Race fetchProfile against a 4s timeout
-        await Promise.race([
-          get().fetchProfile(),
-          new Promise<void>(resolve => setTimeout(resolve, 4000)),
-        ]);
+        if (session?.user && get().profile?.user_id !== session.user.id) {
+          // Race fetchProfile against a 4s timeout
+          await Promise.race([
+            get().fetchProfile(),
+            new Promise<void>(resolve => setTimeout(resolve, 4000)),
+          ]);
+        }
+      } else {
+        timedOut = true;
+        console.warn('[Auth] getSession timed out — relying on onAuthStateChange for session state');
       }
     } catch (err) {
       // Invalid refresh token or network error — clear state and redirect to login

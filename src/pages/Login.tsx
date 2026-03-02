@@ -210,7 +210,8 @@ export default function Login() {
       // Register FCM token (non-blocking, safe to call multiple times)
       registerFCMToken();
 
-      // Navigation handled by useEffect
+      // Stop spinner — navigation is handled by the useEffect watching session + profile
+      setLoading(false);
     }
   };
 
