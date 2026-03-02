@@ -12,10 +12,16 @@ export default function Splash() {
     initialize();
   }, [initialize]);
 
-  // Hard fallback: if auth hangs beyond 5s, force navigate to login
+  // Hard fallback: if auth hangs beyond 5.5s
   useEffect(() => {
     const fallback = setTimeout(() => {
-      navigate('/login');
+      const current = useAuthStore.getState();
+      if (current.session) {
+        // Session exists — don't bounce to login, go to app (route guards handle the rest)
+        navigate('/my-deliveries');
+      } else {
+        navigate('/login');
+      }
     }, 5500);
     return () => clearTimeout(fallback);
   }, []);
@@ -32,8 +38,13 @@ export default function Splash() {
     // Profile still resolving — wait for it
     if (profileState === 'idle' || profileState === 'loading') return;
 
-    // Profile had an error — wait for retry (retry is scheduled in auth store)
-    if (profileState === 'error') return;
+    // Profile had an error — give retries 6s then navigate to app
+    if (profileState === 'error') {
+      const errorTimer = setTimeout(() => {
+        navigate('/my-deliveries');
+      }, 6000);
+      return () => clearTimeout(errorTimer);
+    }
 
     // profileState is 'ready' or 'missing' — route accordingly
     if (!profile || !profile.documents_submitted) {
