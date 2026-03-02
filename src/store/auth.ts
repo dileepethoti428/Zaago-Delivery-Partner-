@@ -97,10 +97,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Idempotent — calling twice is a no-op
     if (initialized) return;
     initialized = true;
+
+    // loading stays TRUE until INITIAL_SESSION fires — never set it early
     set({ loading: true, profileState: 'idle' });
 
-    // Register listener FIRST (before getSession) — Supabase docs requirement.
-    // INITIAL_SESSION fires synchronously from localStorage on most app opens.
+    // Register listener FIRST (before getSession) — Supabase requirement.
+    // INITIAL_SESSION is the ONLY event that clears loading state.
     if (!listenerRegistered) {
       listenerRegistered = true;
 
@@ -108,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.log('[Auth] State change:', event);
 
         if (event === 'SIGNED_OUT') {
-          set({ session: null, user: null, profile: null, profileState: 'idle' });
+          set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
           return;
         }
 
@@ -121,18 +123,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return;
         }
 
-        // INITIAL_SESSION, SIGNED_IN, USER_UPDATED
-        if (event === 'INITIAL_SESSION') {
-          initialSessionReceived = true;
-        }
-
         // Only update state if session actually changed (prevents LocationSync restarts)
         const currentSession = get().session;
         if (currentSession?.access_token !== session?.access_token) {
           set({ session, user: session?.user ?? null });
         }
 
-        // Mark loading false as soon as session state is known (don't wait for profile)
+        // INITIAL_SESSION is the authoritative signal that auth is resolved.
+        // loading must remain true until this fires — no manual overrides.
         if (event === 'INITIAL_SESSION') {
           set({ loading: false });
         }
@@ -141,23 +139,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           // Skip fetchProfile if we already have a profile for this user
           if (get().profile?.user_id !== session.user.id) {
             // Fire-and-forget profile fetch with retries — never block UI
+            const scheduleRetry = (attempt: number) => {
+              const retryDelays = [2000, 4000, 8000];
+              if (attempt >= retryDelays.length) return;
+              setTimeout(() => {
+                if (get().profileState !== 'ready') {
+                  console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
+                  get().fetchProfile().catch(() => scheduleRetry(attempt + 1));
+                }
+              }, retryDelays[attempt]);
+            };
+
             get().fetchProfile().catch((err: any) => {
               console.warn('[Auth] Profile fetch issue:', err?.message);
               if (get().profileState === 'loading') {
                 set({ profileState: 'error' });
               }
-              // Exponential backoff retries: 2s, 4s, 8s
-              const retryDelays = [2000, 4000, 8000];
-              const scheduleRetry = (attempt: number) => {
-                if (attempt >= retryDelays.length) return;
-                setTimeout(() => {
-                  if (get().profileState !== 'ready') {
-                    console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
-                    get().fetchProfile()
-                      .catch(() => scheduleRetry(attempt + 1));
-                  }
-                }, retryDelays[attempt]);
-              };
               scheduleRetry(0);
             });
           }
@@ -167,53 +164,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     }
 
+    // Call getSession to trigger the INITIAL_SESSION event from the listener above.
+    // No timeout race — we trust Supabase to fire INITIAL_SESSION from localStorage synchronously.
     try {
-      // Race getSession vs 5s timeout.
-      const result = await Promise.race([
-        supabase.auth.getSession().then(r => ({
-          timedOut: false as const,
-          session: r.data.session ?? null,
-        })),
-        new Promise<{ timedOut: true; session: null }>(resolve =>
-          setTimeout(() => resolve({ timedOut: true, session: null }), 5000)
-        ),
-      ]);
-
-      if (!result.timedOut) {
-        // getSession returned — if INITIAL_SESSION already fired, do nothing
-        if (!initialSessionReceived) {
-          const session = result.session;
-          set({ session, user: session?.user ?? null, loading: false });
-          if (session?.user) {
-            // Fire-and-forget — don't block UI
-            get().fetchProfile().catch(() => {
-              if (get().profileState === 'loading') {
-                set({ profileState: 'error' });
-              }
-              const retryDelays = [2000, 4000, 8000];
-              const scheduleRetry = (attempt: number) => {
-                if (attempt >= retryDelays.length) return;
-                setTimeout(() => {
-                  if (get().profileState !== 'ready') {
-                    get().fetchProfile().catch(() => scheduleRetry(attempt + 1));
-                  }
-                }, retryDelays[attempt]);
-              };
-              scheduleRetry(0);
-            });
-          }
-        }
-      } else {
-        if (!initialSessionReceived) {
-          console.warn('[Auth] getSession timed out — continuing with existing session');
-          set({ loading: false });
-        }
-      }
+      await supabase.auth.getSession();
     } catch (err) {
-      console.warn('[Auth] Initialize error, clearing session:', err);
-      set({ session: null, user: null, profile: null, profileState: 'idle' });
-      try { await supabase.auth.signOut(); } catch { /* ignore */ }
-      if (!initialSessionReceived) {
+      // Network failure on getSession — INITIAL_SESSION may not fire.
+      // Clear loading so the app doesn't hang indefinitely.
+      console.warn('[Auth] getSession failed:', err);
+      if (!get().session) {
+        set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
+      } else {
+        // Preserve existing session (from a previous event), just unblock UI
         set({ loading: false });
       }
     }
