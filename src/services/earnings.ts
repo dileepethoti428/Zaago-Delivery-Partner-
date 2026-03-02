@@ -45,36 +45,6 @@ export interface EarningsByType {
   recent_earnings: EarningRecord[];
 }
 
-// Full live earnings data structure
-export interface LiveEarningsData {
-  today: PeriodEarnings;
-  week: PeriodEarnings;
-  month: PeriodEarnings;
-  recent_earnings: EarningRecord[];
-  live_payout: number;
-  deliveries_in_progress: number;
-  // Separated earnings by order type
-  regular: EarningsByType;
-  subscription: EarningsByType;
-}
-
-export async function fetchLiveEarnings(): Promise<LiveEarningsData> {
-  const { data, error } = await supabase.functions.invoke('get-agent-live-earnings', {
-    method: 'POST'
-  });
-
-  if (error) {
-    console.error('Error fetching live earnings:', error);
-    throw error;
-  }
-
-  if (!data?.success) {
-    throw new Error(data?.error || 'Failed to fetch earnings');
-  }
-
-  return data.data;
-}
-
 export function formatCurrency(amount: number | null | undefined): string {
   if (amount === null || amount === undefined) return '—';
   if (amount === 0) return '₹0';
@@ -95,18 +65,15 @@ export function computeEarningsTotals(rows: { expected_payout: number | null; cr
   const IST_TIMEZONE = 'Asia/Kolkata';
   const now = new Date();
   
-  // Get today's date in IST for accurate comparison
   const todayIST = now.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
 
-  // Calculate week start in IST
   const weekStart = new Date(now);
   weekStart.setDate(weekStart.getDate() - 7);
 
-  // Get current month/year in IST
   const currentMonthIST = parseInt(now.toLocaleDateString('en-CA', { 
     timeZone: IST_TIMEZONE, 
     month: 'numeric' 
-  })) - 1; // 0-indexed
+  })) - 1;
   const currentYearIST = parseInt(now.toLocaleDateString('en-CA', { 
     timeZone: IST_TIMEZONE, 
     year: 'numeric' 
@@ -120,7 +87,6 @@ export function computeEarningsTotals(rows: { expected_payout: number | null; cr
     const d = new Date(r.created_at);
     const amt = Number(r.expected_payout) || 0;
 
-    // Get the row's date in IST for comparison
     const rowDateIST = d.toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE });
     const rowMonthIST = parseInt(d.toLocaleDateString('en-CA', { 
       timeZone: IST_TIMEZONE, 
@@ -131,7 +97,6 @@ export function computeEarningsTotals(rows: { expected_payout: number | null; cr
       year: 'numeric' 
     }));
 
-    // Compare dates in IST
     if (rowDateIST === todayIST) {
       today += amt;
     }
