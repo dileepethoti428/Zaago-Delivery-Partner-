@@ -3,6 +3,10 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { cleanupOnLogout } from '@/utils/logoutCleanup';
 
+// Module-level guard: ensures onAuthStateChange is registered only once
+// across React StrictMode double-mounts and hot reloads
+let listenerRegistered = false;
+
 interface Profile {
   user_id: string;
   full_name: string | null;

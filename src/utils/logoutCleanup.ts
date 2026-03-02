@@ -8,6 +8,8 @@ import { agentSession } from '@/utils/agentSession';
 import { resetFCMState } from '@/utils/fcm';
 
 // All known localStorage keys to clear on logout
+// NOTE: Do NOT add Supabase auth keys here — supabase.auth.signOut() clears them internally.
+// This list is for app-level caches only.
 const STORAGE_KEYS_TO_CLEAR = [
   'agent_profile_cache',
   'assigned_orders_cache',
@@ -20,8 +22,13 @@ const STORAGE_KEYS_TO_CLEAR = [
   'inflight_flags',
   'last_api_call_timestamps',
   'zaago_last_loc',
-  'sb-auth-token',
 ] as const;
+
+/**
+ * IMPORTANT: This function must ONLY be called from explicit user logout paths.
+ * Never call this during app lifecycle events (resume, background, TOKEN_REFRESHED, INITIAL_SESSION).
+ * Calling it outside of logout will destroy the session and log the user out unintentionally.
+ */
 
 /**
  * Comprehensive logout cleanup utility
