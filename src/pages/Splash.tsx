@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Truck } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
-import { cache } from '@/utils/cache';
 
 export default function Splash() {
   const navigate = useNavigate();
