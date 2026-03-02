@@ -3,15 +3,13 @@ import { fetchAvailableOrders } from '@/services/orders';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-export const useOrders = (agentId?: string) => {
+export const useOrders = (agentId?: string, isScreenActive = false) => {
   return useQuery({
     queryKey: ['orders', agentId],
     queryFn: () => fetchAvailableOrders(agentId!),
-    enabled: !!agentId,
+    enabled: !!agentId && isScreenActive,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
-    refetchOnMount: 'always', // Always refetch on mount to show fresh data after navigation
-    refetchOnWindowFocus: true,
   });
 };
 

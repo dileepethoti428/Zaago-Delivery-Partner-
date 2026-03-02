@@ -19,10 +19,10 @@ export default function MyDeliveries() {
   // Start location sync on this screen
   useScreenLocationSync();
 
-  // Use separate RPC hooks for each tab - NO FRONTEND DATE LOGIC
-  const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders();
-  const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders();
-  const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders();
+  // Use separate RPC hooks for each tab - only fetch when this screen is mounted
+  const { data: todayOrders = [], isLoading: loadingToday, error: errorToday } = useTodayOrders(true);
+  const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders(true);
+  const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders(true);
 
   // Current orders based on selected tab - NO DATE FILTERING, just tab selection
   const currentOrders = useMemo(() => {
