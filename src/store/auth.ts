@@ -133,18 +133,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 ]);
               } catch (err: any) {
                 console.warn('[Auth] INITIAL_SESSION profile fetch issue:', err?.message);
-                // On timeout/error: keep profileState as-is (loading/error), NOT missing
-                // This prevents false redirect to upload-documents
                 if (get().profileState === 'loading') {
                   set({ profileState: 'error' });
                 }
-                // Schedule a retry after 2s
-                setTimeout(() => {
-                  if (get().profileState !== 'ready') {
-                    console.log('[Auth] Retrying profile fetch...');
-                    get().fetchProfile().catch(console.warn);
-                  }
-                }, 2000);
+                // Exponential backoff retries: 2s, 4s, 8s
+                const retryDelays = [2000, 4000, 8000];
+                const scheduleRetry = (attempt: number) => {
+                  if (attempt >= retryDelays.length) return;
+                  setTimeout(() => {
+                    if (get().profileState !== 'ready') {
+                      console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
+                      get().fetchProfile()
+                        .catch(() => scheduleRetry(attempt + 1));
+                    }
+                  }, retryDelays[attempt]);
+                };
+                scheduleRetry(0);
               }
               set({ loading: false });
               return;
@@ -188,11 +192,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               if (get().profileState === 'loading') {
                 set({ profileState: 'error' });
               }
-              setTimeout(() => {
-                if (get().profileState !== 'ready') {
-                  get().fetchProfile().catch(console.warn);
-                }
-              }, 2000);
+              const retryDelays = [2000, 4000, 8000];
+              const scheduleRetry = (attempt: number) => {
+                if (attempt >= retryDelays.length) return;
+                setTimeout(() => {
+                  if (get().profileState !== 'ready') {
+                    console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
+                    get().fetchProfile()
+                      .catch(() => scheduleRetry(attempt + 1));
+                  }
+                }, retryDelays[attempt]);
+              };
+              scheduleRetry(0);
             }
           }
           set({ loading: false });
