@@ -139,9 +139,12 @@ function AuthInitializer({ children }: { children: ReactNode }) {
       try {
         listener = await App.addListener("appStateChange", ({ isActive }) => {
           if (isActive) {
-            // Delay to absorb WebView transition noise (keyboard, permission dialogs)
-            setTimeout(() => { onAppResume(); }, 500);
-            
+            // Belt-and-suspenders: skip resume if auth is still in progress
+            const { loading } = useAuthStore.getState();
+            if (!loading) {
+              // Delay to absorb WebView transition noise (keyboard, permission dialogs)
+              setTimeout(() => { onAppResume(); }, 500);
+            }
             const user = useAuthStore.getState().user;
             if (user) {
               registerFCMToken();
