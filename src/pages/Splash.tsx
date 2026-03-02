@@ -6,13 +6,13 @@ import { useAuthStore } from '@/store/auth';
 
 export default function Splash() {
   const navigate = useNavigate();
-  const { session, profile, loading, initialize } = useAuthStore();
+  const { session, profile, profileState, loading, initialize } = useAuthStore();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
-  // Hard fallback: if auth hangs beyond 5s (matches auth timeout), force navigate to login
+  // Hard fallback: if auth hangs beyond 5s, force navigate to login
   useEffect(() => {
     const fallback = setTimeout(() => {
       navigate('/login');
@@ -23,14 +23,19 @@ export default function Splash() {
   useEffect(() => {
     if (loading) return;
 
-    // Navigate immediately — no artificial delay
+    // Not authenticated
     if (!session) {
       navigate('/login');
       return;
     }
 
-    // User is authenticated, check profile status
-    // Location sync will happen in AppShell when /home loads
+    // Profile still resolving — wait for it
+    if (profileState === 'idle' || profileState === 'loading') return;
+
+    // Profile had an error — wait for retry (retry is scheduled in auth store)
+    if (profileState === 'error') return;
+
+    // profileState is 'ready' or 'missing' — route accordingly
     if (!profile || !profile.documents_submitted) {
       navigate('/upload-documents');
     } else if (profile.approval_status === 'deactivated' || profile.isActive === false) {
@@ -42,7 +47,7 @@ export default function Splash() {
     } else if (profile.approval_status === 'approved') {
       navigate('/home');
     }
-  }, [session, profile, loading, navigate]);
+  }, [session, profile, profileState, loading, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5">

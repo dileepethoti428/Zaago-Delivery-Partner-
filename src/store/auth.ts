@@ -21,10 +21,13 @@ interface Profile {
   isActive?: boolean; // from delivery_agents.is_active
 }
 
+export type ProfileState = 'idle' | 'loading' | 'ready' | 'missing' | 'error';
+
 interface AuthState {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  profileState: ProfileState;
   loading: boolean;
   setSession: (session: Session | null) => void;
   setProfile: (profile: Profile | null) => void;
@@ -38,33 +41,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
   profile: null,
+  profileState: 'idle',
   loading: true,
 
   setSession: (session) => set({ session, user: session?.user ?? null }),
-  setProfile: (profile) => set({ profile }),
+  setProfile: (profile) => set({ profile, profileState: profile ? 'ready' : 'missing' }),
   setLoading: (loading) => set({ loading }),
 
   fetchProfile: async () => {
     const { user } = get();
     if (!user) {
-      set({ profile: null });
+      set({ profile: null, profileState: 'missing' });
       return;
     }
 
-    const [profileRes, agentRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
-      supabase.from('delivery_agents').select('is_active').eq('agent_id', user.id).maybeSingle(),
-    ]);
+    set({ profileState: 'loading' });
 
-    if (!profileRes.error && profileRes.data) {
-      set({
-        profile: {
-          ...(profileRes.data as Profile),
-          isActive: agentRes.data?.is_active ?? true,
-        }
-      });
-    } else {
-      set({ profile: null });
+    try {
+      const [profileRes, agentRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+        supabase.from('delivery_agents').select('is_active').eq('agent_id', user.id).maybeSingle(),
+      ]);
+
+      if (!profileRes.error && profileRes.data) {
+        set({
+          profile: {
+            ...(profileRes.data as Profile),
+            isActive: agentRes.data?.is_active ?? true,
+          },
+          profileState: 'ready',
+        });
+      } else {
+        console.warn('[Auth] Profile fetch returned no data:', profileRes.error?.message);
+        set({ profile: null, profileState: 'missing' });
+      }
+    } catch (err) {
+      console.warn('[Auth] Profile fetch network error:', err);
+      set({ profileState: 'error' });
+      throw err; // re-throw so callers can catch
     }
   },
 
@@ -72,7 +86,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Idempotent — calling twice is a no-op
     if (initialized) return;
     initialized = true;
-    set({ loading: true });
+    set({ loading: true, profileState: 'idle' });
 
     // Register listener FIRST (before getSession) — Supabase docs requirement.
     // INITIAL_SESSION fires synchronously from localStorage on most app opens.
@@ -83,7 +97,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.log('[Auth] State change:', event);
 
         if (event === 'SIGNED_OUT') {
-          set({ session: null, user: null, profile: null });
+          set({ session: null, user: null, profile: null, profileState: 'idle' });
           return;
         }
 
@@ -105,17 +119,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           if (get().profile?.user_id !== session.user.id) {
             if (event === 'INITIAL_SESSION') {
               // Block loading until profile is ready (with 4s safety timeout)
-              await Promise.race([
-                get().fetchProfile(),
-                new Promise<void>(r => setTimeout(r, 4000)),
-              ]).catch(console.warn);
+              try {
+                await Promise.race([
+                  get().fetchProfile(),
+                  new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 4000)),
+                ]);
+              } catch (err: any) {
+                console.warn('[Auth] INITIAL_SESSION profile fetch issue:', err?.message);
+                // On timeout/error: keep profileState as-is (loading/error), NOT missing
+                // This prevents false redirect to upload-documents
+                if (get().profileState === 'loading') {
+                  set({ profileState: 'error' });
+                }
+                // Schedule a retry after 2s
+                setTimeout(() => {
+                  if (get().profileState !== 'ready') {
+                    console.log('[Auth] Retrying profile fetch...');
+                    get().fetchProfile().catch(console.warn);
+                  }
+                }, 2000);
+              }
               set({ loading: false });
               return;
             }
             get().fetchProfile().catch(console.warn);
           }
         } else {
-          set({ profile: null });
+          set({ profile: null, profileState: 'missing' });
         }
 
         if (event === 'INITIAL_SESSION') {
@@ -126,8 +156,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     try {
       // Race getSession vs 5s timeout.
-      // On most app opens getSession reads from localStorage instantly.
-      // On expired tokens it must make a network call to refresh.
       const result = await Promise.race([
         supabase.auth.getSession().then(r => ({
           timedOut: false as const,
@@ -144,25 +172,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const session = result.session;
           set({ session, user: session?.user ?? null });
           if (session?.user) {
-            await Promise.race([
-              get().fetchProfile(),
-              new Promise<void>(r => setTimeout(r, 4000)),
-            ]);
+            try {
+              await Promise.race([
+                get().fetchProfile(),
+                new Promise<void>((_, reject) => setTimeout(() => reject(new Error('profile_timeout')), 4000)),
+              ]);
+            } catch {
+              if (get().profileState === 'loading') {
+                set({ profileState: 'error' });
+              }
+              setTimeout(() => {
+                if (get().profileState !== 'ready') {
+                  get().fetchProfile().catch(console.warn);
+                }
+              }, 2000);
+            }
           }
           set({ loading: false });
         }
-        // else: INITIAL_SESSION handler already set loading: false — nothing to do
       } else {
-        // Timeout — if INITIAL_SESSION never arrived, auth is stuck: go to login
         if (!initialSessionReceived) {
           console.warn('[Auth] getSession timed out — continuing with existing session');
           set({ loading: false });
         }
-        // else: INITIAL_SESSION handler is in flight or done — don't interfere
       }
     } catch (err) {
       console.warn('[Auth] Initialize error, clearing session:', err);
-      set({ session: null, user: null, profile: null });
+      set({ session: null, user: null, profile: null, profileState: 'idle' });
       try { await supabase.auth.signOut(); } catch { /* ignore */ }
       if (!initialSessionReceived) {
         set({ loading: false });
@@ -177,6 +213,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // listenerRegistered stays true — listener persists across sign-out/sign-in
 
     await cleanupOnLogout();
-    set({ session: null, user: null, profile: null, loading: false });
+    set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
   },
 }));
