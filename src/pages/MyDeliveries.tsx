@@ -9,7 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
-import { useAppLifecycle } from '@/hooks/useAppLifecycle';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 
