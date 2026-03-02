@@ -46,6 +46,9 @@ export default function Home() {
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
 
+  // Stable location key — prevents distance recalc on every minor GPS tick
+  const locationKey = lastKnown ? `${lastKnown.lat.toFixed(4)}-${lastKnown.lng.toFixed(4)}` : 'none';
+
   const ordersWithDistance = useMemo(() => {
     // Safety filter: exclude terminal statuses client-side as well
     const terminalStatuses = ['delivered', 'completed', 'cancelled', 'canceled'];
@@ -69,7 +72,8 @@ export default function Home() {
       
       return { order, distanceKm };
     });
-  }, [orders, lastKnown]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, locationKey]);
 
   const { nearbyOrders, otherOrders } = useMemo(() => {
     const nearby: Array<typeof orders[0] & { distanceKm: number }> = [];
