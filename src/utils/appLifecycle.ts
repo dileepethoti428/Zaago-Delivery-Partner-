@@ -1,6 +1,7 @@
 import { useLifecycleStore } from '@/store/lifecycle';
 import { useOrdersStore } from '@/store/orders';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuthStore } from '@/store/auth';
 
 const RESUME_DEBOUNCE_MS = 30000; // 30 seconds — prevents double-fire from visibilitychange + focus
 const SHORT_BACKGROUND_MS = 5 * 60 * 1000; // 5 minutes — skip heavy resume for quick nav-app trips
