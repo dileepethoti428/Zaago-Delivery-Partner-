@@ -169,7 +169,11 @@ export default function Profile() {
   ];
 
   const handleWhatsAppClick = () => {
-    window.open('https://wa.me/917842343642', '_system');
+    if (Capacitor.isNativePlatform()) {
+      window.location.href = 'whatsapp://send?phone=917842343642';
+    } else {
+      window.open('https://wa.me/917842343642', '_blank');
+    }
   };
 
   return (
