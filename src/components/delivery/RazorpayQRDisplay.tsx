@@ -123,9 +123,14 @@ export function RazorpayQRDisplay({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
+      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
 
-        <DialogContent className="sm:max-w-md rounded-2xl p-0 max-h-screen overflow-y-auto" aria-describedby="payment-qr-desc">
+        <DialogContent
+          className="sm:max-w-md rounded-2xl p-0 max-h-screen overflow-y-auto"
+          aria-describedby="payment-qr-desc"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           {paymentStatus === 'success' ? (
             <div className="flex flex-col items-center justify-center py-12 px-6 space-y-4">
               <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
