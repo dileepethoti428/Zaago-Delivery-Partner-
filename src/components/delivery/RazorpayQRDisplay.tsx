@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, X, Loader2, AlertCircle } from 'lucide-react';
@@ -26,6 +26,23 @@ export function RazorpayQRDisplay({
   const QR_SIZE = 300;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Acquire screen wake lock when QR is open so screen doesn't turn off
+  useEffect(() => {
+    const acquire = async () => {
+      try {
+        if (open && 'wakeLock' in navigator) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch { /* ignore — not all browsers support this */ }
+    };
+    acquire();
+    return () => {
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    };
+  }, [open]);
 
   useEffect(() => {
     const calcFs = () => {
@@ -106,8 +123,14 @@ export function RazorpayQRDisplay({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-        <DialogContent className="sm:max-w-md rounded-2xl p-0 max-h-screen overflow-y-auto" aria-describedby="payment-qr-desc">
+      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+
+        <DialogContent
+          className="sm:max-w-md rounded-2xl p-0 max-h-screen overflow-y-auto"
+          aria-describedby="payment-qr-desc"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           {paymentStatus === 'success' ? (
             <div className="flex flex-col items-center justify-center py-12 px-6 space-y-4">
               <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -222,7 +245,7 @@ export function RazorpayQRDisplay({
           <DialogDescription id="fullscreen-qr-desc" className="sr-only">Fullscreen payment QR code</DialogDescription>
           <div className="w-full h-full flex flex-col items-center justify-center bg-background gap-4">
             <p className="text-foreground font-bold text-xl">₹{orderAmount.toFixed(2)}</p>
-            {upiString && (
+            {upiString ? (
               <div className="bg-white p-4 rounded-xl">
                 <QRCodeSVG
                   value={upiString}
@@ -234,7 +257,15 @@ export function RazorpayQRDisplay({
                   style={{ display: 'block', shapeRendering: 'crispEdges' }}
                 />
               </div>
-            )}
+            ) : qrData?.image_url ? (
+              <div className="bg-white p-4 rounded-xl">
+                <img
+                  src={qrData.image_url}
+                  alt="Payment QR Code"
+                  style={{ width: fsQrSize, height: fsQrSize, display: 'block', imageRendering: 'pixelated' }}
+                />
+              </div>
+            ) : null}
             <p className="text-muted-foreground text-sm">Tap outside to close</p>
           </div>
         </DialogContent>
