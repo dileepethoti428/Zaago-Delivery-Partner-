@@ -48,10 +48,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (loading) => set({ loading }),
 
   fetchProfile: async () => {
-    const { user } = get();
-    if (!user) {
-      set({ profile: null, profileState: 'missing' });
+    const { user, session } = get();
+    if (!session) {
+      console.log('[Profile] No session yet — skipping fetch');
       return;
+    }
+    if (!user) {
+      return; // skip silently, don't wipe profile
     }
 
     set({ profileState: 'loading' });
