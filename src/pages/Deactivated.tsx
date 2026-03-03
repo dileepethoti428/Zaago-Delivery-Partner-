@@ -44,15 +44,13 @@ export default function Deactivated() {
             </div>
 
             <div className="space-y-3">
-              <a
-                href="https://wa.me/917842343642"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => window.open('https://wa.me/917842343642', '_system')}
                 className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-[hsl(142,76%,36%)] hover:bg-[hsl(142,76%,30%)] text-white font-medium transition-colors"
               >
                 <MessageCircle className="h-4 w-4" />
                 Contact Support on WhatsApp
-              </a>
+              </button>
 
               <Button
                 onClick={handleLogout}
