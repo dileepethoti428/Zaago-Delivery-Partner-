@@ -93,7 +93,7 @@ export function RequireAuth() {
     return <Navigate to="/login" replace />;
   }
 
-  if (!session) {
+  if (!loading && !session) {
     return <Navigate to="/login" replace />;
   }
 
