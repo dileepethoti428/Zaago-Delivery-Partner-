@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { cleanupOnLogout } from '@/utils/logoutCleanup';
+import { ensureAgentExists, syncLocationAfterAuth } from '@/utils/postAuthInit';
+import { registerFCMToken } from '@/utils/fcm';
 
 // Module-level guards — persist across React StrictMode double-mounts
 let listenerRegistered = false;
@@ -146,6 +148,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 set({ profileState: 'error' });
               }
               scheduleRetry(0);
+            });
+          }
+
+          // Run post-auth side effects on first sign-in or session restore.
+          // Fire-and-forget — never blocks UI or navigation.
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            Promise.resolve().then(async () => {
+              try {
+                console.log('[AuthInit] Running post-auth initialization...');
+                await ensureAgentExists();
+                registerFCMToken();
+                syncLocationAfterAuth();
+              } catch (e) {
+                console.warn('[AuthInit] Non-blocking init error:', e);
+              }
             });
           }
         }
