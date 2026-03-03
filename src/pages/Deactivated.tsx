@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShieldOff, LogOut, Phone, Mail } from 'lucide-react';
+import { ShieldOff, LogOut, MessageCircle, Mail } from 'lucide-react';
+import { Browser } from '@capacitor/browser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/store/auth';
