@@ -87,7 +87,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ profile: null, profileState: 'loading' });
         get().fetchProfile().catch(() => {});
 
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        if (event === 'SIGNED_IN') {
           Promise.resolve().then(async () => {
             try {
               console.log('[AuthInit] Running post-auth initialization...');
