@@ -181,6 +181,17 @@ export function RazorpayQRDisplay({
                       style={{ display: 'block', shapeRendering: 'crispEdges' }}
                     />
                   </div>
+                ) : qrData?.image_url ? (
+                  <div
+                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
+                    onClick={() => setIsFullscreen(true)}
+                  >
+                    <img
+                      src={qrData.image_url}
+                      alt="Payment QR Code"
+                      style={{ width: qrSize, height: qrSize, display: 'block' }}
+                    />
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center gap-3 py-8 text-muted-foreground">
                     <AlertCircle className="h-10 w-10 text-destructive" />
