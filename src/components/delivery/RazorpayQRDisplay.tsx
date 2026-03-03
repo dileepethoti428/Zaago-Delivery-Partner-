@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, X, Loader2 } from 'lucide-react';
+import { CheckCircle, X, Loader2, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,15 +21,14 @@ export function RazorpayQRDisplay({
   onPaymentComplete 
 }: RazorpayQRDisplayProps) {
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success' | 'timeout'>('pending');
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(300);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
-  const [qrSize, setQrSize] = useState(360);
+  const [qrSize, setQrSize] = useState(280);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
-    const calc = () => setQrSize(Math.min(560, Math.max(360, Math.floor(window.innerWidth * 0.94))));
+    const calc = () => setQrSize(Math.min(320, Math.max(240, Math.floor(window.innerWidth * 0.72))));
     calc();
     window.addEventListener('resize', calc);
     return () => window.removeEventListener('resize', calc);
@@ -37,7 +36,7 @@ export function RazorpayQRDisplay({
 
   useEffect(() => {
     const calcFs = () => {
-      const size = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.96);
+      const size = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.88);
       setFsQrSize(Math.min(860, Math.max(420, size)));
     };
     if (isFullscreen) {
@@ -53,7 +52,6 @@ export function RazorpayQRDisplay({
     setPaymentStatus('pending');
     setTimeLeft(300);
 
-    // Start polling for payment status every 3 seconds
     const interval = setInterval(async () => {
       try {
         setPaymentStatus('checking');
@@ -62,37 +60,30 @@ export function RazorpayQRDisplay({
         });
 
         if (error) {
-          console.error('Error checking payment status:', error);
           setPaymentStatus('pending');
           return;
         }
 
         if (data?.isPaid) {
           setPaymentStatus('success');
-          // Clear interval and trigger completion after a brief success display
-          if (interval) clearInterval(interval);
-          setTimeout(() => {
-            onPaymentComplete();
-          }, 2000);
+          clearInterval(interval);
+          setTimeout(() => { onPaymentComplete(); }, 2000);
         } else {
           setPaymentStatus('pending');
         }
-      } catch (error) {
-        console.error('Payment status check failed:', error);
+      } catch {
         setPaymentStatus('pending');
       }
-    }, 3000); // Poll every 3 seconds
+    }, 3000);
 
     setPollingInterval(interval);
 
-    // Countdown timer
     const timerInterval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timerInterval);
-          if (pollingInterval) clearInterval(pollingInterval);
+          clearInterval(interval);
           setPaymentStatus('timeout');
-          setPaymentError('Payment timed out. Please choose another method or retry.');
           return 0;
         }
         return prev - 1;
@@ -100,7 +91,7 @@ export function RazorpayQRDisplay({
     }, 1000);
 
     return () => {
-      if (interval) clearInterval(interval);
+      clearInterval(interval);
       clearInterval(timerInterval);
     };
   }, [open, qrData?.qr_id]);
@@ -118,118 +109,125 @@ export function RazorpayQRDisplay({
 
   if (!qrData) return null;
 
+  const upiString = qrData.qr_string;
+
   return (
     <>
       <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-lg md:max-w-xl rounded-2xl p-0 max-h-screen overflow-y-auto" aria-describedby="payment-qr-desc">
-        {paymentStatus === 'success' ? (
-          <div className="flex flex-col items-center justify-center py-12 px-6 space-y-4">
-            <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-              <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
+        <DialogContent className="sm:max-w-md rounded-2xl p-0 max-h-screen overflow-y-auto" aria-describedby="payment-qr-desc">
+          {paymentStatus === 'success' ? (
+            <div className="flex flex-col items-center justify-center py-12 px-6 space-y-4">
+              <div className="h-20 w-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-green-600 dark:text-green-400">Payment Received!</h3>
+                <p className="text-muted-foreground">Completing delivery...</p>
+              </div>
             </div>
-            <div className="text-center">
-              <h3 className="text-xl font-bold text-green-600 dark:text-green-400">Payment Received!</h3>
-              <p className="text-muted-foreground">Completing delivery...</p>
-            </div>
-          </div>
-        ) : (
-          <div className="px-5 pt-6 pb-5">
-            <DialogDescription id="payment-qr-desc" className="sr-only">
-              Scan the QR code with any UPI app to complete payment
-            </DialogDescription>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClose}
-              className="absolute right-4 top-4 h-8 w-8 rounded-full opacity-70 hover:opacity-100"
-            >
-              <X className="h-5 w-5" />
-            </Button>
+          ) : (
+            <div className="px-4 pt-5 pb-4">
+              <DialogDescription id="payment-qr-desc" className="sr-only">
+                Scan the QR code with any UPI app to complete payment
+              </DialogDescription>
 
-            <div className="flex items-center justify-between mb-4 px-1">
-              <span className="text-lg sm:text-xl font-bold tracking-wide text-foreground">BHIM</span>
-              <span className="text-lg sm:text-xl font-bold tracking-wide text-foreground">UPI</span>
-            </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClose}
+                className="absolute right-3 top-3 h-8 w-8 rounded-full opacity-70 hover:opacity-100"
+              >
+                <X className="h-4 w-4" />
+              </Button>
 
-            <div className="flex justify-center">
-              <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-                {qrData.qr_string ? (
-                  <QRCodeSVG
-                    value={qrData.qr_string}
-                    size={qrSize}
-                    bgColor="#FFFFFF"
-                    fgColor="#000000"
-                    level="H"
-                    includeMargin
-                    style={{ display: 'block', shapeRendering: 'crispEdges', cursor: 'zoom-in' }}
+              {/* Header */}
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-base font-bold tracking-wide text-foreground">BHIM UPI</span>
+                <span className="text-xs text-muted-foreground font-medium">
+                  {paymentStatus === 'checking' ? (
+                    <span className="flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Checking...
+                    </span>
+                  ) : paymentStatus === 'timeout' ? (
+                    <span className="text-destructive">Expired</span>
+                  ) : (
+                    <span className={timeLeft < 60 ? 'text-destructive font-bold' : ''}>
+                      ⏱ {formatTime(timeLeft)}
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              {/* Amount */}
+              <div className="text-center mb-3">
+                <span className="text-2xl font-bold text-foreground">₹{orderAmount.toFixed(2)}</span>
+                <p className="text-xs text-muted-foreground mt-0.5">Scan to pay this amount</p>
+              </div>
+
+              {/* QR Code */}
+              <div className="flex justify-center">
+                {upiString ? (
+                  <div
+                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
                     onClick={() => setIsFullscreen(true)}
-                  />
+                  >
+                    <QRCodeSVG
+                      value={upiString}
+                      size={qrSize}
+                      bgColor="#FFFFFF"
+                      fgColor="#000000"
+                      level="H"
+                      includeMargin={false}
+                      style={{ display: 'block', shapeRendering: 'crispEdges' }}
+                    />
+                  </div>
                 ) : (
-                  <img
-                    src={qrData.image_url}
-                    alt="Payment QR Code"
-                    style={{ width: qrSize, height: qrSize, imageRendering: 'pixelated', cursor: 'zoom-in' }}
-                    onClick={() => setIsFullscreen(true)}
-                  />
+                  <div className="flex flex-col items-center gap-3 py-8 text-muted-foreground">
+                    <AlertCircle className="h-10 w-10 text-destructive" />
+                    <p className="text-sm text-center">QR code unavailable.<br/>Please choose another payment method.</p>
+                  </div>
                 )}
               </div>
-            </div>
 
-            <div className="mt-4 text-center text-sm font-semibold text-foreground">
-              SCAN & PAY WITH ANY UPI APP
-            </div>
-            <div className="text-center mt-1 text-xs text-muted-foreground">Tap QR to enlarge</div>
+              <p className="text-center text-xs text-muted-foreground mt-2 mb-1">Tap QR to enlarge</p>
+              <p className="text-center text-xs font-semibold text-foreground mt-1">SCAN WITH ANY UPI APP</p>
 
-            {paymentStatus === 'checking' && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Checking payment...</span>
-              </div>
-            )}
-
-            {(timeLeft === 0 || paymentStatus === 'timeout' || paymentError) && (
-              <div className="mt-4 space-y-3">
-                <div className="bg-destructive/10 text-destructive p-3 rounded-lg text-center text-sm">
-                  {paymentError || 'Payment timed out. QR code expired.'}
+              {(paymentStatus === 'timeout' || timeLeft === 0) && (
+                <div className="mt-3 space-y-2">
+                  <div className="bg-destructive/10 text-destructive p-3 rounded-lg text-center text-sm">
+                    QR code expired. Please choose another method or retry.
+                  </div>
+                  <Button variant="outline" className="w-full" onClick={handleClose}>
+                    Choose Different Method
+                  </Button>
                 </div>
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={handleClose}
-                >
-                  Choose Different Method
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-
-    <Dialog open={isFullscreen} onOpenChange={(o) => setIsFullscreen(o)}>
-      <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white border-0" aria-describedby="fullscreen-qr-desc">
-        <DialogDescription id="fullscreen-qr-desc" className="sr-only">Fullscreen payment QR code</DialogDescription>
-        <div className="w-full h-full flex items-center justify-center bg-white">
-          {qrData?.qr_string ? (
-            <QRCodeSVG
-              value={qrData.qr_string}
-              size={fsQrSize}
-              bgColor="#FFFFFF"
-              fgColor="#000000"
-              level="H"
-              includeMargin
-              style={{ display: 'block', shapeRendering: 'crispEdges' }}
-            />
-          ) : (
-            <img
-              src={qrData?.image_url}
-              alt="Payment QR Code"
-              style={{ width: fsQrSize, height: fsQrSize, imageRendering: 'pixelated' }}
-            />
+              )}
+            </div>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fullscreen QR */}
+      <Dialog open={isFullscreen} onOpenChange={(o) => setIsFullscreen(o)}>
+        <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white border-0" aria-describedby="fullscreen-qr-desc">
+          <DialogDescription id="fullscreen-qr-desc" className="sr-only">Fullscreen payment QR code</DialogDescription>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-white gap-4">
+            <p className="text-gray-800 font-bold text-xl">₹{orderAmount.toFixed(2)}</p>
+            {upiString && (
+              <QRCodeSVG
+                value={upiString}
+                size={fsQrSize}
+                bgColor="#FFFFFF"
+                fgColor="#000000"
+                level="H"
+                includeMargin
+                style={{ display: 'block', shapeRendering: 'crispEdges' }}
+              />
+            )}
+            <p className="text-gray-500 text-sm">Tap outside to close</p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

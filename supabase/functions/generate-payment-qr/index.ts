@@ -57,6 +57,21 @@ serve(async (req) => {
     const qrData = await razorpayResponse.json();
     
     console.log('✅ Razorpay QR code generated successfully:', qrData.id);
+    console.log('🔍 Razorpay QR response fields:', Object.keys(qrData));
+
+    // Always ensure we have a UPI string to render the QR ourselves
+    // Razorpay may or may not return qr_string depending on account plan
+    let upiString = qrData.qr_string;
+    
+    if (!upiString) {
+      // Construct standard UPI deep link manually
+      const RAZORPAY_VPA = Deno.env.get('RAZORPAY_VPA') || 'zaago@razorpay';
+      const merchantName = encodeURIComponent('Zaago Delivery');
+      const amountStr = amount.toFixed(2);
+      const txnNote = encodeURIComponent(`Order ${order_id.substring(0, 8)}`);
+      upiString = `upi://pay?pa=${RAZORPAY_VPA}&pn=${merchantName}&am=${amountStr}&cu=INR&tn=${txnNote}&tr=${qrData.id}`;
+      console.log('⚠️ qr_string not in Razorpay response, constructed manually:', upiString);
+    }
 
     // Store QR code ID in database for tracking
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -75,8 +90,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         qr_code_id: qrData.id,
-        qr_code_url: qrData.image_url,
-        qr_string: qrData.qr_string, // For direct UPI apps
+        qr_string: upiString, // Always present — rendered by QRCodeSVG on client
         amount: amount,
         expires_at: qrData.close_by,
       }),
