@@ -209,22 +209,24 @@ export function RazorpayQRDisplay({
 
       {/* Fullscreen QR */}
       <Dialog open={isFullscreen} onOpenChange={(o) => setIsFullscreen(o)}>
-        <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none bg-white border-0" aria-describedby="fullscreen-qr-desc">
+        <DialogContent className="rounded-none p-0 w-screen h-screen max-w-none border-0 bg-background" aria-describedby="fullscreen-qr-desc">
           <DialogDescription id="fullscreen-qr-desc" className="sr-only">Fullscreen payment QR code</DialogDescription>
-          <div className="w-full h-full flex flex-col items-center justify-center bg-white gap-4">
-            <p className="text-gray-800 font-bold text-xl">₹{orderAmount.toFixed(2)}</p>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-background gap-4">
+            <p className="text-foreground font-bold text-xl">₹{orderAmount.toFixed(2)}</p>
             {upiString && (
-              <QRCodeSVG
-                value={upiString}
-                size={fsQrSize}
-                bgColor="#FFFFFF"
-                fgColor="#000000"
-                level="H"
-                includeMargin
-                style={{ display: 'block', shapeRendering: 'crispEdges' }}
-              />
+              <div className="bg-white p-4 rounded-xl">
+                <QRCodeSVG
+                  value={upiString}
+                  size={fsQrSize}
+                  bgColor="#FFFFFF"
+                  fgColor="#000000"
+                  level="H"
+                  includeMargin
+                  style={{ display: 'block', shapeRendering: 'crispEdges' }}
+                />
+              </div>
             )}
-            <p className="text-gray-500 text-sm">Tap outside to close</p>
+            <p className="text-muted-foreground text-sm">Tap outside to close</p>
           </div>
         </DialogContent>
       </Dialog>
