@@ -45,19 +45,22 @@ export default function Deactivated() {
             </div>
 
             <div className="space-y-3">
-              <button
-        onClick={() => {
-          if (Capacitor.isNativePlatform()) {
-            window.location.href = 'whatsapp://send?phone=917842343642';
-          } else {
-            window.open('https://wa.me/917842343642', '_blank');
-          }
-        }}
-                className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-[hsl(142,76%,36%)] hover:bg-[hsl(142,76%,30%)] text-white font-medium transition-colors"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Contact Support on WhatsApp
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <a
+                  href="tel:+917842343642"
+                  className="flex items-center justify-center gap-2 h-11 rounded-xl bg-primary text-primary-foreground font-medium transition-colors hover:opacity-90"
+                >
+                  <Phone className="h-4 w-4" />
+                  Call Support
+                </a>
+                <a
+                  href="mailto:helpzaago@gmail.com"
+                  className="flex items-center justify-center gap-2 h-11 rounded-xl border border-border bg-muted text-foreground font-medium transition-colors hover:bg-muted/70"
+                >
+                  <Mail className="h-4 w-4" />
+                  Email Us
+                </a>
+              </div>
 
               <Button
                 onClick={handleLogout}
