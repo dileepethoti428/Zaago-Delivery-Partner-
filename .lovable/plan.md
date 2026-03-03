@@ -1,166 +1,49 @@
 
-I understand how frustrating this has been. I reviewed your auth flow, splash flow, router, and the latest logs.
+## Two Bugs Found
 
-Do I know what the issue is? Yes.
+### Bug 1: Screen turns off → QR dialog disappears
 
-Root cause summary (from current code):
-1) `main.tsx` mounts correctly and router is initialized correctly.  
-2) The real “blank after splash” lock is in guard logic:
-   - `RequireApproval.tsx` starts an 8s bypass timer on every `profileState` change.
-   - `fetchProfile()` retries flip `profileState` between `loading` and `error` every few seconds.
-   - That keeps resetting the timer, so bypass may never trigger, leaving the app on skeleton/blank forever.
-3) `Splash.tsx` currently has competing timers and can route to protected pages on partial/stale session state (`/my-deliveries`) instead of reliably sending unauthenticated users to `/login`.
-4) No wildcard route (`*`) + no global error boundary means unmatched routes/runtime crashes can appear as a white screen.
-5) Startup is slower than needed because auth/profile boot path still waits on network races before route settles.
+**Root cause**: When the screen turns off and back on, `document.visibilityState` fires `visible` → `onAppResume()` → `resetAllLoaders()` runs. But more critically, the `useResumeGuard` in `ManageDelivery.tsx` (if used) or a parent navigation reset could close dialogs. However, looking carefully: the actual cause is that **Radix UI Dialog checks focus** — when the screen turns off, the browser window loses focus. Some Radix versions auto-dismiss modals on focus loss. But the real smoking gun is `onOpenChange={(open) => !open && handleClose()}` — if Radix fires `onOpenChange(false)` on visibility loss, it calls `handleClose()` which clears the interval and calls `onClose()` which sets `showQRDialog = false` in ManageDelivery, permanently killing the QR dialog.
 
-Implementation plan (step-by-step fix)
+**Fix**: Add `modal={false}` on the QR dialog to prevent Radix from auto-closing it on focus changes, OR replace the outer Dialog with a persistent overlay that doesn't auto-close on visibility change. Best approach: use `preventAutoFocus` and add a `NoCloseonBlur` approach by keeping dialog state in a ref and using `wakeLock` API to prevent screen timeout.
 
-1. Stabilize app boot + add crash visibility
-Files:
-- `src/App.tsx`
-- `src/main.tsx`
-- `src/components/system/AppErrorBoundary.tsx` (new)
-- `src/utils/startupDiagnostics.ts` (new)
+Actually simpler fix: add the Screen Wake Lock API (`navigator.wakeLock.request('screen')`) when the QR dialog opens so the screen **never turns off** while waiting for payment. This is the perfect UX solution — the screen should stay on while a customer is scanning the QR. Release the lock when dialog closes.
 
-Changes:
-- Replace `App.tsx` (currently `return null`) with actual root composition:
-  - `<AppErrorBoundary>`
-    - `<AppProviders>`
-      - `<NetworkStatusWrapper>`
-        - `<RouterProvider router={router} />`
-- Update `main.tsx` to render `<App />` only.
-- Add startup diagnostics once on app boot:
-  - `window.onerror`
-  - `window.onunhandledrejection`
-  - console markers for boot phase transitions.
-- Add a user-safe fallback UI in error boundary (“Something went wrong”, Retry, Go to Login).
+### Bug 2: Fullscreen tap shows blank screen
 
-Why:
-- Prevent silent white screens.
-- Makes runtime failures visible and recoverable.
+**Root cause**: Line 225 in `RazorpayQRDisplay.tsx` — the fullscreen Dialog only renders if `upiString` is truthy:
+```tsx
+{upiString && (
+  <div className="bg-white p-4 rounded-xl">
+    <QRCodeSVG ... />
+  </div>
+)}
+```
+If the `image_url` fallback path is used (no `upiString`), the fullscreen dialog body is **completely empty** — just shows the amount and "Tap outside to close" text. The `<img>` fallback is NOT inside the fullscreen dialog at all.
 
-2. Fix routing safety (404/catch-all)
-File:
-- `src/router/index.tsx`
+**Fix**: Add the same `<img>` fallback inside the fullscreen dialog body (parallel to the `upiString` check).
 
-Changes:
-- Add final fallback route:
-  - `path: '*'`
-  - `element: <Navigate to="/login" replace />`
-- Keep `/`, `/splash`, `/login` explicit and unchanged in intent.
+---
 
-Why:
-- Any unmatched path will never render blank again.
+## Changes
 
-3. Fix auth guard deadlock (main blank-screen bug)
-Files:
-- `src/components/auth/RequireApproval.tsx`
-- `src/components/auth/RequireAuth.tsx`
+**`src/components/delivery/RazorpayQRDisplay.tsx`**:
 
-Changes:
-- In `RequireApproval.tsx`, change bypass timer to depend on unresolved boolean, not raw `profileState` transitions.
-  - Use `isUnresolved = ['idle','loading','error'].includes(profileState)`.
-  - Start 1 timer when unresolved begins; do not reset while unresolved stays true.
-  - After timeout, stop blocking and render recovery path.
-- In `RequireAuth.tsx`, add boot deadline behavior:
-  - If auth still loading past deadline and no valid session => redirect `/login`.
-  - Keep retry controls but never allow infinite skeleton.
-- Add token staleness safety check (`session.expires_at`) before granting protected outlet.
+1. **Screen Wake Lock** — acquire `navigator.wakeLock.request('screen')` when `open` becomes true, release on dialog close/unmount. This prevents screen-off from dismissing the QR dialog.
 
-Why:
-- Eliminates the loading/error timer-reset loop that causes endless blank/skeleton.
+2. **Fullscreen blank fix** — Add `image_url` branch inside the fullscreen Dialog:
+```tsx
+{upiString ? (
+  <div className="bg-white p-4 rounded-xl">
+    <QRCodeSVG value={upiString} size={fsQrSize} ... />
+  </div>
+) : qrData?.image_url ? (
+  <div className="bg-white p-4 rounded-xl">
+    <img src={qrData.image_url} style={{ width: fsQrSize, height: fsQrSize, imageRendering: 'pixelated' }} />
+  </div>
+) : null}
+```
 
-4. Make splash deterministic and faster
-File:
-- `src/pages/Splash.tsx`
+3. **Also guard Radix Dialog dismissal** — add `onInteractOutside={(e) => e.preventDefault()}` on the main QR dialog so tapping outside doesn't close it accidentally (user should use the X button only, since payment may be in progress).
 
-Changes:
-- Replace current multi-timer behavior with one deterministic boot deadline flow:
-  - If `loading` resolves quickly: route immediately based on session/profile.
-  - If deadline hits:
-    - no session => `/login`
-    - session exists => protected landing (`/my-deliveries`) with guards handling profile.
-- Remove redundant/competing timers that can conflict with auth transitions.
-- Ensure no repeated navigation loops.
-
-Why:
-- Splash always exits predictably.
-- Unauthenticated users reliably reach Login.
-
-5. Reduce auth initialization blocking time
-File:
-- `src/store/auth.ts`
-
-Changes:
-- Keep listener-first pattern.
-- Decouple “auth loading” from slow profile calls:
-  - mark `loading=false` once session state is known.
-  - continue profile fetch/retry in background via `profileState`.
-- Keep existing retry backoff; avoid long blocking path at boot.
-- Preserve current error classification (`PGRST116` vs transient errors).
-
-Why:
-- Faster perceived launch.
-- Prevents splash waiting on slow profile/API calls.
-
-6. Capacitor splash handling (native-safe)
-Files:
-- `package.json` (if missing plugin)
-- `src/pages/Splash.tsx` or a bootstrap helper
-
-Changes:
-- Add guarded native splash hide:
-  - `if (Capacitor.isNativePlatform()) SplashScreen.hide().catch(...)`
-- Call hide only after app readiness decision (not before router/auth state is settled).
-- Never block UI waiting for hide.
-
-Why:
-- Prevents native splash freeze on Android/iOS.
-- Keeps web behavior unaffected.
-
-7. Safe render guard to force login when session/auth fails
-Files:
-- `src/components/auth/RequireAuth.tsx`
-- `src/pages/Splash.tsx`
-
-Changes:
-- If session is missing/expired or auth check fails beyond deadline, always navigate to `/login`.
-- No protected route rendering without a valid usable session.
-
-Why:
-- Matches your expected behavior: after splash, login must appear when auth isn’t valid.
-
-8. Performance tuning (quick wins for slow startup)
-Files:
-- `src/store/auth.ts`
-- `src/router/index.tsx` (optional phase-2 lazy loading)
-
-Changes:
-- Remove unnecessary blocking `await`s before first route paint.
-- Optional: lazy-load heavy protected pages (`Home`, `Earnings`, `MyDeliveries`) with fallback skeleton.
-
-Why:
-- Faster time-to-interactive on mobile/webview.
-
-Exact files to modify
-- `src/App.tsx`
-- `src/main.tsx`
-- `src/router/index.tsx`
-- `src/pages/Splash.tsx`
-- `src/components/auth/RequireAuth.tsx`
-- `src/components/auth/RequireApproval.tsx`
-- `src/store/auth.ts`
-- `src/components/system/AppErrorBoundary.tsx` (new)
-- `src/utils/startupDiagnostics.ts` (new)
-- `package.json` (only if adding `@capacitor/splash-screen`)
-
-Validation checklist after implementation
-1) Cold start with no session => Splash briefly shows, then `/login` always appears.  
-2) Signed-in user on slow network => no white/blank lock; app exits splash deterministically.  
-3) Force profile API errors => guard never gets stuck forever; recovery path is shown.  
-4) Unknown route (e.g. `/abc`) => redirects to `/login` (no blank page).  
-5) Simulate runtime throw => ErrorBoundary fallback appears (not white screen).  
-6) Measure startup timing before/after to confirm speed improvement.
-
-Technical note
-- `App.tsx` is currently unused (`return null`), which is risky for maintainability and debugging. I will make it the true app root so startup instrumentation and error boundary are guaranteed in one place.
+These are all changes in a single file.
