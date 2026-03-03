@@ -23,16 +23,9 @@ export function RazorpayQRDisplay({
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success' | 'timeout'>('pending');
   const [timeLeft, setTimeLeft] = useState(300);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
-  const [qrSize, setQrSize] = useState(280);
+  const QR_SIZE = 300;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
-
-  useEffect(() => {
-    const calc = () => setQrSize(Math.min(320, Math.max(240, Math.floor(window.innerWidth * 0.72))));
-    calc();
-    window.addEventListener('resize', calc);
-    return () => window.removeEventListener('resize', calc);
-  }, []);
 
   useEffect(() => {
     const calcFs = () => {
@@ -173,7 +166,7 @@ export function RazorpayQRDisplay({
                   >
                     <QRCodeSVG
                       value={upiString}
-                      size={qrSize}
+                      size={QR_SIZE}
                       bgColor="#FFFFFF"
                       fgColor="#000000"
                       level="H"
@@ -189,7 +182,12 @@ export function RazorpayQRDisplay({
                     <img
                       src={qrData.image_url}
                       alt="Payment QR Code"
-                      style={{ width: qrSize, height: qrSize, display: 'block' }}
+                      style={{
+                        width: 360,
+                        height: 360,
+                        display: 'block',
+                        imageRendering: 'pixelated',
+                      }}
                     />
                   </div>
                 ) : (
