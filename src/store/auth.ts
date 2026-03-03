@@ -154,13 +154,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // No manual getSession() call — Supabase fires INITIAL_SESSION automatically
     // when onAuthStateChange listener is registered, reading from localStorage.
 
-    // Safety fallback — if no auth event fires within 4s, unlock UI
-    setTimeout(() => {
-      if (get().loading) {
-        console.warn('[Auth] Safety unlock triggered — no auth event received');
+    // Fallback: if INITIAL_SESSION hasn't fired within 1.5s, manually restore session.
+    // Covers Capacitor/WebView environments where the event can be missed or arrive late.
+    setTimeout(async () => {
+      if (!get().loading) return; // already resolved by event
+      console.warn('[Auth] INITIAL_SESSION not received — falling back to getSession()');
+      try {
+        const { data } = await supabase.auth.getSession();
+        set({
+          session: data.session,
+          user: data.session?.user ?? null,
+          loading: false,
+        });
+        if (data.session?.user && get().profileState !== 'ready') {
+          get().fetchProfile().catch(() => {});
+        }
+      } catch {
         set({ loading: false });
       }
-    }, 4000);
+    }, 1500);
   },
 
   signOut: async () => {
