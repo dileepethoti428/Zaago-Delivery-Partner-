@@ -46,7 +46,13 @@ export default function Deactivated() {
 
             <div className="space-y-3">
               <button
-                onClick={() => window.open('https://wa.me/917842343642', '_system')}
+        onClick={() => {
+          if (Capacitor.isNativePlatform()) {
+            window.location.href = 'whatsapp://send?phone=917842343642';
+          } else {
+            window.open('https://wa.me/917842343642', '_blank');
+          }
+        }}
                 className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-[hsl(142,76%,36%)] hover:bg-[hsl(142,76%,30%)] text-white font-medium transition-colors"
               >
                 <MessageCircle className="h-4 w-4" />

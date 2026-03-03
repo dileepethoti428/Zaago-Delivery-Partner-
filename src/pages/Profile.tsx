@@ -29,6 +29,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { checkLocationPermission } from '@/utils/checkLocationPermission';
 import { useQueryClient } from '@tanstack/react-query';
 import { useResumeGuard } from '@/hooks/useResumeGuard';
+import { Capacitor } from '@capacitor/core';
 
 export default function Profile() {
   const navigate = useNavigate();
