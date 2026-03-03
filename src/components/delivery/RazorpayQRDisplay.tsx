@@ -166,7 +166,7 @@ export function RazorpayQRDisplay({
                   >
                     <QRCodeSVG
                       value={upiString}
-                      size={qrSize}
+                      size={QR_SIZE}
                       bgColor="#FFFFFF"
                       fgColor="#000000"
                       level="H"
@@ -182,7 +182,12 @@ export function RazorpayQRDisplay({
                     <img
                       src={qrData.image_url}
                       alt="Payment QR Code"
-                      style={{ width: qrSize, height: qrSize, display: 'block' }}
+                      style={{
+                        width: 360,
+                        height: 360,
+                        display: 'block',
+                        imageRendering: 'pixelated',
+                      }}
                     />
                   </div>
                 ) : (
