@@ -280,8 +280,8 @@ export default function Profile() {
         className="fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-110 transition-all duration-200 flex items-center justify-center"
         aria-label="Call Support"
       >
-        <WhatsAppIcon className="h-7 w-7" />
-      </button>
+        <Phone className="h-6 w-6" />
+      </a>
     </AppShell>
     </motion.div>
   );
