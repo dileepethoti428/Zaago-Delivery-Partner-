@@ -17,7 +17,6 @@ import { agentSession } from "@/utils/agentSession";
 import { cache } from "@/utils/cache";
 import { advancedCache } from "@/utils/advancedCache";
 import { queryClient } from "@/providers/AppProviders";
-import { registerFCMToken } from "@/utils/fcm";
 
 type Mode = "login" | "signup" | "reset";
 
