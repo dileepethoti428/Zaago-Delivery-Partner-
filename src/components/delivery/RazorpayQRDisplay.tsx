@@ -26,6 +26,23 @@ export function RazorpayQRDisplay({
   const QR_SIZE = 300;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Acquire screen wake lock when QR is open so screen doesn't turn off
+  useEffect(() => {
+    const acquire = async () => {
+      try {
+        if (open && 'wakeLock' in navigator) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch { /* ignore — not all browsers support this */ }
+    };
+    acquire();
+    return () => {
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    };
+  }, [open]);
 
   useEffect(() => {
     const calcFs = () => {
