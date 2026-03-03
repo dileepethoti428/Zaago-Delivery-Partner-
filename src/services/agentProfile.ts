@@ -9,6 +9,31 @@ function resolvePhotoUrl(url: string | null | undefined): string | null {
   return `${SUPABASE_URL}/storage/v1/object/public/agent-documents/${url}`;
 }
 
+export async function fetchAgentProfileById(userId: string) {
+  const { data, error } = await supabase
+    .from('delivery_agents')
+    .select('*')
+    .eq('agent_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return data;
+
+  const { data: docData } = await supabase
+    .from('agent_documents')
+    .select('profile_photo_url')
+    .eq('user_id', data.agent_id)
+    .maybeSingle();
+
+  const fallbackPhoto = docData?.profile_photo_url ?? null;
+
+  return {
+    ...data,
+    profile_image:
+      resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
+  };
+}
+
 export async function fetchAgentProfile(email: string) {
   // Step 1: Fetch agent record by email
   const { data, error } = await supabase

@@ -1,40 +1,166 @@
 
-## What's Actually Happening
+I understand how frustrating this has been. I reviewed your auth flow, splash flow, router, and the latest logs.
 
-The user's diagnosis points at Profile.tsx using `useProfile(user?.email)` (React Query) instead of the Zustand auth store. However, the auth store's `Profile` interface contains **different fields** from a different table:
+Do I know what the issue is? Yes.
 
-- **Auth store profile** → `profiles` table → `full_name`, `approval_status`, `documents_submitted`
-- **`useProfile` hook** → `delivery_agents` table → `name`, `profile_image`, `is_active`, `is_online`
+Root cause summary (from current code):
+1) `main.tsx` mounts correctly and router is initialized correctly.  
+2) The real “blank after splash” lock is in guard logic:
+   - `RequireApproval.tsx` starts an 8s bypass timer on every `profileState` change.
+   - `fetchProfile()` retries flip `profileState` between `loading` and `error` every few seconds.
+   - That keeps resetting the timer, so bypass may never trigger, leaving the app on skeleton/blank forever.
+3) `Splash.tsx` currently has competing timers and can route to protected pages on partial/stale session state (`/my-deliveries`) instead of reliably sending unauthenticated users to `/login`.
+4) No wildcard route (`*`) + no global error boundary means unmatched routes/runtime crashes can appear as a white screen.
+5) Startup is slower than needed because auth/profile boot path still waits on network races before route settles.
 
-These are genuinely different tables. Profile.tsx **must** use `delivery_agents` data (`name`, `profile_image`, `is_active`) — the auth store cannot supply these fields.
+Implementation plan (step-by-step fix)
 
-**The real problem** is that `useProfile` uses `user?.email` as the query key, and `user` can be transiently null/undefined after refresh before the session restores. This causes either:
-1. The query to fire with `undefined` email → creates a disabled/pending query → `isLoading` stays true → stale data
-2. Or email returned from `delivery_agents` query mismatches
+1. Stabilize app boot + add crash visibility
+Files:
+- `src/App.tsx`
+- `src/main.tsx`
+- `src/components/system/AppErrorBoundary.tsx` (new)
+- `src/utils/startupDiagnostics.ts` (new)
 
-## The Correct Fix (Minimal, Surgical)
+Changes:
+- Replace `App.tsx` (currently `return null`) with actual root composition:
+  - `<AppErrorBoundary>`
+    - `<AppProviders>`
+      - `<NetworkStatusWrapper>`
+        - `<RouterProvider router={router} />`
+- Update `main.tsx` to render `<App />` only.
+- Add startup diagnostics once on app boot:
+  - `window.onerror`
+  - `window.onunhandledrejection`
+  - console markers for boot phase transitions.
+- Add a user-safe fallback UI in error boundary (“Something went wrong”, Retry, Go to Login).
 
-### Option A — Switch `useProfile` to query by `user?.id` instead of email
-The `delivery_agents` table has an `agent_id` field which is the auth user UUID. Querying by `agent_id = user.id` is far more stable than by email. The `fetchAgentProfile` service already has `data.agent_id` available.
+Why:
+- Prevent silent white screens.
+- Makes runtime failures visible and recoverable.
 
-### Plan: 2 targeted changes
+2. Fix routing safety (404/catch-all)
+File:
+- `src/router/index.tsx`
 
-**`src/services/agentProfile.ts`** — Add a new function `fetchAgentProfileById(userId)` that queries `delivery_agents` by `agent_id` (UUID) instead of `email`.
+Changes:
+- Add final fallback route:
+  - `path: '*'`
+  - `element: <Navigate to="/login" replace />`
+- Keep `/`, `/splash`, `/login` explicit and unchanged in intent.
 
-**`src/hooks/useProfile.ts`** — Add a new `useProfileById(userId)` hook that uses `user?.id` as the query key and calls the new fetch function. More stable than email because `user.id` is always the same UUID.
+Why:
+- Any unmatched path will never render blank again.
 
-**`src/pages/Profile.tsx`** — Replace:
-```ts
-const { data: agentProfile, isLoading: loading } = useProfile(user?.email);
-```
-With:
-```ts
-const { data: agentProfile, isLoading: loading } = useProfileById(user?.id);
-```
+3. Fix auth guard deadlock (main blank-screen bug)
+Files:
+- `src/components/auth/RequireApproval.tsx`
+- `src/components/auth/RequireAuth.tsx`
 
-This keeps the same data source (`delivery_agents`) but eliminates the email instability. The query key becomes `['profile', userId]` where `userId` is the stable UUID from the session — never changes on refresh.
+Changes:
+- In `RequireApproval.tsx`, change bypass timer to depend on unresolved boolean, not raw `profileState` transitions.
+  - Use `isUnresolved = ['idle','loading','error'].includes(profileState)`.
+  - Start 1 timer when unresolved begins; do not reset while unresolved stays true.
+  - After timeout, stop blocking and render recovery path.
+- In `RequireAuth.tsx`, add boot deadline behavior:
+  - If auth still loading past deadline and no valid session => redirect `/login`.
+  - Keep retry controls but never allow infinite skeleton.
+- Add token staleness safety check (`session.expires_at`) before granting protected outlet.
 
-### Files to change
-- `src/services/agentProfile.ts` — add `fetchAgentProfileById(userId: string)` 
-- `src/hooks/useProfile.ts` — add `useProfileById(userId?: string)`
-- `src/pages/Profile.tsx` — swap hook call to `useProfileById(user?.id)`
+Why:
+- Eliminates the loading/error timer-reset loop that causes endless blank/skeleton.
+
+4. Make splash deterministic and faster
+File:
+- `src/pages/Splash.tsx`
+
+Changes:
+- Replace current multi-timer behavior with one deterministic boot deadline flow:
+  - If `loading` resolves quickly: route immediately based on session/profile.
+  - If deadline hits:
+    - no session => `/login`
+    - session exists => protected landing (`/my-deliveries`) with guards handling profile.
+- Remove redundant/competing timers that can conflict with auth transitions.
+- Ensure no repeated navigation loops.
+
+Why:
+- Splash always exits predictably.
+- Unauthenticated users reliably reach Login.
+
+5. Reduce auth initialization blocking time
+File:
+- `src/store/auth.ts`
+
+Changes:
+- Keep listener-first pattern.
+- Decouple “auth loading” from slow profile calls:
+  - mark `loading=false` once session state is known.
+  - continue profile fetch/retry in background via `profileState`.
+- Keep existing retry backoff; avoid long blocking path at boot.
+- Preserve current error classification (`PGRST116` vs transient errors).
+
+Why:
+- Faster perceived launch.
+- Prevents splash waiting on slow profile/API calls.
+
+6. Capacitor splash handling (native-safe)
+Files:
+- `package.json` (if missing plugin)
+- `src/pages/Splash.tsx` or a bootstrap helper
+
+Changes:
+- Add guarded native splash hide:
+  - `if (Capacitor.isNativePlatform()) SplashScreen.hide().catch(...)`
+- Call hide only after app readiness decision (not before router/auth state is settled).
+- Never block UI waiting for hide.
+
+Why:
+- Prevents native splash freeze on Android/iOS.
+- Keeps web behavior unaffected.
+
+7. Safe render guard to force login when session/auth fails
+Files:
+- `src/components/auth/RequireAuth.tsx`
+- `src/pages/Splash.tsx`
+
+Changes:
+- If session is missing/expired or auth check fails beyond deadline, always navigate to `/login`.
+- No protected route rendering without a valid usable session.
+
+Why:
+- Matches your expected behavior: after splash, login must appear when auth isn’t valid.
+
+8. Performance tuning (quick wins for slow startup)
+Files:
+- `src/store/auth.ts`
+- `src/router/index.tsx` (optional phase-2 lazy loading)
+
+Changes:
+- Remove unnecessary blocking `await`s before first route paint.
+- Optional: lazy-load heavy protected pages (`Home`, `Earnings`, `MyDeliveries`) with fallback skeleton.
+
+Why:
+- Faster time-to-interactive on mobile/webview.
+
+Exact files to modify
+- `src/App.tsx`
+- `src/main.tsx`
+- `src/router/index.tsx`
+- `src/pages/Splash.tsx`
+- `src/components/auth/RequireAuth.tsx`
+- `src/components/auth/RequireApproval.tsx`
+- `src/store/auth.ts`
+- `src/components/system/AppErrorBoundary.tsx` (new)
+- `src/utils/startupDiagnostics.ts` (new)
+- `package.json` (only if adding `@capacitor/splash-screen`)
+
+Validation checklist after implementation
+1) Cold start with no session => Splash briefly shows, then `/login` always appears.  
+2) Signed-in user on slow network => no white/blank lock; app exits splash deterministically.  
+3) Force profile API errors => guard never gets stuck forever; recovery path is shown.  
+4) Unknown route (e.g. `/abc`) => redirects to `/login` (no blank page).  
+5) Simulate runtime throw => ErrorBoundary fallback appears (not white screen).  
+6) Measure startup timing before/after to confirm speed improvement.
+
+Technical note
+- `App.tsx` is currently unused (`return null`), which is risky for maintainability and debugging. I will make it the true app root so startup instrumentation and error boundary are guaranteed in one place.

@@ -22,7 +22,7 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 import { motion as m } from 'framer-motion';
-import { useProfile } from '@/hooks/useProfile';
+import { useProfileById } from '@/hooks/useProfile';
 import { useAgentSettings } from '@/hooks/useSettings';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,7 +35,7 @@ export default function Profile() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
-  const { data: agentProfile, isLoading: loading } = useProfile(user?.email);
+  const { data: agentProfile, isLoading: loading } = useProfileById(user?.id);
   const { data: agentSettingsData } = useAgentSettings();
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const startWatch = useLocationStore((state) => state.startWatch);

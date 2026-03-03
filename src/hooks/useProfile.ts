@@ -1,5 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchAgentProfile } from '@/services/agentProfile';
+import { fetchAgentProfile, fetchAgentProfileById } from '@/services/agentProfile';
+
+export const useProfileById = (userId?: string) => {
+  return useQuery({
+    queryKey: ['profile', userId],
+    queryFn: () => fetchAgentProfileById(userId!),
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: 1000,
+  });
+};
 
 export const useProfile = (email?: string) => {
   return useQuery({
