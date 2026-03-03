@@ -283,11 +283,11 @@ export default function Profile() {
 
       </div>
 
-      {/* Floating WhatsApp Button */}
-      <button
-        onClick={handleWhatsAppClick}
-        className="fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#20BD5A] hover:scale-110 transition-all duration-200 flex items-center justify-center"
-        aria-label="Chat on WhatsApp"
+      {/* Floating Call Support Button */}
+      <a
+        href="tel:+917842343642"
+        className="fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-110 transition-all duration-200 flex items-center justify-center"
+        aria-label="Call Support"
       >
         <WhatsAppIcon className="h-7 w-7" />
       </button>
