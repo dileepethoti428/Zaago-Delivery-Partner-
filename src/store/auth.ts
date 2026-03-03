@@ -148,7 +148,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               scheduleRetry(0);
             });
           }
-        // Do not reset profile here — SIGNED_OUT handles that above
+        }
+        // SIGNED_OUT handles profile reset above — no reset here for other events
       });
     }
 
