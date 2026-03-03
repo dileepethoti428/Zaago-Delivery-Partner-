@@ -37,68 +37,8 @@ async function fetchProfileWithTimeout(fetchProfile: () => Promise<void>): Promi
   }
 }
 
-// Helper function to ensure agent exists in delivery_agents table
-async function ensureAgentExists() {
-  try {
-    console.log("[Login] Ensuring agent exists in delivery_agents...");
-    const { data, error } = await supabase.functions.invoke("ensure-agent-exists");
-    if (error) {
-      console.error("[Login] Error ensuring agent exists:", error);
-      return false;
-    }
-    console.log("[Login] Agent ensured:", data);
-    return true;
-  } catch (error) {
-    console.error("[Login] Failed to ensure agent exists:", error);
-    return false;
-  }
-}
-
-// Helper function to sync location - called after login/signup
-// CRITICAL: This is completely NON-BLOCKING - failures never affect login/navigation
-async function syncLocationAfterAuth(): Promise<void> {
-  try {
-    if (!navigator.geolocation) {
-      console.warn("[Login] Geolocation not supported - continuing without location sync");
-      return;
-    }
-
-    let position: GeolocationPosition;
-    try {
-      position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 30000,
-        });
-      });
-    } catch (geoError) {
-      console.warn("[Login] Geolocation unavailable - continuing without location sync:", geoError);
-      return;
-    }
-
-    const { latitude, longitude, accuracy, heading, speed } = position.coords;
-    console.log("[Login] Attempting location sync:", { latitude, longitude });
-
-    try {
-      const { data, error } = await supabase.functions.invoke("update-agent-location", {
-        body: { latitude, longitude, accuracy, heading: heading ?? undefined, speed: speed ?? undefined },
-      });
-
-      if (error) {
-        console.warn("[Login] Location sync edge function error (non-blocking):", error);
-      } else if (data?.success === false) {
-        console.warn("[Login] Location sync returned non-success (non-blocking):", data?.reason || "unknown");
-      } else {
-        console.log("[Login] Location synced successfully");
-      }
-    } catch (invokeError) {
-      console.warn("[Login] Location sync invoke failed (non-blocking):", invokeError);
-    }
-  } catch (unexpectedError) {
-    console.warn("[Login] Unexpected error in location sync (non-blocking):", unexpectedError);
-  }
-}
+// Side effects (ensureAgentExists, syncLocationAfterAuth, registerFCMToken)
+// are now handled centrally in src/store/auth.ts onAuthStateChange.
 
 export default function Login() {
   const navigate = useNavigate();
