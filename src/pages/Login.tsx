@@ -207,10 +207,7 @@ export default function Login() {
         return;
       }
 
-      // Non-blocking tasks
-      ensureAgentExists();
-      syncLocationAfterAuth();
-      registerFCMToken();
+      // Non-blocking tasks now handled centrally in auth store
 
       if (!profileLoaded) {
         toast({
