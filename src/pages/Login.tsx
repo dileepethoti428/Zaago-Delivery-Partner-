@@ -220,11 +220,6 @@ export default function Login() {
 
         await fetchProfileWithTimeout(fetchProfile);
 
-        // Non-blocking tasks
-        ensureAgentExists();
-        syncLocationAfterAuth();
-        registerFCMToken();
-
         navigate("/upload-documents");
       }
     } catch (err) {
