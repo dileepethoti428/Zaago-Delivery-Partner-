@@ -77,22 +77,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     set({ loading: true });
 
-    const { data: { session } } = await supabase.auth.getSession();
-
-    set({ session, user: session?.user ?? null, loading: false });
-
-    if (session?.user) {
-      set({ profileState: 'loading' });
-      get().fetchProfile().catch(() => {});
-    }
-
+    // 1️⃣ Register listener FIRST so no auth event is missed
     supabase.auth.onAuthStateChange((event, session) => {
       console.log('[Auth] State change:', event);
 
       set({ session, user: session?.user ?? null, loading: false });
 
       if (session?.user) {
-        set({ profileState: 'loading' });
+        set({ profile: null, profileState: 'loading' });
         get().fetchProfile().catch(() => {});
 
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
@@ -111,6 +103,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ profile: null, profileState: 'idle' });
       }
     });
+
+    // 2️⃣ THEN check existing session (covers cold start if INITIAL_SESSION fires before listener)
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      set({ session, user: session.user, loading: false });
+      set({ profile: null, profileState: 'loading' });
+      get().fetchProfile().catch(() => {});
+    }
   },
 
   signOut: async () => {
