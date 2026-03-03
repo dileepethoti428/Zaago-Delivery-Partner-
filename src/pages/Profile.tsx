@@ -169,13 +169,6 @@ export default function Profile() {
     { icon: HelpCircle, label: 'Help & Support', action: () => navigate('/help') },
   ];
 
-  const handleWhatsAppClick = () => {
-    if (Capacitor.isNativePlatform()) {
-      window.location.href = 'whatsapp://send?phone=917842343642';
-    } else {
-      window.open('https://wa.me/917842343642', '_blank');
-    }
-  };
 
   return (
     <motion.div initial={pageTransition.initial} animate={pageTransition.animate} exit={pageTransition.exit} transition={pageTransitionConfig} className="h-full">
