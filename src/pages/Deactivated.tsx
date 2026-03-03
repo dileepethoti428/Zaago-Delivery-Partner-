@@ -45,20 +45,20 @@ export default function Deactivated() {
 
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <a
-                  href="tel:+917842343642"
+                <button
+                  onClick={() => window.open('tel:+917842343642', '_system')}
                   className="flex items-center justify-center gap-2 h-11 rounded-xl bg-primary text-primary-foreground font-medium transition-colors hover:opacity-90"
                 >
                   <Phone className="h-4 w-4" />
                   Call Support
-                </a>
-                <a
-                  href="mailto:helpzaago@gmail.com"
+                </button>
+                <button
+                  onClick={() => window.open('mailto:helpzaago@gmail.com', '_system')}
                   className="flex items-center justify-center gap-2 h-11 rounded-xl border border-border bg-muted text-foreground font-medium transition-colors hover:bg-muted/70"
                 >
                   <Mail className="h-4 w-4" />
                   Email Us
-                </a>
+                </button>
               </div>
 
               <Button

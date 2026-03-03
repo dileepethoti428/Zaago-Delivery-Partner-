@@ -274,13 +274,13 @@ export default function Profile() {
       </div>
 
       {/* Floating Call Support Button */}
-      <a
-        href="tel:+917842343642"
+      <button
+        onClick={() => window.open('tel:+917842343642', '_system')}
         className="fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-110 transition-all duration-200 flex items-center justify-center"
         aria-label="Call Support"
       >
         <Phone className="h-6 w-6" />
-      </a>
+      </button>
     </AppShell>
     </motion.div>
   );
