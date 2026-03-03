@@ -5,10 +5,6 @@ import { cleanupOnLogout } from '@/utils/logoutCleanup';
 import { ensureAgentExists, syncLocationAfterAuth } from '@/utils/postAuthInit';
 import { registerFCMToken } from '@/utils/fcm';
 
-// Module-level guards — persist across React StrictMode double-mounts
-let listenerRegistered = false;
-let initialized = false;
-
 interface Profile {
   user_id: string;
   full_name: string | null;
@@ -19,7 +15,7 @@ interface Profile {
   documents_submitted: boolean;
   submission_date: string | null;
   rejection_reason: string | null;
-  isActive?: boolean; // from delivery_agents.is_active
+  isActive?: boolean;
 }
 
 export type ProfileState = 'idle' | 'loading' | 'ready' | 'missing' | 'error';
@@ -50,14 +46,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (loading) => set({ loading }),
 
   fetchProfile: async () => {
-    const { user, session } = get();
-    if (!session) {
-      console.log('[Profile] No session yet — skipping fetch');
-      return;
-    }
-    if (!user) {
-      return; // skip silently, don't wipe profile
-    }
+    const { user } = get();
+    if (!user) return;
 
     set({ profileState: 'loading' });
 
@@ -67,7 +57,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         supabase.from('delivery_agents').select('is_active').eq('agent_id', user.id).maybeSingle(),
       ]);
 
-      if (!profileRes.error && profileRes.data) {
+      if (profileRes.data) {
         set({
           profile: {
             ...(profileRes.data as Profile),
@@ -75,130 +65,55 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           },
           profileState: 'ready',
         });
-      } else if (profileRes.error) {
-        const isNoRow = profileRes.error.code === 'PGRST116';
-        if (isNoRow) {
-          console.warn('[Auth] Profile not found (no row)');
-          set({ profile: null, profileState: 'missing' });
-        } else {
-          console.warn('[Auth] Profile fetch API error:', profileRes.error.message, profileRes.error.code);
-          set({ profileState: 'error' });
-          throw new Error(profileRes.error.message);
-        }
       } else {
         set({ profile: null, profileState: 'missing' });
       }
     } catch (err) {
-      console.warn('[Auth] Profile fetch network error:', err);
+      console.warn('[Auth] Profile fetch error:', err);
       set({ profileState: 'error' });
-      throw err;
     }
   },
 
   initialize: async () => {
-    // Idempotent — calling twice is a no-op
-    if (initialized) return;
-    initialized = true;
+    set({ loading: true });
 
-    // loading stays TRUE until INITIAL_SESSION or SIGNED_IN fires
-    set({ loading: true, profileState: 'idle' });
+    const { data: { session } } = await supabase.auth.getSession();
 
-    if (!listenerRegistered) {
-      listenerRegistered = true;
+    set({ session, user: session?.user ?? null, loading: false });
 
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('[Auth] State change:', event);
-
-        // TOKEN_REFRESHED: always sync session+user so downstream queries (e.g. useProfile) can fire
-        if (event === 'TOKEN_REFRESHED') {
-          set({ session, user: session?.user ?? null, loading: false });
-          return;
-        }
-
-        if (event === 'SIGNED_OUT') {
-          set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
-          return;
-        }
-
-        // Always sync session unconditionally for all other events
-        set({ session, user: session?.user ?? null });
-
-        // INITIAL_SESSION and SIGNED_IN are the authoritative signals that auth is resolved
-        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-          set({ loading: false });
-        }
-
-        if (session?.user) {
-          // Fetch profile whenever session exists and profile isn't already ready
-          if (get().profileState !== 'ready') {
-            const scheduleRetry = (attempt: number) => {
-              const retryDelays = [2000, 4000, 8000];
-              if (attempt >= retryDelays.length) return;
-              setTimeout(() => {
-                if (get().profileState !== 'ready') {
-                  console.log(`[Auth] Retrying profile fetch (attempt ${attempt + 1})...`);
-                  get().fetchProfile().catch(() => scheduleRetry(attempt + 1));
-                }
-              }, retryDelays[attempt]);
-            };
-
-            get().fetchProfile().catch((err: any) => {
-              console.warn('[Auth] Profile fetch issue:', err?.message);
-              if (get().profileState === 'loading') {
-                set({ profileState: 'error' });
-              }
-              scheduleRetry(0);
-            });
-          }
-
-          // Run post-auth side effects on first sign-in or session restore.
-          // Fire-and-forget — never blocks UI or navigation.
-          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-            Promise.resolve().then(async () => {
-              try {
-                console.log('[AuthInit] Running post-auth initialization...');
-                await ensureAgentExists();
-                registerFCMToken();
-                syncLocationAfterAuth();
-              } catch (e) {
-                console.warn('[AuthInit] Non-blocking init error:', e);
-              }
-            });
-          }
-        }
-        // SIGNED_OUT handles profile reset above — no reset here for other events
-      });
+    if (session?.user) {
+      set({ profileState: 'loading' });
+      get().fetchProfile().catch(() => {});
     }
 
-    // No manual getSession() call — Supabase fires INITIAL_SESSION automatically
-    // when onAuthStateChange listener is registered, reading from localStorage.
+    supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] State change:', event);
 
-    // Fallback: if INITIAL_SESSION hasn't fired within 1.5s, manually restore session.
-    // Covers Capacitor/WebView environments where the event can be missed or arrive late.
-    setTimeout(async () => {
-      if (!get().loading) return; // already resolved by event
-      console.warn('[Auth] INITIAL_SESSION not received — falling back to getSession()');
-      try {
-        const { data } = await supabase.auth.getSession();
-        set({
-          session: data.session,
-          user: data.session?.user ?? null,
-          loading: false,
-        });
-        if (data.session?.user && get().profileState !== 'ready') {
-          get().fetchProfile().catch(() => {});
+      set({ session, user: session?.user ?? null, loading: false });
+
+      if (session?.user) {
+        set({ profileState: 'loading' });
+        get().fetchProfile().catch(() => {});
+
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          Promise.resolve().then(async () => {
+            try {
+              console.log('[AuthInit] Running post-auth initialization...');
+              await ensureAgentExists();
+              registerFCMToken();
+              syncLocationAfterAuth();
+            } catch (e) {
+              console.warn('[AuthInit] Non-blocking init error:', e);
+            }
+          });
         }
-      } catch {
-        set({ loading: false });
+      } else {
+        set({ profile: null, profileState: 'idle' });
       }
-    }, 1500);
+    });
   },
 
   signOut: async () => {
-    // Reset module flags so the next login cycle re-initializes cleanly
-    initialized = false;
-    // listenerRegistered stays true — listener persists across sign-out/sign-in
-
     await cleanupOnLogout();
     set({ session: null, user: null, profile: null, profileState: 'idle', loading: false });
   },
