@@ -22,7 +22,7 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 import { motion as m } from 'framer-motion';
-import { useProfile } from '@/hooks/useProfile';
+import { useProfileById } from '@/hooks/useProfile';
 import { useAgentSettings } from '@/hooks/useSettings';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
