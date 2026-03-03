@@ -275,7 +275,7 @@ export default function Profile() {
 
       {/* Floating Call Support Button */}
       <button
-        onClick={() => window.open('tel:+917842343642', '_system')}
+        onClick={() => { window.location.href = 'tel:+917842343642'; }}
         className="fixed bottom-24 right-4 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-110 transition-all duration-200 flex items-center justify-center"
         aria-label="Call Support"
       >
