@@ -23,47 +23,8 @@ export default function Settings() {
   const navigate = useNavigate();
   const { signOut, user } = useAuthStore();
   const { data: settings, isLoading } = useAgentSettings();
-  const [testingNotification, setTestingNotification] = useState(false);
-
-  // Reset stuck loading states when returning from external apps
-  useResumeGuard(() => {
-    setTestingNotification(false);
-  });
-
-  const handleTestNotification = async () => {
-    if (!user?.email) {
-      toast.error('No user email found');
-      return;
-    }
-    
-    setTestingNotification(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('send-push-notification', {
-        body: {
-          userEmail: user.email,
-          title: "Test Notification",
-          message: "Push notifications are working!"
-        }
-      });
-      
-      if (error) throw error;
-      
-      if (data?.success) {
-        toast.success(`Test notification sent! Recipients: ${data.recipients}`);
-      } else {
-        toast.error('Notification sent but no recipients received it');
-      }
-    } catch (err: any) {
-      console.error('Test notification error:', err);
-      toast.error(err.message || 'Failed to send test notification');
-    } finally {
-      setTestingNotification(false);
-    }
-  };
-  
   const updateProfile = useUpdateProfile();
   const updatePreferences = useUpdatePreferences();
-  const updateNotifications = useUpdateNotifications();
   const updatePayout = useUpdatePayout();
   const updateKYC = useUpdateKYC();
   const deleteAccount = useDeleteAccount();
