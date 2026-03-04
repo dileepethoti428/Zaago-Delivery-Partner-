@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Loader2, Package, ShoppingBag, RefreshCw, TrendingUp } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { useEarnings } from '@/hooks/useEarnings';
+import { useAllTimeEarnings } from '@/hooks/useAllTimeEarnings';
 import { formatCurrency } from '@/services/earnings';
 import { EarningsSummaryCard } from '@/components/earnings/EarningsSummaryCard';
 import { RecentEarningsList } from '@/components/earnings/RecentEarningsList';
