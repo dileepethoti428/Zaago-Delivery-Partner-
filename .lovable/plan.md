@@ -1,166 +1,60 @@
 
-I understand how frustrating this has been. I reviewed your auth flow, splash flow, router, and the latest logs.
+## Plan: All-Time Earnings + Date Range Filter
 
-Do I know what the issue is? Yes.
+### What needs to be added
 
-Root cause summary (from current code):
-1) `main.tsx` mounts correctly and router is initialized correctly.  
-2) The real “blank after splash” lock is in guard logic:
-   - `RequireApproval.tsx` starts an 8s bypass timer on every `profileState` change.
-   - `fetchProfile()` retries flip `profileState` between `loading` and `error` every few seconds.
-   - That keeps resetting the timer, so bypass may never trigger, leaving the app on skeleton/blank forever.
-3) `Splash.tsx` currently has competing timers and can route to protected pages on partial/stale session state (`/my-deliveries`) instead of reliably sending unauthenticated users to `/login`.
-4) No wildcard route (`*`) + no global error boundary means unmatched routes/runtime crashes can appear as a white screen.
-5) Startup is slower than needed because auth/profile boot path still waits on network races before route settles.
+**1. New edge function: `get-earnings-by-daterange`**  
+A new lightweight edge function that accepts `from_date` and `to_date` (ISO strings) and returns aggregated earnings + records from `agent_earnings_tracking` for that date range. This avoids modifying the existing `get-agent-live-earnings` function.
 
-Implementation plan (step-by-step fix)
+**2. Update `get-agent-live-earnings`** to also return `all_time` earnings  
+Add a query with no date filter to compute the all-time total. The current function only queries from `monthStart` — need to fetch all records for all-time total.
 
-1. Stabilize app boot + add crash visibility
-Files:
-- `src/App.tsx`
-- `src/main.tsx`
-- `src/components/system/AppErrorBoundary.tsx` (new)
-- `src/utils/startupDiagnostics.ts` (new)
+**3. New hook: `useEarningsByDateRange`**  
+Accepts `{ fromDate, toDate }` and calls the new edge function using `useQuery`.
 
-Changes:
-- Replace `App.tsx` (currently `return null`) with actual root composition:
-  - `<AppErrorBoundary>`
-    - `<AppProviders>`
-      - `<NetworkStatusWrapper>`
-        - `<RouterProvider router={router} />`
-- Update `main.tsx` to render `<App />` only.
-- Add startup diagnostics once on app boot:
-  - `window.onerror`
-  - `window.onunhandledrejection`
-  - console markers for boot phase transitions.
-- Add a user-safe fallback UI in error boundary (“Something went wrong”, Retry, Go to Login).
+**4. Update `src/services/earnings.ts`**  
+Add `fetchEarningsByDateRange(from: string, to: string)` function and `AllTimeEarnings` interface.
 
-Why:
-- Prevent silent white screens.
-- Makes runtime failures visible and recoverable.
+**5. Update `src/pages/Earnings.tsx`**  
+- Add an "All Time" summary card using data from `earningsData?.all_time`
+- Add a **Date Filter** section below the summary cards: two date pickers (From / To) + "Search" button
+- Show filtered results in a `RecentEarningsList` below with total amount for that period
+- Loading state while fetching filtered results
 
-2. Fix routing safety (404/catch-all)
-File:
-- `src/router/index.tsx`
+### Visual layout (All tab)
+```
+Today's Earnings [featured card]
 
-Changes:
-- Add final fallback route:
-  - `path: '*'`
-  - `element: <Navigate to="/login" replace />`
-- Keep `/`, `/splash`, `/login` explicit and unchanged in intent.
+This Week | This Month
+          
+All Time [new amber card]
 
-Why:
-- Any unmatched path will never render blank again.
+──────────────────────────────
+Date Filter
+[From: date picker] [To: date picker]
+        [Search Earnings]
+──────────────────────────────
+[Filtered results list OR recent earnings]
+```
 
-3. Fix auth guard deadlock (main blank-screen bug)
-Files:
-- `src/components/auth/RequireApproval.tsx`
-- `src/components/auth/RequireAuth.tsx`
+### Files changed
+- `supabase/functions/get-earnings-by-daterange/index.ts` — new edge function
+- `supabase/functions/get-agent-live-earnings/index.ts` — add `all_time` field (fetch without date filter)
+- `src/services/earnings.ts` — add `fetchEarningsByDateRange`
+- `src/hooks/useEarningsByDateRange.ts` — new hook
+- `src/pages/Earnings.tsx` — add All Time card + date filter UI
 
-Changes:
-- In `RequireApproval.tsx`, change bypass timer to depend on unresolved boolean, not raw `profileState` transitions.
-  - Use `isUnresolved = ['idle','loading','error'].includes(profileState)`.
-  - Start 1 timer when unresolved begins; do not reset while unresolved stays true.
-  - After timeout, stop blocking and render recovery path.
-- In `RequireAuth.tsx`, add boot deadline behavior:
-  - If auth still loading past deadline and no valid session => redirect `/login`.
-  - Keep retry controls but never allow infinite skeleton.
-- Add token staleness safety check (`session.expires_at`) before granting protected outlet.
+### Edge function logic
+```typescript
+// get-earnings-by-daterange
+// Body: { from_date: "2025-01-01", to_date: "2025-03-04" }
+// Queries agent_earnings_tracking where accepted_at BETWEEN from_date AND to_date+end_of_day
+// Returns: { total, pending, confirmed, deliveries, cancelled, records[] }
+```
 
-Why:
-- Eliminates the loading/error timer-reset loop that causes endless blank/skeleton.
+### All-time in existing function
+Change the fetch in `get-agent-live-earnings` to remove the `.gte('accepted_at', monthStart)` filter (fetch ALL records), then compute month/week/today by filtering in memory — same as it does now but on the full dataset. Add `all_time` calculation using the full dataset.
 
-4. Make splash deterministic and faster
-File:
-- `src/pages/Splash.tsx`
+Wait — the current function fetches from `monthStart` which limits the dataset. If we remove that filter, it could be a large payload. Better approach: keep the month filter for normal data, and make a **separate count query** for all_time totals only (sum + count, not all records). Use `.select('expected_payout, actual_payout, payout_status')` for all_time — no limit needed since it's aggregated in JS, or use `count` RPC.
 
-Changes:
-- Replace current multi-timer behavior with one deterministic boot deadline flow:
-  - If `loading` resolves quickly: route immediately based on session/profile.
-  - If deadline hits:
-    - no session => `/login`
-    - session exists => protected landing (`/my-deliveries`) with guards handling profile.
-- Remove redundant/competing timers that can conflict with auth transitions.
-- Ensure no repeated navigation loops.
-
-Why:
-- Splash always exits predictably.
-- Unauthenticated users reliably reach Login.
-
-5. Reduce auth initialization blocking time
-File:
-- `src/store/auth.ts`
-
-Changes:
-- Keep listener-first pattern.
-- Decouple “auth loading” from slow profile calls:
-  - mark `loading=false` once session state is known.
-  - continue profile fetch/retry in background via `profileState`.
-- Keep existing retry backoff; avoid long blocking path at boot.
-- Preserve current error classification (`PGRST116` vs transient errors).
-
-Why:
-- Faster perceived launch.
-- Prevents splash waiting on slow profile/API calls.
-
-6. Capacitor splash handling (native-safe)
-Files:
-- `package.json` (if missing plugin)
-- `src/pages/Splash.tsx` or a bootstrap helper
-
-Changes:
-- Add guarded native splash hide:
-  - `if (Capacitor.isNativePlatform()) SplashScreen.hide().catch(...)`
-- Call hide only after app readiness decision (not before router/auth state is settled).
-- Never block UI waiting for hide.
-
-Why:
-- Prevents native splash freeze on Android/iOS.
-- Keeps web behavior unaffected.
-
-7. Safe render guard to force login when session/auth fails
-Files:
-- `src/components/auth/RequireAuth.tsx`
-- `src/pages/Splash.tsx`
-
-Changes:
-- If session is missing/expired or auth check fails beyond deadline, always navigate to `/login`.
-- No protected route rendering without a valid usable session.
-
-Why:
-- Matches your expected behavior: after splash, login must appear when auth isn’t valid.
-
-8. Performance tuning (quick wins for slow startup)
-Files:
-- `src/store/auth.ts`
-- `src/router/index.tsx` (optional phase-2 lazy loading)
-
-Changes:
-- Remove unnecessary blocking `await`s before first route paint.
-- Optional: lazy-load heavy protected pages (`Home`, `Earnings`, `MyDeliveries`) with fallback skeleton.
-
-Why:
-- Faster time-to-interactive on mobile/webview.
-
-Exact files to modify
-- `src/App.tsx`
-- `src/main.tsx`
-- `src/router/index.tsx`
-- `src/pages/Splash.tsx`
-- `src/components/auth/RequireAuth.tsx`
-- `src/components/auth/RequireApproval.tsx`
-- `src/store/auth.ts`
-- `src/components/system/AppErrorBoundary.tsx` (new)
-- `src/utils/startupDiagnostics.ts` (new)
-- `package.json` (only if adding `@capacitor/splash-screen`)
-
-Validation checklist after implementation
-1) Cold start with no session => Splash briefly shows, then `/login` always appears.  
-2) Signed-in user on slow network => no white/blank lock; app exits splash deterministically.  
-3) Force profile API errors => guard never gets stuck forever; recovery path is shown.  
-4) Unknown route (e.g. `/abc`) => redirects to `/login` (no blank page).  
-5) Simulate runtime throw => ErrorBoundary fallback appears (not white screen).  
-6) Measure startup timing before/after to confirm speed improvement.
-
-Technical note
-- `App.tsx` is currently unused (`return null`), which is risky for maintainability and debugging. I will make it the true app root so startup instrumentation and error boundary are guaranteed in one place.
+Actually simplest approach: add a second query in `get-agent-live-earnings` that fetches all records but only selects `expected_payout, actual_payout, payout_status` (3 columns) — lightweight for all-time total calculation. No raw SQL needed.
