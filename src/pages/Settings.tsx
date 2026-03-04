@@ -14,9 +14,6 @@ import { useAgentSettings, useUpdateProfile, useUpdatePreferences, useUpdatePayo
 import { profileSchema, payoutSchema, kycSchema, preferencesSchema, type ProfileFormData, type PayoutFormData, type KYCFormData, type PreferencesFormData } from '@/utils/settingsValidation';
 import { useAuthStore } from '@/store/auth';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { useResumeGuard } from '@/hooks/useResumeGuard';
 
 export default function Settings() {
   const navigate = useNavigate();
