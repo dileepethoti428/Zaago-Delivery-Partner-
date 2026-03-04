@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Loader2, Package, ShoppingBag, RefreshCw, TrendingUp } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { useEarnings } from '@/hooks/useEarnings';
+import { useAllTimeEarnings } from '@/hooks/useAllTimeEarnings';
 import { formatCurrency } from '@/services/earnings';
 import { EarningsSummaryCard } from '@/components/earnings/EarningsSummaryCard';
 import { RecentEarningsList } from '@/components/earnings/RecentEarningsList';
@@ -15,6 +16,7 @@ import { SubscriptionTabContent } from '@/components/earnings/SubscriptionTabCon
 
 export default function Earnings() {
   const { data: earningsData, isLoading: loading, isFetching } = useEarnings();
+  const { data: allTimeData } = useAllTimeEarnings();
   const showLoader = loading && isFetching;
   const [activeTab, setActiveTab] = useState('all');
 
@@ -83,14 +85,14 @@ export default function Earnings() {
                           <div>
                             <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">All Time Earnings</p>
                             <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-                              {formatCurrency(earningsData?.all_time?.total ?? 0)}
+                            {formatCurrency(allTimeData?.total ?? earningsData?.all_time?.total ?? 0)}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-amber-600/70 dark:text-amber-400/70">{earningsData?.all_time?.deliveries ?? 0} deliveries</p>
+                          <p className="text-xs text-amber-600/70 dark:text-amber-400/70">{allTimeData?.deliveries ?? earningsData?.all_time?.deliveries ?? 0} deliveries</p>
                           <p className="text-xs text-amber-600/70 dark:text-amber-400/70 mt-0.5">
-                            ₹{earningsData?.all_time?.confirmed ?? 0} confirmed
+                            ₹{allTimeData?.confirmed ?? earningsData?.all_time?.confirmed ?? 0} confirmed
                           </p>
                         </div>
                       </div>
