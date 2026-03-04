@@ -96,9 +96,6 @@ export default function Settings() {
     preferencesForm.setValue(field, value);
   };
 
-  const onNotificationsSubmit = (data: NotificationsFormData) => {
-    updateNotifications.mutate(data);
-  };
 
   const onPayoutSubmit = (data: PayoutFormData) => {
     updatePayout.mutate(data);
