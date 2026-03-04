@@ -8677,6 +8677,7 @@ export type Database = {
           delivery_longitude: number
           delivery_time_slot: string
           id: string
+          is_on_vacation: boolean
           location_id: number
           product_id: string
           product_image: string
@@ -8707,6 +8708,7 @@ export type Database = {
           delivery_longitude: number
           delivery_time_slot: string
           id: string
+          is_on_vacation: boolean
           location_id: number
           product_id: string
           product_image: string
@@ -8737,6 +8739,7 @@ export type Database = {
           delivery_longitude: number
           delivery_time_slot: string
           id: string
+          is_on_vacation: boolean
           location_id: number
           product_id: string
           product_image: string

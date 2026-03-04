@@ -27,6 +27,7 @@ export interface AssignedOrder {
   productPrice: number;
   productImage: string | null;
   isSubscription: boolean;
+  isOnVacation: boolean;
 }
 
 // Interface for the enriched RPC response
