@@ -317,6 +317,7 @@ serve(async (req) => {
       }
     };
 
+    console.log('📊 All-time earnings:', JSON.stringify(allTimeEarnings));
     console.log('✅ Returning earnings data successfully:', {
       todayTotal: todayEarnings.total,
       weekTotal: weekEarnings.total,

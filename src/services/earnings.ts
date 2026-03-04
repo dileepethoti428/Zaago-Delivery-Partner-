@@ -43,10 +43,10 @@ export interface EarningsByType {
 }
 
 export interface LiveEarningsData {
+  all_time: PeriodEarnings;
   today: PeriodEarnings;
   week: PeriodEarnings;
   month: PeriodEarnings;
-  all_time: PeriodEarnings;
   recent_earnings: EarningRecord[];
   live_payout: number;
   deliveries_in_progress: number;
