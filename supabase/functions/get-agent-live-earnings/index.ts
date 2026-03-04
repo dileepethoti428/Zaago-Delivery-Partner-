@@ -215,6 +215,26 @@ serve(async (req) => {
       };
     };
 
+    // Calculate all-time totals
+    const allTimePending = (allTimeData || [])
+      .filter(t => t.payout_status === 'pending')
+      .reduce((sum, t) => sum + (parseFloat(t.expected_payout) || 0), 0);
+    const allTimeConfirmed = (allTimeData || [])
+      .filter(t => t.payout_status === 'confirmed')
+      .reduce((sum, t) => sum + (parseFloat(t.actual_payout) || 0), 0);
+    const allTimeDeliveries = (allTimeData || []).filter(t => t.payout_status === 'confirmed').length;
+    const allTimeCancelled = (allTimeData || []).filter(t => t.payout_status === 'cancelled').length;
+    const allTimeInProgress = (allTimeData || []).filter(t => t.payout_status === 'pending').length;
+    const allTimeEarnings = {
+      pending: parseFloat(allTimePending.toFixed(2)),
+      confirmed: parseFloat(allTimeConfirmed.toFixed(2)),
+      total: parseFloat((allTimePending + allTimeConfirmed).toFixed(2)),
+      deliveries: allTimeDeliveries,
+      in_progress: allTimeInProgress,
+      cancelled: allTimeCancelled,
+      total_orders: allTimeDeliveries + allTimeInProgress + allTimeCancelled
+    };
+
     // Calculate combined earnings (existing behavior)
     const todayEarnings = calculatePeriodEarnings(todayStart, 'all');
     const weekEarnings = calculatePeriodEarnings(weekStart, 'all');
