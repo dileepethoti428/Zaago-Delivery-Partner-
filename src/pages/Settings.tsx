@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,60 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, User, Settings as SettingsIcon, Bell, CreditCard, FileText, Globe, LogOut, Trash2, HelpCircle, Shield, ChevronRight, Send, ArrowLeft } from 'lucide-react';
-import { useAgentSettings, useUpdateProfile, useUpdatePreferences, useUpdateNotifications, useUpdatePayout, useUpdateKYC, useDeleteAccount } from '@/hooks/useSettings';
-import { profileSchema, payoutSchema, kycSchema, notificationsSchema, preferencesSchema, type ProfileFormData, type PayoutFormData, type KYCFormData, type NotificationsFormData, type PreferencesFormData } from '@/utils/settingsValidation';
+import { Loader2, User, Settings as SettingsIcon, CreditCard, FileText, Globe, Trash2, Shield, ChevronRight, ArrowLeft } from 'lucide-react';
+import { useAgentSettings, useUpdateProfile, useUpdatePreferences, useUpdatePayout, useUpdateKYC, useDeleteAccount } from '@/hooks/useSettings';
+import { profileSchema, payoutSchema, kycSchema, preferencesSchema, type ProfileFormData, type PayoutFormData, type KYCFormData, type PreferencesFormData } from '@/utils/settingsValidation';
 import { useAuthStore } from '@/store/auth';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { useResumeGuard } from '@/hooks/useResumeGuard';
 
 export default function Settings() {
   const navigate = useNavigate();
   const { signOut, user } = useAuthStore();
   const { data: settings, isLoading } = useAgentSettings();
-  const [testingNotification, setTestingNotification] = useState(false);
-
-  // Reset stuck loading states when returning from external apps
-  useResumeGuard(() => {
-    setTestingNotification(false);
-  });
-
-  const handleTestNotification = async () => {
-    if (!user?.email) {
-      toast.error('No user email found');
-      return;
-    }
-    
-    setTestingNotification(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('send-push-notification', {
-        body: {
-          userEmail: user.email,
-          title: "Test Notification",
-          message: "Push notifications are working!"
-        }
-      });
-      
-      if (error) throw error;
-      
-      if (data?.success) {
-        toast.success(`Test notification sent! Recipients: ${data.recipients}`);
-      } else {
-        toast.error('Notification sent but no recipients received it');
-      }
-    } catch (err: any) {
-      console.error('Test notification error:', err);
-      toast.error(err.message || 'Failed to send test notification');
-    } finally {
-      setTestingNotification(false);
-    }
-  };
-  
   const updateProfile = useUpdateProfile();
   const updatePreferences = useUpdatePreferences();
-  const updateNotifications = useUpdateNotifications();
   const updatePayout = useUpdatePayout();
   const updateKYC = useUpdateKYC();
   const deleteAccount = useDeleteAccount();
@@ -88,16 +45,6 @@ export default function Settings() {
       auto_accept_orders: settings?.settings?.auto_accept_orders ?? false,
       preferred_language: settings?.settings?.preferred_language || 'en',
       theme_preference: settings?.settings?.theme_preference || 'system',
-    },
-  });
-
-  // Notifications form
-  const notificationsForm = useForm<NotificationsFormData>({
-    resolver: zodResolver(notificationsSchema),
-    values: {
-      notify_new_orders: settings?.settings?.notify_new_orders ?? true,
-      notify_earnings_updates: settings?.settings?.notify_earnings_updates ?? true,
-      notify_promotions: settings?.settings?.notify_promotions ?? true,
     },
   });
 
@@ -145,9 +92,6 @@ export default function Settings() {
     preferencesForm.setValue(field, value);
   };
 
-  const onNotificationsSubmit = (data: NotificationsFormData) => {
-    updateNotifications.mutate(data);
-  };
 
   const onPayoutSubmit = (data: PayoutFormData) => {
     updatePayout.mutate(data);
@@ -318,69 +262,6 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Notifications Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-primary" />
-              <CardTitle>Notifications</CardTitle>
-            </div>
-            <CardDescription>Manage your notification preferences</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={notificationsForm.handleSubmit(onNotificationsSubmit)} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>New order alerts</Label>
-                <Switch
-                  checked={notificationsForm.watch('notify_new_orders')}
-                  onCheckedChange={(checked) => notificationsForm.setValue('notify_new_orders', checked)}
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <Label>Earnings updates</Label>
-                <Switch
-                  checked={notificationsForm.watch('notify_earnings_updates')}
-                  onCheckedChange={(checked) => notificationsForm.setValue('notify_earnings_updates', checked)}
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <Label>Promotions & offers</Label>
-                <Switch
-                  checked={notificationsForm.watch('notify_promotions')}
-                  onCheckedChange={(checked) => notificationsForm.setValue('notify_promotions', checked)}
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={updateNotifications.isPending}>
-                {updateNotifications.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Notification Settings
-              </Button>
-            </form>
-
-            <div className="border-t pt-4 mt-4">
-              <Button 
-                type="button"
-                variant="outline" 
-                className="w-full"
-                onClick={handleTestNotification}
-                disabled={testingNotification}
-              >
-                {testingNotification ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                Send Test Notification
-              </Button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Test if push notifications are working on your device
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Payout & Bank Section */}
         <Card>
           <CardHeader>
@@ -480,7 +361,6 @@ export default function Settings() {
                 <SelectContent>
                   <SelectItem value="en">English</SelectItem>
                   <SelectItem value="hi">Hindi</SelectItem>
-                  <SelectItem value="ta">Tamil</SelectItem>
                   <SelectItem value="te">Telugu</SelectItem>
                 </SelectContent>
               </Select>
