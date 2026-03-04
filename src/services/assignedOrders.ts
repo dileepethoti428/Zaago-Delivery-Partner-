@@ -27,6 +27,7 @@ export interface AssignedOrder {
   productPrice: number;
   productImage: string | null;
   isSubscription: boolean;
+  isOnVacation: boolean;
 }
 
 // Interface for the enriched RPC response
@@ -59,6 +60,8 @@ interface EnrichedOrderRow {
   product_name: string | null;
   product_price: number | null;
   product_image: string | null;
+  // Vacation
+  is_on_vacation: boolean | null;
 }
 
 // Transform enriched RPC response directly to AssignedOrder
@@ -92,6 +95,7 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     productPrice: row.product_price || 0,
     productImage: row.product_image || null,
     isSubscription: !!row.subscription_id,
+    isOnVacation: row.is_on_vacation === true,
   }));
 }
 
@@ -194,6 +198,7 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     productPrice: 0,
     productImage: row.product_image || null,
     isSubscription: !!row.subscription_id,
+    isOnVacation: false,
   }));
 }
 

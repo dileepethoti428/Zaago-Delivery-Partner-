@@ -3,7 +3,7 @@ import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CardContent } from '@/components/ui/card';
-import { Clock, MapPin, Phone, Package, Calendar, RefreshCw } from 'lucide-react';
+import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree } from 'lucide-react';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 // Helper to safely extract address string from string or object
@@ -15,7 +15,6 @@ const getAddressString = (address: unknown): string => {
     if (addr.full_address && typeof addr.full_address === 'string') {
       return addr.full_address;
     }
-    // Fallback: combine available fields
     const parts = [addr.address, addr.street, addr.area, addr.city]
       .filter(p => p && typeof p === 'string');
     return parts.join(', ') || '';
@@ -42,7 +41,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
   }, [onManage]);
 
   return (
-    <AnimatedCard delay={index * 0.05} onClick={onManage}>
+    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation ? undefined : onManage}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header with badges */}
@@ -56,6 +55,12 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                   <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs">
                     <RefreshCw className="h-3 w-3 mr-1" />
                     Subscription
+                  </Badge>
+                )}
+                {order.isOnVacation && (
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs">
+                    <Palmtree className="h-3 w-3 mr-1" />
+                    On Vacation
                   </Badge>
                 )}
               </div>
@@ -111,13 +116,24 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
 
           {/* Action button */}
           <div className="pt-2">
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={handleManage}
-            >
-              Manage Delivery
-            </Button>
+            {order.isOnVacation ? (
+              <Button
+                size="sm"
+                className="w-full bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-100 cursor-not-allowed dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700"
+                disabled
+              >
+                <Palmtree className="h-4 w-4 mr-2" />
+                Skip — Customer On Vacation
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={handleManage}
+              >
+                Manage Delivery
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -128,6 +144,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     prevProps.order.id === nextProps.order.id &&
     prevProps.order.status === nextProps.order.status &&
     prevProps.order.quantity === nextProps.order.quantity &&
+    prevProps.order.isOnVacation === nextProps.order.isOnVacation &&
     prevProps.dateLabel === nextProps.dateLabel &&
     prevProps.index === nextProps.index
   );
