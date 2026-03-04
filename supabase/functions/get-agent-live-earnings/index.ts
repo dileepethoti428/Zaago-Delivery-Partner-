@@ -152,6 +152,12 @@ serve(async (req) => {
       .gte('accepted_at', monthStart)
       .order('accepted_at', { ascending: false });
 
+    // Fetch all-time lightweight data (only needed columns for totals)
+    const { data: allTimeData } = await supabase
+      .from('agent_earnings_tracking')
+      .select('expected_payout, actual_payout, payout_status')
+      .eq('agent_id', agentId);
+
     if (trackingError) {
       console.error('❌ Error fetching tracking data:', trackingError);
       return new Response(
