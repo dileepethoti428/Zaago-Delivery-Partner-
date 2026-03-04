@@ -269,69 +269,6 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Notifications Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-primary" />
-              <CardTitle>Notifications</CardTitle>
-            </div>
-            <CardDescription>Manage your notification preferences</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={notificationsForm.handleSubmit(onNotificationsSubmit)} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>New order alerts</Label>
-                <Switch
-                  checked={notificationsForm.watch('notify_new_orders')}
-                  onCheckedChange={(checked) => notificationsForm.setValue('notify_new_orders', checked)}
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <Label>Earnings updates</Label>
-                <Switch
-                  checked={notificationsForm.watch('notify_earnings_updates')}
-                  onCheckedChange={(checked) => notificationsForm.setValue('notify_earnings_updates', checked)}
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <Label>Promotions & offers</Label>
-                <Switch
-                  checked={notificationsForm.watch('notify_promotions')}
-                  onCheckedChange={(checked) => notificationsForm.setValue('notify_promotions', checked)}
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={updateNotifications.isPending}>
-                {updateNotifications.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Notification Settings
-              </Button>
-            </form>
-
-            <div className="border-t pt-4 mt-4">
-              <Button 
-                type="button"
-                variant="outline" 
-                className="w-full"
-                onClick={handleTestNotification}
-                disabled={testingNotification}
-              >
-                {testingNotification ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                Send Test Notification
-              </Button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Test if push notifications are working on your device
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Payout & Bank Section */}
         <Card>
           <CardHeader>
