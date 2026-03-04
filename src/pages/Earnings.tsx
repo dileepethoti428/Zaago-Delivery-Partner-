@@ -4,41 +4,19 @@ import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Loader2, Package, ShoppingBag, RefreshCw, Search, TrendingUp, CalendarIcon, X } from 'lucide-react';
+import { Calendar, Loader2, Package, ShoppingBag, RefreshCw, TrendingUp } from 'lucide-react';
 import { motion as m } from 'framer-motion';
 import { useEarnings } from '@/hooks/useEarnings';
-import { useEarningsByDateRange } from '@/hooks/useEarningsByDateRange';
 import { formatCurrency } from '@/services/earnings';
 import { EarningsSummaryCard } from '@/components/earnings/EarningsSummaryCard';
 import { RecentEarningsList } from '@/components/earnings/RecentEarningsList';
 import { EarningsTabContent } from '@/components/earnings/EarningsTabContent';
 import { SubscriptionTabContent } from '@/components/earnings/SubscriptionTabContent';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar as CalendarPicker } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 
 export default function Earnings() {
   const { data: earningsData, isLoading: loading, isFetching } = useEarnings();
   const showLoader = loading && isFetching;
   const [activeTab, setActiveTab] = useState('all');
-
-  const [fromDate, setFromDate] = useState<Date | undefined>();
-  const [toDate, setToDate] = useState<Date | undefined>();
-  const { data: rangeData, isLoading: rangeLoading, error: rangeError, fetchByDateRange, reset } = useEarningsByDateRange();
-
-  const handleSearch = () => {
-    if (fromDate && toDate) {
-      fetchByDateRange(fromDate, toDate);
-    }
-  };
-
-  const handleClear = () => {
-    setFromDate(undefined);
-    setToDate(undefined);
-    reset();
-  };
 
   const emptyPeriod = { pending: 0, confirmed: 0, total: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0 };
 
@@ -66,7 +44,6 @@ export default function Earnings() {
 
               {/* All Earnings Tab */}
               <TabsContent value="all" className="space-y-4 mt-0">
-                {/* Today's Earnings - Featured Card */}
                 <EarningsSummaryCard
                   title="Today's Earnings"
                   data={earningsData?.today || emptyPeriod}
@@ -75,7 +52,6 @@ export default function Earnings() {
                   icon={<Calendar className="h-4 w-4" />}
                 />
 
-                {/* Week and Month Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   <EarningsSummaryCard
                     title="This Week"
@@ -193,131 +169,11 @@ export default function Earnings() {
                   </Card>
                 </m.div>
 
-                {/* Date Range Filter */}
-                <m.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4, ease: [0.4, 0, 0.2, 1] }}
-                >
-                  <Card className="rounded-2xl">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <Search className="h-4 w-4" />
-                        Filter by Date Range
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        {/* From Date */}
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">From</p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn('w-full justify-start text-left font-normal text-xs h-9', !fromDate && 'text-muted-foreground')}
-                              >
-                                <CalendarIcon className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-                                {fromDate ? format(fromDate, 'dd MMM yy') : 'Pick date'}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 z-50" align="start">
-                              <CalendarPicker
-                                mode="single"
-                                selected={fromDate}
-                                onSelect={setFromDate}
-                                disabled={(d) => d > new Date()}
-                                initialFocus
-                                className={cn('p-3 pointer-events-auto')}
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        {/* To Date */}
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">To</p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn('w-full justify-start text-left font-normal text-xs h-9', !toDate && 'text-muted-foreground')}
-                              >
-                                <CalendarIcon className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-                                {toDate ? format(toDate, 'dd MMM yy') : 'Pick date'}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 z-50" align="start">
-                              <CalendarPicker
-                                mode="single"
-                                selected={toDate}
-                                onSelect={setToDate}
-                                disabled={(d) => d > new Date() || (fromDate ? d < fromDate : false)}
-                                initialFocus
-                                className={cn('p-3 pointer-events-auto')}
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={handleSearch}
-                          disabled={!fromDate || !toDate || rangeLoading}
-                          className="flex-1 h-9 text-sm"
-                        >
-                          {rangeLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Search className="h-4 w-4 mr-1" />}
-                          Search
-                        </Button>
-                        {(fromDate || toDate || rangeData) && (
-                          <Button variant="outline" onClick={handleClear} className="h-9 px-3">
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-
-                      {rangeError && (
-                        <p className="text-xs text-destructive">{rangeError}</p>
-                      )}
-
-                      {/* Range Results */}
-                      {rangeData && !rangeLoading && (
-                        <div className="space-y-3 pt-1">
-                          {/* Summary */}
-                          <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-muted/50">
-                            <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">{formatCurrency(rangeData.summary.total)}</p>
-                              <p className="text-xs text-muted-foreground">Total</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-lg font-bold text-green-600">{rangeData.summary.deliveries}</p>
-                              <p className="text-xs text-muted-foreground">Delivered</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-lg font-bold text-red-500">{rangeData.summary.cancelled}</p>
-                              <p className="text-xs text-muted-foreground">Cancelled</p>
-                            </div>
-                          </div>
-                          {/* Records */}
-                          {rangeData.records.length > 0 ? (
-                            <RecentEarningsList earnings={rangeData.records} type="all" delay={0} />
-                          ) : (
-                            <p className="text-center text-sm text-muted-foreground py-4">No earnings found in this date range</p>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </m.div>
-
-                {/* Recent Deliveries — shown only when no range filter active */}
-                {!rangeData && (
-                  <RecentEarningsList
-                    earnings={earningsData?.recent_earnings || []}
-                    type="all"
-                    delay={0.45}
-                  />
-                )}
+                <RecentEarningsList
+                  earnings={earningsData?.recent_earnings || []}
+                  type="all"
+                  delay={0.4}
+                />
               </TabsContent>
 
               {/* Regular Orders Tab */}
