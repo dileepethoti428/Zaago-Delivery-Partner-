@@ -46,6 +46,7 @@ export interface LiveEarningsData {
   today: PeriodEarnings;
   week: PeriodEarnings;
   month: PeriodEarnings;
+  all_time: PeriodEarnings;
   recent_earnings: EarningRecord[];
   live_payout: number;
   deliveries_in_progress: number;
