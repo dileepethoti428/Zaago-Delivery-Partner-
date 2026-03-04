@@ -11,10 +11,21 @@ export const useAllTimeEarnings = () => {
     enabled: !!user?.id,
     staleTime: 60 * 1000,
     queryFn: async () => {
+      // Step 1: Resolve the internal delivery_agents.id from auth user UUID
+      const { data: agentRow, error: agentError } = await supabase
+        .from('delivery_agents')
+        .select('id')
+        .eq('agent_id', user!.id)
+        .maybeSingle();
+
+      if (agentError) throw agentError;
+      if (!agentRow) return { total: 0, confirmed: 0, pending: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0 };
+
+      // Step 2: Query earnings using internal delivery_agents.id
       const { data, error } = await supabase
         .from('agent_earnings_tracking')
         .select('expected_payout, actual_payout, payout_status')
-        .eq('agent_id', user!.id);
+        .eq('agent_id', agentRow.id);
 
       if (error) throw error;
 
