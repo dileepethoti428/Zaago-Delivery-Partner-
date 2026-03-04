@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, User, Settings as SettingsIcon, Bell, CreditCard, FileText, Globe, LogOut, Trash2, HelpCircle, Shield, ChevronRight, Send, ArrowLeft } from 'lucide-react';
-import { useAgentSettings, useUpdateProfile, useUpdatePreferences, useUpdateNotifications, useUpdatePayout, useUpdateKYC, useDeleteAccount } from '@/hooks/useSettings';
-import { profileSchema, payoutSchema, kycSchema, notificationsSchema, preferencesSchema, type ProfileFormData, type PayoutFormData, type KYCFormData, type NotificationsFormData, type PreferencesFormData } from '@/utils/settingsValidation';
+import { Loader2, User, Settings as SettingsIcon, CreditCard, FileText, Globe, Trash2, Shield, ChevronRight, ArrowLeft } from 'lucide-react';
+import { useAgentSettings, useUpdateProfile, useUpdatePreferences, useUpdatePayout, useUpdateKYC, useDeleteAccount } from '@/hooks/useSettings';
+import { profileSchema, payoutSchema, kycSchema, preferencesSchema, type ProfileFormData, type PayoutFormData, type KYCFormData, type PreferencesFormData } from '@/utils/settingsValidation';
 import { useAuthStore } from '@/store/auth';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
