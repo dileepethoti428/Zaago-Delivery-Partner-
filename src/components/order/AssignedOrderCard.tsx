@@ -3,7 +3,7 @@ import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CardContent } from '@/components/ui/card';
-import { Clock, MapPin, Phone, Package, Calendar, RefreshCw } from 'lucide-react';
+import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree } from 'lucide-react';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 // Helper to safely extract address string from string or object
