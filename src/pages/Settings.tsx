@@ -52,16 +52,6 @@ export default function Settings() {
     },
   });
 
-  // Notifications form
-  const notificationsForm = useForm<NotificationsFormData>({
-    resolver: zodResolver(notificationsSchema),
-    values: {
-      notify_new_orders: settings?.settings?.notify_new_orders ?? true,
-      notify_earnings_updates: settings?.settings?.notify_earnings_updates ?? true,
-      notify_promotions: settings?.settings?.notify_promotions ?? true,
-    },
-  });
-
   // Payout form
   const payoutForm = useForm<PayoutFormData>({
     resolver: zodResolver(payoutSchema),
