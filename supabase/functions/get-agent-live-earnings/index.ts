@@ -304,6 +304,9 @@ serve(async (req) => {
           recent_earnings: recentRegularEarnings
         },
         
+        // NEW: All-time totals
+        all_time: allTimeEarnings,
+        
         // NEW: Subscription earnings
         subscription: {
           today: subscriptionTodayEarnings,
