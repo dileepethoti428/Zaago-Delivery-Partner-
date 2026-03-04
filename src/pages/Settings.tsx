@@ -365,7 +365,6 @@ export default function Settings() {
                 <SelectContent>
                   <SelectItem value="en">English</SelectItem>
                   <SelectItem value="hi">Hindi</SelectItem>
-                  <SelectItem value="ta">Tamil</SelectItem>
                   <SelectItem value="te">Telugu</SelectItem>
                 </SelectContent>
               </Select>
