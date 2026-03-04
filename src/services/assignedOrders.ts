@@ -60,6 +60,7 @@ interface EnrichedOrderRow {
   product_name: string | null;
   product_price: number | null;
   product_image: string | null;
+  is_on_vacation: boolean | null;
 }
 
 // Transform enriched RPC response directly to AssignedOrder
