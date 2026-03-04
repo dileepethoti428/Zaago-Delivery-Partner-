@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 // REGULAR_ORDER_PRICING removed - no longer recalculating payouts in JS
@@ -152,6 +152,12 @@ serve(async (req) => {
       .gte('accepted_at', monthStart)
       .order('accepted_at', { ascending: false });
 
+    // Fetch all-time lightweight data (only needed columns for totals)
+    const { data: allTimeData } = await supabase
+      .from('agent_earnings_tracking')
+      .select('expected_payout, actual_payout, payout_status')
+      .eq('agent_id', agentId);
+
     if (trackingError) {
       console.error('❌ Error fetching tracking data:', trackingError);
       return new Response(
@@ -207,6 +213,26 @@ serve(async (req) => {
         cancelled,
         total_orders: totalOrders
       };
+    };
+
+    // Calculate all-time totals
+    const allTimePending = (allTimeData || [])
+      .filter(t => t.payout_status === 'pending')
+      .reduce((sum, t) => sum + (parseFloat(t.expected_payout) || 0), 0);
+    const allTimeConfirmed = (allTimeData || [])
+      .filter(t => t.payout_status === 'confirmed')
+      .reduce((sum, t) => sum + (parseFloat(t.actual_payout) || 0), 0);
+    const allTimeDeliveries = (allTimeData || []).filter(t => t.payout_status === 'confirmed').length;
+    const allTimeCancelled = (allTimeData || []).filter(t => t.payout_status === 'cancelled').length;
+    const allTimeInProgress = (allTimeData || []).filter(t => t.payout_status === 'pending').length;
+    const allTimeEarnings = {
+      pending: parseFloat(allTimePending.toFixed(2)),
+      confirmed: parseFloat(allTimeConfirmed.toFixed(2)),
+      total: parseFloat((allTimePending + allTimeConfirmed).toFixed(2)),
+      deliveries: allTimeDeliveries,
+      in_progress: allTimeInProgress,
+      cancelled: allTimeCancelled,
+      total_orders: allTimeDeliveries + allTimeInProgress + allTimeCancelled
     };
 
     // Calculate combined earnings (existing behavior)
@@ -277,6 +303,9 @@ serve(async (req) => {
           month: regularMonthEarnings,
           recent_earnings: recentRegularEarnings
         },
+        
+        // NEW: All-time totals
+        all_time: allTimeEarnings,
         
         // NEW: Subscription earnings
         subscription: {

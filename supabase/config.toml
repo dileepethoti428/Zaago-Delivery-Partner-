@@ -6,6 +6,9 @@ verify_jwt = true
 [functions.get-agent-live-earnings]
 verify_jwt = true
 
+[functions.get-earnings-by-daterange]
+verify_jwt = true
+
 [functions.get-delivery-history]
 verify_jwt = true
 
