@@ -28,6 +28,9 @@ export interface AssignedOrder {
   productImage: string | null;
   isSubscription: boolean;
   isOnVacation: boolean;
+  sellerLatitude: number | null;
+  sellerLongitude: number | null;
+  distanceFromShop?: number | null;
 }
 
 // Interface for the enriched RPC response
@@ -42,12 +45,10 @@ interface EnrichedOrderRow {
   created_at: string | null;
   assigned_agent_id: string | null;
   assigned_by: string | null;
-  // Subscription data
   delivery_address: Record<string, unknown> | null;
   delivery_time_slot: string | null;
   delivery_latitude: number | null;
   delivery_longitude: number | null;
-  // Customer data
   customer_name: string | null;
   customer_phone: string | null;
   customer_address: string | null;
@@ -55,13 +56,13 @@ interface EnrichedOrderRow {
   customer_pincode: string | null;
   customer_latitude: number | null;
   customer_longitude: number | null;
-  // Product data
   product_id: string | null;
   product_name: string | null;
   product_price: number | null;
   product_image: string | null;
-  // Vacation
   is_on_vacation: boolean | null;
+  seller_latitude: number | null;
+  seller_longitude: number | null;
 }
 
 // Transform enriched RPC response directly to AssignedOrder
@@ -96,6 +97,8 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     productImage: row.product_image || null,
     isSubscription: !!row.subscription_id,
     isOnVacation: row.is_on_vacation === true,
+    sellerLatitude: row.seller_latitude ?? null,
+    sellerLongitude: row.seller_longitude ?? null,
   }));
 }
 
@@ -199,6 +202,8 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     productImage: row.product_image || null,
     isSubscription: !!row.subscription_id,
     isOnVacation: false,
+    sellerLatitude: null,
+    sellerLongitude: null,
   }));
 }
 
