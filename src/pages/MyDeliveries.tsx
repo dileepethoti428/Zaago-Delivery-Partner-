@@ -9,6 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
+import { getDistanceKm } from '@/utils/geo';
+import type { AssignedOrder } from '@/services/assignedOrders';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 
@@ -25,19 +27,43 @@ export default function MyDeliveries() {
   const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders(dateFilter === 'tomorrow' || dateFilter === 'all');
   const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders(dateFilter === 'delivered');
 
-  // Current orders based on selected tab - NO DATE FILTERING, just tab selection
+  // Sort orders by distance from seller shop, vacation orders at end
+  const sortByDistance = (orders: AssignedOrder[]): AssignedOrder[] => {
+    return orders.map(order => {
+      const custLat = order.deliveryLatitude ?? order.customerLatitude;
+      const custLng = order.deliveryLongitude ?? order.customerLongitude;
+      let dist: number | null = null;
+      if (order.sellerLatitude && order.sellerLongitude && custLat && custLng) {
+        dist = Math.round(getDistanceKm(
+          { lat: order.sellerLatitude, lng: order.sellerLongitude },
+          { lat: custLat, lng: custLng }
+        ) * 100) / 100;
+      }
+      return { ...order, distanceFromShop: dist };
+    }).sort((a, b) => {
+      // Vacation orders always at end
+      if (a.isOnVacation !== b.isOnVacation) return a.isOnVacation ? 1 : -1;
+      // Orders without distance go after those with distance
+      if (a.distanceFromShop == null && b.distanceFromShop == null) return 0;
+      if (a.distanceFromShop == null) return 1;
+      if (b.distanceFromShop == null) return -1;
+      return a.distanceFromShop - b.distanceFromShop;
+    });
+  };
+
+  // Current orders based on selected tab - sorted by distance
   const currentOrders = useMemo(() => {
     switch (dateFilter) {
       case 'today':
-        return todayOrders;
+        return sortByDistance(todayOrders);
       case 'tomorrow':
-        return tomorrowOrders;
+        return sortByDistance(tomorrowOrders);
       case 'delivered':
-        return deliveredOrders;
+        return deliveredOrders; // No sorting for delivered
       case 'all':
-        return [...todayOrders, ...tomorrowOrders];
+        return sortByDistance([...todayOrders, ...tomorrowOrders]);
       default:
-        return todayOrders;
+        return sortByDistance(todayOrders);
     }
   }, [dateFilter, todayOrders, tomorrowOrders, deliveredOrders]);
 

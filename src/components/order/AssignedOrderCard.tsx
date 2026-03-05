@@ -3,7 +3,7 @@ import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CardContent } from '@/components/ui/card';
-import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree } from 'lucide-react';
+import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree, Navigation } from 'lucide-react';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 // Helper to safely extract address string from string or object
@@ -40,6 +40,20 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     onManage();
   }, [onManage]);
 
+  const handleNavigate = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const lat = order.deliveryLatitude ?? order.customerLatitude;
+    const lng = order.deliveryLongitude ?? order.customerLongitude;
+    if (lat && lng) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+    }
+  }, [order]);
+
+  const formatDistance = (km: number): string => {
+    if (km < 1) return `${Math.round(km * 1000)}m`;
+    return `${km.toFixed(1)} km`;
+  };
+
   return (
     <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation ? undefined : onManage}>
       <CardContent className="p-4">
@@ -61,6 +75,12 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                   <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs">
                     <Palmtree className="h-3 w-3 mr-1" />
                     On Vacation
+                  </Badge>
+                )}
+                {order.distanceFromShop != null && (
+                  <Badge variant="secondary" className="gap-1 text-xs font-medium">
+                    <MapPin className="h-3 w-3" />
+                    {formatDistance(order.distanceFromShop)}
                   </Badge>
                 )}
               </div>
@@ -134,6 +154,17 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                 Manage Delivery
               </Button>
             )}
+            {!order.isOnVacation && (order.deliveryLatitude || order.customerLatitude) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full mt-2"
+                onClick={handleNavigate}
+              >
+                <Navigation className="h-4 w-4 mr-2" />
+                Navigate
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -145,6 +176,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     prevProps.order.status === nextProps.order.status &&
     prevProps.order.quantity === nextProps.order.quantity &&
     prevProps.order.isOnVacation === nextProps.order.isOnVacation &&
+    prevProps.order.distanceFromShop === nextProps.order.distanceFromShop &&
     prevProps.dateLabel === nextProps.dateLabel &&
     prevProps.index === nextProps.index
   );
