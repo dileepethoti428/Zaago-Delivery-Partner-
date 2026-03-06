@@ -8671,22 +8671,22 @@ export type Database = {
           customer_name: string
           customer_phone: string
           customer_pincode: string
-          date: string
-          delivery_address: Json
+          delivery_address: string
           delivery_latitude: number
           delivery_longitude: number
           delivery_time_slot: string
-          id: string
           is_on_vacation: boolean
           location_id: number
+          order_date: string
+          order_id: string
+          order_status: string
           product_id: string
-          product_image: string
+          product_image_url: string
           product_name: string
           product_price: number
           quantity: number
           seller_latitude: number
           seller_longitude: number
-          status: string
           subscription_id: string
         }[]
       }
@@ -8704,22 +8704,22 @@ export type Database = {
           customer_name: string
           customer_phone: string
           customer_pincode: string
-          date: string
-          delivery_address: Json
+          delivery_address: string
           delivery_latitude: number
           delivery_longitude: number
           delivery_time_slot: string
-          id: string
           is_on_vacation: boolean
           location_id: number
+          order_date: string
+          order_id: string
+          order_status: string
           product_id: string
-          product_image: string
+          product_image_url: string
           product_name: string
           product_price: number
           quantity: number
           seller_latitude: number
           seller_longitude: number
-          status: string
           subscription_id: string
         }[]
       }
@@ -8737,22 +8737,22 @@ export type Database = {
           customer_name: string
           customer_phone: string
           customer_pincode: string
-          date: string
-          delivery_address: Json
+          delivery_address: string
           delivery_latitude: number
           delivery_longitude: number
           delivery_time_slot: string
-          id: string
           is_on_vacation: boolean
           location_id: number
+          order_date: string
+          order_id: string
+          order_status: string
           product_id: string
-          product_image: string
+          product_image_url: string
           product_name: string
           product_price: number
           quantity: number
           seller_latitude: number
           seller_longitude: number
-          status: string
           subscription_id: string
         }[]
       }

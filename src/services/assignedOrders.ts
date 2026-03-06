@@ -35,17 +35,17 @@ export interface AssignedOrder {
 
 // Interface for the enriched RPC response
 interface EnrichedOrderRow {
-  id: string;
-  date: string;
+  order_id: string;
+  order_date: string;
   quantity: number;
-  status: string;
+  order_status: string;
   subscription_id: string | null;
   customer_id: string;
   location_id: number | null;
   created_at: string | null;
   assigned_agent_id: string | null;
   assigned_by: string | null;
-  delivery_address: Record<string, unknown> | null;
+  delivery_address: string | Record<string, unknown> | null;
   delivery_time_slot: string | null;
   delivery_latitude: number | null;
   delivery_longitude: number | null;
@@ -59,7 +59,7 @@ interface EnrichedOrderRow {
   product_id: string | null;
   product_name: string | null;
   product_price: number | null;
-  product_image: string | null;
+  product_image_url: string | null;
   is_on_vacation: boolean | null;
   seller_latitude: number | null;
   seller_longitude: number | null;
@@ -70,12 +70,12 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
   if (!rows || rows.length === 0) return [];
 
   return rows.map(row => ({
-    id: row.id,
-    dailyOrderId: row.id,
+    id: row.order_id,
+    dailyOrderId: row.order_id,
     orderId: row.subscription_id,
-    date: row.date,
+    date: row.order_date,
     quantity: row.quantity,
-    status: row.status,
+    status: row.order_status,
     subscriptionId: row.subscription_id,
     customerId: row.customer_id,
     locationId: row.location_id,
@@ -94,7 +94,7 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     productId: row.product_id || null,
     productName: row.product_name || 'Unknown Product',
     productPrice: row.product_price || 0,
-    productImage: row.product_image || null,
+    productImage: row.product_image_url || null,
     isSubscription: !!row.subscription_id,
     isOnVacation: row.is_on_vacation === true,
     sellerLatitude: row.seller_latitude ?? null,
@@ -115,7 +115,7 @@ export async function fetchTodayOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as EnrichedOrderRow[]);
+  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
 }
 
 // Fetch TOMORROW's orders using Postgres RPC with enriched data
@@ -131,7 +131,7 @@ export async function fetchTomorrowOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as EnrichedOrderRow[]);
+  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
 }
 
 // Fetch UPCOMING orders using Postgres RPC with enriched data
@@ -147,7 +147,7 @@ export async function fetchUpcomingOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as EnrichedOrderRow[]);
+  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
 }
 
 // Interface for the delivered orders RPC response (simpler than EnrichedOrderRow)
