@@ -8671,7 +8671,7 @@ export type Database = {
           customer_name: string
           customer_phone: string
           customer_pincode: string
-          delivery_address: string
+          delivery_address: Json
           delivery_latitude: number
           delivery_longitude: number
           delivery_time_slot: string
@@ -8704,7 +8704,7 @@ export type Database = {
           customer_name: string
           customer_phone: string
           customer_pincode: string
-          delivery_address: string
+          delivery_address: Json
           delivery_latitude: number
           delivery_longitude: number
           delivery_time_slot: string
@@ -8737,7 +8737,7 @@ export type Database = {
           customer_name: string
           customer_phone: string
           customer_pincode: string
-          delivery_address: string
+          delivery_address: Json
           delivery_latitude: number
           delivery_longitude: number
           delivery_time_slot: string
