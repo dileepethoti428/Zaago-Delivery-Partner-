@@ -10,6 +10,7 @@ import { Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
+import { CodCollectionCard } from '@/components/delivery/CodCollectionCard';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
@@ -134,6 +135,9 @@ export default function MyDeliveries() {
   return (
     <AppShell>
       <div className="space-y-4">
+        {/* COD Collection Card */}
+        <CodCollectionCard />
+
         {/* Date Filter Tabs */}
         <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
           <TabsList className="grid w-full grid-cols-4">

@@ -1205,6 +1205,64 @@ export type Database = {
         }
         Relationships: []
       }
+      cod_settlements: {
+        Row: {
+          agent_id: string
+          amount: number
+          created_at: string | null
+          id: string
+          order_id: string
+          seller_id: string
+          settled_at: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id: string
+          amount: number
+          created_at?: string | null
+          id?: string
+          order_id: string
+          seller_id: string
+          settled_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string
+          amount?: number
+          created_at?: string | null
+          id?: string
+          order_id?: string
+          seller_id?: string
+          settled_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cod_settlements_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cod_settlements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cod_settlements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders_with_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collection_centers: {
         Row: {
           address: string | null

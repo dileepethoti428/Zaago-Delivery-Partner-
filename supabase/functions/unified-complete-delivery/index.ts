@@ -102,6 +102,8 @@ serve(async (req) => {
     console.log('💳 Payment method normalized:', { original: payment_method, normalized: normalizedPayment });
 
     let result: any = null;
+    let sellerId: string | null = null;
+    let totalAmount: number = 0;
 
     // Handle daily/subscription orders differently - NO PAYOUT
     if (isDailyOrder) {
@@ -146,11 +148,12 @@ serve(async (req) => {
             .single();
           
           product = productData;
-          console.log('📦 Product found:', product?.name);
+          sellerId = product?.seller_id || null;
+          console.log('📦 Product found:', product?.name, 'seller_id:', sellerId);
         }
 
         const customer = dailyOrder.customers as any;
-        const totalAmount = (product?.price || 0) * dailyOrder.quantity;
+        totalAmount = (product?.price || 0) * dailyOrder.quantity;
 
         // Check if already delivered
         if (dailyOrder.status === 'delivered') {
@@ -202,12 +205,11 @@ serve(async (req) => {
           }
 
           // Insert into agent_earnings_tracking for subscription orders
-          // Use daily_order_id instead of order_id to avoid FK violation
           const { error: trackingError } = await supabase
             .from('agent_earnings_tracking')
             .insert({
-              order_id: null,  // Set to null for subscription orders
-              daily_order_id: order_id,  // Use the new column for daily_orders reference
+              order_id: null,
+              daily_order_id: order_id,
               agent_id: agent.id,
               accepted_at: new Date().toISOString(),
               completed_at: new Date().toISOString(),
@@ -271,7 +273,7 @@ serve(async (req) => {
       // PRE-COMPLETION GUARD 2: Fetch order and validate status
       const { data: orderCheck, error: orderCheckError } = await supabase
         .from('orders')
-        .select('id, status, subscription_id, payment_status')
+        .select('id, status, subscription_id, payment_status, seller_id, total_amount')
         .eq('id', order_id)
         .single();
 
@@ -283,11 +285,16 @@ serve(async (req) => {
         );
       }
 
+      // Capture seller_id and amount for COD settlement
+      sellerId = orderCheck.seller_id || null;
+      totalAmount = orderCheck.total_amount || 0;
+
       console.log('🔍 PRE-COMPLETION GUARD CHECK:', {
         order_id,
         order_status: orderCheck.status,
         payment_status: orderCheck.payment_status,
         subscription_id: orderCheck.subscription_id,
+        seller_id: sellerId,
         agent_id: agent.id,
         timestamp: new Date().toISOString()
       });
@@ -357,6 +364,27 @@ serve(async (req) => {
         payout_breakdown: data.payout_breakdown,
         already_completed: data.already_completed || false
       };
+    }
+
+    // ── COD Settlement: Insert pending record if payment was COD ──
+    if (normalizedPayment === 'cod' && sellerId && !result.already_completed) {
+      console.log('💰 Inserting COD settlement record:', { order_id, agent_id: agent.id, seller_id: sellerId, amount: totalAmount });
+      const { error: codError } = await supabase
+        .from('cod_settlements')
+        .insert({
+          order_id: order_id,
+          agent_id: agent.id,
+          seller_id: sellerId,
+          amount: totalAmount,
+          status: 'pending'
+        });
+
+      if (codError) {
+        // Non-blocking: log but don't fail the delivery
+        console.warn('⚠️ Failed to insert COD settlement:', codError);
+      } else {
+        console.log('✅ COD settlement record created (pending)');
+      }
     }
 
     // Return success
