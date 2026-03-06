@@ -1,49 +1,46 @@
 
-Issue reframed:
-- You are still seeing “Failed to load orders → structure of query does not match function result type.”
-- I rechecked live logs and DB: error is now **exactly** `Returned type bigint does not match expected type integer in column 7`.
 
-Do I know what the issue is?
-- Yes.
+## COD Collection Tracker for Delivery Partners
 
-Root cause (confirmed):
-- In all 3 RPCs:
-  - `get_agent_orders_today`
-  - `get_agent_orders_tomorrow`
-  - `get_agent_orders_upcoming`
-- `RETURNS TABLE` defines column 7 (`location_id`) as `integer`.
-- But `daily_orders.location_id` is actually `bigint` (`int8`).
-- PostgreSQL throws 42804 before returning any row.
+### What the user wants
+When a delivery partner completes COD orders, they collect cash from customers. They need to see:
+1. How much total COD cash they currently hold (need to submit to seller)
+2. Per-seller breakdown of pending COD amounts
+3. When the seller marks it as "settled" from their app, it should sync and update automatically
 
-Files/areas isolated:
-- `supabase/migrations/20260306044145_dfcee404-4f98-4a74-b611-769b394b3106.sql` (currently declares `location_id integer`)
-- Live DB function definitions for the 3 RPCs (same mismatch)
-- Frontend call path: `src/services/assignedOrders.ts` (RPC consumers; not the root cause)
+### Current state
+- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
+- The table is currently empty — no records are being inserted
+- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
+- The seller app presumably can update `cod_settlements.status` to mark cash as received
 
-Clarification:
-- No critical unknowns blocking implementation; this is a deterministic type mismatch fix.
+### Implementation Plan
 
-Implementation plan:
-1. Create a new migration to drop/recreate the 3 RPCs with corrected signatures.
-2. In each `RETURNS TABLE`, change:
-   - `location_id integer` → `location_id bigint`
-3. In each SELECT list, explicitly cast for safety:
-   - `d.location_id::bigint AS location_id`
-4. Keep previously fixed logic unchanged:
-   - `quantity::numeric`
-   - seller join via `p.seller_id = sel.user_id`
-   - vacation check across both vacation tables.
-5. Do not manually edit generated Supabase types file.
-6. Validate immediately after migration:
-   - `select * from public.get_agent_orders_today() limit 1;`
-   - `select * from public.get_agent_orders_tomorrow() limit 1;`
-   - `select * from public.get_agent_orders_upcoming() limit 1;`
-   - all must run without 42804.
-7. Frontend verification:
-   - Reload `/home` (Orders tab) and confirm no “Failed to load orders”.
-   - Confirm counts load and cards render again.
-   - Reconfirm vacation badge and distance badge still appear for affected customers.
+**1. Auto-insert COD settlement records on delivery completion**
+- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
+- This covers both regular and subscription/daily order completions
+- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
 
-Expected outcome:
-- Orders page loads normally again.
-- The repeated query-structure error stops because return signature now matches actual DB column type.
+**2. Create a new edge function `get-agent-cod-balance`**
+- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
+- Groups by `seller_id`, joins seller name
+- Returns: total pending amount, per-seller breakdown with amounts
+
+**3. New frontend component: COD Collection Card**
+- A card on the **My Deliveries** page (or Home page) showing:
+  - Total pending COD amount to submit (highlighted in red/orange)
+  - Per-seller breakdown (seller name + amount)
+  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+
+**4. Realtime sync**
+- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+
+### Technical Details
+
+- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
+- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
+- **New hook**: `useCodBalance` — React Query hook calling the edge function
+- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
+- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
+- **No migration needed**: `cod_settlements` table already exists with the right schema
+
