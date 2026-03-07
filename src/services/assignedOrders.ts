@@ -101,6 +101,7 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     isOnVacation: row.is_on_vacation === true,
     sellerLatitude: row.seller_latitude ?? null,
     sellerLongitude: row.seller_longitude ?? null,
+    sellerName: row.seller_name || null,
   }));
 }
 
