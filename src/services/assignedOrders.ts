@@ -30,6 +30,7 @@ export interface AssignedOrder {
   isOnVacation: boolean;
   sellerLatitude: number | null;
   sellerLongitude: number | null;
+  sellerName: string | null;
   distanceFromShop?: number | null;
 }
 
@@ -63,6 +64,7 @@ interface EnrichedOrderRow {
   is_on_vacation: boolean | null;
   seller_latitude: number | null;
   seller_longitude: number | null;
+  seller_name: string | null;
 }
 
 // Transform enriched RPC response directly to AssignedOrder
@@ -99,6 +101,7 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     isOnVacation: row.is_on_vacation === true,
     sellerLatitude: row.seller_latitude ?? null,
     sellerLongitude: row.seller_longitude ?? null,
+    sellerName: row.seller_name || null,
   }));
 }
 
@@ -204,6 +207,7 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     isOnVacation: false,
     sellerLatitude: null,
     sellerLongitude: null,
+    sellerName: null,
   }));
 }
 

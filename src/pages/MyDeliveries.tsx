@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
 import { CodCollectionCard } from '@/components/delivery/CodCollectionCard';
+import { PickupSummaryCard } from '@/components/delivery/PickupSummaryCard';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
@@ -137,6 +138,14 @@ export default function MyDeliveries() {
       <div className="space-y-4">
         {/* COD Collection Card */}
         <CodCollectionCard />
+
+        {/* Pickup Summary - only for non-delivered tabs */}
+        {dateFilter !== 'delivered' && (
+          <PickupSummaryCard
+            orders={currentOrders}
+            label={dateFilter === 'today' ? 'Today' : dateFilter === 'tomorrow' ? 'Tomorrow' : 'All'}
+          />
+        )}
 
         {/* Date Filter Tabs */}
         <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>

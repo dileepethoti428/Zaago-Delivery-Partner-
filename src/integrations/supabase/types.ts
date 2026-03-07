@@ -8745,6 +8745,7 @@ export type Database = {
           quantity: number
           seller_latitude: number
           seller_longitude: number
+          seller_name: string
           subscription_id: string
         }[]
       }
@@ -8778,6 +8779,7 @@ export type Database = {
           quantity: number
           seller_latitude: number
           seller_longitude: number
+          seller_name: string
           subscription_id: string
         }[]
       }
@@ -8811,6 +8813,7 @@ export type Database = {
           quantity: number
           seller_latitude: number
           seller_longitude: number
+          seller_name: string
           subscription_id: string
         }[]
       }
@@ -9297,6 +9300,23 @@ export type Database = {
           agent_name: string
           agent_phone: string
           agent_profile_image: string
+          product_id: string
+          product_image: string
+          product_name: string
+          product_unit: string
+          total_orders: number
+          total_quantity: number
+        }[]
+      }
+      get_seller_subscription_handover_direct: {
+        Args: { handover_date: string; seller_user_id: string }
+        Returns: {
+          agent_id: string
+          agent_name: string
+          agent_phone: string
+          agent_profile_image: string
+          customer_name: string
+          customer_quantity: number
           product_id: string
           product_image: string
           product_name: string
