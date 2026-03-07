@@ -9305,6 +9305,23 @@ export type Database = {
           total_quantity: number
         }[]
       }
+      get_seller_subscription_handover_direct: {
+        Args: { handover_date: string; seller_user_id: string }
+        Returns: {
+          agent_id: string
+          agent_name: string
+          agent_phone: string
+          agent_profile_image: string
+          customer_name: string
+          customer_quantity: number
+          product_id: string
+          product_image: string
+          product_name: string
+          product_unit: string
+          total_orders: number
+          total_quantity: number
+        }[]
+      }
       get_seller_subscription_orders_overview: {
         Args: { p_date: string; p_seller_user_id: string }
         Returns: {
