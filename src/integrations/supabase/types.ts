@@ -8745,6 +8745,7 @@ export type Database = {
           quantity: number
           seller_latitude: number
           seller_longitude: number
+          seller_name: string
           subscription_id: string
         }[]
       }
@@ -8778,6 +8779,7 @@ export type Database = {
           quantity: number
           seller_latitude: number
           seller_longitude: number
+          seller_name: string
           subscription_id: string
         }[]
       }
@@ -8811,6 +8813,7 @@ export type Database = {
           quantity: number
           seller_latitude: number
           seller_longitude: number
+          seller_name: string
           subscription_id: string
         }[]
       }

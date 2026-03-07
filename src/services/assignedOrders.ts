@@ -207,6 +207,7 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     isOnVacation: false,
     sellerLatitude: null,
     sellerLongitude: null,
+    sellerName: null,
   }));
 }
 
