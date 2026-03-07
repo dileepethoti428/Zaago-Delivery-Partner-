@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
 import { CodCollectionCard } from '@/components/delivery/CodCollectionCard';
+import { PickupSummaryCard } from '@/components/delivery/PickupSummaryCard';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
