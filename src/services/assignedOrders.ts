@@ -64,6 +64,7 @@ interface EnrichedOrderRow {
   is_on_vacation: boolean | null;
   seller_latitude: number | null;
   seller_longitude: number | null;
+  seller_name: string | null;
 }
 
 // Transform enriched RPC response directly to AssignedOrder
