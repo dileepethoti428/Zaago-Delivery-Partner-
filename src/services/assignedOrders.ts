@@ -30,6 +30,7 @@ export interface AssignedOrder {
   isOnVacation: boolean;
   sellerLatitude: number | null;
   sellerLongitude: number | null;
+  sellerName: string | null;
   distanceFromShop?: number | null;
 }
 
