@@ -139,6 +139,14 @@ export default function MyDeliveries() {
         {/* COD Collection Card */}
         <CodCollectionCard />
 
+        {/* Pickup Summary - only for non-delivered tabs */}
+        {dateFilter !== 'delivered' && (
+          <PickupSummaryCard
+            orders={currentOrders}
+            label={dateFilter === 'today' ? 'Today' : dateFilter === 'tomorrow' ? 'Tomorrow' : 'All'}
+          />
+        )}
+
         {/* Date Filter Tabs */}
         <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
           <TabsList className="grid w-full grid-cols-4">
