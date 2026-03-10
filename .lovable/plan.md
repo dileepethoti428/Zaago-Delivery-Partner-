@@ -1,46 +1,71 @@
 
+## Root Cause Analysis: Cancel Order After Accepting Returns 403 Error
 
-## COD Collection Tracker for Delivery Partners
+### Issues Found (3 confirmed bugs)
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+**Bug 1 — CRITICAL: Wrong agent ID used in `cancel-delivery` for daily orders (the main 403 cause)**
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+In `daily_orders`, the `assigned_agent_id` column stores the **raw auth user UUID** (e.g., `17578977-5353-46fd-8ba0-9d2c058adcec`).
 
-### Implementation Plan
+But `cancel-delivery` resolves the incoming `agent_id` to `delivery_agents.id` (the internal UUID, e.g., `c4b29233-d15c-497c-ad01-4c5238be2b4e`) and uses `resolvedAgentId` in both the ownership check and the `.eq('assigned_agent_id', resolvedAgentId)` filter.
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+`c4b29233 !== 17578977` → always 403 "Order is assigned to another agent".
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+**Fix**: For the daily order path, skip the ID resolution and use the raw `agent_id` directly for `assigned_agent_id` comparisons (since that column stores auth UUIDs).
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+---
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+**Bug 2 — SECONDARY: `accept-order` has incomplete CORS headers**
 
-### Technical Details
+`accept-order/index.ts` line 6 only has 4 CORS headers:
+```
+'authorization, x-client-info, apikey, content-type'
+```
+The required standard is 8 headers including `x-supabase-client-platform`, `x-supabase-client-platform-version`, etc. This causes CORS preflight failures when the Supabase JS SDK v2.56.0+ sends its extra headers.
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+**Fix**: Update `accept-order` CORS headers to match the project standard.
 
+---
+
+**Bug 3 — MINOR: `cancel-delivery` not in `config.toml`**
+
+Without an explicit entry, `cancel-delivery` defaults to `verify_jwt = true`. Since the function already validates JWT internally with the service role client, this isn't causing crashes but is an inconsistency that can cause subtle JWT validation issues.
+
+**Fix**: Add `[functions.cancel-delivery] verify_jwt = true` to `config.toml`.
+
+---
+
+### Files to Change
+
+1. **`supabase/functions/cancel-delivery/index.ts`**
+   - In the daily order section: use `agent_id` (raw auth UUID) directly — not `resolvedAgentId` — when checking `daily_orders.assigned_agent_id`
+   - Change the ownership check: `if (dailyOrder.assigned_agent_id && dailyOrder.assigned_agent_id !== agent_id)`
+   - Change the update filter: `.eq('assigned_agent_id', agent_id)` (not resolvedAgentId)
+   - Also update `agent_earnings_tracking` cancel to use `resolvedAgentId` still (earnings table uses delivery_agents.id)
+
+2. **`supabase/functions/accept-order/index.ts`**
+   - Update `corsHeaders` to include all 8 required Supabase SDK headers
+
+3. **`supabase/config.toml`**
+   - Add `[functions.cancel-delivery]` with `verify_jwt = true`
+
+4. **`src/pages/ManageDelivery.tsx`**  
+   - Also invalidate `assigned-orders` query after cancel (currently only removes `orders`) so My Deliveries refreshes correctly
+
+---
+
+### Summary
+
+```text
+User cancels a daily/subscription order
+    ↓
+ManageDelivery calls cancel-delivery with agent_id = auth UUID
+    ↓
+cancel-delivery resolves auth UUID → delivery_agents.id (internal UUID)
+    ↓
+Checks daily_orders.assigned_agent_id === resolvedAgentId
+    ↓
+daily_orders stores RAW auth UUID, not delivery_agents.id
+    ↓
+UUIDs don't match → 403 "assigned to another agent"
+```
