@@ -70,7 +70,8 @@ serve(async (req) => {
       }
 
       // Check if assigned to this agent
-      if (dailyOrder.assigned_agent_id && dailyOrder.assigned_agent_id !== resolvedAgentId) {
+      // NOTE: daily_orders.assigned_agent_id stores the raw auth UUID, NOT delivery_agents.id
+      if (dailyOrder.assigned_agent_id && dailyOrder.assigned_agent_id !== agent_id) {
         return new Response(
           JSON.stringify({ success: false, error: 'Order is assigned to another agent' }),
           { 
@@ -81,6 +82,7 @@ serve(async (req) => {
       }
 
       // Update daily_orders - release back to pool
+      // Use raw agent_id (auth UUID) since that's what daily_orders.assigned_agent_id stores
       const { error: updateError } = await supabase
         .from('daily_orders')
         .update({
@@ -88,7 +90,7 @@ serve(async (req) => {
           assigned_agent_id: null
         })
         .eq('id', order_id)
-        .eq('assigned_agent_id', resolvedAgentId);
+        .eq('assigned_agent_id', agent_id);
 
       if (updateError) {
         console.error('Failed to update daily order:', updateError);

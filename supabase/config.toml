@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.store-player-id]
 verify_jwt = true
+
+[functions.cancel-delivery]
+verify_jwt = true
