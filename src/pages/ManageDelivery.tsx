@@ -227,6 +227,7 @@ export default function ManageDelivery() {
 
       toast({ title: 'Delivery Cancelled', description: 'Order has been cancelled successfully' });
       queryClient.removeQueries({ queryKey: ['orders'] });
+      queryClient.removeQueries({ queryKey: ['assigned-orders'] });
       navigate(-1);
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error?.message || 'Failed to cancel delivery' });
