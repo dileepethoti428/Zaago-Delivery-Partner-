@@ -119,7 +119,9 @@ export function RazorpayQRDisplay({
 
   if (!qrData) return null;
 
-  const upiString = qrData.qr_string;
+  // Prefer Razorpay-hosted image_url (always valid); fall back to manual UPI string
+  const imageUrl = qrData.image_url;
+  const upiString = !imageUrl ? qrData.qr_string : null;
 
   return (
     <>
