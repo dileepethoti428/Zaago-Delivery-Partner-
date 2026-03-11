@@ -1,46 +1,58 @@
 
+## Root Cause Identified
 
-## COD Collection Tracker for Delivery Partners
+The logs prove two things:
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+1. Razorpay does NOT return `qr_string` (not included in the response fields list)
+2. Razorpay DOES return `image_url` (confirmed in response fields list)
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+The fallback currently builds a manual UPI string: `upi://pay?pa=zaago431980.rzp@rxairtel&...`
 
-### Implementation Plan
+The VPA `zaago431980.rzp@rxairtel` is a Razorpay-generated virtual address — UPI apps often fail on these with "provider facing technical issue" because this address type has specific routing requirements that may not be active on the account.
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+**The fix:** Use `image_url` from Razorpay's response — it IS returned and contains a properly generated, scannable QR image that Razorpay hosts. This will always work because it's the official QR rendered by Razorpay, not a manually constructed UPI string.
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+### Changes needed
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+**1. `supabase/functions/generate-payment-qr/index.ts`**
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+Return `image_url` from Razorpay's response to the frontend:
+```typescript
+return new Response(
+  JSON.stringify({
+    success: true,
+    qr_code_id: qrData.id,
+    qr_string: upiString,           // keep as fallback
+    qr_code_url: qrData.image_url,  // ← ADD THIS — the real hosted QR image
+    amount: amount,
+    expires_at: qrData.close_by,
+  }),
+  ...
+);
+```
 
-### Technical Details
+**2. `src/components/delivery/RazorpayQRDisplay.tsx`**
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+Priority order for QR display:
+- First try `image_url` (Razorpay-hosted QR) — most reliable, always works
+- Fall back to `qr_string` (manual UPI) only if `image_url` is absent
+- Fix TypeScript build error: `NodeJS.Timeout` → `ReturnType<typeof setInterval>`
 
+**3. `src/pages/ManageDelivery.tsx`**
+
+The `generateAndShowQR` function already maps `data.qr_code_url` into `qrData.image_url`, so no change needed there — it's already correct.
+
+### Also fix the build error
+
+Line 25 in `RazorpayQRDisplay.tsx`:
+```typescript
+// Before (broken)
+const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+
+// After (fixed)
+const [pollingInterval, setPollingInterval] = useState<ReturnType<typeof setInterval> | null>(null);
+```
+
+### Files to change
+1. `supabase/functions/generate-payment-qr/index.ts` — ensure `image_url` is in response (it already maps to `qr_code_url` but confirm)
+2. `src/components/delivery/RazorpayQRDisplay.tsx` — prioritize `image_url` over manual UPI string + fix TS error
