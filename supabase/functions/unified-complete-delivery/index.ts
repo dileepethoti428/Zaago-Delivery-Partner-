@@ -273,7 +273,7 @@ serve(async (req) => {
       // PRE-COMPLETION GUARD 2: Fetch order and validate status
       const { data: orderCheck, error: orderCheckError } = await supabase
         .from('orders')
-        .select('id, status, subscription_id, payment_status, seller_id, total_amount')
+        .select('id, status, subscription_id, payment_status, seller_id, total')
         .eq('id', order_id)
         .single();
 
@@ -287,7 +287,7 @@ serve(async (req) => {
 
       // Capture seller_id and amount for COD settlement
       sellerId = orderCheck.seller_id || null;
-      totalAmount = orderCheck.total_amount || 0;
+      totalAmount = (orderCheck as any).total || 0;
 
       console.log('🔍 PRE-COMPLETION GUARD CHECK:', {
         order_id,
