@@ -1,46 +1,41 @@
 
+## Root Cause: Wrong Agent ID passed to `useRejectOrder`
 
-## COD Collection Tracker for Delivery Partners
+### The Bug
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+In `Home.tsx` line 155:
+```typescript
+await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
+```
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+`profile.agent_id` = auth user UUID (e.g., `17578977-...`)
 
-### Implementation Plan
+But `agent_order_rejections.agent_id` is validated by RLS against `delivery_agents.id` (internal UUID, e.g., `c4b29233-...`):
+```sql
+-- RLS INSERT policy:
+agent_id IN (SELECT delivery_agents.id WHERE email = auth.email())
+```
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+`17578977 ≠ c4b29233` → RLS rejects the INSERT → "Failed to reject order" error.
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+**Second problem:** Even if the insert succeeded, `get-available-orders` queries `agent_order_rejections` using `resolvedAgentId` (internal ID `c4b29233`). If the row was stored with auth UUID `17578977`, the filter wouldn't match and the order would keep appearing for that agent — defeating the whole purpose of rejecting.
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+### Fix (one line)
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+In `src/pages/Home.tsx`, change `handleRejectOrder` to pass `profile?.id` (internal `delivery_agents.id`) instead of `profile?.agent_id`:
 
-### Technical Details
+```typescript
+// Before
+await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+// After  
+await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.id });
+```
 
+That's it — one field change. `profile.id` is the internal `delivery_agents.id` that matches the RLS policy and the `get-available-orders` rejection filter.
+
+### Files to change
+
+1. **`src/pages/Home.tsx`** — `handleRejectOrder` callback: `profile.agent_id` → `profile.id`
+
+No backend changes needed. The edge function, RLS policy, and `get-available-orders` filter are all correct and already use `delivery_agents.id`.
