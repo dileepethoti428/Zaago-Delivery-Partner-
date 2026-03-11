@@ -247,7 +247,15 @@ export function RazorpayQRDisplay({
           <DialogDescription id="fullscreen-qr-desc" className="sr-only">Fullscreen payment QR code</DialogDescription>
           <div className="w-full h-full flex flex-col items-center justify-center bg-background gap-4">
             <p className="text-foreground font-bold text-xl">₹{orderAmount.toFixed(2)}</p>
-            {upiString ? (
+            {imageUrl ? (
+              <div className="bg-white p-4 rounded-xl">
+                <img
+                  src={imageUrl}
+                  alt="Payment QR Code"
+                  style={{ width: fsQrSize, height: fsQrSize, display: 'block', imageRendering: 'pixelated' }}
+                />
+              </div>
+            ) : upiString ? (
               <div className="bg-white p-4 rounded-xl">
                 <QRCodeSVG
                   value={upiString}
@@ -257,14 +265,6 @@ export function RazorpayQRDisplay({
                   level="H"
                   includeMargin
                   style={{ display: 'block', shapeRendering: 'crispEdges' }}
-                />
-              </div>
-            ) : qrData?.image_url ? (
-              <div className="bg-white p-4 rounded-xl">
-                <img
-                  src={qrData.image_url}
-                  alt="Payment QR Code"
-                  style={{ width: fsQrSize, height: fsQrSize, display: 'block', imageRendering: 'pixelated' }}
                 />
               </div>
             ) : null}
