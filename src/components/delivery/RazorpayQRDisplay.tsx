@@ -182,9 +182,25 @@ export function RazorpayQRDisplay({
                 <p className="text-xs text-muted-foreground mt-0.5">Scan to pay this amount</p>
               </div>
 
-              {/* QR Code */}
+              {/* QR Code — prefer Razorpay-hosted image, fall back to SVG */}
               <div className="flex justify-center">
-                {upiString ? (
+                {imageUrl ? (
+                  <div
+                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
+                    onClick={() => setIsFullscreen(true)}
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Payment QR Code"
+                      style={{
+                        width: QR_SIZE,
+                        height: QR_SIZE,
+                        display: 'block',
+                        imageRendering: 'pixelated',
+                      }}
+                    />
+                  </div>
+                ) : upiString ? (
                   <div
                     className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
                     onClick={() => setIsFullscreen(true)}
@@ -197,22 +213,6 @@ export function RazorpayQRDisplay({
                       level="H"
                       includeMargin={false}
                       style={{ display: 'block', shapeRendering: 'crispEdges' }}
-                    />
-                  </div>
-                ) : qrData?.image_url ? (
-                  <div
-                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
-                    onClick={() => setIsFullscreen(true)}
-                  >
-                    <img
-                      src={qrData.image_url}
-                      alt="Payment QR Code"
-                      style={{
-                        width: 360,
-                        height: 360,
-                        display: 'block',
-                        imageRendering: 'pixelated',
-                      }}
                     />
                   </div>
                 ) : (
