@@ -23,7 +23,7 @@ export function RazorpayQRDisplay({
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success' | 'timeout'>('pending');
   const [timeLeft, setTimeLeft] = useState(300);
   const [pollingInterval, setPollingInterval] = useState<ReturnType<typeof setInterval> | null>(null);
-  const QR_SIZE = 300;
+  const dialogQrSize = Math.min(280, Math.floor((window.innerWidth - 80) * 0.9));
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
