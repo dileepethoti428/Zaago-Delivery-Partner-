@@ -1,46 +1,44 @@
 
+## Problem: QR is shrinking/distorted on mobile
 
-## COD Collection Tracker for Delivery Partners
+### Root Cause
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+In `RazorpayQRDisplay.tsx`, the QR image (and SVG fallback) are hardcoded at `width: 300, height: 300` in pixels. On mobile, the `DialogContent` is narrower than `300px + dialog padding (≈32px)`, so the browser squishes the image to fit — making the QR unreadable and uncapturable by UPI apps.
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+Additionally, `imageRendering: 'pixelated'` is applied to the Razorpay-hosted PNG/JPEG, which makes it blurry when scaled down (this style is for pixel art, not photos/QR images).
 
-### Implementation Plan
+### The Fix
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+**Make the QR responsive** — use CSS `width: 100%` + `aspect-ratio: 1` instead of fixed pixel dimensions, with a `max-width` cap for tablets/desktop.
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+Three specific changes in `src/components/delivery/RazorpayQRDisplay.tsx`:
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+**1. Normal dialog QR (line 192–201) — replace fixed pixel size with responsive CSS:**
+```tsx
+// Before
+<img style={{ width: QR_SIZE, height: QR_SIZE, imageRendering: 'pixelated' }} />
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+// After
+<img style={{ width: '100%', height: 'auto', display: 'block' }} />
+// Container div gets: className="w-full max-w-[280px] mx-auto"
+```
 
-### Technical Details
+**2. SVG fallback QR (line 208–216) — use viewport-relative size:**
+```tsx
+// Before
+<QRCodeSVG size={QR_SIZE} />
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+// After — compute size from window.innerWidth at render time
+const dialogQrSize = Math.min(280, Math.floor((window.innerWidth - 64) * 0.9));
+<QRCodeSVG size={dialogQrSize} />
+```
 
+**3. Remove `imageRendering: 'pixelated'`** from both normal and fullscreen `<img>` — Razorpay serves a high-res PNG, pixelated rendering hurts quality
+
+**4. Dialog outer container** — add `w-full` constraint so the QR wrapper fills properly:
+The outer `<div className="flex justify-center">` wrapping the QR box should let the image fill properly.
+
+### Files to change
+1. **`src/components/delivery/RazorpayQRDisplay.tsx`** — make QR responsive (normal + fullscreen), remove pixelated rendering
+
+No backend changes needed.
