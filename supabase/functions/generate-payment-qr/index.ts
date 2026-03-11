@@ -90,7 +90,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         qr_code_id: qrData.id,
-        qr_string: upiString, // Always present — rendered by QRCodeSVG on client
+        qr_string: upiString,          // fallback UPI string
+        qr_code_url: qrData.image_url, // Razorpay-hosted QR image (preferred)
         amount: amount,
         expires_at: qrData.close_by,
       }),
