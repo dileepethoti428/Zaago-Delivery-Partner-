@@ -1,0 +1,1 @@
+UPDATE orders SET assigned_agent_id = NULL, updated_at = NOW() WHERE status = 'packed' AND agent_id IS NULL AND assigned_agent_id IS NOT NULL
