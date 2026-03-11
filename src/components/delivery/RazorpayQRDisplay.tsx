@@ -22,7 +22,7 @@ export function RazorpayQRDisplay({
 }: RazorpayQRDisplayProps) {
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success' | 'timeout'>('pending');
   const [timeLeft, setTimeLeft] = useState(300);
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const QR_SIZE = 300;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
@@ -119,7 +119,9 @@ export function RazorpayQRDisplay({
 
   if (!qrData) return null;
 
-  const upiString = qrData.qr_string;
+  // Prefer Razorpay-hosted image_url (always valid); fall back to manual UPI string
+  const imageUrl = qrData.image_url;
+  const upiString = !imageUrl ? qrData.qr_string : null;
 
   return (
     <>
@@ -180,9 +182,25 @@ export function RazorpayQRDisplay({
                 <p className="text-xs text-muted-foreground mt-0.5">Scan to pay this amount</p>
               </div>
 
-              {/* QR Code */}
+              {/* QR Code — prefer Razorpay-hosted image, fall back to SVG */}
               <div className="flex justify-center">
-                {upiString ? (
+                {imageUrl ? (
+                  <div
+                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
+                    onClick={() => setIsFullscreen(true)}
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Payment QR Code"
+                      style={{
+                        width: QR_SIZE,
+                        height: QR_SIZE,
+                        display: 'block',
+                        imageRendering: 'pixelated',
+                      }}
+                    />
+                  </div>
+                ) : upiString ? (
                   <div
                     className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
                     onClick={() => setIsFullscreen(true)}
@@ -195,22 +213,6 @@ export function RazorpayQRDisplay({
                       level="H"
                       includeMargin={false}
                       style={{ display: 'block', shapeRendering: 'crispEdges' }}
-                    />
-                  </div>
-                ) : qrData?.image_url ? (
-                  <div
-                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
-                    onClick={() => setIsFullscreen(true)}
-                  >
-                    <img
-                      src={qrData.image_url}
-                      alt="Payment QR Code"
-                      style={{
-                        width: 360,
-                        height: 360,
-                        display: 'block',
-                        imageRendering: 'pixelated',
-                      }}
                     />
                   </div>
                 ) : (
@@ -245,7 +247,15 @@ export function RazorpayQRDisplay({
           <DialogDescription id="fullscreen-qr-desc" className="sr-only">Fullscreen payment QR code</DialogDescription>
           <div className="w-full h-full flex flex-col items-center justify-center bg-background gap-4">
             <p className="text-foreground font-bold text-xl">₹{orderAmount.toFixed(2)}</p>
-            {upiString ? (
+            {imageUrl ? (
+              <div className="bg-white p-4 rounded-xl">
+                <img
+                  src={imageUrl}
+                  alt="Payment QR Code"
+                  style={{ width: fsQrSize, height: fsQrSize, display: 'block', imageRendering: 'pixelated' }}
+                />
+              </div>
+            ) : upiString ? (
               <div className="bg-white p-4 rounded-xl">
                 <QRCodeSVG
                   value={upiString}
@@ -255,14 +265,6 @@ export function RazorpayQRDisplay({
                   level="H"
                   includeMargin
                   style={{ display: 'block', shapeRendering: 'crispEdges' }}
-                />
-              </div>
-            ) : qrData?.image_url ? (
-              <div className="bg-white p-4 rounded-xl">
-                <img
-                  src={qrData.image_url}
-                  alt="Payment QR Code"
-                  style={{ width: fsQrSize, height: fsQrSize, display: 'block', imageRendering: 'pixelated' }}
                 />
               </div>
             ) : null}
