@@ -148,15 +148,15 @@ export default function Home() {
   }, [profile?.agent_id, processingOrder, acceptOrderMutation, navigate]);
 
   const handleRejectOrder = useCallback(async (orderId: string) => {
-    if (!profile?.agent_id || processingOrder) return;
+    if (!profile?.id || processingOrder) return;
     setProcessingOrder(orderId);
     
     try {
-      await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.agent_id });
+      await rejectOrderMutation.mutateAsync({ orderId, agentId: profile.id });
     } finally {
       setProcessingOrder(null);
     }
-  }, [profile?.agent_id, processingOrder, rejectOrderMutation]);
+  }, [profile?.id, processingOrder, rejectOrderMutation]);
 
   const handleViewOrder = useCallback((orderId: string) => {
     navigate(`/order/${orderId}`);
