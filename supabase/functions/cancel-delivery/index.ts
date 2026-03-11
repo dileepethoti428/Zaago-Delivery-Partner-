@@ -232,6 +232,7 @@ serve(async (req) => {
       .update({
         status: 'packed',
         agent_id: null,
+        assigned_agent_id: null,
         updated_at: new Date().toISOString()
       })
       .eq('id', order_id)
