@@ -23,7 +23,7 @@ export function RazorpayQRDisplay({
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'success' | 'timeout'>('pending');
   const [timeLeft, setTimeLeft] = useState(300);
   const [pollingInterval, setPollingInterval] = useState<ReturnType<typeof setInterval> | null>(null);
-  const QR_SIZE = 300;
+  const dialogQrSize = Math.min(280, Math.floor((window.innerWidth - 80) * 0.9));
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsQrSize, setFsQrSize] = useState(512);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -183,21 +183,16 @@ export function RazorpayQRDisplay({
               </div>
 
               {/* QR Code — prefer Razorpay-hosted image, fall back to SVG */}
-              <div className="flex justify-center">
+              <div className="flex justify-center w-full">
                 {imageUrl ? (
                   <div
-                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm"
+                    className="bg-white rounded-xl border border-border p-3 cursor-zoom-in shadow-sm w-full max-w-[280px] mx-auto"
                     onClick={() => setIsFullscreen(true)}
                   >
                     <img
                       src={imageUrl}
                       alt="Payment QR Code"
-                      style={{
-                        width: QR_SIZE,
-                        height: QR_SIZE,
-                        display: 'block',
-                        imageRendering: 'pixelated',
-                      }}
+                      style={{ width: '100%', height: 'auto', display: 'block' }}
                     />
                   </div>
                 ) : upiString ? (
@@ -207,7 +202,7 @@ export function RazorpayQRDisplay({
                   >
                     <QRCodeSVG
                       value={upiString}
-                      size={QR_SIZE}
+                      size={dialogQrSize}
                       bgColor="#FFFFFF"
                       fgColor="#000000"
                       level="H"
@@ -252,7 +247,7 @@ export function RazorpayQRDisplay({
                 <img
                   src={imageUrl}
                   alt="Payment QR Code"
-                  style={{ width: fsQrSize, height: fsQrSize, display: 'block', imageRendering: 'pixelated' }}
+                  style={{ width: fsQrSize, height: fsQrSize, display: 'block' }}
                 />
               </div>
             ) : upiString ? (
