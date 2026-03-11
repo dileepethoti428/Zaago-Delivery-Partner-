@@ -247,7 +247,7 @@ export function RazorpayQRDisplay({
                 <img
                   src={imageUrl}
                   alt="Payment QR Code"
-                  style={{ width: fsQrSize, height: fsQrSize, display: 'block', imageRendering: 'pixelated' }}
+                  style={{ width: fsQrSize, height: fsQrSize, display: 'block' }}
                 />
               </div>
             ) : upiString ? (
