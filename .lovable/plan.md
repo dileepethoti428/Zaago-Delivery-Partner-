@@ -1,70 +1,46 @@
 
-## Root Cause Found — Two Bugs Preventing Cancelled Orders from Showing to Other Agents
 
-### Bug 1 — CRITICAL: `cancel-delivery` clears `agent_id` but NOT `assigned_agent_id`
+## COD Collection Tracker for Delivery Partners
 
-**Database proof:**
-```
-Order b5a89853 after cancellation:
-  status          = 'packed'    ✅ correct
-  agent_id        = NULL        ✅ correct  
-  assigned_agent_id = c4b29233  ❌ STILL SET — never cleared!
-```
+### What the user wants
+When a delivery partner completes COD orders, they collect cash from customers. They need to see:
+1. How much total COD cash they currently hold (need to submit to seller)
+2. Per-seller breakdown of pending COD amounts
+3. When the seller marks it as "settled" from their app, it should sync and update automatically
 
-The `cancel-delivery` function (lines 230-239) only sets `agent_id = null`:
-```typescript
-.update({
-  status: 'packed',
-  agent_id: null,         // ✅ cleared
-  // assigned_agent_id NOT cleared ❌
-  updated_at: ...
-})
-```
+### Current state
+- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
+- The table is currently empty — no records are being inserted
+- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
+- The seller app presumably can update `cod_settlements.status` to mark cash as received
 
-But `get-available-orders` (line 307-309) filters available orders as:
-```typescript
-const isAvailable = order.agent_id === null && 
-                    order.assigned_agent_id === null &&  // ← FAILS because still set!
-                    order.status === 'packed';
-```
+### Implementation Plan
 
-So the order is `packed` with `agent_id = null` but `assigned_agent_id` is still the old internal ID — it **never appears as available** to other agents.
+**1. Auto-insert COD settlement records on delivery completion**
+- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
+- This covers both regular and subscription/daily order completions
+- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
 
----
+**2. Create a new edge function `get-agent-cod-balance`**
+- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
+- Groups by `seller_id`, joins seller name
+- Returns: total pending amount, per-seller breakdown with amounts
 
-### Bug 2 — SECONDARY: Cancelling agent's own rejection record uses the wrong ID (though this would not matter for others, it prevents the cancelling agent from re-seeing it — not the main issue)
+**3. New frontend component: COD Collection Card**
+- A card on the **My Deliveries** page (or Home page) showing:
+  - Total pending COD amount to submit (highlighted in red/orange)
+  - Per-seller breakdown (seller name + amount)
+  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
 
-This is already working correctly per the DB query — `resolvedAgentId` is the internal ID and `agent_order_rejections` stores internal IDs. So that part is fine.
+**4. Realtime sync**
+- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
 
----
+### Technical Details
 
-### Fix: One line change in `cancel-delivery`
+- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
+- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
+- **New hook**: `useCodBalance` — React Query hook calling the edge function
+- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
+- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
+- **No migration needed**: `cod_settlements` table already exists with the right schema
 
-In the regular order cancellation block, also clear `assigned_agent_id`:
-
-```typescript
-.update({
-  status: 'packed',
-  agent_id: null,
-  assigned_agent_id: null,   // ← ADD THIS
-  updated_at: new Date().toISOString()
-})
-```
-
----
-
-### Files to change
-
-**1. `supabase/functions/cancel-delivery/index.ts`** — line 230-239
-- Add `assigned_agent_id: null` to the UPDATE for regular orders
-
-**2. Fix existing stuck orders in DB** — a migration to clean up any orders that are currently stuck in this state (packed, agent_id null, assigned_agent_id set, not in delivery_history):
-```sql
-UPDATE orders 
-SET assigned_agent_id = NULL, updated_at = NOW()
-WHERE status = 'packed' 
-  AND agent_id IS NULL 
-  AND assigned_agent_id IS NOT NULL;
-```
-
-That's the entire fix — one field missing from the cancel UPDATE query.
