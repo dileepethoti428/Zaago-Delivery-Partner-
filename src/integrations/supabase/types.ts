@@ -8902,6 +8902,10 @@ export type Database = {
       get_customer_next_deliveries: {
         Args: { p_customer_id: string }
         Returns: {
+          agent_name: string
+          agent_phone: string
+          agent_vehicle_number: string
+          agent_vehicle_type: string
           assigned_agent_id: string
           next_date: string
           status: string
