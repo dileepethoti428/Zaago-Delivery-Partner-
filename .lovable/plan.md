@@ -1,46 +1,59 @@
 
+## Findings
 
-## COD Collection Tracker for Delivery Partners
+### Question 1: Is rating the average of ALL orders?
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+**Current state**: The `average_rating` in `delivery_agents` IS calculated as `AVG(rating)` from `delivery_agent_ratings` table — but there is a **real problem right now**:
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+- Dileep has **5 ratings** (1, 1, 1, 2, 5) → correct average = **2.0** but `delivery_agents.average_rating` still shows **5.00** (the old backfilled value from before today's new 1-star and 2-star ratings)
+- The trigger `update_agent_rating_after_insert` was created by our migration, BUT there was already another trigger called `trigger_update_delivery_agent_rating_stats` — this older trigger is also firing and **may have a conflict** or the order of firing is wrong
+- Net result: new ratings inserted after the migration did NOT update the stored average from 5.0 → 2.0
 
-### Implementation Plan
+**Root cause of mismatch**: The backfill only ran once at migration time. But new ratings came in after, and somehow the stored value is NOT being updated. The trigger exists and is enabled — need to check if there's a conflict between the two duplicate triggers.
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+**Fix needed**: Remove the duplicate trigger (keep only one), and re-run the backfill to sync Dileep's current actual average of 2.0.
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+### Question 2: How is Performance Score calculated?
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+**Answer**: The `performance_score` column has a **default value of 100** and is **never updated by any function or trigger**. There is NO calculation logic — every agent always shows 100%. It is a static placeholder that was never implemented.
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+**What it should ideally factor in** (common delivery partner scoring):
+- Customer rating (e.g. 40% weight)
+- Delivery success rate / completion rate (e.g. 40% weight)  
+- On-time delivery rate (e.g. 20% weight)
 
-### Technical Details
+**Honest answer to show the user**: The score is currently always 100% — it's not being calculated from any real data. Two options:
+1. Hide the performance score tile since it shows misleading data
+2. Implement a real calculation based on available data
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+### Plan
 
+**Fix 1: Duplicate trigger conflict** — drop the old duplicate trigger, keep only the one we created. Then re-sync the current averages.
+
+**Fix 2: Profile UI** — Add a tooltip/label under "Score" that explains it honestly, OR hide the score tile and replace it with a "Total Ratings" count which IS real data.
+
+**Migration changes**:
+```sql
+-- Remove duplicate trigger
+DROP TRIGGER IF EXISTS trigger_update_delivery_agent_rating_stats ON public.delivery_agent_ratings;
+
+-- Re-sync averages (Dileep should now show 2.0 not 5.0)
+UPDATE public.delivery_agents d
+SET average_rating = sub.avg_rating, updated_at = now()
+FROM (
+  SELECT agent_id, ROUND(AVG(rating)::numeric, 1) AS avg_rating
+  FROM public.delivery_agent_ratings
+  GROUP BY agent_id
+) sub
+WHERE d.id = sub.agent_id;
+```
+
+**Frontend change (Profile.tsx)**:
+- Replace the misleading "Score: 100%" tile with "Reviews: X" count — showing how many customers have rated the agent (real, useful data)
+- The rating tile already correctly shows `average_rating`
+
+### Files to change
+1. **Migration** — drop duplicate trigger, re-sync average ratings
+2. **`src/pages/Profile.tsx`** — replace "Score %" stat with "Reviews" count (total number of customer ratings)
+
+No edge function changes needed.
