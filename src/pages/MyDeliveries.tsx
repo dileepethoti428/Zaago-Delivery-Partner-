@@ -115,12 +115,13 @@ export default function MyDeliveries() {
   const filteredOrders = useMemo(() => {
     if (!search.trim()) return currentOrders;
     const q = search.trim().toLowerCase();
+    const toStr = (v: unknown) => (typeof v === 'string' ? v : v ? JSON.stringify(v) : '');
     return currentOrders.filter(order =>
-      order.customerName?.toLowerCase().includes(q) ||
-      order.deliveryAddress?.toLowerCase().includes(q) ||
-      order.customerAddress?.toLowerCase().includes(q) ||
-      order.productName?.toLowerCase().includes(q) ||
-      order.sellerName?.toLowerCase().includes(q)
+      toStr(order.customerName).toLowerCase().includes(q) ||
+      toStr(order.deliveryAddress).toLowerCase().includes(q) ||
+      toStr(order.customerAddress).toLowerCase().includes(q) ||
+      toStr(order.productName).toLowerCase().includes(q) ||
+      toStr(order.sellerName).toLowerCase().includes(q)
     );
   }, [currentOrders, search]);
 
