@@ -1,57 +1,46 @@
 
-## Root Cause: Missing Trigger + Wrong Column in Profile Fetch
 
-Two bugs confirmed by database inspection:
+## COD Collection Tracker for Delivery Partners
 
-### Bug 1: No trigger attached to `delivery_agent_ratings`
+### What the user wants
+When a delivery partner completes COD orders, they collect cash from customers. They need to see:
+1. How much total COD cash they currently hold (need to submit to seller)
+2. Per-seller breakdown of pending COD amounts
+3. When the seller marks it as "settled" from their app, it should sync and update automatically
 
-The function `update_delivery_agent_rating_stats()` EXISTS in the database but there is **no trigger attached to the `delivery_agent_ratings` table**. This means when a customer submits a rating, the `delivery_agents.average_rating` column is NEVER updated — it stays at 0.00 forever.
+### Current state
+- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
+- The table is currently empty — no records are being inserted
+- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
+- The seller app presumably can update `cod_settlements.status` to mark cash as received
 
-Proof from DB query:
-- Dinesh has 2 ratings both = 5 stars → correct avg should be **5.0** but `delivery_agents.average_rating = 0.00`
-- Dileep has 1 rating = 5 stars → correct avg should be **5.0** but `delivery_agents.average_rating = 0.00`
+### Implementation Plan
 
-### Bug 2: Profile page fetches by `agent_id` (auth UUID) but stats card reads from the same row
+**1. Auto-insert COD settlement records on delivery completion**
+- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
+- This covers both regular and subscription/daily order completions
+- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
 
-`delivery_agents` table has TWO different UUID columns:
-- `id` — the table's primary key (e.g. `70dfec40-...`) — this is what `delivery_agent_ratings.agent_id` references
-- `agent_id` — the auth UUID (e.g. `677b89fb-...`) — this is what the app queries by
+**2. Create a new edge function `get-agent-cod-balance`**
+- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
+- Groups by `seller_id`, joins seller name
+- Returns: total pending amount, per-seller breakdown with amounts
 
-The profile page fetches by `agent_id` (auth UUID) which is correct and returns the row. But the `average_rating` column on that row is always 0 because the trigger never fires to update it.
+**3. New frontend component: COD Collection Card**
+- A card on the **My Deliveries** page (or Home page) showing:
+  - Total pending COD amount to submit (highlighted in red/orange)
+  - Per-seller breakdown (seller name + amount)
+  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
 
-### Fix: Two changes
+**4. Realtime sync**
+- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
 
-**1. Create the missing trigger** (migration)
+### Technical Details
 
-```sql
-CREATE TRIGGER update_agent_rating_after_insert
-AFTER INSERT OR UPDATE OR DELETE ON public.delivery_agent_ratings
-FOR EACH ROW EXECUTE FUNCTION public.update_delivery_agent_rating_stats();
-```
+- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
+- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
+- **New hook**: `useCodBalance` — React Query hook calling the edge function
+- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
+- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
+- **No migration needed**: `cod_settlements` table already exists with the right schema
 
-This will auto-update `average_rating` on `delivery_agents` every time a customer submits a rating.
-
-**2. Backfill existing ratings** (data fix)
-
-There are already 3 ratings in the table that were never applied. Run an UPDATE to sync them now:
-
-```sql
-UPDATE delivery_agents d
-SET average_rating = sub.avg_rating, updated_at = now()
-FROM (
-  SELECT agent_id, ROUND(AVG(rating)::numeric, 1) as avg_rating
-  FROM delivery_agent_ratings
-  GROUP BY agent_id
-) sub
-WHERE d.id = sub.agent_id;
-```
-
-### What the profile page shows after fix
-
-- Dinesh: **5.0 ⭐** (was showing 0)
-- Dileep: **5.0 ⭐** (was showing 0)
-- All future customer ratings will auto-update immediately
-
-### Files to change
-1. **Migration** — create the missing trigger + backfill existing ratings
-2. **No frontend changes needed** — `Profile.tsx` already renders `average_rating` correctly with `Number(agentProfile.average_rating).toFixed(1)`
