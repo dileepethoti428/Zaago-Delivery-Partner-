@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
-import { LogOut, User, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2, MessageCircle } from 'lucide-react';
+import { LogOut, User, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2, MessageCircle, Star, Package, TrendingUp } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 
 import { motion as m } from 'framer-motion';
@@ -197,6 +197,43 @@ export default function Profile() {
                     </Badge>
                   )}
                 </div>
+
+                {/* Stats row */}
+                {agentProfile && (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center rounded-lg bg-muted/50 px-2 py-2">
+                      <div className="flex items-center gap-1 text-amber-400">
+                        <Star className="h-3.5 w-3.5 fill-amber-400" />
+                        <span className="text-sm font-bold text-foreground">
+                          {agentProfile.average_rating != null
+                            ? Number(agentProfile.average_rating).toFixed(1)
+                            : '—'}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">Rating</p>
+                    </div>
+                    <div className="flex flex-col items-center rounded-lg bg-muted/50 px-2 py-2">
+                      <div className="flex items-center gap-1">
+                        <Package className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-sm font-bold text-foreground">
+                          {agentProfile.total_deliveries ?? 0}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">Deliveries</p>
+                    </div>
+                    <div className="flex flex-col items-center rounded-lg bg-muted/50 px-2 py-2">
+                      <div className="flex items-center gap-1">
+                        <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-sm font-bold text-foreground">
+                          {agentProfile.performance_score != null
+                            ? `${Math.round(Number(agentProfile.performance_score))}%`
+                            : '—'}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">Score</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
