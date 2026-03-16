@@ -19,18 +19,26 @@ export async function fetchAgentProfileById(userId: string) {
   if (error) throw error;
   if (!data) return data;
 
-  const { data: docData } = await supabase
-    .from('agent_documents')
-    .select('profile_photo_url')
-    .eq('user_id', data.agent_id)
-    .maybeSingle();
+  const [docResult, ratingCountResult] = await Promise.all([
+    supabase
+      .from('agent_documents')
+      .select('profile_photo_url')
+      .eq('user_id', data.agent_id)
+      .maybeSingle(),
+    supabase
+      .from('delivery_agent_ratings')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', data.id),
+  ]);
 
-  const fallbackPhoto = docData?.profile_photo_url ?? null;
+  const fallbackPhoto = docResult.data?.profile_photo_url ?? null;
+  const review_count = ratingCountResult.count ?? 0;
 
   return {
     ...data,
     profile_image:
       resolvePhotoUrl(data.profile_image) || resolvePhotoUrl(fallbackPhoto),
+    review_count,
   };
 }
 

@@ -225,12 +225,10 @@ export default function Profile() {
                       <div className="flex items-center gap-1">
                         <TrendingUp className="h-3.5 w-3.5 text-primary" />
                         <span className="text-sm font-bold text-foreground">
-                          {agentProfile.performance_score != null
-                            ? `${Math.round(Number(agentProfile.performance_score))}%`
-                            : '—'}
+                          {(agentProfile as typeof agentProfile & { review_count?: number }).review_count ?? 0}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-[10px] text-muted-foreground">Score</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">Reviews</p>
                     </div>
                   </div>
                 )}
