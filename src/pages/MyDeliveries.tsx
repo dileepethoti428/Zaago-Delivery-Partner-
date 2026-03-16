@@ -20,6 +20,7 @@ type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+  const [search, setSearch] = useState('');
 
   // Start location sync on this screen
   useScreenLocationSync();
