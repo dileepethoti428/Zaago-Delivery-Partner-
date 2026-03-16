@@ -1,46 +1,50 @@
 
+## Plan: Search Bar on My Deliveries + Rating on Profile
 
-## COD Collection Tracker for Delivery Partners
+### Feature 1: Search Bar on My Deliveries page (`src/pages/MyDeliveries.tsx`)
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+**Why**: With 40+ subscription orders, agents need to quickly find a customer by name, address, or product.
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+**What to add**: A search input below the tab bar that filters `currentOrders` client-side by:
+- Customer name
+- Delivery address
+- Product name
 
-### Implementation Plan
+The search is purely frontend — no extra API calls. State: `const [search, setSearch] = useState('')`. Filter applied after `currentOrders` is computed, before rendering the list. Show a clear (×) button when search has text. Show count of filtered results.
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+**Files to change**: `src/pages/MyDeliveries.tsx` only
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+---
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+### Feature 2: Rating display on Profile page (`src/pages/Profile.tsx`)
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+**Good news**: The `delivery_agents` table already has `average_rating`, `total_deliveries`, and `performance_score` columns — and `agentProfile` from `useProfileById` already fetches the full row. **No extra API call needed.**
 
-### Technical Details
+**What to add**: A stats row inside the profile card showing:
+- ⭐ Rating: `agentProfile.average_rating` (e.g. "4.8") — shown as star icons + number
+- 📦 Total Deliveries: `agentProfile.total_deliveries`
+- (optional) 🏆 Performance Score if non-null
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+Display as a horizontal 2–3 column grid below the name/badge row inside the existing profile card.
 
+**Files to change**: `src/pages/Profile.tsx` only
+
+---
+
+### Summary of changes
+
+```
+src/pages/MyDeliveries.tsx
+  - Add `search` state
+  - Add search Input with Search icon + clear button (below tabs)
+  - Add `filteredOrders` derived from `currentOrders` filtered by search text
+  - Render `filteredOrders` instead of `currentOrders`
+  - Show "No results for '...'" empty state when search returns nothing
+
+src/pages/Profile.tsx
+  - Add rating/stats row inside the profile card
+  - Star rating display using agentProfile.average_rating (already fetched)
+  - Total deliveries count from agentProfile.total_deliveries
+```
+
+No backend changes, no migrations, no new hooks needed.
