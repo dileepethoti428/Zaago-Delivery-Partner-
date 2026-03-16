@@ -111,6 +111,19 @@ export default function MyDeliveries() {
     all: todayOrders.length + tomorrowOrders.length,
   }), [todayOrders, tomorrowOrders, deliveredOrders]);
 
+  // Client-side search filter
+  const filteredOrders = useMemo(() => {
+    if (!search.trim()) return currentOrders;
+    const q = search.trim().toLowerCase();
+    return currentOrders.filter(order =>
+      order.customerName?.toLowerCase().includes(q) ||
+      order.deliveryAddress?.toLowerCase().includes(q) ||
+      order.customerAddress?.toLowerCase().includes(q) ||
+      order.productName?.toLowerCase().includes(q) ||
+      order.sellerName?.toLowerCase().includes(q)
+    );
+  }, [currentOrders, search]);
+
   const handleViewOrder = (order: typeof todayOrders[0]) => {
     const navId = order.dailyOrderId || order.id;
     if (!navId) {

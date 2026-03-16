@@ -202,8 +202,8 @@ export default function Profile() {
                 {agentProfile && (
                   <div className="mt-3 grid grid-cols-3 gap-2">
                     <div className="flex flex-col items-center rounded-lg bg-muted/50 px-2 py-2">
-                      <div className="flex items-center gap-1 text-yellow-500">
-                        <Star className="h-3.5 w-3.5 fill-yellow-500" />
+                      <div className="flex items-center gap-1 text-amber-400">
+                        <Star className="h-3.5 w-3.5 fill-amber-400" />
                         <span className="text-sm font-bold text-foreground">
                           {agentProfile.average_rating != null
                             ? Number(agentProfile.average_rating).toFixed(1)
