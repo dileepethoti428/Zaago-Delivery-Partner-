@@ -164,7 +164,7 @@ export default function MyDeliveries() {
         )}
 
         {/* Date Filter Tabs */}
-        <Tabs value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
+        <Tabs value={dateFilter} onValueChange={(v) => { setDateFilter(v as DateFilter); setSearch(''); }}>
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="today" className="text-xs">
               Today ({counts.today})
@@ -180,6 +180,28 @@ export default function MyDeliveries() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {/* Search Bar */}
+        {!isLoading && !error && currentOrders.length > 0 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search by customer, address, product…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-9"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Loading State */}
         {isLoading && (
@@ -198,7 +220,7 @@ export default function MyDeliveries() {
           </div>
         )}
 
-        {/* Empty State */}
+        {/* Empty State — no orders at all */}
         {!isLoading && !error && currentOrders.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -218,10 +240,23 @@ export default function MyDeliveries() {
           </motion.div>
         )}
 
+        {/* Empty State — search returned nothing */}
+        {!isLoading && !error && currentOrders.length > 0 && filteredOrders.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-10"
+          >
+            <Search className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+            <h3 className="font-semibold text-foreground mb-1">No results</h3>
+            <p className="text-sm text-muted-foreground">No orders match "{search}"</p>
+          </motion.div>
+        )}
+
         {/* Orders List */}
-        {!isLoading && !error && currentOrders.length > 0 && (
+        {!isLoading && !error && filteredOrders.length > 0 && (
           <div className="space-y-3">
-            {currentOrders.map((order, index) => (
+            {filteredOrders.map((order, index) => (
               <AssignedOrderCard
                 key={order.id}
                 order={order}
