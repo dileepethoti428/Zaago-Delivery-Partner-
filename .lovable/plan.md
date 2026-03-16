@@ -1,57 +1,46 @@
 
-## Root Cause Analysis — Two Separate Bugs
 
-### Bug 1: Reviews showing 0 — RLS blocks agents from reading their own ratings
+## COD Collection Tracker for Delivery Partners
 
-The `delivery_agent_ratings` table has RLS enabled. The only SELECT policy is:
-- `Users can view their own agent ratings` → `WHERE auth.uid() = user_id`
+### What the user wants
+When a delivery partner completes COD orders, they collect cash from customers. They need to see:
+1. How much total COD cash they currently hold (need to submit to seller)
+2. Per-seller breakdown of pending COD amounts
+3. When the seller marks it as "settled" from their app, it should sync and update automatically
 
-This policy allows **customers** (who submitted the rating, their `user_id` is stored) to see their own rating. But when the **delivery agent** (Dileep, auth UUID = `17578977-...`) queries this table with:
+### Current state
+- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
+- The table is currently empty — no records are being inserted
+- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
+- The seller app presumably can update `cod_settlements.status` to mark cash as received
 
-```sql
-SELECT count(*) FROM delivery_agent_ratings WHERE agent_id = 'c4b29233-...'
-```
+### Implementation Plan
 
-Their `auth.uid()` = `17578977-...` does NOT match `user_id` (which is the customer's UUID). So the query returns 0 rows → `review_count = 0`.
+**1. Auto-insert COD settlement records on delivery completion**
+- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
+- This covers both regular and subscription/daily order completions
+- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
 
-**Fix**: Add a SELECT policy that allows an agent to count/read ratings where `agent_id` matches their own `delivery_agents.id`.
+**2. Create a new edge function `get-agent-cod-balance`**
+- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
+- Groups by `seller_id`, joins seller name
+- Returns: total pending amount, per-seller breakdown with amounts
 
-```sql
-CREATE POLICY "Agents can view their own ratings"
-ON public.delivery_agent_ratings
-FOR SELECT
-TO authenticated
-USING (
-  agent_id IN (
-    SELECT id FROM public.delivery_agents WHERE agent_id = auth.uid()
-  )
-);
-```
+**3. New frontend component: COD Collection Card**
+- A card on the **My Deliveries** page (or Home page) showing:
+  - Total pending COD amount to submit (highlighted in red/orange)
+  - Per-seller breakdown (seller name + amount)
+  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
 
-### Bug 2: Rating is showing correctly (2.0) ✓
+**4. Realtime sync**
+- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
 
-Good news — the trigger IS working now. The DB confirms `average_rating = 2.00` for Dileep (5 ratings: 1, 5, 1, 2, 1 → avg = 2.0). The average_rating on the profile WILL display correctly as "2.0".
+### Technical Details
 
-### Bug 3: New ratings submitted — are they updating average_rating?
+- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
+- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
+- **New hook**: `useCodBalance` — React Query hook calling the edge function
+- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
+- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
+- **No migration needed**: `cod_settlements` table already exists with the right schema
 
-Confirmed: the 5 ratings in the DB are all for Dileep (`agent_id = c4b29233-...`) and the `average_rating` correctly reflects 2.0. The trigger IS working — new ratings after the migration are being counted. ✓
-
-### Summary of what to fix
-
-**Only one migration needed**: Add an RLS policy so agents can read their own ratings count.
-
-**Files to change:**
-1. Migration only — add SELECT policy on `delivery_agent_ratings` for agents to view ratings where they are the rated agent.
-2. No frontend changes needed — the code in `agentProfile.ts` is correct, the query just returns 0 due to RLS blocking it.
-
-```
-Migration:
-  ADD POLICY "Agents can view their own ratings"
-  ON delivery_agent_ratings FOR SELECT
-  USING (agent_id IN (SELECT id FROM delivery_agents WHERE agent_id = auth.uid()))
-```
-
-After this fix:
-- Dileep will see Reviews: 5 (correct — 5 ratings exist)
-- Dinesh will see Reviews: 2 (correct — 2 ratings exist)
-- Average rating already shows correctly (2.0 for Dileep, 5.0 for Dinesh)
