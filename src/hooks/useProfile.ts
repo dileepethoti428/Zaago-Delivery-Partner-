@@ -6,9 +6,10 @@ export const useProfileById = (userId?: string) => {
     queryKey: ['profile', userId],
     queryFn: () => fetchAgentProfileById(userId!),
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     retry: 2,
     retryDelay: 1000,
   });
