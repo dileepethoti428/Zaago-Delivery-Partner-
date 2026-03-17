@@ -1,46 +1,50 @@
 
+## Root Cause Found — Two Bugs Working Against Each Other
 
-## COD Collection Tracker for Delivery Partners
+### Investigation Results
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+**Bug 1: Frontend cache (PRIMARY cause of user frustration)**
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+In `src/hooks/useProfile.ts`:
+```ts
+staleTime: 5 * 60 * 1000,  // 5 MINUTES cache
+refetchOnWindowFocus: false, // won't refresh when agent comes back to app
+```
 
-### Implementation Plan
+This means even when the DB correctly updates `average_rating`, the Profile page shows the **old cached value for up to 5 minutes**. The agent gives a rating, checks the profile immediately → still sees old number because React Query is serving the 5-minute-old cache. This is the main reason it "doesn't change".
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+**Bug 2: Duplicate triggers + Dinesh's wrong stored rating**
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+Two triggers both fire on every new rating:
+- `update_agent_rating_after_insert` (our first migration)
+- `update_agent_rating_on_change` (our second migration)
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+Both call the same function. DB confirmation shows this caused Dinesh's stored average to be **3.90** while the actual correct average from ratings is **3.50** (8 ratings). The duplicate triggers are fighting each other.
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+Also confirmed: the trigger function logic itself has a subtle mismatch — it updates `WHERE id = COALESCE(NEW.agent_id, OLD.agent_id)` but the DB correctly joins on `delivery_agents.id = delivery_agent_ratings.agent_id`. This is actually correct and working for Dileep (2.8 stored = 2.8 correct ✓). Dinesh's mismatch is from historical data.
 
-### Technical Details
+### Full Fix Plan
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+**1. Fix frontend — `src/hooks/useProfile.ts`**
+- Drop `staleTime` from 5 minutes to **30 seconds**
+- Add `refetchOnMount: 'always'` so profile is always fresh when the agent navigates to the Profile tab
 
+**2. Fix database — migration**
+- Drop the duplicate `update_agent_rating_on_change` trigger (keep `update_agent_rating_after_insert`)
+- Re-sync Dinesh's correct average from 3.90 → 3.50
+
+**Files to change:**
+1. `src/hooks/useProfile.ts` — fix stale cache settings
+2. Migration — drop duplicate trigger + fix Dinesh's stored rating
+
+### Why This Will Now Work
+
+```
+Before fix:
+  Customer rates → DB updates avg_rating → Agent checks profile → 
+  Cache still serving 5-min-old data → Agent sees old rating ❌
+
+After fix:
+  Customer rates → DB updates avg_rating → Agent checks profile → 
+  Profile refetches fresh data (max 30s stale) → Agent sees new rating ✓
+```
