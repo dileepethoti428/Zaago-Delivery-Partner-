@@ -7,7 +7,8 @@ import { useTodayOrders, useTomorrowOrders, useDeliveredOrders } from '@/hooks/u
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Package, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Package, Search, X, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
@@ -21,6 +22,7 @@ export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(5);
 
   // Start location sync on this screen
   useScreenLocationSync();
@@ -164,7 +166,7 @@ export default function MyDeliveries() {
         )}
 
         {/* Date Filter Tabs */}
-        <Tabs value={dateFilter} onValueChange={(v) => { setDateFilter(v as DateFilter); setSearch(''); }}>
+        <Tabs value={dateFilter} onValueChange={(v) => { setDateFilter(v as DateFilter); setSearch(''); setVisibleCount(5); }}>
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="today" className="text-xs">
               Today ({counts.today})
@@ -254,19 +256,35 @@ export default function MyDeliveries() {
         )}
 
         {/* Orders List */}
-        {!isLoading && !error && filteredOrders.length > 0 && (
-          <div className="space-y-3">
-            {filteredOrders.map((order, index) => (
-              <AssignedOrderCard
-                key={order.id}
-                order={order}
-                index={index}
-                dateLabel={dateFilter === 'all' ? formatDateLabel(order.date) : undefined}
-                onManage={() => handleViewOrder(order)}
-              />
-            ))}
-          </div>
-        )}
+        {!isLoading && !error && filteredOrders.length > 0 && (() => {
+          const displayedOrders = search ? filteredOrders : filteredOrders.slice(0, visibleCount);
+          const hasMore = !search && filteredOrders.length > visibleCount;
+          return (
+            <>
+              <div className="space-y-3">
+                {displayedOrders.map((order, index) => (
+                  <AssignedOrderCard
+                    key={order.id}
+                    order={order}
+                    index={index}
+                    dateLabel={dateFilter === 'all' ? formatDateLabel(order.date) : undefined}
+                    onManage={() => handleViewOrder(order)}
+                  />
+                ))}
+              </div>
+              {hasMore && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setVisibleCount((prev) => prev + 5)}
+                >
+                  <ChevronDown className="h-4 w-4 mr-2" />
+                  View More ({filteredOrders.length - visibleCount} remaining)
+                </Button>
+              )}
+            </>
+          );
+        })()}
       </div>
     </AppShell>
   );
