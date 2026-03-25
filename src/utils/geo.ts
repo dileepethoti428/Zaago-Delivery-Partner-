@@ -48,7 +48,7 @@ export function canUseGeolocation(): boolean {
 }
 
 const GEOCODE_CACHE_KEY = 'zaago_geocode_cache';
-const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const GEOCODE_CACHE_TTL_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
 const GEOCODE_DISTANCE_THRESHOLD_KM = 0.5; // 500 meters
 
 type GeocodeCache = {
