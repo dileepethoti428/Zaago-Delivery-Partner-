@@ -181,7 +181,7 @@ export default function Earnings() {
               {/* Regular Orders Tab */}
               <TabsContent value="regular" className="mt-0">
                 {earningsData?.regular ? (
-                  <EarningsTabContent data={earningsData.regular} type="regular" />
+                  <EarningsTabContent data={earningsData.regular} type="regular" allTimeDeliveries={allTimeData?.regularDeliveries} />
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     <ShoppingBag className="h-12 w-12 mx-auto mb-3 opacity-30" />
@@ -193,7 +193,7 @@ export default function Earnings() {
               {/* Subscription Deliveries Tab */}
               <TabsContent value="subscription" className="mt-0">
                 {earningsData?.subscription ? (
-                  <SubscriptionTabContent data={earningsData.subscription} />
+                  <SubscriptionTabContent data={earningsData.subscription} allTimeDeliveries={allTimeData?.subscriptionDeliveries} />
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     <RefreshCw className="h-12 w-12 mx-auto mb-3 opacity-30" />
