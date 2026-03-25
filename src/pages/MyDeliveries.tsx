@@ -256,19 +256,35 @@ export default function MyDeliveries() {
         )}
 
         {/* Orders List */}
-        {!isLoading && !error && filteredOrders.length > 0 && (
-          <div className="space-y-3">
-            {filteredOrders.map((order, index) => (
-              <AssignedOrderCard
-                key={order.id}
-                order={order}
-                index={index}
-                dateLabel={dateFilter === 'all' ? formatDateLabel(order.date) : undefined}
-                onManage={() => handleViewOrder(order)}
-              />
-            ))}
-          </div>
-        )}
+        {!isLoading && !error && filteredOrders.length > 0 && (() => {
+          const displayedOrders = search ? filteredOrders : filteredOrders.slice(0, visibleCount);
+          const hasMore = !search && filteredOrders.length > visibleCount;
+          return (
+            <>
+              <div className="space-y-3">
+                {displayedOrders.map((order, index) => (
+                  <AssignedOrderCard
+                    key={order.id}
+                    order={order}
+                    index={index}
+                    dateLabel={dateFilter === 'all' ? formatDateLabel(order.date) : undefined}
+                    onManage={() => handleViewOrder(order)}
+                  />
+                ))}
+              </div>
+              {hasMore && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setVisibleCount((prev) => prev + 5)}
+                >
+                  <ChevronDown className="h-4 w-4 mr-2" />
+                  View More ({filteredOrders.length - visibleCount} remaining)
+                </Button>
+              )}
+            </>
+          );
+        })()}
       </div>
     </AppShell>
   );
