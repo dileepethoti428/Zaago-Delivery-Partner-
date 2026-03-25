@@ -22,6 +22,7 @@ export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(5);
 
   // Start location sync on this screen
   useScreenLocationSync();
