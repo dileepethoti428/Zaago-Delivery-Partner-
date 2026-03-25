@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, RefreshCw } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { RefreshCw, TrendingUp } from 'lucide-react';
 import { EarningsByType } from '@/services/earnings';
 import { SubscriptionDeliverySummaryCard } from './SubscriptionDeliverySummaryCard';
 import { SubscriptionDeliveryList } from './SubscriptionDeliveryList';
@@ -7,9 +7,10 @@ import { motion } from 'framer-motion';
 
 interface SubscriptionTabContentProps {
   data: EarningsByType;
+  allTimeDeliveries?: number;
 }
 
-export function SubscriptionTabContent({ data }: SubscriptionTabContentProps) {
+export function SubscriptionTabContent({ data, allTimeDeliveries }: SubscriptionTabContentProps) {
   return (
     <div className="space-y-4">
       {/* Today's Deliveries - Featured - NO earnings */}
@@ -37,44 +38,29 @@ export function SubscriptionTabContent({ data }: SubscriptionTabContentProps) {
         />
       </div>
 
-      {/* Delivery Statistics */}
+      {/* All Time Deliveries Card */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, ease: [0.4, 0, 0.2, 1] }}
       >
-        <Card className="rounded-2xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Subscription Delivery Statistics (This Month)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-green-600">
-                  {data.month.deliveries}
+        <Card className="rounded-2xl border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50">
+                  <TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Completed
+                <div>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">All Time Deliveries</p>
+                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+                    {allTimeDeliveries ?? 0}
+                  </p>
                 </div>
               </div>
-              <div>
-                <div className="text-2xl font-bold text-orange-600">
-                  {data.month.in_progress}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Pending
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-red-600">
-                  {data.month.cancelled}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Skipped
-                </div>
+              <div className="text-right">
+                <RefreshCw className="h-8 w-8 text-amber-300 dark:text-amber-700 ml-auto" />
+                <p className="text-xs text-amber-600/70 dark:text-amber-400/70 mt-1">Subscriptions</p>
               </div>
             </div>
           </CardContent>

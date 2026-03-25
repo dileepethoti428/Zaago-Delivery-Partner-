@@ -3,15 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/store/auth';
 import type { PeriodEarnings } from '@/services/earnings';
 
+export interface AllTimeEarnings extends PeriodEarnings {
+  regularDeliveries: number;
+  subscriptionDeliveries: number;
+}
+
 export const useAllTimeEarnings = () => {
   const user = useAuthStore((s) => s.user);
 
-  return useQuery<PeriodEarnings>({
+  return useQuery<AllTimeEarnings>({
     queryKey: ['all-time-earnings', user?.id],
     enabled: !!user?.id,
     staleTime: 60 * 1000,
     queryFn: async () => {
-      // Step 1: Resolve the internal delivery_agents.id from auth user UUID
       const { data: agentRow, error: agentError } = await supabase
         .from('delivery_agents')
         .select('id')
@@ -19,12 +23,11 @@ export const useAllTimeEarnings = () => {
         .maybeSingle();
 
       if (agentError) throw agentError;
-      if (!agentRow) return { total: 0, confirmed: 0, pending: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0 };
+      if (!agentRow) return { total: 0, confirmed: 0, pending: 0, deliveries: 0, in_progress: 0, cancelled: 0, total_orders: 0, regularDeliveries: 0, subscriptionDeliveries: 0 };
 
-      // Step 2: Query earnings using internal delivery_agents.id
       const { data, error } = await supabase
         .from('agent_earnings_tracking')
-        .select('expected_payout, actual_payout, payout_status')
+        .select('expected_payout, actual_payout, payout_status, order_type')
         .eq('agent_id', agentRow.id);
 
       if (error) throw error;
@@ -36,9 +39,12 @@ export const useAllTimeEarnings = () => {
       let deliveries = 0;
       let in_progress = 0;
       let cancelled = 0;
+      let regularDeliveries = 0;
+      let subscriptionDeliveries = 0;
 
       for (const r of rows) {
         const status = r.payout_status ?? '';
+        const orderType = r.order_type ?? '';
         const expected = parseFloat(String(r.expected_payout ?? 0));
         const actual = parseFloat(String(r.actual_payout ?? 0));
 
@@ -46,6 +52,8 @@ export const useAllTimeEarnings = () => {
           confirmed += actual || expected;
           total += actual || expected;
           deliveries++;
+          if (orderType === 'regular') regularDeliveries++;
+          else if (orderType === 'subscription') subscriptionDeliveries++;
         } else if (status === 'pending') {
           pending += expected;
           total += expected;
@@ -55,7 +63,7 @@ export const useAllTimeEarnings = () => {
         }
       }
 
-      return { total, confirmed, pending, deliveries, in_progress, cancelled, total_orders: rows.length };
+      return { total, confirmed, pending, deliveries, in_progress, cancelled, total_orders: rows.length, regularDeliveries, subscriptionDeliveries };
     },
   });
 };

@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Package } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Package, ChevronDown } from 'lucide-react';
 import { useDeliveryHistory } from '@/hooks/useDeliveryHistory';
 import { DeliveryHistoryCard } from '@/components/delivery/DeliveryHistoryCard';
 
 export default function DeliveryHistory() {
   const { data, isLoading: loading } = useDeliveryHistory(50, 0, undefined, true);
   const history = data?.data || [];
+  const [visibleCount, setVisibleCount] = useState(5);
 
   if (loading) {
     return (
@@ -36,6 +39,9 @@ export default function DeliveryHistory() {
     );
   }
 
+  const visibleHistory = history.slice(0, visibleCount);
+  const hasMore = history.length > visibleCount;
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -45,7 +51,7 @@ export default function DeliveryHistory() {
         </div>
 
         <div className="space-y-4">
-          {history.map((delivery, index) => (
+          {visibleHistory.map((delivery, index) => (
             <DeliveryHistoryCard
               key={delivery.id}
               delivery={delivery}
@@ -53,6 +59,17 @@ export default function DeliveryHistory() {
             />
           ))}
         </div>
+
+        {hasMore && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setVisibleCount((prev) => prev + 5)}
+          >
+            <ChevronDown className="h-4 w-4 mr-2" />
+            View More ({history.length - visibleCount} remaining)
+          </Button>
+        )}
       </div>
     </AppShell>
   );
