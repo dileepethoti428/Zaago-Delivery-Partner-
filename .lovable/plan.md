@@ -1,46 +1,29 @@
 
+## Plan: Extend Location Cache to 5 Days
 
-## COD Collection Tracker for Delivery Partners
+### What "location cache" means here
 
-### What the user wants
-When a delivery partner completes COD orders, they collect cash from customers. They need to see:
-1. How much total COD cash they currently hold (need to submit to seller)
-2. Per-seller breakdown of pending COD amounts
-3. When the seller marks it as "settled" from their app, it should sync and update automatically
+There are two separate caches in the location system:
 
-### Current state
-- A `cod_settlements` table already exists with columns: `id`, `order_id`, `agent_id`, `seller_id`, `amount`, `status`, `settled_at`, `created_at`, `updated_at`
-- The table is currently empty — no records are being inserted
-- `delivery_history` tracks completed deliveries with `payment_method` (COD/ONLINE) and `total_amount`
-- The seller app presumably can update `cod_settlements.status` to mark cash as received
+1. **Reverse geocode cache** (`zaago_geocode_cache` in `src/utils/geo.ts`) — caches the human-readable address label (e.g. "Hyderabad, Telangana"). Currently TTL = **24 hours**.
 
-### Implementation Plan
+2. **Last known location** (`zaago_last_loc` in `src/store/location.ts`) — caches raw GPS coordinates (lat/lng). This has **no TTL expiry** — it's always loaded on hydration. The GPS watcher continuously overwrites this anyway.
 
-**1. Auto-insert COD settlement records on delivery completion**
-- Update the `unified-complete-delivery` edge function to INSERT into `cod_settlements` whenever `payment_method = 'COD'` with `status = 'pending'`
-- This covers both regular and subscription/daily order completions
-- Fields: `order_id`, `agent_id` (delivery_agents.id), `seller_id` (from the order), `amount` (total_amount), `status: 'pending'`
+The user's request to "add location cache on home page to 5 days" means extending the **reverse geocode label cache** from 24 hours → **5 days**. This means the app won't call the Nominatim API repeatedly if the agent hasn't moved more than 500m within 5 days — the address label stays cached.
 
-**2. Create a new edge function `get-agent-cod-balance`**
-- Queries `cod_settlements` WHERE `agent_id = <agent>` AND `status = 'pending'`
-- Groups by `seller_id`, joins seller name
-- Returns: total pending amount, per-seller breakdown with amounts
+### Single change needed
 
-**3. New frontend component: COD Collection Card**
-- A card on the **My Deliveries** page (or Home page) showing:
-  - Total pending COD amount to submit (highlighted in red/orange)
-  - Per-seller breakdown (seller name + amount)
-  - When seller settles, the amount disappears (realtime via Supabase subscription on `cod_settlements`)
+**File: `src/utils/geo.ts`** — line 51
 
-**4. Realtime sync**
-- Subscribe to `cod_settlements` table changes so when seller updates `status` to `settled`, the card updates automatically without refresh
+```typescript
+// Before
+const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-### Technical Details
+// After
+const GEOCODE_CACHE_TTL_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
+```
 
-- **Edge function change**: `unified-complete-delivery` — add INSERT into `cod_settlements` after successful delivery completion for COD orders
-- **New edge function**: `get-agent-cod-balance` — returns pending COD amounts grouped by seller
-- **New hook**: `useCodBalance` — React Query hook calling the edge function
-- **New component**: `CodCollectionCard` — displays pending COD on My Deliveries page
-- **Realtime**: Subscribe to `cod_settlements` for status changes to invalidate the query cache
-- **No migration needed**: `cod_settlements` table already exists with the right schema
+That's the only change. The distance threshold (500m) stays the same — if the agent moves more than 500m, the cache is invalidated and a fresh geocode is fetched regardless of TTL.
 
+### Files to change
+1. `src/utils/geo.ts` — change `GEOCODE_CACHE_TTL_MS` from 24h to 5 days (one line)
