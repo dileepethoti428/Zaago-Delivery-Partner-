@@ -166,7 +166,7 @@ export default function MyDeliveries() {
         )}
 
         {/* Date Filter Tabs */}
-        <Tabs value={dateFilter} onValueChange={(v) => { setDateFilter(v as DateFilter); setSearch(''); }}>
+        <Tabs value={dateFilter} onValueChange={(v) => { setDateFilter(v as DateFilter); setSearch(''); setVisibleCount(5); }}>
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="today" className="text-xs">
               Today ({counts.today})
