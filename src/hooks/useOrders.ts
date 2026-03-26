@@ -8,7 +8,7 @@ export const useOrders = (agentId?: string, isScreenActive = false) => {
     queryKey: ['orders', agentId],
     queryFn: () => fetchAvailableOrders(agentId!),
     enabled: !!agentId && isScreenActive,
-    staleTime: 30 * 1000,
+    staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000,
   });
 };

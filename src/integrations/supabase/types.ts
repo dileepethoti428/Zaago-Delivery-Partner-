@@ -2533,6 +2533,33 @@ export type Database = {
         }
         Relationships: []
       }
+      distance_cache: {
+        Row: {
+          created_at: string | null
+          dest_lat: number
+          dest_lng: number
+          distance_km: number
+          origin_lat: number
+          origin_lng: number
+        }
+        Insert: {
+          created_at?: string | null
+          dest_lat: number
+          dest_lng: number
+          distance_km: number
+          origin_lat: number
+          origin_lng: number
+        }
+        Update: {
+          created_at?: string | null
+          dest_lat?: number
+          dest_lng?: number
+          distance_km?: number
+          origin_lat?: number
+          origin_lng?: number
+        }
+        Relationships: []
+      }
       driver_locations: {
         Row: {
           accuracy: number | null
