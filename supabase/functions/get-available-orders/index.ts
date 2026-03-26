@@ -153,6 +153,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+    _supabaseClient = supabase;
 
     const { agent_id } = await req.json();
     console.log('Getting available orders for agent (auth user ID):', agent_id);
