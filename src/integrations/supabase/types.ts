@@ -8726,6 +8726,14 @@ export type Database = {
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       get_agent_distance_stats: { Args: { agent_uuid: string }; Returns: Json }
+      get_agent_earnings_series: {
+        Args: { target_agent_id: string; time_period?: string }
+        Returns: {
+          bucket_label: string
+          earnings: number
+          orders: number
+        }[]
+      }
       get_agent_hours_today: { Args: { agent_uuid: string }; Returns: number }
       get_agent_orders_delivered_today: {
         Args: never
@@ -9217,6 +9225,14 @@ export type Database = {
         Returns: {
           agent_id: string
           order_count: number
+        }[]
+      }
+      get_seller_earnings_series: {
+        Args: { target_seller_id: string; time_period?: string }
+        Returns: {
+          bucket_label: string
+          earnings: number
+          orders: number
         }[]
       }
       get_seller_order_items: {
