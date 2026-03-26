@@ -17,6 +17,60 @@ const REGULAR_ORDER_PRICING = {
  * Returns distance in km, rounded UP to 1 decimal (Zepto style)
  * NO HAVERSINE FALLBACK - returns null if routing fails
  */
+// Round coordinate to 3 decimal places (~111m precision) for cache key
+function roundCoord(v: number): number {
+  return Math.round(v * 1000) / 1000;
+}
+
+// Supabase client reference set inside serve() handler
+let _supabaseClient: any = null;
+
+/**
+ * Check distance_cache table for a cached distance
+ */
+async function getCachedDistance(
+  oLat: number, oLng: number, dLat: number, dLng: number
+): Promise<number | null> {
+  if (!_supabaseClient) return null;
+  try {
+    const { data } = await _supabaseClient
+      .from('distance_cache')
+      .select('distance_km')
+      .match({
+        origin_lat: oLat,
+        origin_lng: oLng,
+        dest_lat: dLat,
+        dest_lng: dLng,
+      })
+      .maybeSingle();
+    return data?.distance_km ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store distance in cache table
+ */
+async function setCachedDistance(
+  oLat: number, oLng: number, dLat: number, dLng: number, distanceKm: number
+): Promise<void> {
+  if (!_supabaseClient) return;
+  try {
+    await _supabaseClient
+      .from('distance_cache')
+      .upsert({
+        origin_lat: oLat,
+        origin_lng: oLng,
+        dest_lat: dLat,
+        dest_lng: dLng,
+        distance_km: distanceKm,
+      }, { onConflict: 'origin_lat,origin_lng,dest_lat,dest_lng' });
+  } catch (e) {
+    console.warn('Failed to cache distance:', e);
+  }
+}
+
 async function calculateRoadDistance(
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number }
@@ -26,6 +80,19 @@ async function calculateRoadDistance(
   if (!googleApiKey) {
     console.error('❌ GOOGLE_PLACES_API_KEY not configured - cannot calculate road distance');
     return null;
+  }
+
+  // Round coords for cache key
+  const oLat = roundCoord(origin.lat);
+  const oLng = roundCoord(origin.lng);
+  const dLat = roundCoord(destination.lat);
+  const dLng = roundCoord(destination.lng);
+
+  // Check cache first
+  const cached = await getCachedDistance(oLat, oLng, dLat, dLng);
+  if (cached !== null) {
+    console.log(`📦 Cache HIT: (${oLat},${oLng})→(${dLat},${dLng}) = ${cached}km`);
+    return cached;
   }
 
   try {
@@ -47,15 +114,15 @@ async function calculateRoadDistance(
     }
     
     const distanceMeters = element.distance.value;
-    
-    // Convert meters to km
     const rawDistanceKm = distanceMeters / 1000;
-    
-    // Zepto style: Round UP to 1 decimal place (ceil)
     const roundedDistanceKm = Math.ceil(rawDistanceKm * 10) / 10;
-    
-    // Minimum distance of 0.1 km
-    return Math.max(0.1, roundedDistanceKm);
+    const result = Math.max(0.1, roundedDistanceKm);
+
+    // Store in cache
+    console.log(`🌐 Cache MISS: (${oLat},${oLng})→(${dLat},${dLng}) = ${result}km → saving`);
+    await setCachedDistance(oLat, oLng, dLat, dLng, result);
+
+    return result;
   } catch (error) {
     console.error('Google Distance Matrix API error:', error);
     return null;
