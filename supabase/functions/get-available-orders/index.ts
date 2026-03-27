@@ -531,6 +531,13 @@ serve(async (req) => {
         let properTimeSlot = order.delivery_time_slot;
         let immediateTimingConfig = null;
         
+        // Determine if order has a real scheduling signal
+        const hasScheduleSignal = !!(
+          (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) ||
+          (order.delivery_date && order.delivery_date !== today) ||
+          (order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim())
+        );
+
         // Determine delivery type
         if (order.subscription_id) {
           calculatedType = 'subscription';
@@ -540,14 +547,17 @@ serve(async (req) => {
           } else if (!properTimeSlot) {
             properTimeSlot = '06:00-10:00';
           }
-        } else if (order.payment_status === 'pending') {
-          calculatedType = 'book_now_pay_later';
-        } else if (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) {
-          calculatedType = 'scheduled';
-          properTimeSlot = order.delivery_time_slot.trim();
-        } else if (order.delivery_date && order.delivery_date !== today) {
-          calculatedType = 'scheduled';
+        } else if (order.payment_status && order.payment_status.toLowerCase().includes('paid_subscription')) {
+          calculatedType = 'subscription';
           if (!properTimeSlot) {
+            properTimeSlot = '06:00-10:00';
+          }
+        } else if (hasScheduleSignal && order.payment_status === 'pending') {
+          // BNGL = has a schedule + unpaid
+          calculatedType = 'book_now_pay_later';
+          if (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) {
+            properTimeSlot = order.delivery_time_slot.trim();
+          } else if (order.delivery_date && order.delivery_date !== today && !properTimeSlot) {
             const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
             if (scheduledTiming) {
               properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
@@ -555,19 +565,22 @@ serve(async (req) => {
               properTimeSlot = '09:00-12:00';
             }
           }
-        } else if (order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim()) {
+        } else if (hasScheduleSignal) {
+          // Scheduled = has a schedule + paid/not pending
           calculatedType = 'scheduled';
-        } else if (order.payment_status && order.payment_status.toLowerCase().includes('paid_subscription')) {
-          calculatedType = 'subscription';
-          if (!properTimeSlot) {
-            properTimeSlot = '06:00-10:00';
+          if (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) {
+            properTimeSlot = order.delivery_time_slot.trim();
+          } else if (order.delivery_date && order.delivery_date !== today && !properTimeSlot) {
+            const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
+            if (scheduledTiming) {
+              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
+            } else {
+              properTimeSlot = '09:00-12:00';
+            }
           }
         } else if (
           !order.subscription_id &&
-          (!order.delivery_time_slot || order.delivery_time_slot === null || order.delivery_time_slot === '' || order.delivery_time_slot.trim() === '') &&
-          (!order.delivery_date || order.delivery_date === today) && 
-          minutesSinceCreated < 45 &&
-          (!order.delivery_time || order.delivery_time === '12:00:00')
+          minutesSinceCreated < 45
         ) {
           calculatedType = 'immediate';
           const immediateTiming = deliveryTimings?.find(t => t.delivery_type === 'immediate');

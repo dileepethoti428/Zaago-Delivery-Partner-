@@ -12,6 +12,8 @@ export interface OrderDetails {
   delivery_otp?: string;
   otp_expiry?: string;
   subscription_id?: string;
+  delivery_time_slot?: string;
+  delivery_date?: string;
   created_at: string;
   accepted_at?: string;
   delivered_at?: string;
@@ -243,7 +245,9 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
       delivery_latitude,
       delivery_longitude,
       subscription_id,
-      delivery_payout
+      delivery_payout,
+      delivery_time_slot,
+      delivery_date
     `)
     .eq('id', orderId)
     .single();
@@ -275,6 +279,8 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
     delivery_otp: order.delivery_otp || undefined,
     otp_expiry: order.otp_expires_at || undefined,
     subscription_id: order.subscription_id || undefined,
+    delivery_time_slot: order.delivery_time_slot || undefined,
+    delivery_date: order.delivery_date || undefined,
     created_at: order.created_at,
     accepted_at: order.accepted_at || undefined,
     delivered_at: order.delivered_at || undefined,
