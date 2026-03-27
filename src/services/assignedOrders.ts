@@ -214,6 +214,7 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     sellerLatitude: null,
     sellerLongitude: null,
     sellerName: null,
+    deliveryType: row.subscription_id ? 'subscription' : 'immediate',
   }));
 }
 
