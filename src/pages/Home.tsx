@@ -334,122 +334,18 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-medium text-muted-foreground">Other Orders</h3>
               </div>
-              {otherOrders.map((order, index) => (
-                <AnimatedCard
+              {sortedOtherOrders.map((order, index) => (
+                <OrderCard
                   key={order.id}
-                  delay={(nearbyOrders.length + index) * 0.05}
-                  onClick={() => {
-                    if (order.status === 'packed' || order.status === 'assigned') return;
-                    navigate(`/order/${order.id}`);
-                  }}
-                  className="rounded-2xl border-2 hover:border-primary/50 transition-colors cursor-pointer"
-                >
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-lg">{order.customerName || order.id}</h3>
-                          <StatusPill status={order.status} />
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {order.etaMin} min
-                          </div>
-                          {order.createdAt && (
-                            <span className="text-xs">
-                              {formatDistanceToNow(order.createdAt, { addSuffix: true })}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-green-100 rounded-xl"
-                      >
-                        <IndianRupee className="h-4 w-4 text-green-700" />
-                        <span className="font-bold text-green-700">{order.payout}</span>
-                      </motion.div>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-start gap-2">
-                        <div className="mt-0.5 h-2 w-2 rounded-full bg-blue-500" />
-                        <div>
-                          <p className="font-medium">Pickup</p>
-                          <p className="text-muted-foreground">{order.pickup}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-start gap-2">
-                        <div className="mt-0.5 h-2 w-2 rounded-full bg-green-500" />
-                        <div>
-                          <p className="font-medium">Drop</p>
-                          <p className="text-muted-foreground">{order.drop}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons - 3 state logic */}
-                    {order.agentId === profile?.id ? (
-                      // Order is assigned to current agent
-                      <div className="pt-2">
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleManageDelivery(order.id);
-                          }}
-                          className="w-full rounded-xl gap-2"
-                          size="sm"
-                        >
-                          Manage Delivery
-                        </Button>
-                      </div>
-                    ) : order.agentId ? (
-                      // Order is assigned to another agent - show disabled "Taken" button
-                      <div className="pt-2">
-                        <Button
-                          disabled
-                          variant="secondary"
-                          className="w-full rounded-xl gap-2"
-                          size="sm"
-                        >
-                          Taken
-                        </Button>
-                      </div>
-                    ) : (order.status === 'packed' || order.status === 'accepted') ? (
-                      // Order is not assigned and available for acceptance
-                      <div className="flex gap-2 pt-2">
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAcceptOrder(order.id);
-                          }}
-                          disabled={processingOrder === order.id}
-                          className="flex-1 rounded-xl gap-2"
-                          size="sm"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                          Accept
-                        </Button>
-                        <Button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRejectOrder(order.id);
-                          }}
-                          disabled={processingOrder === order.id}
-                          variant="destructive"
-                          className="flex-1 rounded-xl gap-2"
-                          size="sm"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          Reject
-                        </Button>
-                      </div>
-                    ) : null}
-                  </CardContent>
-                </AnimatedCard>
+                  order={order}
+                  index={nearbyOrders.length + index}
+                  isProcessing={processingOrder === order.id}
+                  currentAgentId={profile?.id}
+                  onAccept={handleAcceptOrder}
+                  onReject={handleRejectOrder}
+                  onView={handleViewOrder}
+                  onManage={handleManageDelivery}
+                />
               ))}
             </div>
           )}
