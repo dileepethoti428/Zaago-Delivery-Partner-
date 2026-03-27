@@ -540,6 +540,8 @@ serve(async (req) => {
           } else if (!properTimeSlot) {
             properTimeSlot = '06:00-10:00';
           }
+        } else if (order.payment_status === 'pending') {
+          calculatedType = 'book_now_pay_later';
         } else if (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) {
           calculatedType = 'scheduled';
           properTimeSlot = order.delivery_time_slot.trim();
@@ -584,8 +586,6 @@ serve(async (req) => {
               slot_name: 'Immediate Delivery'
             };
           }
-        } else if (order.payment_status === 'pending') {
-          calculatedType = 'book_now_pay_later';
         } else {
           calculatedType = 'scheduled';
           if (!properTimeSlot) {
