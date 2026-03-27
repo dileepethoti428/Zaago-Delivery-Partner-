@@ -1,64 +1,42 @@
 
-## Plan: Fix Home "Other Orders" cards so Regular and BNGL look different
 
-### What I found
-The screenshot matches the `/home` page’s **Other Orders** section.
+## Fix: Order Type Badge Wrong + Delivery Schedule in Special Instructions
 
-That section is the real problem:
-- **Nearby Orders** use `OrderCard`, which already supports:
-  - Regular = default
-  - Scheduled = blue
-  - Subscription = purple
-  - BNGL = amber
-- But **Other Orders** in `src/pages/Home.tsx` do **not** use `OrderCard`
-- They render a separate custom `AnimatedCard` layout that completely ignores:
-  - `order.deliveryType`
-  - `order.deliveryTimeSlot`
-  - BNGL / Scheduled badges
-  - left-border color accents
+### Two problems found
 
-So even if backend classification is correct, both cards in **Other Orders** will still look almost the same.
+**Problem 1 — All COD orders show "Book Now Get Later"**
+Both orders have `delivery_date = '2026-03-27'` (today's date). The regular order has `delivery_time_slot = null`, but the ManageDelivery page checks `delivery_date` alone as a schedule signal. Since both are `payment_status = pending`, both become BNGL.
 
-### Root cause
-There are currently **two different card UIs** on Home:
-1. `OrderCard` for nearby orders → type-aware
-2. Inline custom card for other orders → not type-aware
+Fix: Only use `delivery_time_slot` (not `delivery_date` alone) as the schedule signal in ManageDelivery. A `delivery_date` equal to today is not a scheduling signal — it just means "deliver today".
 
-That is why your regular order and Book Now Get Later order are showing the same UI in the screenshot.
+**Problem 2 — BNGL order shows delivery timing as "Special Instructions"**
+The database has `special_instructions = "Scheduled delivery for 2026-03-27 at 18:00-20:00"` for the BNGL order. This is real DB data but redundant. The fix: filter out this auto-generated text from the special instructions display, and instead show delivery schedule info in a dedicated section.
 
-### Fix approach
-1. **Unify the Home card UI**
-   - Update `src/pages/Home.tsx` so **Other Orders** also use `OrderCard`
-   - Pass the same props already used for Nearby Orders
+### Changes
 
-2. **Keep type styling consistent**
-   - Reuse the existing logic from `OrderCard` so BNGL shows:
-     - amber left border
-     - amber “Book Now Get Later” badge
-   - Regular orders stay default
+**File 1: `src/pages/ManageDelivery.tsx`**
+- Fix Order Type badge: change `hasSchedule` to only use `delivery_time_slot` (not `delivery_date` alone)
+- Filter `special_instructions`: if it starts with "Scheduled delivery for", don't show it in the Special Instructions card
+- Add a "Delivery Schedule" info card when `delivery_time_slot` exists, showing the slot and date clearly
 
-3. **Optional clarity improvement**
-   - Add an explicit neutral **“Regular”** badge in `OrderCard`
-   - This makes the difference obvious even when regular has no colored border
-
-### Files to change
-1. `src/pages/Home.tsx`
-   - Replace the custom “Other Orders” card markup with `OrderCard`
-2. `src/components/order/OrderCard.tsx`
-   - Optional: add a small “Regular” badge for immediate orders
+**File 2: `supabase/functions/get-available-orders/index.ts`**
+- Tighten `hasScheduleSignal`: require `delivery_time_slot` with a valid slot format, or `delivery_date` that is strictly in the future (not today)
+- This prevents regular same-day COD orders from being classified as BNGL
 
 ### Expected result
-```text
-Home → Other Orders
+```
+Regular COD order:
+  - Order Type badge: "Regular"
+  - No special instructions shown
+  - No delivery schedule section
 
-Regular order:
-- normal card
-- optionally “Regular” badge
-
-Book Now Get Later order:
-- amber left border
-- amber “Book Now Get Later” badge
+BNGL order:
+  - Order Type badge: "Book Now Get Later"
+  - Delivery Schedule section showing "18:00-20:00" and date
+  - Special Instructions only if there are real instructions
 ```
 
-### Technical note
-The current backend/type logic may already be correct for this specific issue. The visible problem in your screenshot is mainly that **Other Orders UI is not using the delivery-type-aware component at all**.
+### Files to change
+1. `src/pages/ManageDelivery.tsx`
+2. `supabase/functions/get-available-orders/index.ts`
+
