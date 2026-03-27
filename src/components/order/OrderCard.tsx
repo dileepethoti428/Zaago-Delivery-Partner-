@@ -55,6 +55,7 @@ export const OrderCard = memo(function OrderCard({
   const isAssignedToOtherAgent = !!(order.agentId && order.agentId !== currentAgentId);
   const isScheduled = order.deliveryType === 'scheduled';
   const isSubscription = order.deliveryType === 'subscription';
+  const isBookNowGetLater = order.deliveryType === 'book_now_pay_later';
 
   // Determine button state: 
   // 1. Assigned to me → Manage Delivery
@@ -115,7 +116,8 @@ export const OrderCard = memo(function OrderCard({
         className={cn(
           "p-4",
           isScheduled && "border-l-4 border-l-blue-500",
-          isSubscription && "border-l-4 border-l-purple-500"
+          isSubscription && "border-l-4 border-l-purple-500",
+          isBookNowGetLater && "border-l-4 border-l-amber-500"
         )}
       >
         <div className="space-y-3">
@@ -135,6 +137,16 @@ export const OrderCard = memo(function OrderCard({
                     timeSlot={order.deliveryTimeSlot} 
                     date={order.deliveryDate} 
                   />
+                </div>
+              )}
+
+              {/* Book Now Get Later badge */}
+              {isBookNowGetLater && (
+                <div className="mb-3">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                    <Clock className="h-3 w-3" />
+                    Book Now Get Later
+                  </span>
                 </div>
               )}
               
