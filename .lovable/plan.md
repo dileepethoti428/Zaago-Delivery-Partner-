@@ -1,131 +1,64 @@
 
-## What I found
+## Plan: Fix Home "Other Orders" cards so Regular and BNGL look different
 
-The problem is not the color component itself. The real issue is the **order-type detection logic**.
+### What I found
+The screenshot matches the `/home` page’s **Other Orders** section.
 
-I checked the actual two orders in the database:
+That section is the real problem:
+- **Nearby Orders** use `OrderCard`, which already supports:
+  - Regular = default
+  - Scheduled = blue
+  - Subscription = purple
+  - BNGL = amber
+- But **Other Orders** in `src/pages/Home.tsx` do **not** use `OrderCard`
+- They render a separate custom `AnimatedCard` layout that completely ignores:
+  - `order.deliveryType`
+  - `order.deliveryTimeSlot`
+  - BNGL / Scheduled badges
+  - left-border color accents
 
+So even if backend classification is correct, both cards in **Other Orders** will still look almost the same.
+
+### Root cause
+There are currently **two different card UIs** on Home:
+1. `OrderCard` for nearby orders → type-aware
+2. Inline custom card for other orders → not type-aware
+
+That is why your regular order and Book Now Get Later order are showing the same UI in the screenshot.
+
+### Fix approach
+1. **Unify the Home card UI**
+   - Update `src/pages/Home.tsx` so **Other Orders** also use `OrderCard`
+   - Pass the same props already used for Nearby Orders
+
+2. **Keep type styling consistent**
+   - Reuse the existing logic from `OrderCard` so BNGL shows:
+     - amber left border
+     - amber “Book Now Get Later” badge
+   - Regular orders stay default
+
+3. **Optional clarity improvement**
+   - Add an explicit neutral **“Regular”** badge in `OrderCard`
+   - This makes the difference obvious even when regular has no colored border
+
+### Files to change
+1. `src/pages/Home.tsx`
+   - Replace the custom “Other Orders” card markup with `OrderCard`
+2. `src/components/order/OrderCard.tsx`
+   - Optional: add a small “Regular” badge for immediate orders
+
+### Expected result
 ```text
-57404118...  payment_status=pending  delivery_time_slot=18:00-20:00
-4cdf4472...  payment_status=pending  delivery_time_slot=null
+Home → Other Orders
+
+Regular order:
+- normal card
+- optionally “Regular” badge
+
+Book Now Get Later order:
+- amber left border
+- amber “Book Now Get Later” badge
 ```
 
-So:
-- one order is clearly **scheduled / BNGL** because it has a delivery slot
-- the other is **regular / immediate** because it has no slot
-
-But the current backend logic in `supabase/functions/get-available-orders/index.ts` does this:
-
-```ts
-if (subscription) -> subscription
-else if (payment_status === 'pending') -> book_now_pay_later
-else if (delivery_time_slot...) -> scheduled
-...
-```
-
-That means **both COD orders become BNGL**, because both have `payment_status = 'pending'`.
-
-There is a second issue too:
-- `ManageDelivery.tsx` also treats `payment_status === 'pending'` as BNGL
-- `assignedOrders.ts` does not actually preserve BNGL at all for accepted orders
-
-## Root cause
-
-`payment_status = pending` is **not enough** to identify BNGL.
-
-Regular COD orders are also pending until delivery.
-
-So BNGL should be derived from a combination like:
-- unpaid COD
-- and a real scheduling signal (`delivery_time_slot`, future `delivery_date`, or valid non-default `delivery_time`)
-
-## Plan
-
-### 1) Fix backend classification in available orders
-Update `supabase/functions/get-available-orders/index.ts` so the type logic becomes:
-
-```text
-subscription                    -> subscription
-scheduled + unpaid              -> book_now_pay_later
-scheduled + not unpaid          -> scheduled
-no schedule markers             -> immediate
-```
-
-More specifically:
-- do **not** use `payment_status === 'pending'` by itself for BNGL
-- first detect whether the order is scheduled
-- if scheduled and unpaid/COD, mark as `book_now_pay_later`
-- if not scheduled, fallback to `immediate`
-
-This will make the two current orders render differently before acceptance.
-
-### 2) Fix Manage Delivery order-type badge
-Update `src/pages/ManageDelivery.tsx` so it does not use this rule:
-
-```ts
-order.payment_status === 'pending' => BNGL
-```
-
-Instead derive the badge from:
-- `subscription_id` => Subscription
-- schedule markers + pending/COD => Book Now Get Later
-- schedule markers without BNGL condition => Scheduled
-- otherwise => Regular
-
-That fixes the wrong badge after acceptance/opening the order.
-
-### 3) Fix accepted-orders mapping
-Update `src/services/assignedOrders.ts` so accepted orders also carry correct `deliveryType`.
-
-Right now it only does:
-- subscription
-- scheduled if time slot exists
-- otherwise immediate
-
-It should instead support:
-- subscription
-- book_now_pay_later when scheduled + unpaid marker is available from RPC
-- scheduled
-- immediate
-
-If the RPC does not currently return the payment/schedule fields needed for BNGL, then the RPCs behind:
-- `get_agent_orders_today`
-- `get_agent_orders_tomorrow`
-- `get_agent_orders_upcoming`
-
-will need to expose the required columns so frontend mapping is correct.
-
-### 4) Keep AssignedOrderCard visuals aligned
-`src/components/order/AssignedOrderCard.tsx` already has amber/blue/purple styles.
-After fixing the data mapping, it should naturally show:
-- Regular = default
-- Scheduled = blue
-- BNGL = amber
-- Subscription = purple
-
-So this file may need little or no UI change, but I would verify the label text remains consistent.
-
-## Files likely to change
-
-1. `supabase/functions/get-available-orders/index.ts`
-2. `src/pages/ManageDelivery.tsx`
-3. `src/services/assignedOrders.ts`
-4. Possibly the SQL/RPC source for assigned orders if payment/schedule fields are missing there
-
-## Expected result
-
-```text
-Before accepting:
-- Regular COD order: default card
-- BNGL order: amber card/badge
-
-After accepting:
-- Regular COD order: Regular badge
-- BNGL order: Book Now Get Later badge
-- Scheduled prepaid order: Scheduled badge
-- Subscription order: Subscription badge
-```
-
-## Technical note
-
-The Stack Overflow-style guidance about moving `payment_status === 'pending'` earlier is not correct for your current data model, because your regular COD orders are also `pending`. In this project, BNGL must be detected using **schedule signal + unpaid status**, not unpaid status alone.
+### Technical note
+The current backend/type logic may already be correct for this specific issue. The visible problem in your screenshot is mainly that **Other Orders UI is not using the delivery-type-aware component at all**.
