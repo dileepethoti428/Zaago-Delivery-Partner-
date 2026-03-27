@@ -116,7 +116,8 @@ export const OrderCard = memo(function OrderCard({
         className={cn(
           "p-4",
           isScheduled && "border-l-4 border-l-blue-500",
-          isSubscription && "border-l-4 border-l-purple-500"
+          isSubscription && "border-l-4 border-l-purple-500",
+          isBookNowGetLater && "border-l-4 border-l-amber-500"
         )}
       >
         <div className="space-y-3">
