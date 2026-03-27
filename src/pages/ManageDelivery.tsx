@@ -298,13 +298,20 @@ export default function ManageDelivery() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Order Type</span>
-                {order.subscription_id ? (
-                  <Badge variant="secondary" className="rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">Subscription</Badge>
-                ) : order.payment_status === 'pending' ? (
-                  <Badge className="rounded-lg bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Book Now Get Later</Badge>
-                ) : (
-                  <Badge variant="secondary" className="rounded-lg">Regular</Badge>
-                )}
+                {(() => {
+                  const hasSlot = !!(order.delivery_time_slot && typeof order.delivery_time_slot === 'string' && order.delivery_time_slot.includes('-'));
+                  const hasSchedule = hasSlot || !!(order.delivery_date);
+                  if (order.subscription_id) {
+                    return <Badge variant="secondary" className="rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">Subscription</Badge>;
+                  }
+                  if (hasSchedule && order.payment_status === 'pending') {
+                    return <Badge className="rounded-lg bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Book Now Get Later</Badge>;
+                  }
+                  if (hasSchedule) {
+                    return <Badge className="rounded-lg bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">Scheduled</Badge>;
+                  }
+                  return <Badge variant="secondary" className="rounded-lg">Regular</Badge>;
+                })()}
               </div>
             </CardContent>
           </Card>
