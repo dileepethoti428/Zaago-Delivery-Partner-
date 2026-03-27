@@ -432,16 +432,44 @@ export default function ManageDelivery() {
             </CardContent>
           </Card>
 
-          {order.special_instructions && (
-            <Card className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+          {/* Delivery Schedule (for scheduled/BNGL orders with time slot) */}
+          {order.delivery_time_slot && typeof order.delivery_time_slot === 'string' && order.delivery_time_slot.includes('-') && (
+            <Card className="rounded-2xl border-2 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Special Instructions</CardTitle>
+                <CardTitle className="text-base">Delivery Schedule</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm">{order.special_instructions}</p>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Time Slot</span>
+                  <span className="font-medium">{order.delivery_time_slot}</span>
+                </div>
+                {order.delivery_date && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Date</span>
+                    <span className="font-medium">{order.delivery_date}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
+
+          {/* Special Instructions (filter out auto-generated schedule text) */}
+          {(() => {
+            const raw = order.special_instructions;
+            if (!raw) return null;
+            const filtered = raw.replace(/^Scheduled delivery for\s+\S+(\s+at\s+\S+)?\s*/i, '').trim();
+            if (!filtered) return null;
+            return (
+              <Card className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Special Instructions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm">{filtered}</p>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Action Buttons */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t-2 space-y-3">
