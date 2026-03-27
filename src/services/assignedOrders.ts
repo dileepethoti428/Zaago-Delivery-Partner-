@@ -32,6 +32,7 @@ export interface AssignedOrder {
   sellerLongitude: number | null;
   sellerName: string | null;
   distanceFromShop?: number | null;
+  deliveryType: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
 }
 
 // Interface for the enriched RPC response
@@ -102,6 +103,11 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     sellerLatitude: row.seller_latitude ?? null,
     sellerLongitude: row.seller_longitude ?? null,
     sellerName: row.seller_name || null,
+    deliveryType: row.subscription_id
+      ? 'subscription'
+      : (row.delivery_time_slot && row.delivery_time_slot.trim() && row.delivery_time_slot.includes('-'))
+        ? 'scheduled'
+        : 'immediate',
   }));
 }
 
@@ -208,6 +214,7 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     sellerLatitude: null,
     sellerLongitude: null,
     sellerName: null,
+    deliveryType: row.subscription_id ? 'subscription' : 'immediate',
   }));
 }
 

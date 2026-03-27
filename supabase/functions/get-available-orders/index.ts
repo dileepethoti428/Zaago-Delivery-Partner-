@@ -587,15 +587,7 @@ serve(async (req) => {
             };
           }
         } else {
-          calculatedType = 'scheduled';
-          if (!properTimeSlot) {
-            const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
-            if (scheduledTiming) {
-              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
-            } else {
-              properTimeSlot = '09:00-12:00';
-            }
-          }
+          calculatedType = 'immediate';
         }
         
         // Check if order has address with coordinates

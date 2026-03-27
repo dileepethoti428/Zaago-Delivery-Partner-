@@ -22,6 +22,16 @@ const getAddressString = (address: unknown): string => {
   return '';
 };
 
+// Border accent class based on delivery type
+const getBorderClass = (type: AssignedOrder['deliveryType']): string => {
+  switch (type) {
+    case 'scheduled': return 'border-l-4 border-l-blue-500';
+    case 'subscription': return 'border-l-4 border-l-purple-500';
+    case 'book_now_pay_later': return 'border-l-4 border-l-amber-500';
+    default: return '';
+  }
+};
+
 interface AssignedOrderCardProps {
   order: AssignedOrder;
   index: number;
@@ -55,7 +65,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
   };
 
   return (
-    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation ? undefined : onManage}>
+    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation ? undefined : onManage} className={getBorderClass(order.deliveryType)}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header with badges */}
@@ -65,10 +75,22 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                 <span className="font-semibold text-base text-foreground">
                   {order.customerName}
                 </span>
-                {order.isSubscription && (
+                {order.deliveryType === 'subscription' && (
                   <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs">
                     <RefreshCw className="h-3 w-3 mr-1" />
                     Subscription
+                  </Badge>
+                )}
+                {order.deliveryType === 'scheduled' && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Scheduled
+                  </Badge>
+                )}
+                {order.deliveryType === 'book_now_pay_later' && (
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs">
+                    <Package className="h-3 w-3 mr-1" />
+                    Book Now Get Later
                   </Badge>
                 )}
                 {order.isOnVacation && (
@@ -177,6 +199,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     prevProps.order.quantity === nextProps.order.quantity &&
     prevProps.order.isOnVacation === nextProps.order.isOnVacation &&
     prevProps.order.distanceFromShop === nextProps.order.distanceFromShop &&
+    prevProps.order.deliveryType === nextProps.order.deliveryType &&
     prevProps.dateLabel === nextProps.dateLabel &&
     prevProps.index === nextProps.index
   );
