@@ -245,7 +245,9 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
       delivery_latitude,
       delivery_longitude,
       subscription_id,
-      delivery_payout
+      delivery_payout,
+      delivery_time_slot,
+      delivery_date
     `)
     .eq('id', orderId)
     .single();
