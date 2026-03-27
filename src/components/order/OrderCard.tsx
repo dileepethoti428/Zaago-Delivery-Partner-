@@ -55,6 +55,7 @@ export const OrderCard = memo(function OrderCard({
   const isAssignedToOtherAgent = !!(order.agentId && order.agentId !== currentAgentId);
   const isScheduled = order.deliveryType === 'scheduled';
   const isSubscription = order.deliveryType === 'subscription';
+  const isBookNowGetLater = order.deliveryType === 'book_now_pay_later';
 
   // Determine button state: 
   // 1. Assigned to me → Manage Delivery

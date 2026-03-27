@@ -41,7 +41,7 @@ export type ZaagoOrder = {
   };
   roadDistance?: boolean; // Flag indicating backend calculated road distance
   // Scheduled order fields
-  deliveryType?: 'immediate' | 'scheduled' | 'subscription';
+  deliveryType?: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
   deliveryTimeSlot?: string;  // e.g., "10:00-12:00"
   deliveryDate?: string;      // e.g., "2025-02-04"
 };
