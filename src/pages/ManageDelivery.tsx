@@ -300,14 +300,13 @@ export default function ManageDelivery() {
                 <span className="text-sm text-muted-foreground">Order Type</span>
                 {(() => {
                   const hasSlot = !!(order.delivery_time_slot && typeof order.delivery_time_slot === 'string' && order.delivery_time_slot.includes('-'));
-                  const hasSchedule = hasSlot || !!(order.delivery_date);
                   if (order.subscription_id) {
                     return <Badge variant="secondary" className="rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">Subscription</Badge>;
                   }
-                  if (hasSchedule && order.payment_status === 'pending') {
+                  if (hasSlot && order.payment_status === 'pending') {
                     return <Badge className="rounded-lg bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Book Now Get Later</Badge>;
                   }
-                  if (hasSchedule) {
+                  if (hasSlot) {
                     return <Badge className="rounded-lg bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">Scheduled</Badge>;
                   }
                   return <Badge variant="secondary" className="rounded-lg">Regular</Badge>;
@@ -433,16 +432,44 @@ export default function ManageDelivery() {
             </CardContent>
           </Card>
 
-          {order.special_instructions && (
-            <Card className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+          {/* Delivery Schedule (for scheduled/BNGL orders with time slot) */}
+          {order.delivery_time_slot && typeof order.delivery_time_slot === 'string' && order.delivery_time_slot.includes('-') && (
+            <Card className="rounded-2xl border-2 border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Special Instructions</CardTitle>
+                <CardTitle className="text-base">Delivery Schedule</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm">{order.special_instructions}</p>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Time Slot</span>
+                  <span className="font-medium">{order.delivery_time_slot}</span>
+                </div>
+                {order.delivery_date && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Date</span>
+                    <span className="font-medium">{order.delivery_date}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
+
+          {/* Special Instructions (filter out auto-generated schedule text) */}
+          {(() => {
+            const raw = order.special_instructions;
+            if (!raw) return null;
+            const filtered = raw.replace(/^Scheduled delivery for\s+\S+(\s+at\s+\S+)?\s*/i, '').trim();
+            if (!filtered) return null;
+            return (
+              <Card className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Special Instructions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm">{filtered}</p>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Action Buttons */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t-2 space-y-3">

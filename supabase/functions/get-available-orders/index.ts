@@ -532,11 +532,11 @@ serve(async (req) => {
         let immediateTimingConfig = null;
         
         // Determine if order has a real scheduling signal
-        const hasScheduleSignal = !!(
-          (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) ||
-          (order.delivery_date && order.delivery_date !== today) ||
-          (order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim())
-        );
+        // delivery_date equal to today is NOT a schedule signal (it just means "deliver today")
+        const hasTimeSlot = !!(order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-'));
+        const hasFutureDate = !!(order.delivery_date && order.delivery_date !== today);
+        const hasScheduleSignal = hasTimeSlot || hasFutureDate ||
+          !!(order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim());
 
         // Determine delivery type
         if (order.subscription_id) {
