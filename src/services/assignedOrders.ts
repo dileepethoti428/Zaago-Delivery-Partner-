@@ -103,6 +103,11 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     sellerLatitude: row.seller_latitude ?? null,
     sellerLongitude: row.seller_longitude ?? null,
     sellerName: row.seller_name || null,
+    deliveryType: row.subscription_id
+      ? 'subscription'
+      : (row.delivery_time_slot && row.delivery_time_slot.trim() && row.delivery_time_slot.includes('-'))
+        ? 'scheduled'
+        : 'immediate',
   }));
 }
 
