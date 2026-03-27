@@ -139,6 +139,16 @@ export const OrderCard = memo(function OrderCard({
                   />
                 </div>
               )}
+
+              {/* Book Now Get Later badge */}
+              {isBookNowGetLater && (
+                <div className="mb-3">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                    <Clock className="h-3 w-3" />
+                    Book Now Get Later
+                  </span>
+                </div>
+              )}
               
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
