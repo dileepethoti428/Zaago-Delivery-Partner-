@@ -347,3 +347,11 @@ export default function Home() {
                   onManage={handleManageDelivery}
                 />
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </AppShell>
+    </motion.div>
+  );
+}
