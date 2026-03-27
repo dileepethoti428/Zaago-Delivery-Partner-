@@ -12,6 +12,8 @@ export interface OrderDetails {
   delivery_otp?: string;
   otp_expiry?: string;
   subscription_id?: string;
+  delivery_time_slot?: string;
+  delivery_date?: string;
   created_at: string;
   accepted_at?: string;
   delivered_at?: string;
