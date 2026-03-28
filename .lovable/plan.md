@@ -1,42 +1,59 @@
 
 
-## Fix: Order Type Badge Wrong + Delivery Schedule in Special Instructions
+## Fix: Regular and BNGL Orders Look Identical on Home Page
 
-### Two problems found
+### Root cause
 
-**Problem 1 — All COD orders show "Book Now Get Later"**
-Both orders have `delivery_date = '2026-03-27'` (today's date). The regular order has `delivery_time_slot = null`, but the ManageDelivery page checks `delivery_date` alone as a schedule signal. Since both are `payment_status = pending`, both become BNGL.
+The backend classification in `get-available-orders/index.ts` line 538-539 includes `delivery_time` as a schedule signal:
 
-Fix: Only use `delivery_time_slot` (not `delivery_date` alone) as the schedule signal in ManageDelivery. A `delivery_date` equal to today is not a scheduling signal — it just means "deliver today".
-
-**Problem 2 — BNGL order shows delivery timing as "Special Instructions"**
-The database has `special_instructions = "Scheduled delivery for 2026-03-27 at 18:00-20:00"` for the BNGL order. This is real DB data but redundant. The fix: filter out this auto-generated text from the special instructions display, and instead show delivery schedule info in a dedicated section.
-
-### Changes
-
-**File 1: `src/pages/ManageDelivery.tsx`**
-- Fix Order Type badge: change `hasSchedule` to only use `delivery_time_slot` (not `delivery_date` alone)
-- Filter `special_instructions`: if it starts with "Scheduled delivery for", don't show it in the Special Instructions card
-- Add a "Delivery Schedule" info card when `delivery_time_slot` exists, showing the slot and date clearly
-
-**File 2: `supabase/functions/get-available-orders/index.ts`**
-- Tighten `hasScheduleSignal`: require `delivery_time_slot` with a valid slot format, or `delivery_date` that is strictly in the future (not today)
-- This prevents regular same-day COD orders from being classified as BNGL
-
-### Expected result
 ```
-Regular COD order:
-  - Order Type badge: "Regular"
-  - No special instructions shown
-  - No delivery schedule section
-
-BNGL order:
-  - Order Type badge: "Book Now Get Later"
-  - Delivery Schedule section showing "18:00-20:00" and date
-  - Special Instructions only if there are real instructions
+hasScheduleSignal = hasTimeSlot || hasFutureDate ||
+  !!(order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim())
 ```
+
+Regular COD orders likely have a `delivery_time` value (e.g., current time or a default other than `12:00:00`). Combined with `payment_status = 'pending'`, this causes regular orders to be classified as BNGL too.
+
+### Fix 1: Tighten backend schedule signal
+
+Remove `delivery_time` from `hasScheduleSignal`. Only these should count:
+- `delivery_time_slot` with a valid range format (e.g., `18:00-20:00`)
+- `delivery_date` strictly in the future (not today)
+
+This ensures regular same-day COD orders never trigger BNGL.
+
+### Fix 2: Add explicit type badges to OrderCard (before accepting)
+
+Currently, the Home page `OrderCard` shows a badge only for BNGL and Scheduled. Regular orders have no visual label, making them hard to distinguish at a glance.
+
+Add a colored type badge for ALL order types, matching the style used in `AssignedOrderCard` (which the user says looks perfect for subscription):
+
+```text
+Regular:              Gray badge "Regular"
+Scheduled:            Blue badge "Scheduled"  
+Book Now Get Later:   Amber badge "Book Now Get Later"
+Subscription:         Purple badge "Subscription"
+```
+
+Each badge will use the `Badge` component with type-specific colors, placed next to the customer name and status pill.
 
 ### Files to change
-1. `src/pages/ManageDelivery.tsx`
-2. `supabase/functions/get-available-orders/index.ts`
+
+1. **`supabase/functions/get-available-orders/index.ts`** (line 538-539)
+   - Remove `delivery_time` from `hasScheduleSignal`
+   - Keep only `hasTimeSlot || hasFutureDate`
+
+2. **`src/components/order/OrderCard.tsx`**
+   - Import `Badge` and add type-specific badges for all 4 order types
+   - Regular = gray, Scheduled = blue, BNGL = amber, Subscription = purple
+   - Place badge in the header row next to customer name
+
+### Expected result
+
+```text
+Home page cards:
+  Regular COD order:  No border accent + gray "Regular" badge
+  BNGL order:         Amber border + amber "Book Now Get Later" badge  
+  Scheduled order:    Blue border + blue "Scheduled" badge
+  Subscription:       Purple border + purple "Subscription" badge
+```
 
