@@ -124,11 +124,20 @@ export const OrderCard = memo(function OrderCard({
         <div className="space-y-3">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className="font-semibold text-base text-foreground">
                   {order.customerName || 'Unknown Customer'}
                 </span>
                 <StatusPill status={order.status} />
+                {isSubscription ? (
+                  <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100">Subscription</Badge>
+                ) : isBookNowGetLater ? (
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100">Book Now Get Later</Badge>
+                ) : isScheduled ? (
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100">Scheduled</Badge>
+                ) : (
+                  <Badge className="bg-muted text-muted-foreground border-border hover:bg-muted">Regular</Badge>
+                )}
               </div>
 
               {/* Scheduled order time slot */}
