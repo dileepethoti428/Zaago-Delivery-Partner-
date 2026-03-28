@@ -533,9 +533,13 @@ serve(async (req) => {
         
         // Determine if order has a real scheduling signal
         // delivery_date equal to today is NOT a schedule signal (it just means "deliver today")
-        const hasTimeSlot = !!(order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-'));
+        const slotValue = String(order.delivery_time_slot ?? '').trim();
+        const hasTimeSlot = /^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(slotValue);
+        const hasSlotUUID = slotValue.length >= 30 && /^[0-9a-f]{8}-/i.test(slotValue);
         const hasFutureDate = !!(order.delivery_date && order.delivery_date !== today);
-        const hasScheduleSignal = hasTimeSlot || hasFutureDate;
+        const hasScheduleSignal = hasTimeSlot || hasSlotUUID || hasFutureDate;
+        
+        console.log(`📋 Order ${order.id}: slot="${slotValue}" hasTimeSlot=${hasTimeSlot} hasSlotUUID=${hasSlotUUID} hasFutureDate=${hasFutureDate} payment_status="${order.payment_status}"`);
 
         // Determine delivery type
         if (order.subscription_id) {
