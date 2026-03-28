@@ -5,7 +5,7 @@ import { CardContent } from '@/components/ui/card';
 import { DistanceBadge } from '@/components/ui/DistanceBadge';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { ScheduledBadge } from '@/components/order/ScheduledBadge';
-import { Badge } from '@/components/ui/badge';
+
 import { Clock, IndianRupee } from 'lucide-react';
 import type { ZaagoOrder } from '@/services/orders';
 import { cn } from '@/lib/utils';
@@ -146,6 +146,11 @@ export const OrderCard = memo(function OrderCard({
               )}
             </div>
           )}
+          {!isBookNowGetLater && !isSubscription && !isScheduled && (
+            <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-1.5 -mx-1 border border-border">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Regular Order</span>
+            </div>
+          )}
 
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -154,15 +159,6 @@ export const OrderCard = memo(function OrderCard({
                   {order.customerName || 'Unknown Customer'}
                 </span>
                 <StatusPill status={order.status} />
-                {isSubscription ? (
-                  <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100">Subscription</Badge>
-                ) : isBookNowGetLater ? (
-                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100">Book Now Get Later</Badge>
-                ) : isScheduled ? (
-                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100">Scheduled</Badge>
-                ) : (
-                  <Badge className="bg-muted text-muted-foreground border-border hover:bg-muted">Regular</Badge>
-                )}
               </div>
 
               {/* Scheduled order time slot */}
@@ -172,16 +168,6 @@ export const OrderCard = memo(function OrderCard({
                     timeSlot={order.deliveryTimeSlot} 
                     date={order.deliveryDate} 
                   />
-                </div>
-              )}
-
-              {/* Book Now Get Later badge */}
-              {isBookNowGetLater && (
-                <div className="mb-3">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                    <Clock className="h-3 w-3" />
-                    Book Now Get Later
-                  </span>
                 </div>
               )}
               
