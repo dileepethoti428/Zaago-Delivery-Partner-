@@ -621,6 +621,8 @@ serve(async (req) => {
           calculatedType = 'immediate';
         }
         
+        console.log(`✅ Order ${order.id} classified as: ${calculatedType}`);
+        
         // Check if order has address with coordinates
         if (order.address && order.address.coordinates && order.address.coordinates.lat && order.address.coordinates.lng) {
           try {
