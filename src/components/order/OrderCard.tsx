@@ -154,6 +154,9 @@ export const OrderCard = memo(function OrderCard({
                   {order.customerName || 'Unknown Customer'}
                 </span>
                 <StatusPill status={order.status} />
+                {!isBookNowGetLater && !isSubscription && !isScheduled && (
+                  <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full uppercase">Regular</span>
+                )}
               </div>
 
               {/* Scheduled order time slot */}
