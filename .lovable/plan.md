@@ -1,59 +1,57 @@
 
 
-## Fix: Regular and BNGL Orders Look Identical on Home Page
+## Fix: BNGL Orders Still Classified as Regular on Home Page
 
 ### Root cause
 
-The backend classification in `get-available-orders/index.ts` line 538-539 includes `delivery_time` as a schedule signal:
+The `hasTimeSlot` check at line 536 uses a loose `.includes('-')` test:
 
-```
-hasScheduleSignal = hasTimeSlot || hasFutureDate ||
-  !!(order.delivery_time && order.delivery_time !== '12:00:00' && order.delivery_time.trim())
-```
-
-Regular COD orders likely have a `delivery_time` value (e.g., current time or a default other than `12:00:00`). Combined with `payment_status = 'pending'`, this causes regular orders to be classified as BNGL too.
-
-### Fix 1: Tighten backend schedule signal
-
-Remove `delivery_time` from `hasScheduleSignal`. Only these should count:
-- `delivery_time_slot` with a valid range format (e.g., `18:00-20:00`)
-- `delivery_date` strictly in the future (not today)
-
-This ensures regular same-day COD orders never trigger BNGL.
-
-### Fix 2: Add explicit type badges to OrderCard (before accepting)
-
-Currently, the Home page `OrderCard` shows a badge only for BNGL and Scheduled. Regular orders have no visual label, making them hard to distinguish at a glance.
-
-Add a colored type badge for ALL order types, matching the style used in `AssignedOrderCard` (which the user says looks perfect for subscription):
-
-```text
-Regular:              Gray badge "Regular"
-Scheduled:            Blue badge "Scheduled"  
-Book Now Get Later:   Amber badge "Book Now Get Later"
-Subscription:         Purple badge "Subscription"
+```ts
+const hasTimeSlot = !!(order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-'));
 ```
 
-Each badge will use the `Badge` component with type-specific colors, placed next to the customer name and status pill.
+This is likely failing because:
+1. The BNGL order's `delivery_time_slot` may be stored as a UUID reference (e.g., `a1b2c3d4-...`) to the `delivery_slots` table rather than a literal `18:00-20:00` string. UUIDs contain `-` so `hasTimeSlot` would be true — but then `payment_status` may not exactly equal `'pending'` (could be `'Pending'`, `null`, or another value).
+2. OR `payment_status` is not exactly the string `'pending'` — the check at line 554 does a strict `=== 'pending'` comparison without `.toLowerCase()`.
+
+The fix must handle both:
+- Use case-insensitive check for `payment_status`
+- Add a proper time-slot regex (`HH:MM-HH:MM`) for `hasTimeSlot` to distinguish real slots from UUIDs
+- Add debug logging for order classification so we can trace issues
+
+### Changes
+
+**File: `supabase/functions/get-available-orders/index.ts`**
+
+1. **Fix `hasTimeSlot` check** — use regex `/^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/` instead of `.includes('-')` to only match real time ranges, not UUIDs
+2. **Fix `payment_status` comparison** — use `.toLowerCase()` for case-insensitive matching: `order.payment_status?.toLowerCase() === 'pending'`
+3. **Add UUID slot resolution** — if `delivery_time_slot` is a UUID, resolve it from `delivery_slots` table and treat it as a schedule signal
+4. **Add classification logging** — log each order's `delivery_time_slot`, `delivery_date`, `payment_status`, and resulting `calculatedType`
+
+### Technical details
+
+```ts
+// Line 536 - Replace loose check with strict regex
+const timeSlotValue = order.delivery_time_slot?.toString().trim() || '';
+const hasTimeSlot = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(timeSlotValue);
+const hasSlotUUID = /^[0-9a-fA-F-]{36}$/.test(timeSlotValue);
+const hasScheduleSignal = hasTimeSlot || hasSlotUUID || hasFutureDate;
+
+// Line 554 - Case-insensitive payment_status check
+const isPending = order.payment_status?.toLowerCase() === 'pending';
+
+} else if (hasScheduleSignal && isPending) {
+  calculatedType = 'book_now_pay_later';
+} else if (hasScheduleSignal) {
+  calculatedType = 'scheduled';
+}
+```
 
 ### Files to change
-
-1. **`supabase/functions/get-available-orders/index.ts`** (line 538-539)
-   - Remove `delivery_time` from `hasScheduleSignal`
-   - Keep only `hasTimeSlot || hasFutureDate`
-
-2. **`src/components/order/OrderCard.tsx`**
-   - Import `Badge` and add type-specific badges for all 4 order types
-   - Regular = gray, Scheduled = blue, BNGL = amber, Subscription = purple
-   - Place badge in the header row next to customer name
+1. `supabase/functions/get-available-orders/index.ts` — fix classification logic (~10 lines changed)
 
 ### Expected result
-
-```text
-Home page cards:
-  Regular COD order:  No border accent + gray "Regular" badge
-  BNGL order:         Amber border + amber "Book Now Get Later" badge  
-  Scheduled order:    Blue border + blue "Scheduled" badge
-  Subscription:       Purple border + purple "Subscription" badge
-```
+- Regular COD order (no time slot, no future date): **Regular** badge
+- BNGL order (time slot or UUID slot + pending payment): **Book Now Get Later** amber badge
+- Both visually distinct on Home page before accepting
 
