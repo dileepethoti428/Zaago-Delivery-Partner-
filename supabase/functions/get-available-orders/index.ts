@@ -749,10 +749,33 @@ serve(async (req) => {
       console.log('No agent location available - using stored distance for payout calculation');
       
       // Still process orders with stored distance or default payout
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      
       filteredOrders = filteredOrders.map(order => {
+        // --- Classify delivery type (same logic as location-based path) ---
+        let calculatedType: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later' = 'immediate';
+        
+        const slotVal = String(order.delivery_time_slot ?? '').trim();
+        const slotIsTimeRange = /^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(slotVal);
+        const slotIsUUID = slotVal.length >= 30 && /^[0-9a-f]{8}-/i.test(slotVal);
+        const futureDate = !!(order.delivery_date && order.delivery_date !== todayStr);
+        const scheduleSignal = slotIsTimeRange || slotIsUUID || futureDate;
+        const pendingPayment = order.payment_status?.toLowerCase() === 'pending';
+        
+        if (order.subscription_id || order.payment_status?.toLowerCase().includes('paid_subscription')) {
+          calculatedType = 'subscription';
+        } else if (scheduleSignal && pendingPayment) {
+          calculatedType = 'book_now_pay_later';
+        } else if (scheduleSignal) {
+          calculatedType = 'scheduled';
+        }
+        
+        console.log(`📋 [no-loc] Order ${order.id}: slot="${slotVal}" scheduleSignal=${scheduleSignal} pending=${pendingPayment} → ${calculatedType}`);
+        
         // Skip subscription orders (no payout)
-        if (order.subscription_id || order.order_type === 'subscription') {
-          return { ...order, agent_payout: 0, payout_breakdown: null };
+        if (calculatedType === 'subscription') {
+          return { ...order, agent_payout: 0, payout_breakdown: null, calculated_delivery_type: calculatedType, delivery_type: calculatedType };
         }
         
         // Use stored distance_km from order, or default to 2.5km
@@ -768,6 +791,8 @@ serve(async (req) => {
           distance_km: roundedDistance,
           agent_payout: Math.round(agentPayout * 10) / 10,
           estimated_delivery_time: Math.max(5, Math.ceil(roundedDistance * 2)),
+          calculated_delivery_type: calculatedType,
+          delivery_type: calculatedType,
           payout_breakdown: {
             base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
             distance_pay: Math.round(distancePay * 10) / 10,

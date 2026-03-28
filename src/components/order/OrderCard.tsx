@@ -122,6 +122,31 @@ export const OrderCard = memo(function OrderCard({
         )}
       >
         <div className="space-y-3">
+          {/* Type banner strip for instant recognition */}
+          {isBookNowGetLater && (
+            <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-1.5 -mx-1 border border-amber-200">
+              <Clock className="h-3.5 w-3.5 text-amber-600" />
+              <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">Book Now Get Later</span>
+              {order.deliveryTimeSlot && (
+                <span className="ml-auto text-xs font-medium text-amber-600">{order.deliveryTimeSlot}</span>
+              )}
+            </div>
+          )}
+          {isSubscription && (
+            <div className="flex items-center gap-2 rounded-md bg-purple-50 px-3 py-1.5 -mx-1 border border-purple-200">
+              <span className="text-xs font-bold text-purple-700 uppercase tracking-wide">Subscription</span>
+            </div>
+          )}
+          {isScheduled && (
+            <div className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-1.5 -mx-1 border border-blue-200">
+              <Clock className="h-3.5 w-3.5 text-blue-600" />
+              <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">Scheduled</span>
+              {order.deliveryTimeSlot && (
+                <span className="ml-auto text-xs font-medium text-blue-600">{order.deliveryTimeSlot}</span>
+              )}
+            </div>
+          )}
+
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-3 flex-wrap">
