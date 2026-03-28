@@ -533,9 +533,13 @@ serve(async (req) => {
         
         // Determine if order has a real scheduling signal
         // delivery_date equal to today is NOT a schedule signal (it just means "deliver today")
-        const hasTimeSlot = !!(order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-'));
+        const slotValue = String(order.delivery_time_slot ?? '').trim();
+        const hasTimeSlot = /^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(slotValue);
+        const hasSlotUUID = slotValue.length >= 30 && /^[0-9a-f]{8}-/i.test(slotValue);
         const hasFutureDate = !!(order.delivery_date && order.delivery_date !== today);
-        const hasScheduleSignal = hasTimeSlot || hasFutureDate;
+        const hasScheduleSignal = hasTimeSlot || hasSlotUUID || hasFutureDate;
+        
+        console.log(`📋 Order ${order.id}: slot="${slotValue}" hasTimeSlot=${hasTimeSlot} hasSlotUUID=${hasSlotUUID} hasFutureDate=${hasFutureDate} payment_status="${order.payment_status}"`);
 
         // Determine delivery type
         if (order.subscription_id) {
@@ -551,12 +555,20 @@ serve(async (req) => {
           if (!properTimeSlot) {
             properTimeSlot = '06:00-10:00';
           }
-        } else if (hasScheduleSignal && order.payment_status === 'pending') {
+        } else if (hasScheduleSignal && (order.payment_status?.toLowerCase() === 'pending')) {
           // BNGL = has a schedule + unpaid
           calculatedType = 'book_now_pay_later';
-          if (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) {
-            properTimeSlot = order.delivery_time_slot.trim();
-          } else if (order.delivery_date && order.delivery_date !== today && !properTimeSlot) {
+          if (hasTimeSlot) {
+            properTimeSlot = slotValue;
+          } else if (hasSlotUUID) {
+            // UUID slot reference - keep as schedule signal, use default time
+            const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
+            if (scheduledTiming) {
+              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
+            } else {
+              properTimeSlot = '09:00-12:00';
+            }
+          } else if (hasFutureDate && !properTimeSlot) {
             const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
             if (scheduledTiming) {
               properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
@@ -567,9 +579,16 @@ serve(async (req) => {
         } else if (hasScheduleSignal) {
           // Scheduled = has a schedule + paid/not pending
           calculatedType = 'scheduled';
-          if (order.delivery_time_slot && order.delivery_time_slot.trim() && order.delivery_time_slot.includes('-')) {
-            properTimeSlot = order.delivery_time_slot.trim();
-          } else if (order.delivery_date && order.delivery_date !== today && !properTimeSlot) {
+          if (hasTimeSlot) {
+            properTimeSlot = slotValue;
+          } else if (hasSlotUUID) {
+            const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
+            if (scheduledTiming) {
+              properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
+            } else {
+              properTimeSlot = '09:00-12:00';
+            }
+          } else if (hasFutureDate && !properTimeSlot) {
             const scheduledTiming = deliveryTimings?.find(t => t.delivery_type === 'scheduled');
             if (scheduledTiming) {
               properTimeSlot = `${scheduledTiming.time_slot_start.slice(0, 5)}-${scheduledTiming.time_slot_end.slice(0, 5)}`;
@@ -601,6 +620,8 @@ serve(async (req) => {
         } else {
           calculatedType = 'immediate';
         }
+        
+        console.log(`✅ Order ${order.id} classified as: ${calculatedType}`);
         
         // Check if order has address with coordinates
         if (order.address && order.address.coordinates && order.address.coordinates.lat && order.address.coordinates.lng) {
