@@ -55,6 +55,11 @@ serve(async (req) => {
     // Service client for database operations (bypasses RLS)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Auth-context client for RPC calls that check auth.uid()
+    const supabaseWithAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
     // Auth client - use service key but validate user token explicitly
     // CRITICAL: Pass token explicitly to getUser() - Edge Functions have no session storage
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -325,7 +330,7 @@ serve(async (req) => {
       }
 
       // Now call the RPC with validated data
-      const { data, error } = await supabase.rpc(
+      const { data, error } = await supabaseWithAuth.rpc(
         'complete_delivery_zepto',
         {
           p_order_id: order_id,
