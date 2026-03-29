@@ -9312,29 +9312,41 @@ export type Database = {
         Args: { target_seller_id: string }
         Returns: Json
       }
-      get_seller_performance_summary: {
-        Args: { seller_user_id: string; time_range?: string }
-        Returns: {
-          avg_daily_orders: number
-          completion_rate: number
-          delivered_orders: number
-          failed_orders: number
-          total_orders: number
-          total_revenue: number
-        }[]
-      }
-      get_seller_performance_trends: {
-        Args: { seller_user_id: string; time_range?: string }
-        Returns: {
-          completion_rate: number
-          delivered_orders: number
-          failed_orders: number
-          period_label: string
-          period_start: string
-          total_orders: number
-          total_revenue: number
-        }[]
-      }
+      get_seller_performance_summary:
+        | {
+            Args: { seller_user_id: string; time_range?: string }
+            Returns: {
+              avg_daily_orders: number
+              completion_rate: number
+              delivered_orders: number
+              failed_orders: number
+              total_orders: number
+              total_revenue: number
+            }[]
+          }
+        | { Args: { seller_uuid: string }; Returns: Json }
+      get_seller_performance_trends:
+        | {
+            Args: { seller_user_id: string; time_range?: string }
+            Returns: {
+              completion_rate: number
+              delivered_orders: number
+              failed_orders: number
+              period_label: string
+              period_start: string
+              total_orders: number
+              total_revenue: number
+            }[]
+          }
+        | {
+            Args: { days_back?: number; seller_uuid: string }
+            Returns: {
+              daily_customers: number
+              daily_orders: number
+              daily_revenue: number
+              trend_date: string
+            }[]
+          }
       get_seller_sales_analytics: {
         Args: { target_seller_id: string; time_period?: string }
         Returns: Json
@@ -9360,19 +9372,8 @@ export type Database = {
         | { Args: { seller_user_id: string }; Returns: Json }
         | { Args: { period?: string; seller_user_id: string }; Returns: Json }
       get_seller_stats_with_period: {
-        Args: { period?: string; seller_user_id: string }
-        Returns: {
-          active_orders: number
-          active_subscriptions: number
-          delivered_count: number
-          pending_revenue: number
-          pending_subscription_revenue: number
-          projected_daily_subscription: number
-          regular_revenue: number
-          subscription_revenue: number
-          total_products: number
-          total_revenue: number
-        }[]
+        Args: { period?: string; seller_uuid: string }
+        Returns: Json
       }
       get_seller_subscription_handover_data: {
         Args: { handover_date: string; seller_user_id: string }
