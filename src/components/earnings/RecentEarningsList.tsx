@@ -81,9 +81,8 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'confirmed':
-        return <Badge variant="default" className="bg-green-600 text-white text-xs">Delivered</Badge>;
       case 'pending':
-        return <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-xs">Pending</Badge>;
+        return <Badge variant="default" className="bg-green-600 text-white text-xs">Delivered</Badge>;
       case 'cancelled':
         return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
       default:
@@ -152,7 +151,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                   {earning.status === 'pending' && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <RefreshCw className="h-3 w-3" />
-                      Expected
+                      Payout pending
                     </div>
                   )}
                 </div>
