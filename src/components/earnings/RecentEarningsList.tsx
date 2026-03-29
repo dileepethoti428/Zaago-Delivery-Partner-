@@ -169,7 +169,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                     {earning.payout_breakdown.distance_pay > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km}/km)
+                          Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km ?? 8}/km)
                         </span>
                         <span className="font-medium">₹{earning.payout_breakdown.distance_pay}</span>
                       </div>
