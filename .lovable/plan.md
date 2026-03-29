@@ -1,31 +1,34 @@
 
 
-## Fix: Remove `tip_amount` from earnings insert
+## Fix: Restore Correct Pricing in `complete_delivery_zepto` RPC
 
-### Root cause
-The `earnings` table does not have a `tip_amount` column. The RPC tries to insert into it on line 156.
+### Problem
+During the recent RPC rewrites to fix FK errors, the pricing constants got changed incorrectly:
+- **Current (broken):** Base ₹25, Distance ₹7/km, uses `ceil()` rounding
+- **Correct:** Base ₹10, Distance ₹8/km, round to 1 decimal place
+
+Every other part of the system (edge functions, frontend, shared pricing module) uses ₹10 + ₹8/km. Only the RPC is wrong.
+
+Tips are already working correctly in the RPC (line 88-90) and UI — they just show wrong totals because of the wrong base/rate.
 
 ### Fix
-One database migration to recreate `complete_delivery_zepto` with the `tip_amount` reference removed from the `earnings` INSERT (lines 150-166). The tip is already included in the `amount` field (line 92: `v_payout = base + distance + tip`), so no data is lost.
-
-The tip is still tracked in:
-- `delivery_history.tip_amount` (has the column)
-- `agent_earnings_tracking.tip_amount` (has the column)
-- `payout_breakdown` JSON (includes tip_amount)
-
-### Change
-In the `earnings` INSERT, remove the `tip_amount` column and value:
+One database migration to update two lines in the RPC:
 
 ```sql
--- Before (broken):
-INSERT INTO public.earnings (agent_id, order_id, amount, distance_km, payment_method, tip_amount, status)
-VALUES (v_da_id, p_order_id, v_payout, v_distance_km, v_normalized_payment, v_tip, 'completed');
+-- Line 20-21 change:
+v_base_pay numeric := 10;     -- was 25
+v_per_km_rate numeric := 8;   -- was 7
 
--- After (fixed):
-INSERT INTO public.earnings (agent_id, order_id, amount, distance_km, payment_method, status)
-VALUES (v_da_id, p_order_id, v_payout, v_distance_km, v_normalized_payment, 'completed');
+-- Line 89 change:
+v_rounded_distance := round(v_distance_km::numeric, 1);  -- was ceil()
 ```
 
+### What stays the same
+- Tip logic (already correct)
+- FK handling (already fixed)
+- Auth validation (already fixed)
+- All edge functions and frontend (already use ₹10 + ₹8/km)
+
 ### Files
-- Database migration only — drop and recreate `complete_delivery_zepto` with same logic minus the bad column reference.
+- Database migration only — recreate `complete_delivery_zepto` with corrected pricing constants and rounding
 
