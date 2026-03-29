@@ -151,7 +151,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                   {earning.status === 'pending' && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <RefreshCw className="h-3 w-3" />
-                      Expected
+                      Payout pending
                     </div>
                   )}
                 </div>
