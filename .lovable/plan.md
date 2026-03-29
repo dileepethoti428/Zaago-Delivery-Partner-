@@ -1,26 +1,54 @@
 
 
-## Fix two issues: History "Pending" badge + "₹0" in earnings breakdown
+## Fix: Regular order earnings stuck as "pending" after delivery completion
 
-### Issue 1: Delivery History showing "Pending"
-In `DeliveryHistoryCard.tsx` line 78, the status pill uses `payment_status` (paid/pending) which refers to **COD settlement status**, not delivery status. Since the delivery is already in history, it's always "delivered."
+### Root cause
 
-**Fix in `src/components/delivery/DeliveryHistoryCard.tsx`:**
-- Change the top-right `StatusPill` from `payment_status === 'paid' ? 'completed' : 'pending'` to always show `'completed'` (since all history items are delivered)
-- Move payment status to the expanded Payment section only (it's already there on line 185-186)
+Two writers insert into `agent_earnings_tracking` for the same order:
 
-### Issue 2: "₹0" above Total Payout in Regular Order breakdown
-In `RecentEarningsList.tsx` lines 161-184, the Zepto-style breakdown shows `Base Pay: ₹0` and `Distance Pay: ₹0` when `payout_breakdown` has zero values (e.g. from older records or fallback data). The "0" the user sees is likely `₹0` for base_pay or distance_pay.
+1. **`accept-order` edge function** (line 354): inserts with `payout_status: 'pending'` when agent accepts the order
+2. **`complete_delivery_zepto` RPC** (line 133): inserts with `payout_status: 'confirmed'` when delivery completes
 
-**Fix in `src/components/earnings/RecentEarningsList.tsx`:**
-- When `payout_breakdown` values are all zero but we have a valid `validatedPayout > 0`, skip the breakdown and show only the total payout directly
-- When breakdown values are genuinely zero and payout is also zero, hide the breakdown entirely
+The RPC uses `ON CONFLICT DO NOTHING` (line 136), so when the accept-order row already exists, the confirmed insert is silently skipped. The record stays `pending` forever.
 
-### Files to change
-1. `src/components/delivery/DeliveryHistoryCard.tsx` — line 78: always show "completed" status
-2. `src/components/earnings/RecentEarningsList.tsx` — lines 160-184: conditionally hide zero-value breakdown
+### Fix
+
+Single database migration to change `ON CONFLICT DO NOTHING` to `ON CONFLICT ... DO UPDATE` in `complete_delivery_zepto`, so it updates the existing pending record to confirmed with the final payout data:
+
+```sql
+ON CONFLICT (order_id, agent_id) DO UPDATE SET
+  payout_status = 'confirmed',
+  completed_at = now(),
+  actual_payout = EXCLUDED.actual_payout,
+  expected_payout = EXCLUDED.expected_payout,
+  distance_km = EXCLUDED.distance_km,
+  payout_breakdown = EXCLUDED.payout_breakdown,
+  payment_method = EXCLUDED.payment_method,
+  tip_amount = EXCLUDED.tip_amount;
+```
+
+This also fixes the payout amount, since the accept-order estimates the payout while the RPC calculates the final exact amount.
+
+### Also fix existing pending records
+
+Add a second statement to update all currently-stuck pending records that have a matching `delivery_history` entry (meaning delivery was already completed):
+
+```sql
+UPDATE agent_earnings_tracking aet
+SET payout_status = 'confirmed', completed_at = dh.completed_at
+FROM delivery_history dh
+WHERE aet.order_id = dh.order_id
+  AND aet.agent_id = dh.agent_id
+  AND aet.payout_status = 'pending'
+  AND aet.order_type = 'regular';
+```
+
+### Scope
+- Single database migration (recreate RPC + backfill fix)
+- No frontend or edge function changes needed
 
 ### Result
-- History cards show "Delivered" (green) instead of "Pending"
-- Earnings breakdown hides meaningless ₹0 rows
+- New deliveries: payout_status transitions from `pending` to `confirmed` automatically on completion
+- Existing stuck records: retroactively fixed to `confirmed`
+- Earnings page shows correct "Delivered" status with confirmed payout amounts
 
