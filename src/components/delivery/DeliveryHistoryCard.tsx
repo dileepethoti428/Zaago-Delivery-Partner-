@@ -75,7 +75,7 @@ export const DeliveryHistoryCard = memo(function DeliveryHistoryCard({
                 )}
               </div>
               <div className="flex flex-col items-end gap-2">
-                <StatusPill status={delivery.payment_status === 'paid' ? 'completed' : 'pending'} />
+                <StatusPill status="delivered" />
                 <CollapsibleTrigger 
                   className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   onClick={(e) => e.stopPropagation()}
