@@ -186,13 +186,14 @@ export default function ManageDelivery() {
 
       if (error || !data?.success) throw new Error(data?.error || 'Payment completed but delivery marking failed');
 
-      // ✅ Clear cache + instant navigation
+      // ✅ Clear all related caches
       queryClient.removeQueries({ queryKey: ['orders'] });
       queryClient.removeQueries({ queryKey: ['assigned-orders'] });
+      queryClient.removeQueries({ queryKey: ['order-details', order?.id] });
 
       toast({
         title: 'Delivery Completed!',
-        description: data.already_completed ? 'This order was already marked as delivered.' : 'Product delivered successfully - Paid Online ✓',
+        description: 'Product delivered successfully - Paid Online ✓',
       });
 
       navigate('/my-deliveries', { replace: true });
