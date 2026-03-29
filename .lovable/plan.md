@@ -1,32 +1,23 @@
 
 
-## Fix: "Not authenticated" from complete_delivery_zepto RPC
+## Fix: FK violation on `earnings` table during delivery completion
 
 ### Root cause
-Line 56 creates a service_role client: `createClient(supabaseUrl, supabaseServiceKey)`. This client is used for everything — including the RPC call on line 328. But `complete_delivery_zepto` internally calls `auth.uid()`, which requires a user session context. The service_role client has no session, so `auth.uid()` returns NULL and the function returns "Not authenticated".
+The `complete_delivery_zepto` database function sets `v_agent_id := auth.uid()` (the Supabase Auth UUID) and uses it everywhere. But `earnings.agent_id` has a foreign key referencing `delivery_agents.id` — which is a **different UUID** than the Auth user ID. So the insert fails.
+
+The edge function already passes the correct `delivery_agents.id` as `p_agent_id`, but the RPC ignores it and uses `auth.uid()` instead.
 
 ### Fix
-In `supabase/functions/unified-complete-delivery/index.ts`, create a **second client** with the user's JWT (anon key + Authorization header) specifically for the RPC call. Keep the service_role client for direct table operations that bypass RLS.
+One database migration to update the `complete_delivery_zepto` function. Change the problematic inserts/updates to use `p_agent_id` instead of `v_agent_id` for tables that reference `delivery_agents.id`:
 
-**Changes (lines ~55-56 area):**
-```ts
-// Service client for direct DB ops (bypasses RLS)
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+- **Line 113** (`earnings` insert): `v_agent_id` → `p_agent_id`
+- **Line 110** (`delivery_agents` update): `WHERE agent_id = v_agent_id` → `WHERE id = p_agent_id`
+- **Line 117-126** (`agent_wallet` insert/upsert): `v_agent_id` → `p_agent_id`
+- **Line 129** (`agent_wallet_transactions` insert): `v_agent_id` → `p_agent_id`
+- **Line 139** (`agent_earnings_tracking` update): `v_agent_id` → `p_agent_id`
 
-// Auth-context client for RPC calls that check auth.uid()
-const supabaseWithAuth = createClient(supabaseUrl, supabaseAnonKey, {
-  global: { headers: { Authorization: authHeader } }
-});
-```
-
-**Change (line ~328):** Switch the RPC call from `supabase.rpc(...)` to `supabaseWithAuth.rpc(...)`:
-```ts
-const { data, error } = await supabaseWithAuth.rpc(
-  'complete_delivery_zepto',
-  { p_order_id: order_id, p_agent_id: agent.id, p_payment_method: normalizedPayment }
-);
-```
+Keep `v_agent_id` (auth.uid()) only for the authentication check and the idempotency check on `delivery_history` (which has no FK to `delivery_agents`). The `delivery_history` insert on line 88 should also use `p_agent_id` for consistency.
 
 ### File
-- `supabase/functions/unified-complete-delivery/index.ts` — 2 small edits
+- **Database migration only** — recreate the `complete_delivery_zepto` function with corrected agent ID references. No edge function or frontend changes needed.
 
