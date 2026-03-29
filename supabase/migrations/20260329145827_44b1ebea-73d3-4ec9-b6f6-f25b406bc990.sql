@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS trigger_create_delivery_history_on_delivered ON public.orders;
