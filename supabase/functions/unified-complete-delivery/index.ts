@@ -250,32 +250,7 @@ serve(async (req) => {
       // Regular order flow - add pre-completion guards before calling RPC
       console.log('📦 Processing regular order completion via Zepto RPC...');
 
-      // PRE-COMPLETION GUARD 1: Check if order exists in delivery_history
-      const { data: existingHistory, error: historyCheckError } = await supabase
-        .from('delivery_history')
-        .select('id, completed_at')
-        .eq('order_id', order_id)
-        .maybeSingle();
-
-      if (existingHistory) {
-        console.log('⚠️ Order already in delivery_history:', {
-          order_id,
-          history_id: existingHistory.id,
-          completed_at: existingHistory.completed_at
-        });
-        return new Response(
-          JSON.stringify({
-            success: true,
-            already_completed: true,
-            message: 'Order was already completed',
-            order_id,
-            completed_at: existingHistory.completed_at
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // PRE-COMPLETION GUARD 2: Fetch order and validate status
+      // PRE-COMPLETION GUARD: Fetch order and validate status
       const { data: orderCheck, error: orderCheckError } = await supabase
         .from('orders')
         .select('id, status, subscription_id, payment_status, seller_id, total')
