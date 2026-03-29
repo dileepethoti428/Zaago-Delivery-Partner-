@@ -157,18 +157,23 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                 </div>
 
                 {/* Zepto/Blinkit style breakdown for regular orders */}
-                {type === 'regular' && earning.payout_breakdown && earning.order_type === 'regular' && (
+                {type === 'regular' && earning.payout_breakdown && earning.order_type === 'regular' && 
+                 (earning.payout_breakdown.base_pay > 0 || earning.payout_breakdown.distance_pay > 0) && (
                   <div className="mt-2 bg-muted/50 rounded-lg p-3 space-y-1.5">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Base Pay</span>
-                      <span className="font-medium">₹{earning.payout_breakdown.base_pay}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km})
-                      </span>
-                      <span className="font-medium">₹{earning.payout_breakdown.distance_pay}</span>
-                    </div>
+                    {earning.payout_breakdown.base_pay > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Base Pay</span>
+                        <span className="font-medium">₹{earning.payout_breakdown.base_pay}</span>
+                      </div>
+                    )}
+                    {earning.payout_breakdown.distance_pay > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km})
+                        </span>
+                        <span className="font-medium">₹{earning.payout_breakdown.distance_pay}</span>
+                      </div>
+                    )}
                     {earning.tip_amount && earning.tip_amount > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">💰 Customer Tip</span>
