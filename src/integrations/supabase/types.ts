@@ -8476,25 +8476,15 @@ export type Database = {
         }
         Returns: Json
       }
-      complete_delivery_zepto:
-        | {
-            Args: {
-              p_agent_id: string
-              p_live_distance_km?: number
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_agent_id?: string
-              p_live_distance_km?: number
-              p_order_id: string
-              p_payment_method: string
-            }
-            Returns: Json
-          }
+      complete_delivery_zepto: {
+        Args: {
+          p_agent_id?: string
+          p_live_distance_km?: number
+          p_order_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
       complete_qr_delivery_safe: {
         Args: {
           p_agent_id: string
