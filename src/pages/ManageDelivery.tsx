@@ -150,11 +150,12 @@ export default function ManageDelivery() {
       queryClient.removeQueries({ queryKey: ['orders'] });
       queryClient.removeQueries({ queryKey: ['assigned-orders'] });
 
+      const tipMsg = data.tip_amount && data.tip_amount > 0 ? ` + ₹${data.tip_amount} tip 💰` : '';
       toast({
         title: 'Delivery Completed!',
         description: data.already_completed
           ? 'This order was already marked as delivered.'
-          : paymentMethod === 'COD' ? 'Product delivered successfully - COD ✓' : 'Product delivered successfully - Paid Online ✓',
+          : paymentMethod === 'COD' ? `Product delivered successfully - COD ✓${tipMsg}` : `Product delivered successfully - Paid Online ✓${tipMsg}`,
       });
 
       // ✅ Instant navigation — no setTimeout delay
