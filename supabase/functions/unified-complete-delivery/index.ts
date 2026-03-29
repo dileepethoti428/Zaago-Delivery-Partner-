@@ -330,7 +330,7 @@ serve(async (req) => {
       }
 
       // Now call the RPC with validated data
-      const { data, error } = await supabase.rpc(
+      const { data, error } = await supabaseWithAuth.rpc(
         'complete_delivery_zepto',
         {
           p_order_id: order_id,
