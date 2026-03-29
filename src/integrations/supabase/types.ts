@@ -8480,14 +8480,6 @@ export type Database = {
         | {
             Args: {
               p_agent_id: string
-              p_order_id: string
-              p_payment_method?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_agent_id: string
               p_live_distance_km?: number
               p_order_id: string
               p_payment_method: string

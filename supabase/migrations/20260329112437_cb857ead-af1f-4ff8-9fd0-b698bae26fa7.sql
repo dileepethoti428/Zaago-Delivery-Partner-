@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.complete_delivery_zepto(uuid, uuid, text);
