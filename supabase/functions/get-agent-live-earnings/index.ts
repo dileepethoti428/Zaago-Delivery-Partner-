@@ -273,10 +273,11 @@ serve(async (req) => {
         actual_payout: actualPayout,
         status: tracking.payout_status,
         distance_km: distanceKm,
-        is_peak_hour: false, // Removed peak hour from new model
+        is_peak_hour: false,
         payout_breakdown: breakdown,
-        subscription_id: null, // No longer querying orders table
-        order_type: orderType
+        subscription_id: null,
+        order_type: orderType,
+        tip_amount: parseFloat(tracking.tip_amount || 0)
       };
     };
 

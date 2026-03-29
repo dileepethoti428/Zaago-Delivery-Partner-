@@ -170,6 +170,12 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                       </span>
                       <span className="font-medium">₹{earning.payout_breakdown.distance_pay}</span>
                     </div>
+                    {earning.tip_amount && earning.tip_amount > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">💰 Customer Tip</span>
+                        <span className="font-medium text-green-600">₹{earning.tip_amount}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm pt-1.5 border-t border-border/50">
                       <span className="font-semibold">Total Payout</span>
                       <span className="font-bold text-primary">

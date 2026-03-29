@@ -33,6 +33,7 @@ export interface EarningRecord {
   payout_breakdown?: PayoutBreakdown;
   subscription_id?: string | null;
   order_type: 'regular' | 'subscription';
+  tip_amount?: number;
 }
 
 export interface EarningsByType {
