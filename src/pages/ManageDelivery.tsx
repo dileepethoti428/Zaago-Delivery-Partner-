@@ -146,16 +146,16 @@ export default function ManageDelivery() {
 
       if (error || !data?.success) throw new Error(data?.error || 'Failed to complete delivery');
 
-      // ✅ Clear cache instead of invalidating — no refetch needed, orders screen reloads fresh
+      // ✅ Clear all related caches so lists refresh correctly
       queryClient.removeQueries({ queryKey: ['orders'] });
       queryClient.removeQueries({ queryKey: ['assigned-orders'] });
+      queryClient.removeQueries({ queryKey: ['order-details', order.id] });
 
       const tipMsg = data.tip_amount && data.tip_amount > 0 ? ` + ₹${data.tip_amount} tip 💰` : '';
+      // Treat already_completed as success — the order IS delivered either way
       toast({
         title: 'Delivery Completed!',
-        description: data.already_completed
-          ? 'This order was already marked as delivered.'
-          : paymentMethod === 'COD' ? `Product delivered successfully - COD ✓${tipMsg}` : `Product delivered successfully - Paid Online ✓${tipMsg}`,
+        description: paymentMethod === 'COD' ? `Product delivered successfully - COD ✓${tipMsg}` : `Product delivered successfully - Paid Online ✓${tipMsg}`,
       });
 
       // ✅ Instant navigation — no setTimeout delay
@@ -186,13 +186,14 @@ export default function ManageDelivery() {
 
       if (error || !data?.success) throw new Error(data?.error || 'Payment completed but delivery marking failed');
 
-      // ✅ Clear cache + instant navigation
+      // ✅ Clear all related caches
       queryClient.removeQueries({ queryKey: ['orders'] });
       queryClient.removeQueries({ queryKey: ['assigned-orders'] });
+      queryClient.removeQueries({ queryKey: ['order-details', order?.id] });
 
       toast({
         title: 'Delivery Completed!',
-        description: data.already_completed ? 'This order was already marked as delivered.' : 'Product delivered successfully - Paid Online ✓',
+        description: 'Product delivered successfully - Paid Online ✓',
       });
 
       navigate('/my-deliveries', { replace: true });
