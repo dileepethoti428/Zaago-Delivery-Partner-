@@ -1,20 +1,26 @@
 
 
-## Fix: Drop duplicate `complete_delivery_zepto` overload
+## Fix: Distance Pay label missing "/km" clarity
 
 ### Problem
-The last migration created a new version of `complete_delivery_zepto` without dropping the old one. Now PostgreSQL has two overloads with the same parameter names in different order, causing PostgREST's `PGRST203` ambiguity error.
+On the Recent Regular Order Deliveries breakdown, the distance pay line reads:
+```
+Distance Pay (2.5 km × ₹8)
+```
+The `₹8` is the rate per km but it's not obvious — it looks like a bare number after the currency symbol. Adding `/km` makes it immediately clear.
 
 ### Fix
-Single migration:
-```sql
--- Drop the old signature (params in different order)
-DROP FUNCTION IF EXISTS public.complete_delivery_zepto(uuid, text, uuid, numeric);
+**File:** `src/components/earnings/RecentEarningsList.tsx` — line 172
+
+Change:
+```
+Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km})
+```
+To:
+```
+Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km}/km)
 ```
 
-This leaves only the correct version. No other changes needed.
-
-### Scope
-- One database migration, one `DROP FUNCTION` statement
-- No frontend or edge function changes
+### Result
+Label will read: `Distance Pay (2.5 km × ₹8/km)` — clearly indicating the per-km rate.
 
