@@ -1,23 +1,18 @@
 
 
-## Fix: Hardcode fallback `8` for missing `rate_per_km`
+## Fix: Redeploy `update-agent-location` edge function
 
-### Problem
-`payout_breakdown.rate_per_km` is not stored in older records, so the label renders `₹/km` with nothing before `/km`.
+### Root cause
+The deployed version of `update-agent-location` is an older variant that requires `agent_id` in the request body and throws `"Missing required fields: agent_id, latitude, longitude"` (logs confirm this at line 22 of the deployed file). The frontend correctly sends only `{ latitude, longitude, accuracy }` and relies on the JWT to identify the agent — matching the canonical version already present in the repo (`supabase/functions/update-agent-location/index.ts`), which derives `userId` from `auth.getUser()`.
+
+The repo and the deployment are out of sync.
 
 ### Fix
-**File:** `src/components/earnings/RecentEarningsList.tsx` — line 172
+Redeploy `supabase/functions/update-agent-location/index.ts` (already correct in the repo — JWT-based, soft-fail design, never throws on missing agent_id) so the live function matches the code.
 
-Change:
-```tsx
-₹{earning.payout_breakdown.rate_per_km}/km
-```
-To:
-```tsx
-₹{earning.payout_breakdown.rate_per_km ?? 8}/km
-```
+No code changes needed — just a redeploy of the existing file.
 
-Since the rate is always ₹8/km, this fallback covers all records where the field wasn't persisted.
-
-### Single line change, no backend changes.
+### Result
+- "Save My Location" button on Profile will succeed.
+- Background `useLocationSyncController` syncs will stop logging soft-fail noise from the mismatched contract.
 
