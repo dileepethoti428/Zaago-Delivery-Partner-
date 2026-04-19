@@ -3001,6 +3001,36 @@ export type Database = {
         }
         Relationships: []
       }
+      fines: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          party_id: string
+          party_type: string
+          reason: string | null
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          party_id: string
+          party_type: string
+          reason?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          party_id?: string
+          party_type?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       flexible_payment_requests: {
         Row: {
           agent_id: string
@@ -3629,7 +3659,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          body: string
+          body?: string
           created_at?: string | null
           data?: Json | null
           id?: number
