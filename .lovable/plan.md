@@ -1,42 +1,64 @@
-## Fix: Profile rating shows 0 — missing trigger on `delivery_agent_ratings`
+## Fix: Profile Rating not updating while Reviews count updates
 
-### Root cause
-The `delivery_agents.average_rating` column for Dileep is `0.00`, but `delivery_agent_ratings` actually has 2 ratings averaging **5.0** for that agent.
+### Root cause found
+The Profile UI is not the main problem. It reads:
+- `Reviews` directly from `delivery_agent_ratings` count, so it updates immediately.
+- `Rating` from `delivery_agents.average_rating`, so it only updates if the database sync trigger updates that column.
 
-The function `update_delivery_agent_rating_stats()` exists in the database, but **no trigger is attached** to the `delivery_agent_ratings` table — so when ratings are inserted, `delivery_agents.average_rating` is never updated. Confirmed via `information_schema.triggers` (zero rows for that table).
+Database inspection shows the real issue:
+- There is currently **no trigger attached** to `delivery_agent_ratings`.
+- The earlier trigger migration file exists in the repo, but the live database does not have the trigger, so new reviews are counted but do not recalculate `delivery_agents.average_rating`.
+- Current data is already stale:
+  - Dileep: 3 reviews averaging **3.7**, but stored `average_rating` is still **5.00**.
+  - Dinesh: 1 review averaging **5.0**, but stored `average_rating` is **0.00**.
 
-The Profile page reads `agentProfile.average_rating` directly from `delivery_agents` (`src/pages/Profile.tsx` line ~204), which is why it renders `0.0`.
-
-Similarly, `review_count` on the profile reads from a separate query on `delivery_agent_ratings` keyed by `delivery_agents.id`. We need to confirm both reflect correctly.
-
-### Fix (single migration)
-
-1. **Backfill** existing `delivery_agents.average_rating` and reviews from `delivery_agent_ratings`:
+### Fix
+1. Apply a database migration that safely recreates the trigger:
    ```sql
-   UPDATE delivery_agents da
-   SET average_rating = COALESCE(sub.avg_rating, 0)
+   DROP TRIGGER IF EXISTS trg_update_delivery_agent_rating_stats ON public.delivery_agent_ratings;
+
+   CREATE TRIGGER trg_update_delivery_agent_rating_stats
+   AFTER INSERT OR UPDATE OR DELETE ON public.delivery_agent_ratings
+   FOR EACH ROW
+   EXECUTE FUNCTION public.update_delivery_agent_rating_stats();
+   ```
+
+2. Backfill all existing agent ratings so stored `delivery_agents.average_rating` matches actual review data:
+   ```sql
+   UPDATE public.delivery_agents da
+   SET
+     average_rating = COALESCE(rs.avg_rating, 0),
+     updated_at = now()
    FROM (
      SELECT agent_id, ROUND(AVG(rating)::numeric, 1) AS avg_rating
-     FROM delivery_agent_ratings
+     FROM public.delivery_agent_ratings
      GROUP BY agent_id
-   ) sub
-   WHERE da.id = sub.agent_id;
+   ) rs
+   WHERE da.id = rs.agent_id;
    ```
 
-2. **Create the missing trigger** so future inserts/updates/deletes auto-sync the average:
+3. Also reset agents with no reviews back to `0` so old stale values cannot remain:
    ```sql
-   DROP TRIGGER IF EXISTS trg_update_delivery_agent_rating_stats ON delivery_agent_ratings;
-   CREATE TRIGGER trg_update_delivery_agent_rating_stats
-   AFTER INSERT OR UPDATE OR DELETE ON delivery_agent_ratings
-   FOR EACH ROW
-   EXECUTE FUNCTION update_delivery_agent_rating_stats();
+   UPDATE public.delivery_agents da
+   SET average_rating = 0, updated_at = now()
+   WHERE NOT EXISTS (
+     SELECT 1
+     FROM public.delivery_agent_ratings r
+     WHERE r.agent_id = da.id
+   );
    ```
 
-### Result
-- Dileep's profile will immediately show **5.0** rating (2 reviews).
-- All future ratings auto-update the agent's average via the trigger.
-- No frontend code changes needed — the Profile already reads `average_rating` correctly.
+4. Verify after migration:
+   - `information_schema.triggers` contains `trg_update_delivery_agent_rating_stats`.
+   - `delivery_agents.average_rating` equals `ROUND(AVG(delivery_agent_ratings.rating), 1)` for every reviewed agent.
 
-### Notes
-- Per memory rule "Trigger Consolidation", we use a single unified trigger for ratings updates.
-- This aligns with memory "Ratings Stats — Centralized DB trigger calculates agent ratings" — restoring intended behavior.
+### Optional frontend hardening
+To prevent this kind of mismatch from being visible even if the stored aggregate becomes stale again, update `fetchAgentProfileById()` to calculate `average_rating` from `delivery_agent_ratings` together with `review_count`, and return that computed value to Profile.
+
+This makes the Profile display source-of-truth review data directly, while the database trigger still keeps the aggregate column correct for other screens.
+
+### Expected result
+- Rating and Reviews will stay consistent on the Profile page.
+- Dileep should show rating **3.7** with **3** reviews based on the current live data.
+- Dinesh should show rating **5.0** with **1** review.
+- Future inserted/updated/deleted reviews will automatically update the stored rating.
