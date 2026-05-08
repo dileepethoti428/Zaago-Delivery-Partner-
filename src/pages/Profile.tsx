@@ -15,6 +15,7 @@ import { Browser } from '@capacitor/browser';
 
 import { motion as m } from 'framer-motion';
 import { useProfileById } from '@/hooks/useProfile';
+import { useWorkHours, formatHours } from '@/hooks/useWorkHours';
 import { useAgentSettings } from '@/hooks/useSettings';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
