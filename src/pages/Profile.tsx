@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
 import { LogOut, User, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2, MessageCircle, Star, Package, TrendingUp } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
+import { Clock as ClockIcon } from 'lucide-react';
 
 import { motion as m } from 'framer-motion';
 import { useProfileById } from '@/hooks/useProfile';
