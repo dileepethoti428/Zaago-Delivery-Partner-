@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // If is_available changed, also update delivery_agents.is_online
+    // If is_available changed, also update delivery_agents.is_online and manage work session
     if (is_available !== undefined) {
       const { error: agentUpdateError } = await serviceClient
         .from('delivery_agents')
@@ -157,6 +157,56 @@ Deno.serve(async (req) => {
 
       if (agentUpdateError) {
         console.error('[update-agent-preferences] Failed to update agent online status:', agentUpdateError);
+      }
+
+      const nowIso = new Date().toISOString();
+      try {
+        if (is_available) {
+          // Close any stale open sessions for safety
+          const { data: openSessions } = await serviceClient
+            .from('agent_work_sessions')
+            .select('id, session_start')
+            .eq('agent_id', agent.id)
+            .is('session_end', null);
+
+          if (openSessions && openSessions.length > 0) {
+            for (const s of openSessions) {
+              const startMs = new Date(s.session_start).getTime();
+              const hours = Math.max(0, (Date.now() - startMs) / 3_600_000);
+              await serviceClient
+                .from('agent_work_sessions')
+                .update({ session_end: nowIso, total_hours: hours, updated_at: nowIso })
+                .eq('id', s.id);
+            }
+          }
+
+          // Open a new session
+          await serviceClient.from('agent_work_sessions').insert({
+            agent_id: agent.id,
+            session_start: nowIso,
+          });
+        } else {
+          // Close the latest open session
+          const { data: openSession } = await serviceClient
+            .from('agent_work_sessions')
+            .select('id, session_start')
+            .eq('agent_id', agent.id)
+            .is('session_end', null)
+            .order('session_start', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (openSession) {
+            const startMs = new Date(openSession.session_start).getTime();
+            const hours = Math.max(0, (Date.now() - startMs) / 3_600_000);
+            await serviceClient
+              .from('agent_work_sessions')
+              .update({ session_end: nowIso, total_hours: hours, updated_at: nowIso })
+              .eq('id', openSession.id);
+          }
+        }
+      } catch (sessionErr) {
+        console.error('[update-agent-preferences] Work session update failed:', sessionErr);
       }
     }
 
