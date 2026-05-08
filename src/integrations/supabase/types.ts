@@ -4054,6 +4054,7 @@ export type Database = {
           delivery_time: string | null
           delivery_time_slot: string | null
           distance_km: number | null
+          hidden_by_user: boolean
           id: string
           items: Json
           last_notified_at: string | null
@@ -4118,6 +4119,7 @@ export type Database = {
           delivery_time?: string | null
           delivery_time_slot?: string | null
           distance_km?: number | null
+          hidden_by_user?: boolean
           id?: string
           items: Json
           last_notified_at?: string | null
@@ -4182,6 +4184,7 @@ export type Database = {
           delivery_time?: string | null
           delivery_time_slot?: string | null
           distance_km?: number | null
+          hidden_by_user?: boolean
           id?: string
           items?: Json
           last_notified_at?: string | null
