@@ -84,6 +84,7 @@ export default function Profile() {
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['agent-settings'] });
       queryClient.invalidateQueries({ queryKey: ['agent-profile'] });
+      queryClient.invalidateQueries({ queryKey: ['work-hours', user?.id] });
       
       toast({
         title: checked ? "You're Online!" : "You're Offline",
