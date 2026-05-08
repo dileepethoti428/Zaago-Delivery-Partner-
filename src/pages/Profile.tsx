@@ -29,6 +29,7 @@ export default function Profile() {
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   const { data: agentProfile, isLoading: loading } = useProfileById(user?.id);
+  const { data: totalHours = 0 } = useWorkHours(user?.id, isOnline);
   const { data: agentSettingsData } = useAgentSettings();
   const lastKnown = useLocationStore((state) => state.lastKnown);
   const startWatch = useLocationStore((state) => state.startWatch);
