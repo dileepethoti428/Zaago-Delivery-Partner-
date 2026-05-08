@@ -15,6 +15,7 @@ import { Browser } from '@capacitor/browser';
 
 import { motion as m } from 'framer-motion';
 import { useProfileById } from '@/hooks/useProfile';
+import { useWorkHours, formatHours } from '@/hooks/useWorkHours';
 import { useAgentSettings } from '@/hooks/useSettings';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +35,7 @@ export default function Profile() {
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
+  const { data: totalHours = 0 } = useWorkHours(user?.id, isOnline);
 
   // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
   useResumeGuard(() => {
@@ -82,6 +84,7 @@ export default function Profile() {
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['agent-settings'] });
       queryClient.invalidateQueries({ queryKey: ['agent-profile'] });
+      queryClient.invalidateQueries({ queryKey: ['work-hours', user?.id] });
       
       toast({
         title: checked ? "You're Online!" : "You're Offline",
@@ -250,6 +253,21 @@ export default function Profile() {
                   disabled={isTogglingOnline}
                 />
               </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-medium">Total Working Hours</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOnline ? 'Counting while online' : 'Resumes when you go online'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-base font-bold text-foreground tabular-nums">
+                {formatHours(Number(totalHours) || 0)}
+              </span>
             </div>
           </CardContent>
         </Card>
