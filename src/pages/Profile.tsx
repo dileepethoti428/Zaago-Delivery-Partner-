@@ -254,6 +254,21 @@ export default function Profile() {
                 />
               </div>
             </div>
+
+            <div className="mt-3 flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-medium">Total Working Hours</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOnline ? 'Counting while online' : 'Resumes when you go online'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-base font-bold text-foreground tabular-nums">
+                {formatHours(Number(totalHours) || 0)}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
