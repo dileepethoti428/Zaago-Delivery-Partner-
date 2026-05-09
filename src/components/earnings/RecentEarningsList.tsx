@@ -54,6 +54,7 @@ interface RecentEarningsListProps {
 }
 
 export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarningsListProps) {
+  const [visibleCount, setVisibleCount] = useState(5);
   if (!earnings || earnings.length === 0) {
     return (
       <motion.div
