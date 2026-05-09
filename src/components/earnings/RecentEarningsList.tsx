@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Receipt, Package, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Receipt, Package, RefreshCw, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency, EarningRecord } from '@/services/earnings';
 import { formatDateTimeIST } from '@/utils/dateUtils';
 import { motion } from 'framer-motion';

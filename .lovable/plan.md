@@ -1,64 +1,21 @@
-## Fix: Profile Rating not updating while Reviews count updates
+## Add "View More" to Recent Deliveries lists
 
-### Root cause found
-The Profile UI is not the main problem. It reads:
-- `Reviews` directly from `delivery_agent_ratings` count, so it updates immediately.
-- `Rating` from `delivery_agents.average_rating`, so it only updates if the database sync trigger updates that column.
+Add an inline expansion button to both Recent Regular Order Deliveries and Recent Subscription Deliveries lists on the Earnings page. Initial render shows 5 items; each "View More" click reveals 5 more. A "View Less" button collapses back when fully expanded.
 
-Database inspection shows the real issue:
-- There is currently **no trigger attached** to `delivery_agent_ratings`.
-- The earlier trigger migration file exists in the repo, but the live database does not have the trigger, so new reviews are counted but do not recalculate `delivery_agents.average_rating`.
-- Current data is already stale:
-  - Dileep: 3 reviews averaging **3.7**, but stored `average_rating` is still **5.00**.
-  - Dinesh: 1 review averaging **5.0**, but stored `average_rating` is **0.00**.
+### Files to change
 
-### Fix
-1. Apply a database migration that safely recreates the trigger:
-   ```sql
-   DROP TRIGGER IF EXISTS trg_update_delivery_agent_rating_stats ON public.delivery_agent_ratings;
+1. **`src/components/earnings/RecentEarningsList.tsx`**
+   - Add `useState` for `visibleCount` (default 5).
+   - Slice `earnings.slice(0, visibleCount)` instead of mapping all.
+   - Below the list, add a "View More (N more)" button if `visibleCount < earnings.length`, and a "View Less" button if expanded beyond 5.
+   - Remove the fixed `h-[400px]` ScrollArea wrapper (let list grow naturally with the button) — or keep ScrollArea and place the button inside; will keep ScrollArea but make height auto so it adapts.
 
-   CREATE TRIGGER trg_update_delivery_agent_rating_stats
-   AFTER INSERT OR UPDATE OR DELETE ON public.delivery_agent_ratings
-   FOR EACH ROW
-   EXECUTE FUNCTION public.update_delivery_agent_rating_stats();
-   ```
+2. **`src/components/earnings/SubscriptionDeliveryList.tsx`**
+   - Same pattern: `visibleCount` state, slice, View More / View Less buttons.
 
-2. Backfill all existing agent ratings so stored `delivery_agents.average_rating` matches actual review data:
-   ```sql
-   UPDATE public.delivery_agents da
-   SET
-     average_rating = COALESCE(rs.avg_rating, 0),
-     updated_at = now()
-   FROM (
-     SELECT agent_id, ROUND(AVG(rating)::numeric, 1) AS avg_rating
-     FROM public.delivery_agent_ratings
-     GROUP BY agent_id
-   ) rs
-   WHERE da.id = rs.agent_id;
-   ```
+### UX details
+- Button uses `variant="ghost"` with `size="sm"`, full-width, centered text "View More" with chevron-down icon, "View Less" with chevron-up.
+- Uses semantic tokens (`text-primary`).
+- Button hidden when total ≤ 5.
 
-3. Also reset agents with no reviews back to `0` so old stale values cannot remain:
-   ```sql
-   UPDATE public.delivery_agents da
-   SET average_rating = 0, updated_at = now()
-   WHERE NOT EXISTS (
-     SELECT 1
-     FROM public.delivery_agent_ratings r
-     WHERE r.agent_id = da.id
-   );
-   ```
-
-4. Verify after migration:
-   - `information_schema.triggers` contains `trg_update_delivery_agent_rating_stats`.
-   - `delivery_agents.average_rating` equals `ROUND(AVG(delivery_agent_ratings.rating), 1)` for every reviewed agent.
-
-### Optional frontend hardening
-To prevent this kind of mismatch from being visible even if the stored aggregate becomes stale again, update `fetchAgentProfileById()` to calculate `average_rating` from `delivery_agent_ratings` together with `review_count`, and return that computed value to Profile.
-
-This makes the Profile display source-of-truth review data directly, while the database trigger still keeps the aggregate column correct for other screens.
-
-### Expected result
-- Rating and Reviews will stay consistent on the Profile page.
-- Dileep should show rating **3.7** with **3** reviews based on the current live data.
-- Dinesh should show rating **5.0** with **1** review.
-- Future inserted/updated/deleted reviews will automatically update the stored rating.
+No backend / hook / data-fetching changes — both lists already receive the full `recent_earnings` array from the earnings query.
