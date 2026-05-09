@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Receipt, Package, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Receipt, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { EarningRecord } from '@/services/earnings';
 import { formatDateTimeIST } from '@/utils/dateUtils';
 import { motion } from 'framer-motion';
@@ -11,7 +12,11 @@ interface SubscriptionDeliveryListProps {
   delay?: number;
 }
 
+const PAGE_SIZE = 5;
+
 export function SubscriptionDeliveryList({ deliveries, delay = 0 }: SubscriptionDeliveryListProps) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   if (!deliveries || deliveries.length === 0) {
     return (
       <motion.div
@@ -50,6 +55,10 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
     }
   };
 
+  const visibleDeliveries = deliveries.slice(0, visibleCount);
+  const hasMore = visibleCount < deliveries.length;
+  const isExpanded = visibleCount > PAGE_SIZE;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -64,44 +73,64 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="h-[400px]">
-            <ScrollArea className="h-full">
-              <div className="space-y-3 px-6 py-4">
-              {deliveries.map((delivery, index) => (
-            <div 
-              key={delivery.subscription_id || delivery.daily_order_id || `delivery-${index}`} 
-              className={`py-3 ${index < deliveries.length - 1 ? 'border-b' : ''}`}
-            >
-              {/* Delivery Header - NO payout info */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <RefreshCw className="h-4 w-4 text-purple-600" />
-                  <span className="font-medium text-sm">
-                    {delivery.subscription_id 
-                      ? `Sub #${delivery.subscription_id.slice(0, 8)}...`
-                      : delivery.daily_order_id
-                        ? `Delivery #${delivery.daily_order_id.slice(0, 8)}...`
-                        : `Delivery #${index + 1}`
-                    }
-                  </span>
+          <div className="space-y-3 px-6 py-4">
+            {visibleDeliveries.map((delivery, index) => (
+              <div
+                key={delivery.subscription_id || delivery.daily_order_id || `delivery-${index}`}
+                className={`py-3 ${index < visibleDeliveries.length - 1 ? 'border-b' : ''}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <RefreshCw className="h-4 w-4 text-purple-600" />
+                    <span className="font-medium text-sm">
+                      {delivery.subscription_id
+                        ? `Sub #${delivery.subscription_id.slice(0, 8)}...`
+                        : delivery.daily_order_id
+                          ? `Delivery #${delivery.daily_order_id.slice(0, 8)}...`
+                          : `Delivery #${index + 1}`
+                      }
+                    </span>
+                  </div>
+                  {getStatusBadge(delivery.status)}
                 </div>
-                {getStatusBadge(delivery.status)}
-              </div>
 
-              {/* Delivery info - date only, NO payout */}
-              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                <span>{formatDateTimeIST(delivery.accepted_at)}</span>
-                {delivery.distance_km > 0 && (
-                  <>
-                    <span>•</span>
-                    <span>{delivery.distance_km.toFixed(1)} km</span>
-                  </>
-                )}
+                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                  <span>{formatDateTimeIST(delivery.accepted_at)}</span>
+                  {delivery.distance_km > 0 && (
+                    <>
+                      <span>•</span>
+                      <span>{delivery.distance_km.toFixed(1)} km</span>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+
+            {deliveries.length > PAGE_SIZE && (
+              <div className="pt-2 flex justify-center">
+                {hasMore ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary"
+                    onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, deliveries.length))}
+                  >
+                    View More ({deliveries.length - visibleCount} more)
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                ) : isExpanded ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary"
+                    onClick={() => setVisibleCount(PAGE_SIZE)}
+                  >
+                    View Less
+                    <ChevronUp className="ml-1 h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
-            </ScrollArea>
+            )}
           </div>
         </CardContent>
       </Card>
