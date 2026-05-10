@@ -9118,6 +9118,10 @@ export type Database = {
         Returns: Json
       }
       get_agent_total_hours: { Args: { agent_uuid: string }; Returns: number }
+      get_agent_work_hours_breakdown: {
+        Args: { agent_uuid: string }
+        Returns: Json
+      }
       get_agent_work_stats: { Args: { agent_uuid: string }; Returns: Json }
       get_aggregate_milk_data: {
         Args: { p_milk_type: string; p_period: string }

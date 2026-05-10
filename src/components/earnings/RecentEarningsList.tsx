@@ -113,7 +113,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="space-y-3 px-6 py-4">
+          <div className="max-h-[420px] overflow-y-auto px-6 py-4 space-y-3">
             {visibleEarnings.map((earning, index) => {
               const { payout: validatedPayout, isFixed } = earning.order_type === 'regular'
                 ? getValidatedPayout(earning)
@@ -215,33 +215,33 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                 </div>
               );
             })}
-
-            {earnings.length > PAGE_SIZE && (
-              <div className="pt-2 flex justify-center">
-                {hasMore ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary"
-                    onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, earnings.length))}
-                  >
-                    View More ({earnings.length - visibleCount} more)
-                    <ChevronDown className="ml-1 h-4 w-4" />
-                  </Button>
-                ) : isExpanded ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary"
-                    onClick={() => setVisibleCount(PAGE_SIZE)}
-                  >
-                    View Less
-                    <ChevronUp className="ml-1 h-4 w-4" />
-                  </Button>
-                ) : null}
-              </div>
-            )}
           </div>
+
+          {earnings.length > PAGE_SIZE && (
+            <div className="px-6 pb-4 pt-2 flex justify-center border-t">
+              {hasMore ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary"
+                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, earnings.length))}
+                >
+                  View More ({earnings.length - visibleCount} more)
+                  <ChevronDown className="ml-1 h-4 w-4" />
+                </Button>
+              ) : isExpanded ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary"
+                  onClick={() => setVisibleCount(PAGE_SIZE)}
+                >
+                  View Less
+                  <ChevronUp className="ml-1 h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>

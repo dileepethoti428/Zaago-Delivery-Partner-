@@ -35,7 +35,8 @@ export default function Profile() {
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
-  const { data: totalHours = 0 } = useWorkHours(user?.id, isOnline);
+  const { data: workHours } = useWorkHours(user?.id, isOnline);
+  const hoursBreakdown = workHours ?? { today: 0, yesterday: 0, week: 0, month: 0, allTime: 0 };
 
   // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
   useResumeGuard(() => {
@@ -255,8 +256,8 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="mt-3 flex items-center justify-between p-4 bg-muted/50 rounded-xl">
-              <div className="flex items-center gap-3">
+            <div className="mt-3 p-4 bg-muted/50 rounded-xl">
+              <div className="flex items-center gap-3 mb-3">
                 <Clock className="h-5 w-5 text-primary" />
                 <div>
                   <p className="font-medium">Total Working Hours</p>
@@ -265,9 +266,22 @@ export default function Profile() {
                   </p>
                 </div>
               </div>
-              <span className="text-base font-bold text-foreground tabular-nums">
-                {formatHours(Number(totalHours) || 0)}
-              </span>
+              <div className="space-y-1.5">
+                {[
+                  { label: 'Today', value: hoursBreakdown.today },
+                  { label: 'Yesterday', value: hoursBreakdown.yesterday },
+                  { label: 'Last 7 Days', value: hoursBreakdown.week },
+                  { label: 'Last 30 Days', value: hoursBreakdown.month },
+                  { label: 'All Time', value: hoursBreakdown.allTime },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {formatHours(row.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

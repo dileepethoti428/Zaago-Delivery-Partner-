@@ -73,7 +73,7 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="space-y-3 px-6 py-4">
+          <div className="max-h-[420px] overflow-y-auto px-6 py-4 space-y-3">
             {visibleDeliveries.map((delivery, index) => (
               <div
                 key={delivery.subscription_id || delivery.daily_order_id || `delivery-${index}`}
@@ -105,33 +105,33 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
                 </div>
               </div>
             ))}
-
-            {deliveries.length > PAGE_SIZE && (
-              <div className="pt-2 flex justify-center">
-                {hasMore ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary"
-                    onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, deliveries.length))}
-                  >
-                    View More ({deliveries.length - visibleCount} more)
-                    <ChevronDown className="ml-1 h-4 w-4" />
-                  </Button>
-                ) : isExpanded ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary"
-                    onClick={() => setVisibleCount(PAGE_SIZE)}
-                  >
-                    View Less
-                    <ChevronUp className="ml-1 h-4 w-4" />
-                  </Button>
-                ) : null}
-              </div>
-            )}
           </div>
+
+          {deliveries.length > PAGE_SIZE && (
+            <div className="px-6 pb-4 pt-2 flex justify-center border-t">
+              {hasMore ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary"
+                  onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, deliveries.length))}
+                >
+                  View More ({deliveries.length - visibleCount} more)
+                  <ChevronDown className="ml-1 h-4 w-4" />
+                </Button>
+              ) : isExpanded ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary"
+                  onClick={() => setVisibleCount(PAGE_SIZE)}
+                >
+                  View Less
+                  <ChevronUp className="ml-1 h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
