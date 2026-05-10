@@ -1,21 +1,56 @@
-## Add "View More" to Recent Deliveries lists
+## Goals
 
-Add an inline expansion button to both Recent Regular Order Deliveries and Recent Subscription Deliveries lists on the Earnings page. Initial render shows 5 items; each "View More" click reveals 5 more. A "View Less" button collapses back when fully expanded.
+1. Show **Total Working Hours** on Profile broken down by timeline (Today, Yesterday, 1 Week, 1 Month, All Time) — counted only when the agent is/was Online.
+2. Add a **scrollbar** to the Recent Deliveries lists on the Earnings page in all three tabs (All, Regular, Subscription).
 
-### Files to change
+---
 
-1. **`src/components/earnings/RecentEarningsList.tsx`**
-   - Add `useState` for `visibleCount` (default 5).
-   - Slice `earnings.slice(0, visibleCount)` instead of mapping all.
-   - Below the list, add a "View More (N more)" button if `visibleCount < earnings.length`, and a "View Less" button if expanded beyond 5.
-   - Remove the fixed `h-[400px]` ScrollArea wrapper (let list grow naturally with the button) — or keep ScrollArea and place the button inside; will keep ScrollArea but make height auto so it adapts.
+## 1. Working Hours Breakdown (Profile page)
 
-2. **`src/components/earnings/SubscriptionDeliveryList.tsx`**
-   - Same pattern: `visibleCount` state, slice, View More / View Less buttons.
+### Data layer
+- New SQL function `get_agent_work_hours_breakdown(agent_uuid uuid)` in a migration. Returns a JSON object:
+  ```
+  { today, yesterday, week, month, all_time }
+  ```
+  Computed from `agent_work_sessions` (the same source today's `get_agent_total_hours` uses, so it already reflects "online time only").
+  - For each window, sum `total_hours` of sessions whose `session_start` falls in the window.
+  - For an open session (`session_end IS NULL`), add the live elapsed slice that overlaps each window so Today keeps ticking while Online.
+  - "Yesterday" = the previous calendar day (IST timezone, matching how the rest of the app reports dates).
 
-### UX details
-- Button uses `variant="ghost"` with `size="sm"`, full-width, centered text "View More" with chevron-down icon, "View Less" with chevron-up.
-- Uses semantic tokens (`text-primary`).
-- Button hidden when total ≤ 5.
+### Hook
+- Replace `useWorkHours` return shape with `{ today, yesterday, week, month, allTime }` (still keyed by `userId`, still polls every 60s when `isOnline`).
+- Keep `formatHours` helper as-is.
 
-No backend / hook / data-fetching changes — both lists already receive the full `recent_earnings` array from the earnings query.
+### UI (`src/pages/Profile.tsx`)
+- Replace the single "Total Working Hours" row with a card that contains 5 small rows, each showing label + formatted hours:
+  - Today
+  - Yesterday
+  - This Week
+  - This Month
+  - All Time
+- Keep the existing helper text ("Counting while online / Resumes when you go online") at the top of the card.
+- Use existing semantic tokens (`bg-muted/50`, `text-foreground`, `text-muted-foreground`, `tabular-nums`). No new colors.
+
+---
+
+## 2. Scrollable Recent Deliveries (Earnings page)
+
+Files: `src/components/earnings/RecentEarningsList.tsx` and `src/components/earnings/SubscriptionDeliveryList.tsx`.
+
+- Wrap the list rows (the inner `space-y-3` container that maps over visible items) in a scrollable region:
+  - `max-h-[420px] overflow-y-auto pr-1` so a native scrollbar appears once the list exceeds the cap.
+  - Keep the existing **View More / View Less** buttons just below the scroll area (outside the scroll container) so they remain reachable.
+- No changes to data fetching, pagination logic, or the empty state.
+- Applies to all three Earnings tabs because:
+  - "All" tab uses `RecentEarningsList` directly.
+  - "Regular" tab uses `RecentEarningsList` via `EarningsTabContent`.
+  - "Subscription" tab uses `SubscriptionDeliveryList` via `SubscriptionTabContent`.
+
+---
+
+## Technical details
+
+- New migration adds the breakdown RPC with `SECURITY DEFINER`, `STABLE`, `SET search_path = public`, granted to `authenticated, anon` (matching the existing `get_agent_total_hours` function). No table or RLS changes.
+- `useWorkHours` switches from `.rpc('get_agent_total_hours')` (number) to `.rpc('get_agent_work_hours_breakdown')` (json). Keeps the same `delivery_agents.id` resolution path from `agent_id = userId`.
+- After the migration is approved, `src/integrations/supabase/types.ts` is regenerated automatically — no manual edit.
+- Scrollbar uses Tailwind utilities only; no custom scrollbar styling needed.
