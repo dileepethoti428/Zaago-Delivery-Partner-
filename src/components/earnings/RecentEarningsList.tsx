@@ -215,6 +215,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                 </div>
               );
             })}
+          </div>
 
           {earnings.length > PAGE_SIZE && (
             <div className="px-6 pb-4 pt-2 flex justify-center border-t">
