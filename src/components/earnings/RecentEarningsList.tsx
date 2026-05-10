@@ -113,7 +113,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="space-y-3 px-6 py-4">
+          <div className="max-h-[420px] overflow-y-auto px-6 py-4 space-y-3">
             {visibleEarnings.map((earning, index) => {
               const { payout: validatedPayout, isFixed } = earning.order_type === 'regular'
                 ? getValidatedPayout(earning)

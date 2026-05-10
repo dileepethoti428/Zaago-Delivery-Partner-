@@ -73,7 +73,7 @@ export function SubscriptionDeliveryList({ deliveries, delay = 0 }: Subscription
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="space-y-3 px-6 py-4">
+          <div className="max-h-[420px] overflow-y-auto px-6 py-4 space-y-3">
             {visibleDeliveries.map((delivery, index) => (
               <div
                 key={delivery.subscription_id || delivery.daily_order_id || `delivery-${index}`}
