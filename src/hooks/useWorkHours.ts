@@ -1,8 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-async function fetchTotalHours(userId: string): Promise<number> {
-  // Resolve internal agent PK from auth UUID
+export interface WorkHoursBreakdown {
+  today: number;
+  yesterday: number;
+  week: number;
+  month: number;
+  allTime: number;
+}
+
+const EMPTY: WorkHoursBreakdown = {
+  today: 0,
+  yesterday: 0,
+  week: 0,
+  month: 0,
+  allTime: 0,
+};
+
+async function fetchBreakdown(userId: string): Promise<WorkHoursBreakdown> {
   const { data: agent, error: agentErr } = await supabase
     .from('delivery_agents')
     .select('id')
@@ -10,24 +25,31 @@ async function fetchTotalHours(userId: string): Promise<number> {
     .maybeSingle();
 
   if (agentErr) throw agentErr;
-  if (!agent?.id) return 0;
+  if (!agent?.id) return EMPTY;
 
-  const { data, error } = await supabase.rpc('get_agent_total_hours', {
+  const { data, error } = await supabase.rpc('get_agent_work_hours_breakdown', {
     agent_uuid: agent.id,
   });
 
   if (error) throw error;
-  return Number(data ?? 0);
+
+  const d = (data ?? {}) as Record<string, number>;
+  return {
+    today: Number(d.today ?? 0),
+    yesterday: Number(d.yesterday ?? 0),
+    week: Number(d.week ?? 0),
+    month: Number(d.month ?? 0),
+    allTime: Number(d.all_time ?? 0),
+  };
 }
 
 export function useWorkHours(userId?: string, isOnline?: boolean) {
   return useQuery({
-    queryKey: ['work-hours', userId],
-    queryFn: () => fetchTotalHours(userId!),
+    queryKey: ['work-hours-breakdown', userId],
+    queryFn: () => fetchBreakdown(userId!),
     enabled: !!userId,
     staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
-    // While online, keep the live counter ticking
     refetchInterval: isOnline ? 60_000 : false,
   });
 }
