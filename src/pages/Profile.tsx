@@ -37,6 +37,7 @@ export default function Profile() {
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
   const { data: workHours } = useWorkHours(user?.id, isOnline);
   const hoursBreakdown = workHours ?? { today: 0, yesterday: 0, week: 0, month: 0, allTime: 0 };
+  const [periodFilter, setPeriodFilter] = useState<'today'|'yesterday'|'week'|'month'|'allTime'>('today');
 
   // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
   useResumeGuard(() => {
