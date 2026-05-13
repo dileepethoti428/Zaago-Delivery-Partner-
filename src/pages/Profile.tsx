@@ -267,28 +267,39 @@ export default function Profile() {
             <div className="mt-3 p-4 bg-muted/50 rounded-xl">
               <div className="flex items-center gap-3 mb-3">
                 <Clock className="h-5 w-5 text-primary" />
-                <div>
+                <div className="flex-1">
                   <p className="font-medium">Total Working Hours</p>
                   <p className="text-xs text-muted-foreground">
                     {isOnline ? 'Counting while online' : 'Resumes when you go online'}
                   </p>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                {[
-                  { label: 'Today', value: hoursBreakdown.today },
-                  { label: 'Yesterday', value: hoursBreakdown.yesterday },
-                  { label: 'Last 7 Days', value: hoursBreakdown.week },
-                  { label: 'Last 30 Days', value: hoursBreakdown.month },
-                  { label: 'All Time', value: hoursBreakdown.allTime },
-                ].map((row) => (
-                  <div key={row.label} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{row.label}</span>
-                    <span className="font-semibold text-foreground tabular-nums">
-                      {formatHours(row.value)}
-                    </span>
-                  </div>
-                ))}
+              <Select
+                value={periodFilter}
+                onValueChange={(v) => setPeriodFilter(v as typeof periodFilter)}
+              >
+                <SelectTrigger className="h-9 text-sm bg-background/60 mb-3">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="yesterday">Yesterday</SelectItem>
+                  <SelectItem value="week">Last 7 Days</SelectItem>
+                  <SelectItem value="month">Last 30 Days</SelectItem>
+                  <SelectItem value="allTime">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {periodFilter === 'today' && 'Today'}
+                  {periodFilter === 'yesterday' && 'Yesterday'}
+                  {periodFilter === 'week' && 'Last 7 Days'}
+                  {periodFilter === 'month' && 'Last 30 Days'}
+                  {periodFilter === 'allTime' && 'All Time'}
+                </span>
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatHours(hoursBreakdown[periodFilter])}
+                </span>
               </div>
             </div>
           </CardContent>
