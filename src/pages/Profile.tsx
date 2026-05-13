@@ -8,6 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
 import { LogOut, User, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2, MessageCircle, Star, Package, TrendingUp } from 'lucide-react';
