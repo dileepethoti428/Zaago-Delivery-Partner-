@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { callPhone } from '@/utils/phone';
 import { Phone, Mail, Send, MessageCircle, HelpCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -243,9 +244,10 @@ export default function HelpSupport() {
                   <CardTitle className="text-lg">Other Ways to Reach Us</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <a 
-                    href="tel:+917842343642" 
-                    className="flex items-center gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => callPhone('+917842343642')}
+                    className="w-full text-left flex items-center gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
                   >
                     <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                       <Phone className="h-5 w-5 text-primary" />
@@ -255,7 +257,7 @@ export default function HelpSupport() {
                       <p className="text-sm text-muted-foreground">+91-7842343642</p>
                       <p className="text-xs text-muted-foreground">Available 24/7</p>
                     </div>
-                  </a>
+                  </button>
 
                   <a 
                     href="mailto:helpzaago@gmail.com" 

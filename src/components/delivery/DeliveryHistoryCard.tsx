@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { formatDeliveryDate, formatDeliveryTime, type DeliveryHistoryItem } from '@/services/deliveryHistory';
 import { formatDeliveryAddress, formatPhoneNumber, parseDeliveryItems } from '@/utils/deliveryHelpers';
+import { callPhone } from '@/utils/phone';
 import { useNavigate } from 'react-router-dom';
 
 interface DeliveryHistoryCardProps {
@@ -64,14 +65,14 @@ export const DeliveryHistoryCard = memo(function DeliveryHistoryCard({
                   {delivery.customer_name || 'Customer'}
                 </h3>
                 {formattedPhone && (
-                  <a 
-                    href={`tel:${delivery.customer_phone}`}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); callPhone(delivery.customer_phone); }}
                     className="flex items-center gap-1.5 text-sm text-primary hover:underline mt-1"
-                    onClick={(e) => e.stopPropagation()}
                   >
                     <Phone className="h-3.5 w-3.5" />
                     {formattedPhone}
-                  </a>
+                  </button>
                 )}
               </div>
               <div className="flex flex-col items-end gap-2">

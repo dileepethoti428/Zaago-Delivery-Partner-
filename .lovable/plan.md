@@ -1,56 +1,24 @@
-## Goals
+## Problem
+On the Capacitor Android app, tapping the customer phone number in Delivery History opens an in-webview navigation to `tel:7842343642`, which the WebView cannot handle and shows `net::ERR_UNKNOWN_URL_SCHEME`. On web browsers `tel:` is handled natively, so it works there.
 
-1. Show **Total Working Hours** on Profile broken down by timeline (Today, Yesterday, 1 Week, 1 Month, All Time) — counted only when the agent is/was Online.
-2. Add a **scrollbar** to the Recent Deliveries lists on the Earnings page in all three tabs (All, Regular, Subscription).
+The same issue exists in other places that use raw `tel:` anchors / `window.location.href = 'tel:...'`.
 
----
+## Fix
+Use Capacitor's `@capacitor/app-launcher` to open `tel:` URLs on native, and fall back to standard `tel:` href on web. Install the plugin and add a tiny helper, then use it everywhere a phone link exists.
 
-## 1. Working Hours Breakdown (Profile page)
+### Steps
+1. Install `@capacitor/app-launcher`.
+2. Create `src/utils/phone.ts` with a `callPhone(phone)` helper:
+   - Native (Capacitor.isNativePlatform()): `AppLauncher.openUrl({ url: 'tel:<digits>' })`
+   - Web: `window.location.href = 'tel:<digits>'`
+   - Strip spaces / non-dial chars before dialing.
+3. Update the three places to call this helper instead of relying on the `tel:` href:
+   - `src/components/delivery/DeliveryHistoryCard.tsx` — change the `<a href="tel:...">` to a `<button>` (or keep `<a>` but `preventDefault` and call helper) that calls `callPhone(delivery.customer_phone)`; keep `stopPropagation`.
+   - `src/pages/ManageDelivery.tsx` (line 82) — replace `window.location.href = tel:...` with `callPhone(phone)`.
+   - `src/pages/HelpSupport.tsx` (line 247) — wire the support phone anchor through `callPhone`.
+4. After install, remind the user to run `npx cap sync` so the native plugin is registered on Android/iOS.
 
-### Data layer
-- New SQL function `get_agent_work_hours_breakdown(agent_uuid uuid)` in a migration. Returns a JSON object:
-  ```
-  { today, yesterday, week, month, all_time }
-  ```
-  Computed from `agent_work_sessions` (the same source today's `get_agent_total_hours` uses, so it already reflects "online time only").
-  - For each window, sum `total_hours` of sessions whose `session_start` falls in the window.
-  - For an open session (`session_end IS NULL`), add the live elapsed slice that overlaps each window so Today keeps ticking while Online.
-  - "Yesterday" = the previous calendar day (IST timezone, matching how the rest of the app reports dates).
+### Why AppLauncher (not Browser.open)
+`@capacitor/browser` opens an in-app Chrome Custom Tab, which also cannot handle `tel:`. `AppLauncher.openUrl` hands the URL to the OS, which routes `tel:` to the dialer.
 
-### Hook
-- Replace `useWorkHours` return shape with `{ today, yesterday, week, month, allTime }` (still keyed by `userId`, still polls every 60s when `isOnline`).
-- Keep `formatHours` helper as-is.
-
-### UI (`src/pages/Profile.tsx`)
-- Replace the single "Total Working Hours" row with a card that contains 5 small rows, each showing label + formatted hours:
-  - Today
-  - Yesterday
-  - This Week
-  - This Month
-  - All Time
-- Keep the existing helper text ("Counting while online / Resumes when you go online") at the top of the card.
-- Use existing semantic tokens (`bg-muted/50`, `text-foreground`, `text-muted-foreground`, `tabular-nums`). No new colors.
-
----
-
-## 2. Scrollable Recent Deliveries (Earnings page)
-
-Files: `src/components/earnings/RecentEarningsList.tsx` and `src/components/earnings/SubscriptionDeliveryList.tsx`.
-
-- Wrap the list rows (the inner `space-y-3` container that maps over visible items) in a scrollable region:
-  - `max-h-[420px] overflow-y-auto pr-1` so a native scrollbar appears once the list exceeds the cap.
-  - Keep the existing **View More / View Less** buttons just below the scroll area (outside the scroll container) so they remain reachable.
-- No changes to data fetching, pagination logic, or the empty state.
-- Applies to all three Earnings tabs because:
-  - "All" tab uses `RecentEarningsList` directly.
-  - "Regular" tab uses `RecentEarningsList` via `EarningsTabContent`.
-  - "Subscription" tab uses `SubscriptionDeliveryList` via `SubscriptionTabContent`.
-
----
-
-## Technical details
-
-- New migration adds the breakdown RPC with `SECURITY DEFINER`, `STABLE`, `SET search_path = public`, granted to `authenticated, anon` (matching the existing `get_agent_total_hours` function). No table or RLS changes.
-- `useWorkHours` switches from `.rpc('get_agent_total_hours')` (number) to `.rpc('get_agent_work_hours_breakdown')` (json). Keeps the same `delivery_agents.id` resolution path from `agent_id = userId`.
-- After the migration is approved, `src/integrations/supabase/types.ts` is regenerated automatically — no manual edit.
-- Scrollbar uses Tailwind utilities only; no custom scrollbar styling needed.
+No backend or business-logic changes.
