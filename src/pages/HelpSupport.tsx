@@ -256,7 +256,7 @@ export default function HelpSupport() {
                       <p className="text-sm text-muted-foreground">+91-7842343642</p>
                       <p className="text-xs text-muted-foreground">Available 24/7</p>
                     </div>
-                  </a>
+                  </button>
 
                   <a 
                     href="mailto:helpzaago@gmail.com" 
