@@ -10,6 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrderDetails } from '@/services/orderDetails';
 import { openGoogleMapsAddress, openGoogleMapsCoordinates } from '@/utils/maps';
+import { callPhone } from '@/utils/phone';
 import { useAuthStore } from '@/store/auth';
 import { useState } from 'react';
 import { 
