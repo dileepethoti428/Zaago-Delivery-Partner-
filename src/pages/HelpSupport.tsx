@@ -243,9 +243,10 @@ export default function HelpSupport() {
                   <CardTitle className="text-lg">Other Ways to Reach Us</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <a 
-                    href="tel:+917842343642" 
-                    className="flex items-center gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => callPhone('+917842343642')}
+                    className="w-full text-left flex items-center gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
                   >
                     <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                       <Phone className="h-5 w-5 text-primary" />

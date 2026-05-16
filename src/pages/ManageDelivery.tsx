@@ -79,7 +79,7 @@ export default function ManageDelivery() {
   }, [order?.status]);
 
   const handleCall = (phone: string) => {
-    window.location.href = `tel:${phone}`;
+    callPhone(phone);
   };
 
   const handleMarkAsDelivered = async () => {
