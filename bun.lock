@@ -6,7 +6,7 @@
       "name": "vite_react_shadcn_ts",
       "dependencies": {
         "@capacitor/app": "^6.0.3",
-        "@capacitor/app-launcher": "^8.0.1",
+        "@capacitor/app-launcher": "^6.0.0",
         "@capacitor/browser": "^6.0.0",
         "@capacitor/core": "^6.2.1",
         "@capacitor/preferences": "^6.0.0",
@@ -106,7 +106,7 @@
 
     "@capacitor/app": ["@capacitor/app@6.0.3", "", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-4gFUCbcVz0N/YYN32OBFerocWXslIv3Nc90gDiRsBkJc0plwK6kIUT6PKa5WtW2kfhteUeCVXQbvArH2fH+0Ug=="],
 
-    "@capacitor/app-launcher": ["@capacitor/app-launcher@8.0.1", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/app-launcher/-/app-launcher-8.0.1.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-23D8zi74sn7kxvISix8qYwgqdxGJN+4NImcNGvHen98LB1zb4eZfkJvFvp7pwntxGw4OjIE7yuf4wbzZxQHpog=="],
+    "@capacitor/app-launcher": ["@capacitor/app-launcher@6.0.4", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/app-launcher/-/app-launcher-6.0.4.tgz", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-tOQOChwul08k8y8RFx/OzMhNoxN8tbuc7CdWTwr3D9gffKCnyQ6vYhNZztDt1kIAo/qTJG5n8etDhV3XiQutHA=="],
 
     "@capacitor/browser": ["@capacitor/browser@6.0.6", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/browser/-/browser-6.0.6.tgz", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-VHOPkMR+JqKz2mf5YncnnOWvFdVYFTTLnPW+JRcsP1LobXmA0gtchER35PQ7XXqXU16eeacrehX+XF+rC6wmQw=="],
 
