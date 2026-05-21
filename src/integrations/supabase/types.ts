@@ -5956,6 +5956,10 @@ export type Database = {
       }
       sellers: {
         Row: {
+          aadhaar_back_url: string | null
+          aadhaar_front_url: string | null
+          aadhaar_number: string | null
+          aadhaar_verified: boolean
           account_holder_name: string | null
           account_number: string | null
           account_type: string | null
@@ -5974,20 +5978,32 @@ export type Database = {
           deletion_requested_by: string | null
           device_info: Json | null
           email: string
+          fssai_license_url: string | null
+          fssai_number: string | null
+          fssai_verified: boolean
           id: string
           ifsc_code: string | null
           is_bank_verified: boolean | null
           is_deactivated: boolean | null
           is_deleted: boolean | null
+          kyc_status: string | null
+          kyc_submitted_at: string | null
+          kyc_verified_at: string | null
+          kyc_verified_by: string | null
           latitude: number | null
           location_id: number | null
           location_verified: boolean | null
           longitude: number | null
           name: string
           onesignal_player_id: string | null
+          pan_image_url: string | null
+          pan_number: string | null
+          pan_verified: boolean
           phone: string | null
           privacy_accepted_at: string | null
           rejection_reason: string | null
+          selfie_url: string | null
+          selfie_verified: boolean
           status: string
           terms_accepted_at: string | null
           terms_version: string | null
@@ -5995,6 +6011,10 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          aadhaar_back_url?: string | null
+          aadhaar_front_url?: string | null
+          aadhaar_number?: string | null
+          aadhaar_verified?: boolean
           account_holder_name?: string | null
           account_number?: string | null
           account_type?: string | null
@@ -6013,20 +6033,32 @@ export type Database = {
           deletion_requested_by?: string | null
           device_info?: Json | null
           email: string
+          fssai_license_url?: string | null
+          fssai_number?: string | null
+          fssai_verified?: boolean
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
           is_deactivated?: boolean | null
           is_deleted?: boolean | null
+          kyc_status?: string | null
+          kyc_submitted_at?: string | null
+          kyc_verified_at?: string | null
+          kyc_verified_by?: string | null
           latitude?: number | null
           location_id?: number | null
           location_verified?: boolean | null
           longitude?: number | null
           name: string
           onesignal_player_id?: string | null
+          pan_image_url?: string | null
+          pan_number?: string | null
+          pan_verified?: boolean
           phone?: string | null
           privacy_accepted_at?: string | null
           rejection_reason?: string | null
+          selfie_url?: string | null
+          selfie_verified?: boolean
           status?: string
           terms_accepted_at?: string | null
           terms_version?: string | null
@@ -6034,6 +6066,10 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          aadhaar_back_url?: string | null
+          aadhaar_front_url?: string | null
+          aadhaar_number?: string | null
+          aadhaar_verified?: boolean
           account_holder_name?: string | null
           account_number?: string | null
           account_type?: string | null
@@ -6052,20 +6088,32 @@ export type Database = {
           deletion_requested_by?: string | null
           device_info?: Json | null
           email?: string
+          fssai_license_url?: string | null
+          fssai_number?: string | null
+          fssai_verified?: boolean
           id?: string
           ifsc_code?: string | null
           is_bank_verified?: boolean | null
           is_deactivated?: boolean | null
           is_deleted?: boolean | null
+          kyc_status?: string | null
+          kyc_submitted_at?: string | null
+          kyc_verified_at?: string | null
+          kyc_verified_by?: string | null
           latitude?: number | null
           location_id?: number | null
           location_verified?: boolean | null
           longitude?: number | null
           name?: string
           onesignal_player_id?: string | null
+          pan_image_url?: string | null
+          pan_number?: string | null
+          pan_verified?: boolean
           phone?: string | null
           privacy_accepted_at?: string | null
           rejection_reason?: string | null
+          selfie_url?: string | null
+          selfie_verified?: boolean
           status?: string
           terms_accepted_at?: string | null
           terms_version?: string | null
