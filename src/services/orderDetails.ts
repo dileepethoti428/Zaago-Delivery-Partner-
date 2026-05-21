@@ -266,7 +266,9 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
       parsedAddress = JSON.parse(parsedAddress);
     } catch {
       parsedAddress = { full_address: parsedAddress };
+    }
   }
+
 
   // Backfill missing product images from products table
   let items = (order.items as any[]) || [];
