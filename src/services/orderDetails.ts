@@ -188,6 +188,7 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
         name: product.name,
         price: product.price,
         quantity: dailyOrder.quantity,
+        image_url: (product as any).image_url || null,
       },
     ],
     special_instructions: subscription.special_instructions || undefined,
