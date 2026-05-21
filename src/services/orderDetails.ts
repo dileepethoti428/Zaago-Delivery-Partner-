@@ -269,6 +269,39 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
     }
   }
 
+
+  // Backfill missing product images from products table
+  let items = (order.items as any[]) || [];
+  try {
+    const missingIds = Array.from(new Set(
+      items
+        .filter((it) => !it?.image_url && !it?.image && !(Array.isArray(it?.images) && it.images[0]))
+        .map((it) => it?.id || it?.product_id)
+        .filter(Boolean)
+    ));
+    if (missingIds.length > 0) {
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, image_url, images')
+        .in('id', missingIds);
+      if (products && products.length > 0) {
+        const imgMap = new Map<string, string>();
+        products.forEach((p: any) => {
+          const url = p.image_url || (Array.isArray(p.images) ? p.images[0] : null);
+          if (url) imgMap.set(p.id, url);
+        });
+        items = items.map((it) => {
+          if (it?.image_url || it?.image) return it;
+          const pid = it?.id || it?.product_id;
+          const url = pid ? imgMap.get(pid) : undefined;
+          return url ? { ...it, image_url: url } : it;
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Product image enrichment failed:', e);
+  }
+
   return {
     id: order.id,
     status: order.status || 'pending',
@@ -276,7 +309,7 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
     payment_status: order.payment_status || 'pending',
     total_amount: order.total || 0,
     delivery_charge: order.delivery_payout || 0,
-    items: (order.items as any[]) || [],
+    items,
     special_instructions: order.special_instructions || undefined,
     delivery_otp: order.delivery_otp || undefined,
     otp_expiry: order.otp_expires_at || undefined,
