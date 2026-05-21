@@ -416,15 +416,49 @@ export default function ManageDelivery() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {order.items.map((item: any, index: number) => (
-                <div key={index} className="flex justify-between items-center p-2 bg-muted/50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">{item.product_name || item.name}</p>
-                    <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
-                  </div>
-                  <p className="font-medium">₹{item.price * item.quantity}</p>
-                </div>
-              ))}
+              {(() => {
+                const items = order.items || [];
+                const visible = showAllItems ? items : items.slice(0, 5);
+                return (
+                  <>
+                    {visible.map((item: any, index: number) => {
+                      const img = item.image_url || (Array.isArray(item.images) ? item.images[0] : null);
+                      return (
+                        <div key={index} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
+                          {img ? (
+                            <img
+                              src={img}
+                              alt={item.product_name || item.name || 'Product'}
+                              loading="lazy"
+                              className="h-12 w-12 rounded-lg object-cover bg-muted flex-shrink-0"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                              <Package className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{item.product_name || item.name}</p>
+                            <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                          </div>
+                          <p className="font-medium">₹{item.price * item.quantity}</p>
+                        </div>
+                      );
+                    })}
+                    {items.length > 5 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full rounded-lg"
+                        onClick={() => setShowAllItems((v) => !v)}
+                      >
+                        {showAllItems ? 'Show less' : `View more (${items.length - 5})`}
+                      </Button>
+                    )}
+                  </>
+                );
+              })()}
               <div className="pt-3 border-t-2">
                 <div className="flex justify-between items-center">
                   <span className="font-bold">Total Amount</span>
