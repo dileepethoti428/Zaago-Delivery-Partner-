@@ -125,6 +125,7 @@ async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {
       id,
       name,
       price,
+      image_url,
       seller_id,
       seller_name,
       seller_business
