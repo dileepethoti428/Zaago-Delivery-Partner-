@@ -299,7 +299,6 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
   } catch (e) {
     console.warn('Product image enrichment failed:', e);
   }
-  }
 
   return {
     id: order.id,
@@ -308,7 +307,7 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
     payment_status: order.payment_status || 'pending',
     total_amount: order.total || 0,
     delivery_charge: order.delivery_payout || 0,
-    items: (order.items as any[]) || [],
+    items,
     special_instructions: order.special_instructions || undefined,
     delivery_otp: order.delivery_otp || undefined,
     otp_expiry: order.otp_expires_at || undefined,
