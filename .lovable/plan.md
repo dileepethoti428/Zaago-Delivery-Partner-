@@ -1,21 +1,34 @@
-# Fix: thumbnails missing because items JSON lacks image_url
+## Problem
 
-## Root cause
-Looked at real DB rows for this order. Many `orders.items[]` entries store only `id`, `name`, `price`, `quantity`, `seller_id` — no `image_url` field at all (e.g. Ghee/Vegetables/Paneer/Cow Milk/Curd/Buffalo Milk). That's why the UI shows the Package placeholder. Newer orders do include `image_url`, but older ones don't. The UI code is correct; the data is incomplete.
+The Recent Regular Order Deliveries card shows `₹8/km` even after you change the per-km rate in the `complete_delivery_zepto` SQL function. The DB already stores the correct `rate_per_km` inside `payout_breakdown`, but the UI overrides/falls back to a hardcoded `8`.
 
-## Fix
-Enrich items in `src/services/orderDetails.ts → getRegularOrderDetails` by backfilling missing `image_url` from the `products` table.
+Two places in `src/components/earnings/RecentEarningsList.tsx` cause this:
 
-Steps:
-1. After loading `order`, collect product ids from items that are missing both `image_url` and `image` (use `item.id` or `item.product_id`).
-2. If any ids exist, run a single `supabase.from('products').select('id, image_url, images').in('id', ids)` query.
-3. Build an id → image_url map (prefer `image_url`, fall back to `images[0]`).
-4. Map over `items` and inject `image_url` where missing. Leave other fields untouched.
-5. Tolerate failures silently — if the products fetch errors, just return items as-is (UI already falls back to the Package placeholder).
+1. **Hardcoded fallback in the label** (line ~163):
+   ```ts
+   Distance Pay ({...} × ₹{earning.payout_breakdown.rate_per_km ?? 8}/km)
+   ```
+   `?? 8` masks any DB value when missing or different.
 
-No UI changes needed. The `ManageDelivery.tsx` thumbnail block already handles `image_url`, `images[0]`, and placeholder fallback.
+2. **`getValidatedPayout` + `REGULAR_ORDER_PRICING` constant** (lines 10–40):
+   Uses hardcoded `BASE_PAY: 10` and `DISTANCE_RATE: 8` to "auto-correct" the total. If your real DB rate is now (say) ₹10/km, this helper will incorrectly flag the row and recompute the total using ₹8.
 
-## Files to edit
-- `src/services/orderDetails.ts` — add the enrichment step inside `getRegularOrderDetails` before returning.
+So the DB change *is* working — the UI is just lying on top of it.
 
-No DB schema, RPC, edge function, or new dependency changes.
+## Fix (frontend only, no DB or edge function changes)
+
+Edit `src/components/earnings/RecentEarningsList.tsx`:
+
+1. Remove the `REGULAR_ORDER_PRICING` constant and the entire `getValidatedPayout` helper. Trust the values returned by the backend (`payout_breakdown.base_pay`, `distance_pay`, `rate_per_km`, and `actual_payout` / `expected_payout`).
+2. Render the rate directly from the breakdown without a hardcoded fallback:
+   ```tsx
+   Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km}/km)
+   ```
+   If `rate_per_km` is ever missing, derive it from `distance_pay / distance_km` instead of defaulting to `8`.
+3. Replace `validatedPayout` usages with `earning.actual_payout ?? earning.expected_payout`.
+4. Remove the `AlertTriangle` "auto-corrected" indicator (no longer needed) and its import if unused.
+
+## Out of scope
+
+- No changes to `complete_delivery_zepto`, edge functions, or `supabase/functions/_shared/regularOrderPricing.ts` (only used server-side).
+- No changes to other earnings components.
