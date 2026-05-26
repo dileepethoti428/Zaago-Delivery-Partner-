@@ -31,7 +31,7 @@ BEGIN
   
   -- Validate inputs
   IF p_order_id IS NULL OR p_agent_id IS NULL THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Invalid order_id or agent_id');
+    RETURN jsonb_build_object('success', vfalse, 'error', 'Invalid order_id or agent_id');
   END IF;
   
   -- STEP 1: Early duplicate check - check if delivery already completed
