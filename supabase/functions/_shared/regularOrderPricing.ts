@@ -10,7 +10,7 @@
 
 export const REGULAR_ORDER_PRICING = {
   BASE_PAY: 10, // Fixed ₹10 per order
-  DISTANCE_RATE: 58, // ₹8 per km
+  DISTANCE_RATE: 8, // ₹8 per km
 
   /**
    * Calculate payout for a regular order
