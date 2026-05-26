@@ -2,40 +2,25 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Receipt, Package, RefreshCw, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Receipt, Package, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency, EarningRecord } from '@/services/earnings';
 import { formatDateTimeIST } from '@/utils/dateUtils';
 import { motion } from 'framer-motion';
 
-// Zepto/Blinkit pricing constants for validation
-const REGULAR_ORDER_PRICING = {
-  BASE_PAY: 10,
-  DISTANCE_RATE: 8,
-};
-
-// Validate and fix payout if breakdown exists but total is wrong
-function getValidatedPayout(earning: EarningRecord): { payout: number; isFixed: boolean } {
-  const breakdown = earning.payout_breakdown;
-  const actualPayout = earning.actual_payout ?? earning.expected_payout;
-
-  if (breakdown && typeof breakdown.base_pay === 'number' && typeof breakdown.distance_pay === 'number') {
-    const calculatedTotal = breakdown.base_pay + breakdown.distance_pay;
-    if (Math.abs(calculatedTotal - actualPayout) > 0.5) {
-      return { payout: calculatedTotal, isFixed: true };
-    }
-    return { payout: actualPayout, isFixed: false };
+// Derive the per-km rate from the server-provided breakdown.
+// The rate is set in the DB function complete_delivery_zepto — never hardcode it here.
+function getRatePerKm(breakdown: NonNullable<EarningRecord['payout_breakdown']>): number | null {
+  if (typeof breakdown.rate_per_km === 'number' && breakdown.rate_per_km > 0) {
+    return breakdown.rate_per_km;
   }
-
-  if (earning.distance_km && earning.distance_km > 0 && earning.order_type === 'regular') {
-    const roundedDistance = Math.round(earning.distance_km * 10) / 10;
-    const distancePay = roundedDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE;
-    const calculatedTotal = REGULAR_ORDER_PRICING.BASE_PAY + distancePay;
-    if (Math.abs(calculatedTotal - actualPayout) > 0.5) {
-      return { payout: calculatedTotal, isFixed: true };
-    }
+  if (breakdown.distance_km && breakdown.distance_km > 0 && typeof breakdown.distance_pay === 'number') {
+    return Math.round((breakdown.distance_pay / breakdown.distance_km) * 10) / 10;
   }
+  return null;
+}
 
-  return { payout: actualPayout, isFixed: false };
+function getActualPayout(earning: EarningRecord): number {
+  return earning.actual_payout ?? earning.expected_payout;
 }
 
 interface RecentEarningsListProps {
