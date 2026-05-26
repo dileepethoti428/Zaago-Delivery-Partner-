@@ -100,9 +100,8 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
         <CardContent className="p-0">
           <div className="max-h-[420px] overflow-y-auto px-6 py-4 space-y-3">
             {visibleEarnings.map((earning, index) => {
-              const { payout: validatedPayout, isFixed } = earning.order_type === 'regular'
-                ? getValidatedPayout(earning)
-                : { payout: 0, isFixed: false };
+              const validatedPayout = earning.order_type === 'regular' ? getActualPayout(earning) : 0;
+              const ratePerKm = earning.payout_breakdown ? getRatePerKm(earning.payout_breakdown) : null;
 
               return (
                 <div
@@ -123,11 +122,6 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                       </span>
                       {getStatusBadge(earning.status)}
                       {getTypeLabel(earning)}
-                      {isFixed && (
-                        <span title="Payout auto-corrected using formula">
-                          <AlertTriangle className="h-3 w-3 text-amber-500" />
-                        </span>
-                      )}
                     </div>
                     {earning.status === 'pending' && (
                       <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -149,7 +143,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                       {earning.payout_breakdown.distance_pay > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km ?? 8}/km)
+                            Distance Pay ({earning.payout_breakdown.distance_km} km{ratePerKm !== null ? ` × ₹${ratePerKm}/km` : ''})
                           </span>
                           <span className="font-medium">₹{earning.payout_breakdown.distance_pay}</span>
                         </div>
@@ -168,6 +162,7 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
                       </div>
                     </div>
                   )}
+
 
                   {(type !== 'regular' || earning.order_type !== 'regular') && (
                     <div className="flex items-center justify-between mt-2">
