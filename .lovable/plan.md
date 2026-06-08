@@ -1,34 +1,26 @@
-## Problem
+## Root cause
 
-The Recent Regular Order Deliveries card shows `₹8/km` even after you change the per-km rate in the `complete_delivery_zepto` SQL function. The DB already stores the correct `rate_per_km` inside `payout_breakdown`, but the UI overrides/falls back to a hardcoded `8`.
+The deployed `update-agent-location` edge function is an older version that requires `agent_id`, `latitude`, `longitude` in the request body and throws at line 22 when `agent_id` is missing.
 
-Two places in `src/components/earnings/RecentEarningsList.tsx` cause this:
+The current repo version (`supabase/functions/update-agent-location/index.ts`) is the "v5 never-fail" implementation that:
+- Extracts the user from the JWT (`Authorization` header)
+- Looks up the agent in `delivery_agents` by `agent_id = userId`
+- Only needs `latitude` and `longitude` in the body
 
-1. **Hardcoded fallback in the label** (line ~163):
-   ```ts
-   Distance Pay ({...} × ₹{earning.payout_breakdown.rate_per_km ?? 8}/km)
-   ```
-   `?? 8` masks any DB value when missing or different.
+All frontend callers (Profile "Save Location", `useLocationSyncController`, `postAuthInit`) already match the repo version and send only `latitude`/`longitude`/`accuracy`. The deployed function has simply drifted from the repo and was never re-deployed.
 
-2. **`getValidatedPayout` + `REGULAR_ORDER_PRICING` constant** (lines 10–40):
-   Uses hardcoded `BASE_PAY: 10` and `DISTANCE_RATE: 8` to "auto-correct" the total. If your real DB rate is now (say) ₹10/km, this helper will incorrectly flag the row and recompute the total using ₹8.
+Confirming this is the issue: the same error appears in logs every ~15 seconds (the LocationSync watcher interval), not only when the user clicks Save Location.
 
-So the DB change *is* working — the UI is just lying on top of it.
+## Fix
 
-## Fix (frontend only, no DB or edge function changes)
+Force a redeploy of the `update-agent-location` edge function so the deployed version matches the repo's v5 code. No code changes are required.
 
-Edit `src/components/earnings/RecentEarningsList.tsx`:
+Steps (build mode):
+1. Run `supabase--deploy_edge_functions` for `["update-agent-location"]`.
+2. Click "Save Location" on the Profile page and verify success toast.
+3. Confirm via `supabase--edge_function_logs` that the "Missing required fields" error no longer appears and is replaced by the v5 success logs (`✓ Authenticated user`, `✓ delivery_agents updated`).
 
-1. Remove the `REGULAR_ORDER_PRICING` constant and the entire `getValidatedPayout` helper. Trust the values returned by the backend (`payout_breakdown.base_pay`, `distance_pay`, `rate_per_km`, and `actual_payout` / `expected_payout`).
-2. Render the rate directly from the breakdown without a hardcoded fallback:
-   ```tsx
-   Distance Pay ({earning.payout_breakdown.distance_km} km × ₹{earning.payout_breakdown.rate_per_km}/km)
-   ```
-   If `rate_per_km` is ever missing, derive it from `distance_pay / distance_km` instead of defaulting to `8`.
-3. Replace `validatedPayout` usages with `earning.actual_payout ?? earning.expected_payout`.
-4. Remove the `AlertTriangle` "auto-corrected" indicator (no longer needed) and its import if unused.
+## What we will NOT change
 
-## Out of scope
-
-- No changes to `complete_delivery_zepto`, edge functions, or `supabase/functions/_shared/regularOrderPricing.ts` (only used server-side).
-- No changes to other earnings components.
+- No edits to `Profile.tsx`, `useLocationSyncController.ts`, `postAuthInit.ts`, or `supabase/functions/update-agent-location/index.ts` — the repo is already correct.
+- No DB / RLS changes.

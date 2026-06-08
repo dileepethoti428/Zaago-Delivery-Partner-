@@ -9400,10 +9400,12 @@ export type Database = {
           aadhar_number: string
           aadhar_verified: boolean
           agent_id: string
+          alternate_phone: string
           created_at: string
           dl_number: string
           dl_verified: boolean
           email: string
+          emergency_contact: string
           full_name: string
           is_active: boolean
           phone: string
