@@ -309,7 +309,12 @@ export default function Login() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" placeholder="••••••••" className="rounded-xl" {...loginForm.register("password")} />
+                  <div className="relative">
+                    <Input id="password" type={showLoginPassword ? "text" : "password"} placeholder="••••••••" className="rounded-xl pr-10" {...loginForm.register("password")} />
+                    <button type="button" onClick={() => setShowLoginPassword((v) => !v)} aria-label={showLoginPassword ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   {loginForm.formState.errors.password && <p className="text-sm text-destructive">{loginForm.formState.errors.password.message}</p>}
                 </div>
                 <Button type="submit" className="w-full rounded-xl h-11 text-base font-medium" disabled={loading}>
