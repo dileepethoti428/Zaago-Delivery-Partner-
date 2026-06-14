@@ -336,12 +336,22 @@ export default function Login() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
-                  <Input id="signup-password" type="password" placeholder="••••••••" className="rounded-xl" {...signupForm.register("password")} />
+                  <div className="relative">
+                    <Input id="signup-password" type={showSignupPassword ? "text" : "password"} placeholder="••••••••" className="rounded-xl pr-10" {...signupForm.register("password")} />
+                    <button type="button" onClick={() => setShowSignupPassword((v) => !v)} aria-label={showSignupPassword ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   {signupForm.formState.errors.password && <p className="text-sm text-destructive">{signupForm.formState.errors.password.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirm Password</Label>
-                  <Input id="confirm-password" type="password" placeholder="••••••••" className="rounded-xl" {...signupForm.register("confirmPassword")} />
+                  <div className="relative">
+                    <Input id="confirm-password" type={showConfirmPassword ? "text" : "password"} placeholder="••••••••" className="rounded-xl pr-10" {...signupForm.register("confirmPassword")} />
+                    <button type="button" onClick={() => setShowConfirmPassword((v) => !v)} aria-label={showConfirmPassword ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   {signupForm.formState.errors.confirmPassword && <p className="text-sm text-destructive">{signupForm.formState.errors.confirmPassword.message}</p>}
                 </div>
                 <Button type="submit" className="w-full rounded-xl h-11 text-base font-medium" disabled={loading}>
