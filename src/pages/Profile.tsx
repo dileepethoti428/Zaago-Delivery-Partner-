@@ -29,6 +29,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { checkLocationPermission } from '@/utils/checkLocationPermission';
 import { useQueryClient } from '@tanstack/react-query';
 import { useResumeGuard } from '@/hooks/useResumeGuard';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { buttonVariants } from '@/components/ui/button';
 
 export default function Profile() {
   const navigate = useNavigate();
