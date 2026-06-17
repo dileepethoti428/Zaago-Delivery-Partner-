@@ -825,6 +825,33 @@ export type Database = {
           },
         ]
       }
+      app_config: {
+        Row: {
+          id: string
+          is_active: boolean
+          splash_image_url: string | null
+          splash_subtitle: string | null
+          splash_title: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean
+          splash_image_url?: string | null
+          splash_subtitle?: string | null
+          splash_title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          is_active?: boolean
+          splash_image_url?: string | null
+          splash_subtitle?: string | null
+          splash_title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_notifications: {
         Row: {
           created_at: string
