@@ -29,6 +29,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { checkLocationPermission } from '@/utils/checkLocationPermission';
 import { useQueryClient } from '@tanstack/react-query';
 import { useResumeGuard } from '@/hooks/useResumeGuard';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { buttonVariants } from '@/components/ui/button';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -349,14 +361,34 @@ export default function Profile() {
           </CardContent>
         </Card>
 
-        <Button
-          variant="destructive"
-          className="w-full rounded-xl h-12 gap-2"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-5 w-5" />
-          Logout
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              className="w-full rounded-xl h-12 gap-2"
+            >
+              <LogOut className="h-5 w-5" />
+              Logout
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Sign Out?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to sign out?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleLogout}
+                className={buttonVariants({ variant: 'destructive' })}
+              >
+                Sign Out
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </div>
 
