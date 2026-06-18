@@ -9034,6 +9034,10 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_agent_distance_breakdown: {
+        Args: { agent_uuid: string }
+        Returns: Json
+      }
       get_agent_distance_stats: { Args: { agent_uuid: string }; Returns: Json }
       get_agent_earnings_series: {
         Args: { target_agent_id: string; time_period?: string }
