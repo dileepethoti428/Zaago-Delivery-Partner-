@@ -23,6 +23,7 @@ import { Browser } from '@capacitor/browser';
 import { motion as m } from 'framer-motion';
 import { useProfileById } from '@/hooks/useProfile';
 import { useWorkHours, formatHours } from '@/hooks/useWorkHours';
+import { useDistanceCovered, formatKm } from '@/hooks/useDistanceCovered';
 import { useAgentSettings } from '@/hooks/useSettings';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,6 +58,9 @@ export default function Profile() {
   const { data: workHours } = useWorkHours(user?.id, isOnline);
   const hoursBreakdown = workHours ?? { today: 0, yesterday: 0, week: 0, month: 0, allTime: 0 };
   const [periodFilter, setPeriodFilter] = useState<'today'|'yesterday'|'week'|'month'|'allTime'>('today');
+  const { data: distanceData } = useDistanceCovered(user?.id, isOnline);
+  const distanceBreakdown = distanceData ?? { today: 0, yesterday: 0, week: 0, month: 0, allTime: 0 };
+  const [distancePeriod, setDistancePeriod] = useState<'today'|'yesterday'|'week'|'month'|'allTime'>('today');
 
   // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
   useResumeGuard(() => {
@@ -311,6 +315,45 @@ export default function Profile() {
                 </span>
                 <span className="font-semibold text-foreground tabular-nums">
                   {formatHours(hoursBreakdown[periodFilter])}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 p-4 bg-muted/50 rounded-xl">
+              <div className="flex items-center gap-3 mb-3">
+                <MapPin className="h-5 w-5 text-primary" />
+                <div className="flex-1">
+                  <p className="font-medium">Total Distance Covered</p>
+                  <p className="text-xs text-muted-foreground">
+                    Based on completed deliveries
+                  </p>
+                </div>
+              </div>
+              <Select
+                value={distancePeriod}
+                onValueChange={(v) => setDistancePeriod(v as typeof distancePeriod)}
+              >
+                <SelectTrigger className="h-9 text-sm bg-background/60 mb-3">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="yesterday">Yesterday</SelectItem>
+                  <SelectItem value="week">Last 7 Days</SelectItem>
+                  <SelectItem value="month">Last 30 Days</SelectItem>
+                  <SelectItem value="allTime">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {distancePeriod === 'today' && 'Today'}
+                  {distancePeriod === 'yesterday' && 'Yesterday'}
+                  {distancePeriod === 'week' && 'Last 7 Days'}
+                  {distancePeriod === 'month' && 'Last 30 Days'}
+                  {distancePeriod === 'allTime' && 'All Time'}
+                </span>
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatKm(distanceBreakdown[distancePeriod])}
                 </span>
               </div>
             </div>
