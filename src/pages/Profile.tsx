@@ -23,6 +23,7 @@ import { Browser } from '@capacitor/browser';
 import { motion as m } from 'framer-motion';
 import { useProfileById } from '@/hooks/useProfile';
 import { useWorkHours, formatHours } from '@/hooks/useWorkHours';
+import { useDistanceCovered, formatKm } from '@/hooks/useDistanceCovered';
 import { useAgentSettings } from '@/hooks/useSettings';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,6 +58,9 @@ export default function Profile() {
   const { data: workHours } = useWorkHours(user?.id, isOnline);
   const hoursBreakdown = workHours ?? { today: 0, yesterday: 0, week: 0, month: 0, allTime: 0 };
   const [periodFilter, setPeriodFilter] = useState<'today'|'yesterday'|'week'|'month'|'allTime'>('today');
+  const { data: distanceData } = useDistanceCovered(user?.id, isOnline);
+  const distanceBreakdown = distanceData ?? { today: 0, yesterday: 0, week: 0, month: 0, allTime: 0 };
+  const [distancePeriod, setDistancePeriod] = useState<'today'|'yesterday'|'week'|'month'|'allTime'>('today');
 
   // Reset stuck loading states when returning from external apps (Maps, Phone, etc.)
   useResumeGuard(() => {
