@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_mfa_factors: {
+        Row: {
+          created_at: string
+          enabled_at: string | null
+          secret_encrypted: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled_at?: string | null
+          secret_encrypted: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled_at?: string | null
+          secret_encrypted?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_mfa_recovery_codes: {
+        Row: {
+          code_hash: string
+          created_at: string
+          id: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          id?: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          id?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_notifications: {
         Row: {
           created_at: string
@@ -2701,6 +2749,33 @@ export type Database = {
           },
         ]
       }
+      email_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          subject: string
+          template_key: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          subject: string
+          template_key: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          subject?: string
+          template_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       faqs: {
         Row: {
           answer: string
@@ -3176,6 +3251,33 @@ export type Database = {
         }
         Relationships: []
       }
+      login_lockouts: {
+        Row: {
+          created_at: string
+          failed_count: number
+          last_failed_at: string
+          locked_until: string | null
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          failed_count?: number
+          last_failed_at?: string
+          locked_until?: string | null
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          failed_count?: number
+          last_failed_at?: string
+          locked_until?: string | null
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       marketing_content: {
         Row: {
           created_at: string | null
@@ -3218,6 +3320,33 @@ export type Database = {
           start_time?: string | null
           title?: string | null
           type?: string | null
+        }
+        Relationships: []
+      }
+      mfa_verification_attempts: {
+        Row: {
+          app_key: string
+          attempted_at: string
+          context: string
+          id: string
+          success: boolean
+          user_id: string
+        }
+        Insert: {
+          app_key?: string
+          attempted_at?: string
+          context: string
+          id?: string
+          success?: boolean
+          user_id: string
+        }
+        Update: {
+          app_key?: string
+          attempted_at?: string
+          context?: string
+          id?: string
+          success?: boolean
+          user_id?: string
         }
         Relationships: []
       }
@@ -4067,6 +4196,8 @@ export type Database = {
           cancellation_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
+          coupon_code: string | null
+          coupon_id: string | null
           created_at: string
           customer_name: string | null
           customer_phone: string | null
@@ -4132,6 +4263,8 @@ export type Database = {
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          coupon_code?: string | null
+          coupon_id?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -4197,6 +4330,8 @@ export type Database = {
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          coupon_code?: string | null
+          coupon_id?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -4263,6 +4398,20 @@ export type Database = {
             columns: ["assigned_agent_id"]
             isOneToOne: false
             referencedRelation: "delivery_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "user_eligible_coupons"
             referencedColumns: ["id"]
           },
           {
@@ -4950,6 +5099,30 @@ export type Database = {
           },
         ]
       }
+      product_realtime_events: {
+        Row: {
+          event_type: string
+          id: string
+          is_visible: boolean
+          occurred_at: string
+          product_id: string
+        }
+        Insert: {
+          event_type: string
+          id?: string
+          is_visible?: boolean
+          occurred_at?: string
+          product_id: string
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          is_visible?: boolean
+          occurred_at?: string
+          product_id?: string
+        }
+        Relationships: []
+      }
       product_stock_notifications: {
         Row: {
           created_at: string
@@ -5120,6 +5293,7 @@ export type Database = {
           images: string[] | null
           ingredients: string[] | null
           is_active: boolean
+          is_subscribable: boolean
           low_stock_notified: boolean | null
           name: string
           nutritional_info: Json | null
@@ -5152,6 +5326,7 @@ export type Database = {
           images?: string[] | null
           ingredients?: string[] | null
           is_active?: boolean
+          is_subscribable?: boolean
           low_stock_notified?: boolean | null
           name: string
           nutritional_info?: Json | null
@@ -5184,6 +5359,7 @@ export type Database = {
           images?: string[] | null
           ingredients?: string[] | null
           is_active?: boolean
+          is_subscribable?: boolean
           low_stock_notified?: boolean | null
           name?: string
           nutritional_info?: Json | null
@@ -7409,6 +7585,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_recovery_codes: {
+        Row: {
+          app_key: string
+          code_hash: string
+          created_at: string
+          id: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          app_key?: string
+          code_hash: string
+          created_at?: string
+          id?: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          app_key?: string
+          code_hash?: string
+          created_at?: string
+          id?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -8597,6 +8800,14 @@ export type Database = {
         }
         Returns: string
       }
+      check_mfa_lockout: {
+        Args: { _context: string }
+        Returns: {
+          fails: number
+          locked: boolean
+          seconds_remaining: number
+        }[]
+      }
       check_rate_limit: {
         Args: {
           action_type: string
@@ -8774,6 +8985,7 @@ export type Database = {
         }
         Returns: Json
       }
+      consume_recovery_code: { Args: { _code_hash: string }; Returns: boolean }
       create_admin_notification_for_agent: {
         Args: {
           admin_id?: string
@@ -9372,6 +9584,15 @@ export type Database = {
           product_name: string
           product_price: number
           purchase_count: number
+        }[]
+      }
+      get_mfa_status: {
+        Args: never
+        Returns: {
+          enabled: boolean
+          factor_created_at: string
+          factor_id: string
+          recovery_codes_remaining: number
         }[]
       }
       get_next_delivery_date_v3: {
@@ -10124,6 +10345,10 @@ export type Database = {
       }
       reassign_absent_agents_today: { Args: never; Returns: undefined }
       reconcile_completed_orders: { Args: never; Returns: Json }
+      record_mfa_attempt: {
+        Args: { _context: string; _success: boolean }
+        Returns: string
+      }
       refresh_todays_best_deals: { Args: never; Returns: undefined }
       regenerate_all_product_tags: {
         Args: never
