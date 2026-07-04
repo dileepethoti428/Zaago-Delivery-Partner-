@@ -93,24 +93,17 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
   console.log('✅ Fetched available orders:', data.orders?.length || 0);
 
   const orders = (data.orders || []).map((o: any) => {
-    // Format drop address from address object
-    const dropAddress = (() => {
-      if (o.address?.addressLine1) {
-        const parts = [
-          o.address.addressLine1,
-          o.address.addressLine2,
-          o.address.city,
-          o.address.pincode
-        ].filter(Boolean);
-        return parts.join(', ');
-      }
-      return o.address?.full_address || 'Delivery location';
-    })();
+    const dropAddress = formatAddress(o.address) || 'Delivery location';
+    const pickupAddress =
+      formatAddress(o.pickup_address) ||
+      formatAddress(o?.seller?.address_line) ||
+      formatAddress(o?.seller) ||
+      'Pickup location';
 
     // Use ONLY backend-calculated values - NO local calculations
     return {
       id: o.id,
-      pickup: o.pickup_address || o?.seller?.address_line || 'Pickup location',
+      pickup: pickupAddress,
       drop: dropAddress,
       pickupCoord: parsePoint(o.pickup_location || o?.seller?.coordinates) || null,
       // Use backend ETA, fallback to reasonable default only if missing
