@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { PaymentMethodDialog } from '@/components/delivery/PaymentMethodDialog';
 import { RazorpayQRDisplay } from '@/components/delivery/RazorpayQRDisplay';
+import { DeliveryOtpDialog } from '@/components/delivery/DeliveryOtpDialog';
 
 export default function ManageDelivery() {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +42,7 @@ export default function ManageDelivery() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   const [showAllItems, setShowAllItems] = useState(false);
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
 
   const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
 
@@ -86,7 +88,16 @@ export default function ManageDelivery() {
 
   const handleMarkAsDelivered = async () => {
     if (!order) return;
-    if (order.payment_status === 'paid' || order.payment_method?.toUpperCase() === 'ONLINE') {
+    const isPaidOnline = order.payment_status === 'paid' || order.payment_method?.toUpperCase() === 'ONLINE';
+    const hasSlot = !!(order.delivery_time_slot && typeof order.delivery_time_slot === 'string' && order.delivery_time_slot.includes('-'));
+    const isRegular = !order.subscription_id && !hasSlot;
+
+    if (isPaidOnline && isRegular) {
+      // Regular prepaid → show optional OTP verification
+      setShowOtpDialog(true);
+      return;
+    }
+    if (isPaidOnline) {
       toast({ title: 'Product delivered successfully' });
       await completeDelivery('ONLINE');
       return;
@@ -583,6 +594,26 @@ export default function ManageDelivery() {
           orderAmount={qrData?.amount ?? effectiveTotal}
           onPaymentComplete={handleQRPaymentComplete}
         />
+
+        {order && profile?.user_id && (
+          <DeliveryOtpDialog
+            open={showOtpDialog}
+            onClose={() => setShowOtpDialog(false)}
+            orderId={order.id}
+            agentId={profile.user_id}
+            onVerified={() => {
+              setShowOtpDialog(false);
+              queryClient.removeQueries({ queryKey: ['orders'] });
+              queryClient.removeQueries({ queryKey: ['assigned-orders'] });
+              queryClient.removeQueries({ queryKey: ['order-details', order.id] });
+              navigate('/my-deliveries', { replace: true });
+            }}
+            onSkip={() => {
+              setShowOtpDialog(false);
+              completeDelivery('ONLINE');
+            }}
+          />
+        )}
       </AppShell>
     </motion.div>
   );
