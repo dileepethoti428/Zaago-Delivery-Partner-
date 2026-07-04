@@ -42,6 +42,7 @@ export default function ManageDelivery() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   const [showAllItems, setShowAllItems] = useState(false);
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
 
   const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
 
