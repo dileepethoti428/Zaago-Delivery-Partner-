@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
 import { PaymentMethodDialog } from '@/components/delivery/PaymentMethodDialog';
 import { RazorpayQRDisplay } from '@/components/delivery/RazorpayQRDisplay';
+import { DeliveryOtpDialog } from '@/components/delivery/DeliveryOtpDialog';
 
 export default function ManageDelivery() {
   const { id } = useParams<{ id: string }>();
