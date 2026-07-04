@@ -19,6 +19,7 @@ import { useAuthStore } from '@/store/auth';
 import { useProfile } from '@/hooks/useProfile';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
+import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import LocationChip from '@/components/location/LocationChip';
 import type { GeoPoint } from '@/utils/coords';
