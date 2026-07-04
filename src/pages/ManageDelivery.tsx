@@ -594,6 +594,26 @@ export default function ManageDelivery() {
           orderAmount={qrData?.amount ?? effectiveTotal}
           onPaymentComplete={handleQRPaymentComplete}
         />
+
+        {order && profile?.user_id && (
+          <DeliveryOtpDialog
+            open={showOtpDialog}
+            onClose={() => setShowOtpDialog(false)}
+            orderId={order.id}
+            agentId={profile.user_id}
+            onVerified={() => {
+              setShowOtpDialog(false);
+              queryClient.removeQueries({ queryKey: ['orders'] });
+              queryClient.removeQueries({ queryKey: ['assigned-orders'] });
+              queryClient.removeQueries({ queryKey: ['order-details', order.id] });
+              navigate('/my-deliveries', { replace: true });
+            }}
+            onSkip={() => {
+              setShowOtpDialog(false);
+              completeDelivery('ONLINE');
+            }}
+          />
+        )}
       </AppShell>
     </motion.div>
   );
