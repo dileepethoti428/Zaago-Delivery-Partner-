@@ -1,50 +1,47 @@
 ## Root cause
 
-In `supabase/functions/get-available-orders/index.ts`, the "10 km" rule is broken in two places:
+There's a **key mismatch** between where the agent's location is written and where the 10km filter reads it from.
 
-### 1. No-location fallback returns ALL orders unfiltered (lines 748–804)
+`supabase/functions/update-agent-location/index.ts` (line 269) writes into `driver_locations` using the **internal PK** as the key:
 ```
-if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
-  // 10km filter runs
-} else {
-  // ❌ Every open order is returned with a default 2.5km payout
-}
+agent_id: agent.id  // = delivery_agents.id (internal UUID)
 ```
-If the agent's location isn't fresh in `delivery_agents` (permission denied, background killed, first login, stale timestamp), the function skips the radius filter entirely and returns every open order in the system. This is the main reason partners see orders that are clearly far away.
+It also updates `delivery_agents.latitude / longitude / last_location_updated_at` for the same row.
 
-### 2. The "≤10 km" check uses the wrong distance (line 693–696)
+But `supabase/functions/get-available-orders/index.ts` (lines 197–204) queries `driver_locations` by the **auth UUID** that the client passes in:
 ```
-const totalDistance = (agentToShopDistance || 0) + (shopToCustomerDistance || 0);
-if (totalDistance <= 10) { ...include... }
+.eq('agent_id', agent_id)   // ← this is the auth uid, not delivery_agents.id
 ```
-`totalDistance` is `agent→shop + shop→customer` (the whole trip). The intended rule per project memory is a **10 km visibility radius**, i.e. the pickup/customer must be within 10 km of the agent — not the sum of both legs. A shop 2 km from the agent with a customer 9 km from the shop (11 km total) is correctly nearby but gets excluded, while other edge combinations slip through inconsistently. The check needs to be on the per-leg distance from the agent, not the sum.
 
-Also, when `pickupLocation` is missing (line 679–691), the function silently substitutes `agent→customer` as both legs, which then doubles the number and can wrongly exclude nearby orders.
+The two `agent_id` values are different UUIDs for the same partner (per project memory: "delivery_agents.id (Internal PK) vs agent_id (Auth UUID)"). So the query returns no row → `recorded_at=none` → `hasFreshAgentLocation=false` → the function returns `orders: []`.
+
+That's why you see zero orders in *both* Nearby and Other, and the warning
+`No fresh agent location for 17578977-... (recorded_at=none). Returning 0 available orders until location syncs.`
+
+The saved locations for seller and customer are fine — they're never read for the visibility gate. Only the *agent's* location lookup is broken.
 
 ## Fix
 
-Edit **only** `supabase/functions/get-available-orders/index.ts`:
+Edit **only** `supabase/functions/get-available-orders/index.ts`. No DB migration, no frontend change, no change to the payout formula.
 
-1. **Remove the unfiltered fallback.** If `agentLocation` is missing/stale (no lat/lng, or `location_updated_at` older than ~10 min), return an empty list with a log line — never dump every open order. Partners without a fresh location should see nothing until location syncs.
+1. **Read the agent's location from the correct source.**
+   In the existing `delivery_agents` lookup (currently `select('id')`), also select `latitude, longitude, last_location_updated_at`. `delivery_agents` is the source of truth for the partner's current location and is written on every sync.
 
-2. **Change the radius check to per-leg, not total.** Replace the `totalDistance <= 10` gate with:
-   - `agentToShopDistance <= 10` **AND** `agentToCustomerDistance <= 10`
-   
-   Compute `agentToCustomerDistance` via `calculateRoadDistance(agent, customer)` alongside the existing two legs. Keep `shopToCustomerDistance` for payout only — it must not affect visibility.
+2. **Fallback to `driver_locations` using the internal PK.** If `delivery_agents` has no lat/lng yet (edge case: first sync failed halfway), query `driver_locations` with `.eq('agent_id', deliveryAgentId)` (the internal PK), not the auth UUID. This is the key that `update-agent-location` actually writes.
 
-3. **Keep the "skip if road distance cannot be calculated" behavior.** No Haversine fallback, no coordinate-less orders — that part is already correct.
+3. **Freshness check unchanged** — still ≤10 min via `last_location_updated_at` (or `recorded_at` from the fallback). If stale/missing, keep returning `orders: []` with a clearer log line that shows both sources tried.
 
-4. **Keep payout logic unchanged** (`₹10 + ₹8×shopToCustomer`, per memory). Only visibility changes.
+4. **Everything else stays as it is** — per-leg 10 km gate (`agent→shop ≤ 10` AND `agent→customer ≤ 10`), road-distance calculation, payout formula (`₹10 + ₹8×shop→customer`), assigned/subscription flows.
 
 ## Verification
 
-- Log line after filter should read: `After 10km filtering: N orders remain (agent@lat,lng, all legs ≤10km)`.
-- Call the edge function as an agent with a known location, confirm every returned order has `agent_to_shop_distance ≤ 10` and `agent_to_customer_distance ≤ 10`.
-- Call it as an agent whose `location_updated_at` is stale — should return `orders: []` instead of the full open pool.
-- Spot check in DB: pick one returned order, compute Mapbox distance from agent → customer, confirm ≤10 km.
+- Deploy `get-available-orders` and call it as the affected agent (`17578977-5353-46fd-8ba0-9d2c058adcec`). Log should read `Resolved agent location from delivery_agents (age=Xs)` and `After 10km filtering (per-leg, road distance): N orders remain`.
+- Spot-check DB: `select latitude, longitude, last_location_updated_at from delivery_agents where agent_id = '17578977-…'` — should show a recent timestamp.
+- Every returned order must have `agent_to_shop_distance ≤ 10` and `agent_to_customer_distance ≤ 10`. Orders outside 10 km on either leg should NOT appear in either "Nearby" or "Other" on Home.
+- Force-stale by setting `last_location_updated_at` to 30 min ago → function should return `orders: []` (not the full pool).
 
 ## Not changed
 
-- Frontend (`useOrders`, `OrderCard`, home page) — no UI logic change; it already just displays what the backend returns.
-- Payout formula and `accept-order` distance mapping.
-- Assigned/subscription order flows — the 10 km rule applies only to the "other/available orders" pool on Home, which is exactly this function.
+- Client-side location sync (`useLocationSyncController`, `update-agent-location`) — writes are correct, the bug is only on the read side.
+- Seller / customer coordinates and their tables.
+- `useOrders`, `OrderCard`, Home layout, sorting, or the "Other Orders" section — with the filter fixed, that section will naturally be empty when nothing is out-of-range.
