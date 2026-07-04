@@ -44,6 +44,7 @@ export default function Home() {
 
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Stable location key — prevents distance recalc on every minor GPS tick
   const locationKey = lastKnown ? `${lastKnown.lat.toFixed(4)}-${lastKnown.lng.toFixed(4)}` : 'none';
