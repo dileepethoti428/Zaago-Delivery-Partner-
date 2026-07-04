@@ -19,6 +19,7 @@ import { useAuthStore } from '@/store/auth';
 import { useProfile } from '@/hooks/useProfile';
 import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
+import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import LocationChip from '@/components/location/LocationChip';
 import type { GeoPoint } from '@/utils/coords';
@@ -43,6 +44,7 @@ export default function Home() {
 
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'distance' | 'newest' | 'oldest'>('distance');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Stable location key — prevents distance recalc on every minor GPS tick
   const locationKey = lastKnown ? `${lastKnown.lat.toFixed(4)}-${lastKnown.lng.toFixed(4)}` : 'none';
@@ -123,11 +125,13 @@ export default function Home() {
   const handleRefresh = useCallback(async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
+    setIsRefreshing(true);
     try {
       await useLocationStore.getState().refreshLocation();
       await refetch();
     } finally {
       refreshingRef.current = false;
+      setIsRefreshing(false);
     }
   }, [refetch]);
 
@@ -209,8 +213,9 @@ export default function Home() {
               size="sm" 
               className="gap-2 rounded-xl"
               onClick={handleRefresh}
+              disabled={isRefreshing}
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
               Refresh
             </Button>
           </div>
