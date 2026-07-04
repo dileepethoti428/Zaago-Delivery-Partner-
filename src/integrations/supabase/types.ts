@@ -2447,6 +2447,30 @@ export type Database = {
           },
         ]
       }
+      delivery_otp_attempts: {
+        Row: {
+          attempted_at: string
+          id: string
+          order_id: string | null
+          success: boolean
+          user_id: string
+        }
+        Insert: {
+          attempted_at?: string
+          id?: string
+          order_id?: string | null
+          success: boolean
+          user_id: string
+        }
+        Update: {
+          attempted_at?: string
+          id?: string
+          order_id?: string | null
+          success?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       delivery_routes: {
         Row: {
           agent_id: string
