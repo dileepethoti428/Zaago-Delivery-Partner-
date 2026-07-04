@@ -88,7 +88,16 @@ export default function ManageDelivery() {
 
   const handleMarkAsDelivered = async () => {
     if (!order) return;
-    if (order.payment_status === 'paid' || order.payment_method?.toUpperCase() === 'ONLINE') {
+    const isPaidOnline = order.payment_status === 'paid' || order.payment_method?.toUpperCase() === 'ONLINE';
+    const hasSlot = !!(order.delivery_time_slot && typeof order.delivery_time_slot === 'string' && order.delivery_time_slot.includes('-'));
+    const isRegular = !order.subscription_id && !hasSlot;
+
+    if (isPaidOnline && isRegular) {
+      // Regular prepaid → show optional OTP verification
+      setShowOtpDialog(true);
+      return;
+    }
+    if (isPaidOnline) {
       toast({ title: 'Product delivered successfully' });
       await completeDelivery('ONLINE');
       return;
