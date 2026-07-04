@@ -521,8 +521,9 @@ serve(async (req) => {
     
     filteredOrders = ordersWithSlots;
 
-    // Apply 10km radius filtering if agent location is available
-    if (agentLocation && agentLocation.latitude && agentLocation.longitude) {
+    // Apply 10km radius filtering. Require a FRESH agent location; otherwise
+    // return no orders (never dump the full open pool without a radius check).
+    if (hasFreshAgentLocation) {
       console.log('Applying 10km radius filter for agent location:', {
         lat: agentLocation.latitude,
         lng: agentLocation.longitude
