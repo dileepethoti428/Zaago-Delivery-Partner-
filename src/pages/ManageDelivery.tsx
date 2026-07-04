@@ -43,6 +43,14 @@ export default function ManageDelivery() {
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   const [showAllItems, setShowAllItems] = useState(false);
   const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const handleOtpVerified = async () => {
+    setShowOtpDialog(false);
+    await completeDelivery('ONLINE');
+  };
+  const handleOtpSkip = async () => {
+    setShowOtpDialog(false);
+    await completeDelivery('ONLINE');
+  };
 
   const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
 
@@ -601,17 +609,8 @@ export default function ManageDelivery() {
             onClose={() => setShowOtpDialog(false)}
             orderId={order.id}
             agentId={profile.user_id}
-            onVerified={() => {
-              setShowOtpDialog(false);
-              queryClient.removeQueries({ queryKey: ['orders'] });
-              queryClient.removeQueries({ queryKey: ['assigned-orders'] });
-              queryClient.removeQueries({ queryKey: ['order-details', order.id] });
-              navigate('/my-deliveries', { replace: true });
-            }}
-            onSkip={() => {
-              setShowOtpDialog(false);
-              completeDelivery('ONLINE');
-            }}
+            onVerified={handleOtpVerified}
+            onSkip={handleOtpSkip}
           />
         )}
       </AppShell>

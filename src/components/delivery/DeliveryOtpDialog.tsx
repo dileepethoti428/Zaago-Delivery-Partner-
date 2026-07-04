@@ -12,7 +12,7 @@ type Props = {
   onClose: () => void;
   orderId: string;
   agentId: string;
-  onVerified: () => void;   // RPC already marked delivered — refresh caches & navigate
+  onVerified: () => void;   // OTP verified — caller runs completeDelivery('ONLINE') for history/earnings/payout
   onSkip: () => void;       // fall through to completeDelivery('ONLINE')
 };
 
