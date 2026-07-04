@@ -609,17 +609,8 @@ export default function ManageDelivery() {
             onClose={() => setShowOtpDialog(false)}
             orderId={order.id}
             agentId={profile.user_id}
-            onVerified={() => {
-              setShowOtpDialog(false);
-              queryClient.removeQueries({ queryKey: ['orders'] });
-              queryClient.removeQueries({ queryKey: ['assigned-orders'] });
-              queryClient.removeQueries({ queryKey: ['order-details', order.id] });
-              navigate('/my-deliveries', { replace: true });
-            }}
-            onSkip={() => {
-              setShowOtpDialog(false);
-              completeDelivery('ONLINE');
-            }}
+            onVerified={handleOtpVerified}
+            onSkip={handleOtpSkip}
           />
         )}
       </AppShell>
