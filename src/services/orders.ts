@@ -53,6 +53,19 @@ function coerceStatus(s?: string | null): ZaagoOrder['status'] {
   return v;
 }
 
+/** Coerce an address (string or object with any of the known shapes) to a display string. */
+function formatAddress(a: any): string {
+  if (!a) return '';
+  if (typeof a === 'string') return a;
+  const parts = [
+    a.addressLine1, a.addressLine2, // legacy
+    a.address,                       // current
+    a.city, a.state, a.pincode,
+  ].filter(Boolean);
+  if (parts.length) return parts.join(', ');
+  return a.full_address || a.address_line || '';
+}
+
 /**
  * Fetch available orders from backend
  * ALL distance and payout calculations are done on backend
@@ -80,24 +93,17 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
   console.log('✅ Fetched available orders:', data.orders?.length || 0);
 
   const orders = (data.orders || []).map((o: any) => {
-    // Format drop address from address object
-    const dropAddress = (() => {
-      if (o.address?.addressLine1) {
-        const parts = [
-          o.address.addressLine1,
-          o.address.addressLine2,
-          o.address.city,
-          o.address.pincode
-        ].filter(Boolean);
-        return parts.join(', ');
-      }
-      return o.address?.full_address || 'Delivery location';
-    })();
+    const dropAddress = formatAddress(o.address) || 'Delivery location';
+    const pickupAddress =
+      formatAddress(o.pickup_address) ||
+      formatAddress(o?.seller?.address_line) ||
+      formatAddress(o?.seller) ||
+      'Pickup location';
 
     // Use ONLY backend-calculated values - NO local calculations
     return {
       id: o.id,
-      pickup: o.pickup_address || o?.seller?.address_line || 'Pickup location',
+      pickup: pickupAddress,
       drop: dropAddress,
       pickupCoord: parsePoint(o.pickup_location || o?.seller?.coordinates) || null,
       // Use backend ETA, fallback to reasonable default only if missing
@@ -155,10 +161,9 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
     // Map to ZaagoOrder format - use stored distance_km, don't calculate
     return ((data ?? []) as any[]).map(row => {
       const pickupCoord = parsePoint(row.pickup_location) ?? null;
-      const dropAddress = 
-        row.address?.full_address ?? 
-        row.address?.addressLine1 ?? 
-        row?.delivery_addresses?.full_address ?? 
+      const dropAddress =
+        formatAddress(row.address) ||
+        formatAddress(row?.delivery_addresses) ||
         'Delivery address';
 
       // Use stored distance from database - DO NOT calculate
@@ -166,7 +171,7 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
       
       return {
         id: row.id,
-        pickup: row.pickup_address ?? 'Pickup',
+        pickup: formatAddress(row.pickup_address) || 'Pickup',
         drop: dropAddress,
         pickupCoord,
         // Use stored distance for ETA estimate (2 min per km)
@@ -189,8 +194,8 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
     
     return ((data ?? []) as any[]).map(row => ({
       id: row.id,
-      pickup: row.pickup_address ?? 'Pickup',
-      drop: row.address?.full_address ?? 'Delivery address',
+      pickup: formatAddress(row.pickup_address) || 'Pickup',
+      drop: formatAddress(row.address) || 'Delivery address',
       pickupCoord: parsePoint(row.pickup_location) ?? null,
       etaMin: row.distance_km ? Math.ceil(row.distance_km * 2) : 15,
       payout: 0, // Must come from backend

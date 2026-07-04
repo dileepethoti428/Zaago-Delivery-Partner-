@@ -1,47 +1,48 @@
 ## Root cause
 
-There's a **key mismatch** between where the agent's location is written and where the 10km filter reads it from.
+React error #31 = trying to render a plain object as a text node. The decoded keys are `{city, state, address, pincode}` — that's an address JSON coming back from the backend.
 
-`supabase/functions/update-agent-location/index.ts` (line 269) writes into `driver_locations` using the **internal PK** as the key:
+In `src/services/orders.ts` (line 100), the mapper does:
 ```
-agent_id: agent.id  // = delivery_agents.id (internal UUID)
+pickup: o.pickup_address || o?.seller?.address_line || 'Pickup location',
 ```
-It also updates `delivery_agents.latitude / longitude / last_location_updated_at` for the same row.
+`o.pickup_address` is the object `{ address, city, state, pincode }`, so `pickup` is stored as an object and then `OrderCard.tsx` line 177 renders `{order.pickup}` — React blows up.
 
-But `supabase/functions/get-available-orders/index.ts` (lines 197–204) queries `driver_locations` by the **auth UUID** that the client passes in:
-```
-.eq('agent_id', agent_id)   // ← this is the auth uid, not delivery_agents.id
-```
+The drop-address branch has the same class of bug: it looks for `o.address.addressLine1`, but the actual shape is `{ address, city, state, pincode }`, so the "if" is false, and it falls back to `o.address?.full_address || 'Delivery location'`. That happens to be a string, so `drop` doesn't crash — but it also never shows the real address.
 
-The two `agent_id` values are different UUIDs for the same partner (per project memory: "delivery_agents.id (Internal PK) vs agent_id (Auth UUID)"). So the query returns no row → `recorded_at=none` → `hasFreshAgentLocation=false` → the function returns `orders: []`.
-
-That's why you see zero orders in *both* Nearby and Other, and the warning
-`No fresh agent location for 17578977-... (recorded_at=none). Returning 0 available orders until location syncs.`
-
-The saved locations for seller and customer are fine — they're never read for the visibility gate. Only the *agent's* location lookup is broken.
+This started surfacing now because with the 10km fix, the endpoint is finally returning orders, so `OrderCard` actually renders these fields.
 
 ## Fix
 
-Edit **only** `supabase/functions/get-available-orders/index.ts`. No DB migration, no frontend change, no change to the payout formula.
+Edit **only** `src/services/orders.ts` inside `fetchAvailableOrders` (and mirror the same helper in `fetchOpenOrders` if it builds pickup/drop the same way — I'll check when implementing). Introduce a small local helper:
 
-1. **Read the agent's location from the correct source.**
-   In the existing `delivery_agents` lookup (currently `select('id')`), also select `latitude, longitude, last_location_updated_at`. `delivery_agents` is the source of truth for the partner's current location and is written on every sync.
+```ts
+const formatAddress = (a: any): string => {
+  if (!a) return '';
+  if (typeof a === 'string') return a;
+  const parts = [
+    a.addressLine1, a.addressLine2,   // legacy shape
+    a.address,                         // current shape
+    a.city, a.state, a.pincode,
+  ].filter(Boolean);
+  return parts.length ? parts.join(', ') : (a.full_address || '');
+};
+```
 
-2. **Fallback to `driver_locations` using the internal PK.** If `delivery_agents` has no lat/lng yet (edge case: first sync failed halfway), query `driver_locations` with `.eq('agent_id', deliveryAgentId)` (the internal PK), not the auth UUID. This is the key that `update-agent-location` actually writes.
+Then:
+- `pickup: formatAddress(o.pickup_address) || o?.seller?.address_line || 'Pickup location'`
+- `drop: formatAddress(o.address) || 'Delivery location'`
 
-3. **Freshness check unchanged** — still ≤10 min via `last_location_updated_at` (or `recorded_at` from the fallback). If stale/missing, keep returning `orders: []` with a clearer log line that shows both sources tried.
-
-4. **Everything else stays as it is** — per-leg 10 km gate (`agent→shop ≤ 10` AND `agent→customer ≤ 10`), road-distance calculation, payout formula (`₹10 + ₹8×shop→customer`), assigned/subscription flows.
+Nothing else changes — no UI, no backend, no other hook.
 
 ## Verification
 
-- Deploy `get-available-orders` and call it as the affected agent (`17578977-5353-46fd-8ba0-9d2c058adcec`). Log should read `Resolved agent location from delivery_agents (age=Xs)` and `After 10km filtering (per-leg, road distance): N orders remain`.
-- Spot-check DB: `select latitude, longitude, last_location_updated_at from delivery_agents where agent_id = '17578977-…'` — should show a recent timestamp.
-- Every returned order must have `agent_to_shop_distance ≤ 10` and `agent_to_customer_distance ≤ 10`. Orders outside 10 km on either leg should NOT appear in either "Nearby" or "Other" on Home.
-- Force-stale by setting `last_location_updated_at` to 30 min ago → function should return `orders: []` (not the full pool).
+- Home renders order cards again with real "Pickup" and "Drop" address strings, no error boundary.
+- Console has no more Minified React error #31.
+- Backend responses still control payout/distance/etc. as before.
 
 ## Not changed
 
-- Client-side location sync (`useLocationSyncController`, `update-agent-location`) — writes are correct, the bug is only on the read side.
-- Seller / customer coordinates and their tables.
-- `useOrders`, `OrderCard`, Home layout, sorting, or the "Other Orders" section — with the filter fixed, that section will naturally be empty when nothing is out-of-range.
+- Edge function `get-available-orders` (the 10km fix stays as-is).
+- `OrderCard` component.
+- Assigned/subscription order services (they format address independently).
