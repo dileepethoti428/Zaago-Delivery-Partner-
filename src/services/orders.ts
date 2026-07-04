@@ -161,10 +161,9 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
     // Map to ZaagoOrder format - use stored distance_km, don't calculate
     return ((data ?? []) as any[]).map(row => {
       const pickupCoord = parsePoint(row.pickup_location) ?? null;
-      const dropAddress = 
-        row.address?.full_address ?? 
-        row.address?.addressLine1 ?? 
-        row?.delivery_addresses?.full_address ?? 
+      const dropAddress =
+        formatAddress(row.address) ||
+        formatAddress(row?.delivery_addresses) ||
         'Delivery address';
 
       // Use stored distance from database - DO NOT calculate
@@ -172,7 +171,7 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
       
       return {
         id: row.id,
-        pickup: row.pickup_address ?? 'Pickup',
+        pickup: formatAddress(row.pickup_address) || 'Pickup',
         drop: dropAddress,
         pickupCoord,
         // Use stored distance for ETA estimate (2 min per km)
