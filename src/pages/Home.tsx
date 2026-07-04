@@ -125,11 +125,13 @@ export default function Home() {
   const handleRefresh = useCallback(async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
+    setIsRefreshing(true);
     try {
       await useLocationStore.getState().refreshLocation();
       await refetch();
     } finally {
       refreshingRef.current = false;
+      setIsRefreshing(false);
     }
   }, [refetch]);
 
