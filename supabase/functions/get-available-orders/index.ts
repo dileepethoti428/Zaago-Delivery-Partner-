@@ -169,10 +169,11 @@ serve(async (req) => {
       );
     }
 
-    // Resolve agent's primary key from delivery_agents table
+    // Resolve agent's primary key + current location from delivery_agents
+    // (delivery_agents is the source of truth; update-agent-location writes lat/lng here on every sync)
     const { data: agentData, error: agentError } = await supabase
       .from('delivery_agents')
-      .select('id')
+      .select('id, latitude, longitude, last_location_updated_at')
       .eq('agent_id', agent_id)
       .single();
 
@@ -193,27 +194,49 @@ serve(async (req) => {
     const deliveryAgentId = agentData.id;
     console.log('Resolved delivery agent ID:', deliveryAgentId);
 
-    // Get agent's current location
-    const { data: agentLocation, error: locationError } = await supabase
-      .from('driver_locations')
-      .select('latitude, longitude, recorded_at')
-      .eq('agent_id', agent_id)
-      .eq('is_active', true)
-      .order('recorded_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const LOCATION_MAX_AGE_MS = 10 * 60 * 1000;
 
-    if (locationError) {
-      console.warn('Failed to get agent location:', locationError);
+    // Primary source: delivery_agents row (written on every location sync)
+    let agentLocation: { latitude: number; longitude: number; recorded_at: string } | null = null;
+    let agentLocationSource: string = 'none';
+
+    if (agentData.latitude != null && agentData.longitude != null && agentData.last_location_updated_at) {
+      agentLocation = {
+        latitude: Number(agentData.latitude),
+        longitude: Number(agentData.longitude),
+        recorded_at: agentData.last_location_updated_at,
+      };
+      agentLocationSource = 'delivery_agents';
+    } else {
+      // Fallback: driver_locations keyed by INTERNAL PK (delivery_agents.id),
+      // NOT the auth uid — that's how update-agent-location writes it.
+      const { data: dlRow, error: dlErr } = await supabase
+        .from('driver_locations')
+        .select('latitude, longitude, recorded_at')
+        .eq('agent_id', deliveryAgentId)
+        .eq('is_active', true)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (dlErr) console.warn('driver_locations fallback error:', dlErr);
+      if (dlRow?.latitude && dlRow?.longitude && dlRow?.recorded_at) {
+        agentLocation = {
+          latitude: Number(dlRow.latitude),
+          longitude: Number(dlRow.longitude),
+          recorded_at: dlRow.recorded_at,
+        };
+        agentLocationSource = 'driver_locations';
+      }
     }
 
-    // Enforce a fresh location: stale (> 10 min) is treated as no location.
-    const LOCATION_MAX_AGE_MS = 10 * 60 * 1000;
-    const hasFreshAgentLocation = !!(
-      agentLocation?.latitude &&
-      agentLocation?.longitude &&
-      agentLocation?.recorded_at &&
-      (Date.now() - new Date(agentLocation.recorded_at).getTime()) <= LOCATION_MAX_AGE_MS
+    const locationAgeMs = agentLocation
+      ? Date.now() - new Date(agentLocation.recorded_at).getTime()
+      : Infinity;
+    const hasFreshAgentLocation = !!agentLocation && locationAgeMs <= LOCATION_MAX_AGE_MS;
+
+    console.log(
+      `Agent location: source=${agentLocationSource}, fresh=${hasFreshAgentLocation}, ` +
+      `age=${Number.isFinite(locationAgeMs) ? Math.round(locationAgeMs / 1000) + 's' : 'n/a'}`
     );
 
     // STEP 1: Fetch ALL completed order IDs from delivery_history FIRST
