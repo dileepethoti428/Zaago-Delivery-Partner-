@@ -194,8 +194,8 @@ export async function fetchOpenOrders(): Promise<ZaagoOrder[]> {
     
     return ((data ?? []) as any[]).map(row => ({
       id: row.id,
-      pickup: row.pickup_address ?? 'Pickup',
-      drop: row.address?.full_address ?? 'Delivery address',
+      pickup: formatAddress(row.pickup_address) || 'Pickup',
+      drop: formatAddress(row.address) || 'Delivery address',
       pickupCoord: parsePoint(row.pickup_location) ?? null,
       etaMin: row.distance_km ? Math.ceil(row.distance_km * 2) : 15,
       payout: 0, // Must come from backend
