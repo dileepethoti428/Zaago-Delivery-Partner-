@@ -663,65 +663,77 @@ serve(async (req) => {
               }
             }
             
-            // Calculate ROAD distance using Mapbox (NO Haversine fallback)
+            // Calculate ROAD distance (NO Haversine fallback)
+            // We compute three legs:
+            //   agent→shop         (visibility gate)
+            //   agent→customer     (visibility gate)
+            //   shop→customer      (payout only)
             let shopToCustomerDistance: number | null = null;
             let agentToShopDistance: number | null = null;
-            
+            let agentToCustomerDistance: number | null = null;
+
+            // Always compute agent→customer for the radius check.
+            agentToCustomerDistance = await calculateRoadDistance(
+              { lat: agentLocation.latitude, lng: agentLocation.longitude },
+              { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
+            );
+
+            if (agentToCustomerDistance === null) {
+              console.warn(`⚠️ Order ${order.id} - Could not calculate agent→customer road distance, skipping`);
+              continue;
+            }
+
             if (pickupLocation) {
-              // Leg 1: Agent to pickup location (for filtering only)
               agentToShopDistance = await calculateRoadDistance(
                 { lat: agentLocation.latitude, lng: agentLocation.longitude },
                 { lat: pickupLocation.lat, lng: pickupLocation.lng }
               );
-              
-              // Leg 2: Pickup to customer location (for payout calculation)
+
               shopToCustomerDistance = await calculateRoadDistance(
                 { lat: pickupLocation.lat, lng: pickupLocation.lng },
                 { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
               );
-              
-              if (agentToShopDistance !== null && shopToCustomerDistance !== null) {
-                console.log(`✅ Order ${order.id} road distances - Agent→Shop: ${agentToShopDistance}km, Shop→Customer: ${shopToCustomerDistance}km`);
-              } else {
-                console.warn(`⚠️ Order ${order.id} - Could not calculate road distance, skipping`);
-                continue; // Skip orders where road distance cannot be calculated
-              }
-            } else {
-              // Direct distance to customer if no pickup location
-              shopToCustomerDistance = await calculateRoadDistance(
-                { lat: agentLocation.latitude, lng: agentLocation.longitude },
-                { lat: order.address.coordinates.lat, lng: order.address.coordinates.lng }
-              );
-              agentToShopDistance = shopToCustomerDistance;
-              
-              if (shopToCustomerDistance === null) {
-                console.warn(`⚠️ Order ${order.id} - Could not calculate road distance, skipping`);
+
+              if (agentToShopDistance === null || shopToCustomerDistance === null) {
+                console.warn(`⚠️ Order ${order.id} - Could not calculate shop road distances, skipping`);
                 continue;
               }
+
+              console.log(`✅ Order ${order.id} road distances - Agent→Shop: ${agentToShopDistance}km, Shop→Customer: ${shopToCustomerDistance}km, Agent→Customer: ${agentToCustomerDistance}km`);
+            } else {
+              // No pickup location — treat agent→customer as both the visibility
+              // gate and the payout distance. Do NOT synthesize a shop leg.
+              agentToShopDistance = agentToCustomerDistance;
+              shopToCustomerDistance = agentToCustomerDistance;
+              console.log(`✅ Order ${order.id} (no pickup) Agent→Customer: ${agentToCustomerDistance}km`);
             }
-            
-            const totalDistance = (agentToShopDistance || 0) + (shopToCustomerDistance || 0);
-            
-            // Include orders within 10km radius
-            if (totalDistance <= 10) {
-              // Minimum distance for payout
+
+            // ── 10 km VISIBILITY RULE ──
+            // Both legs from the agent (agent→shop AND agent→customer) must be
+            // within 10 km. Total trip distance is NOT the gate — it was the
+            // previous bug that let far-away orders through in some cases and
+            // excluded valid nearby orders in others.
+            const withinRadius =
+              (agentToShopDistance ?? Infinity) <= 10 &&
+              (agentToCustomerDistance ?? Infinity) <= 10;
+
+            if (withinRadius) {
               const payoutDistance = Math.max(0.1, shopToCustomerDistance || 0.1);
-              
-              // Calculate payout using Zepto/Blinkit formula: ₹10 base + ₹8/km
               const agentPayout = calculateAgentPayout(payoutDistance);
               const estimatedTime = Math.max(5, Math.ceil(payoutDistance * 2));
-              
-              console.log(`✅ Order ${order.id} - Distance: ${payoutDistance}km, Payout: ₹${agentPayout} (₹10 + ${payoutDistance}×₹8)`);
-              
+
+              console.log(`✅ Order ${order.id} INCLUDED - agent→shop=${agentToShopDistance}km, agent→customer=${agentToCustomerDistance}km, payoutDist=${payoutDistance}km, payout=₹${agentPayout}`);
+
               nearbyOrders.push({
                 ...order,
                 distance_km: payoutDistance,
                 agent_to_shop_distance: agentToShopDistance,
-                total_distance: totalDistance,
+                agent_to_customer_distance: agentToCustomerDistance,
+                total_distance: (agentToShopDistance || 0) + (shopToCustomerDistance || 0),
                 agent_payout: agentPayout,
                 estimated_delivery_time: estimatedTime,
                 backend_calculated: true,
-                road_distance: true, // Flag indicating this is road distance, not Haversine
+                road_distance: true,
                 pickup_location: pickupLocation,
                 pickup_address: pickupAddress,
                 pickup_status: 'pending',
@@ -732,7 +744,6 @@ serve(async (req) => {
                 delivery_time_slot: properTimeSlot || order.delivery_time_slot,
                 original_created_at: order.created_at,
                 immediate_timing_config: immediateTimingConfig,
-                // Include payout breakdown for transparency
                 payout_breakdown: {
                   base_pay: REGULAR_ORDER_PRICING.BASE_PAY,
                   distance_pay: Math.round((payoutDistance * REGULAR_ORDER_PRICING.DISTANCE_RATE) * 10) / 10,
@@ -741,7 +752,7 @@ serve(async (req) => {
                 }
               });
             } else {
-              console.log(`❌ Order ${order.id} too far: ${totalDistance}km > 10km`);
+              console.log(`❌ Order ${order.id} outside 10km radius — agent→shop=${agentToShopDistance}km, agent→customer=${agentToCustomerDistance}km`);
             }
           } catch (distanceError) {
             console.error(`Failed to calculate distance for order ${order.id}:`, distanceError);
