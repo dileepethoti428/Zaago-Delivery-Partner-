@@ -196,7 +196,7 @@ serve(async (req) => {
     // Get agent's current location
     const { data: agentLocation, error: locationError } = await supabase
       .from('driver_locations')
-      .select('latitude, longitude')
+      .select('latitude, longitude, recorded_at')
       .eq('agent_id', agent_id)
       .eq('is_active', true)
       .order('recorded_at', { ascending: false })
@@ -206,6 +206,15 @@ serve(async (req) => {
     if (locationError) {
       console.warn('Failed to get agent location:', locationError);
     }
+
+    // Enforce a fresh location: stale (> 10 min) is treated as no location.
+    const LOCATION_MAX_AGE_MS = 10 * 60 * 1000;
+    const hasFreshAgentLocation = !!(
+      agentLocation?.latitude &&
+      agentLocation?.longitude &&
+      agentLocation?.recorded_at &&
+      (Date.now() - new Date(agentLocation.recorded_at).getTime()) <= LOCATION_MAX_AGE_MS
+    );
 
     // STEP 1: Fetch ALL completed order IDs from delivery_history FIRST
     // delivery_history is the SOURCE OF TRUTH for completion (Zepto pattern)
