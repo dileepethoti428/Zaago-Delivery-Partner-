@@ -213,8 +213,9 @@ export default function Home() {
               size="sm" 
               className="gap-2 rounded-xl"
               onClick={handleRefresh}
+              disabled={isRefreshing}
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
               Refresh
             </Button>
           </div>
