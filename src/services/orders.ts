@@ -53,6 +53,19 @@ function coerceStatus(s?: string | null): ZaagoOrder['status'] {
   return v;
 }
 
+/** Coerce an address (string or object with any of the known shapes) to a display string. */
+function formatAddress(a: any): string {
+  if (!a) return '';
+  if (typeof a === 'string') return a;
+  const parts = [
+    a.addressLine1, a.addressLine2, // legacy
+    a.address,                       // current
+    a.city, a.state, a.pincode,
+  ].filter(Boolean);
+  if (parts.length) return parts.join(', ');
+  return a.full_address || a.address_line || '';
+}
+
 /**
  * Fetch available orders from backend
  * ALL distance and payout calculations are done on backend
