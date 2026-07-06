@@ -168,12 +168,22 @@ export const OrderCard = memo(function OrderCard({
                 </div>
               )}
               
-              {!!order.itemCount && order.itemCount > 0 && (
-                <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-medium text-amber-800">
-                  <Package className="h-3.5 w-3.5" />
-                  {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
+              {(!!order.itemCount && order.itemCount > 0) || order.shopName ? (
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {!!order.itemCount && order.itemCount > 0 && (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-medium text-amber-800">
+                      <Package className="h-3.5 w-3.5" />
+                      {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
+                    </div>
+                  )}
+                  {order.shopName && (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-800 max-w-full">
+                      <Store className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{order.shopName}</span>
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
 
               <div className="space-y-2 text-sm">
 
