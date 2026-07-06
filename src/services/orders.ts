@@ -46,6 +46,7 @@ export type ZaagoOrder = {
   deliveryTimeSlot?: string;  // e.g., "10:00-12:00"
   deliveryDate?: string;      // e.g., "2025-02-04"
   itemCount?: number;
+  shopName?: string;
 };
 
 function coerceStatus(s?: string | null): ZaagoOrder['status'] {
@@ -126,6 +127,7 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
       deliveryTimeSlot: o.delivery_time_slot || undefined,
       deliveryDate: o.delivery_date || undefined,
       itemCount,
+      shopName: o.seller_name || undefined,
     };
   }) as ZaagoOrder[];
 
