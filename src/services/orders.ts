@@ -127,6 +127,7 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
       deliveryTimeSlot: o.delivery_time_slot || undefined,
       deliveryDate: o.delivery_date || undefined,
       itemCount,
+      shopName: o.seller_name || undefined,
     };
   }) as ZaagoOrder[];
 
