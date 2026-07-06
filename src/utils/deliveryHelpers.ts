@@ -1,3 +1,36 @@
+// Strip Google Plus Codes like "2G36+F7P" or "7J4C+2X Village" from address text
+const PLUS_CODE_RE = /\b[23456789CFGHJMPQRVWX]{4,}\+[23456789CFGHJMPQRVWX]{2,}\b/gi;
+
+export function stripPlusCode(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(PLUS_CODE_RE, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/,\s*,+/g, ',')
+    .replace(/^\s*,\s*/, '')
+    .replace(/\s*,\s*$/, '')
+    .trim();
+}
+
+// Remove repeated comma-separated fragments (case-insensitive), preserving first occurrence
+export function dedupeAddressParts(text: string): string {
+  if (!text) return text;
+  const seen = new Set<string>();
+  const parts = text.split(',').map((p) => p.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const p of parts) {
+    const k = p.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(p);
+  }
+  return out.join(', ');
+}
+
+export function cleanAddress(text: string): string {
+  return dedupeAddressParts(stripPlusCode(text || ''));
+}
+
 export function formatDeliveryAddress(delivery_address: any): string {
   // Handle strings directly
   if (typeof delivery_address === 'string') {
