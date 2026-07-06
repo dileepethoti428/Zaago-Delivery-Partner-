@@ -95,12 +95,17 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
   console.log('✅ Fetched available orders:', data.orders?.length || 0);
 
   const orders = (data.orders || []).map((o: any) => {
-    const dropAddress = formatAddress(o.address) || 'Delivery location';
+    const dropAddress = cleanAddress(formatAddress(o.address)) || 'Delivery location';
     const pickupAddress =
-      formatAddress(o.pickup_address) ||
-      formatAddress(o?.seller?.address_line) ||
-      formatAddress(o?.seller) ||
-      'Pickup location';
+      cleanAddress(
+        formatAddress(o.pickup_address) ||
+        formatAddress(o?.seller?.address_line) ||
+        formatAddress(o?.seller)
+      ) || 'Pickup location';
+
+    const itemCount = Array.isArray(o.items)
+      ? o.items.reduce((n: number, i: any) => n + (Number(i?.quantity) || 1), 0)
+      : 0;
 
     // Use ONLY backend-calculated values - NO local calculations
     return {
@@ -108,24 +113,19 @@ export async function fetchAvailableOrders(agentId: string): Promise<ZaagoOrder[
       pickup: pickupAddress,
       drop: dropAddress,
       pickupCoord: parsePoint(o.pickup_location || o?.seller?.coordinates) || null,
-      // Use backend ETA, fallback to reasonable default only if missing
       etaMin: typeof o.estimated_delivery_time === 'number' ? Math.round(o.estimated_delivery_time) : 15,
-      // Use backend payout - NEVER calculate locally
       payout: typeof o.agent_payout === 'number' ? Math.round(o.agent_payout) : 0,
       status: o.status || 'open',
-      // Use backend distance - NEVER calculate locally
       distanceKm: typeof o.distance_km === 'number' ? Number(o.distance_km.toFixed(1)) : undefined,
       customerName: o.customer_name || undefined,
       createdAt: o.created_at ? new Date(o.created_at).getTime() : Date.now(),
       agentId: o.agent_id ?? o.assigned_agent_id ?? null,
-      // Include payout breakdown for UI display
       payoutBreakdown: o.payout_breakdown || undefined,
-      // Flag indicating road distance was used (not Haversine)
       roadDistance: o.road_distance === true,
-      // Scheduled order fields
       deliveryType: o.calculated_delivery_type || o.delivery_type || 'immediate',
       deliveryTimeSlot: o.delivery_time_slot || undefined,
       deliveryDate: o.delivery_date || undefined,
+      itemCount,
     };
   }) as ZaagoOrder[];
 
