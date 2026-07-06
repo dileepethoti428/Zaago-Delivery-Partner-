@@ -14,6 +14,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   delivered: { label: 'Delivered', className: 'bg-gray-100 text-gray-700 hover:bg-gray-100' },
   canceled: { label: 'Canceled', className: 'bg-red-100 text-red-700 hover:bg-red-100' },
   cancelled: { label: 'Cancelled', className: 'bg-red-100 text-red-700 hover:bg-red-100' },
+  packed: { label: 'Packed', className: 'bg-green-100 text-green-700 hover:bg-green-100' },
 };
 
 export function StatusPill({ status }: StatusPillProps) {

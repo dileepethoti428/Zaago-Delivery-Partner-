@@ -99,7 +99,7 @@ export const OrderCard = memo(function OrderCard({
         />
         <Button
           size="sm"
-          variant="outline"
+          variant="destructive"
           className="w-full"
           disabled={isProcessing}
           onClick={handleReject}
