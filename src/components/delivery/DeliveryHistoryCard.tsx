@@ -14,7 +14,7 @@ import {
 import { formatDeliveryDate, formatDeliveryTime, type DeliveryHistoryItem } from '@/services/deliveryHistory';
 import { formatDeliveryAddress, formatPhoneNumber, parseDeliveryItems } from '@/utils/deliveryHelpers';
 import { callPhone } from '@/utils/phone';
-import { useNavigate } from 'react-router-dom';
+
 
 interface DeliveryHistoryCardProps {
   delivery: DeliveryHistoryItem;
@@ -26,7 +26,6 @@ export const DeliveryHistoryCard = memo(function DeliveryHistoryCard({
   index 
 }: DeliveryHistoryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const navigate = useNavigate();
 
   const addressString = useMemo(
     () => formatDeliveryAddress(delivery.delivery_address),
@@ -47,7 +46,7 @@ export const DeliveryHistoryCard = memo(function DeliveryHistoryCard({
     <AnimatedCard
       key={delivery.id}
       delay={index * 0.05}
-      onClick={() => !isExpanded && navigate(`/order/${delivery.order_id}`)}
+      onClick={() => setIsExpanded((prev) => !prev)}
     >
       <CardContent className="p-4">
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
