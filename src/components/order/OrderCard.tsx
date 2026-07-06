@@ -228,6 +228,7 @@ export const OrderCard = memo(function OrderCard({
     prevProps.order.deliveryType === nextProps.order.deliveryType &&
     prevProps.order.deliveryTimeSlot === nextProps.order.deliveryTimeSlot &&
     prevProps.order.deliveryDate === nextProps.order.deliveryDate &&
+    prevProps.order.itemCount === nextProps.order.itemCount &&
     prevProps.isProcessing === nextProps.isProcessing &&
     prevProps.currentAgentId === nextProps.currentAgentId &&
     prevProps.index === nextProps.index
