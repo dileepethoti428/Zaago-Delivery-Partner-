@@ -1,6 +1,7 @@
 // Order fetching services - DISPLAY ONLY (no local calculations)
 import { supabase } from '@/integrations/supabase/client';
 import { parsePoint, GeoPoint } from '@/utils/coords';
+import { cleanAddress } from '@/utils/deliveryHelpers';
 
 export type DbOrderRow = {
   id: string;
