@@ -6,7 +6,7 @@ import { DistanceBadge } from '@/components/ui/DistanceBadge';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { ScheduledBadge } from '@/components/order/ScheduledBadge';
 
-import { Clock, IndianRupee, Package } from 'lucide-react';
+import { Clock, IndianRupee, Package, Store } from 'lucide-react';
 import type { ZaagoOrder } from '@/services/orders';
 import { cn } from '@/lib/utils';
 import { SwipeToAccept } from '@/components/order/SwipeToAccept';
