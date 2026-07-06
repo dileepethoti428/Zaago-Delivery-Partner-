@@ -6,9 +6,10 @@ import { DistanceBadge } from '@/components/ui/DistanceBadge';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { ScheduledBadge } from '@/components/order/ScheduledBadge';
 
-import { Clock, IndianRupee } from 'lucide-react';
+import { Clock, IndianRupee, Package } from 'lucide-react';
 import type { ZaagoOrder } from '@/services/orders';
 import { cn } from '@/lib/utils';
+import { SwipeToAccept } from '@/components/order/SwipeToAccept';
 
 interface OrderCardProps {
   order: ZaagoOrder & { distanceKm?: number };
@@ -88,26 +89,24 @@ export const OrderCard = memo(function OrderCard({
       );
     }
     
-    // Unassigned - show Accept/Reject
+    // Unassigned - swipe to accept + reject below
     return (
-      <>
-        <Button
-          size="sm"
-          className="flex-1"
+      <div className="flex-1 space-y-2">
+        <SwipeToAccept
+          onAccept={() => onAccept(order.id)}
           disabled={isProcessing}
-          onClick={handleAccept}
-        >
-          Accept
-        </Button>
+          loading={isProcessing}
+        />
         <Button
           size="sm"
           variant="outline"
+          className="w-full"
           disabled={isProcessing}
           onClick={handleReject}
         >
           Reject
         </Button>
-      </>
+      </div>
     );
   };
 
@@ -169,7 +168,15 @@ export const OrderCard = memo(function OrderCard({
                 </div>
               )}
               
+              {!!order.itemCount && order.itemCount > 0 && (
+                <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-medium text-amber-800">
+                  <Package className="h-3.5 w-3.5" />
+                  {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
+                </div>
+              )}
+
               <div className="space-y-2 text-sm">
+
                 <div className="flex items-start gap-2">
                   <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
                   <div className="flex-1">
@@ -221,6 +228,7 @@ export const OrderCard = memo(function OrderCard({
     prevProps.order.deliveryType === nextProps.order.deliveryType &&
     prevProps.order.deliveryTimeSlot === nextProps.order.deliveryTimeSlot &&
     prevProps.order.deliveryDate === nextProps.order.deliveryDate &&
+    prevProps.order.itemCount === nextProps.order.itemCount &&
     prevProps.isProcessing === nextProps.isProcessing &&
     prevProps.currentAgentId === nextProps.currentAgentId &&
     prevProps.index === nextProps.index
