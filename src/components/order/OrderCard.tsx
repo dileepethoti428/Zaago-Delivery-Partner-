@@ -89,26 +89,24 @@ export const OrderCard = memo(function OrderCard({
       );
     }
     
-    // Unassigned - show Accept/Reject
+    // Unassigned - swipe to accept + reject below
     return (
-      <>
-        <Button
-          size="sm"
-          className="flex-1"
+      <div className="flex-1 space-y-2">
+        <SwipeToAccept
+          onAccept={() => onAccept(order.id)}
           disabled={isProcessing}
-          onClick={handleAccept}
-        >
-          Accept
-        </Button>
+          loading={isProcessing}
+        />
         <Button
           size="sm"
           variant="outline"
+          className="w-full"
           disabled={isProcessing}
           onClick={handleReject}
         >
           Reject
         </Button>
-      </>
+      </div>
     );
   };
 
