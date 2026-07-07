@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
@@ -9,6 +10,7 @@ import { useOrdersStore } from '@/store/orders';
 import { useAuthStore } from '@/store/auth';
 import { openGoogleMapsAddress } from '@/utils/maps';
 import { updateOrderStatus as updateOrderStatusService } from '@/services/updateOrderStatus';
+import { getOrderDetails } from '@/services/orderDetails';
 import { toast } from '@/hooks/use-toast';
 import { MapPin, Clock, IndianRupee, ExternalLink, ArrowLeft, CheckCircle, XCircle, Package } from 'lucide-react';
 import { pageTransition, pageTransitionConfig } from '@/animation/variants';
@@ -19,13 +21,68 @@ export default function OrderDetails() {
   const navigate = useNavigate();
   const { orders, getOrderById, updateOrderStatus, acceptOrder: storeAcceptOrder } = useOrdersStore();
   const { user } = useAuthStore();
-  const order = getOrderById(id || '');
+  const storeOrder = getOrderById(id || '');
+
+  // Backend fallback when the order isn't in the in-memory store
+  // (e.g. cold start deep-link, after accept, subscription/daily order id).
+  const [remoteOrder, setRemoteOrder] = useState<ZaagoOrder | null>(null);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState(false);
+
+  useEffect(() => {
+    if (storeOrder || !id) return;
+    let cancelled = false;
+    setRemoteLoading(true);
+    setRemoteError(false);
+    (async () => {
+      try {
+        let d;
+        try {
+          d = await getOrderDetails(id);
+        } catch {
+          d = await getOrderDetails(id, { type: 'daily' });
+        }
+        if (cancelled) return;
+        setRemoteOrder({
+          id: d.id,
+          pickup: d.seller?.address || 'Pickup location',
+          drop: d.customer?.address || 'Delivery location',
+          pickupCoord: null,
+          etaMin: 15,
+          payout: d.delivery_charge || 0,
+          status: (d.status || 'new') as ZaagoOrder['status'],
+          customerName: d.customer?.name,
+          agentId: null,
+        });
+      } catch (e) {
+        if (!cancelled) setRemoteError(true);
+      } finally {
+        if (!cancelled) setRemoteLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, storeOrder]);
+
+  const order = storeOrder || remoteOrder;
+  const isRemote = !storeOrder && !!remoteOrder;
 
   if (!order) {
+    if (remoteLoading) {
+      return (
+        <AppShell showTabBar={false}>
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <p className="text-muted-foreground">Loading order…</p>
+          </div>
+        </AppShell>
+      );
+    }
     return (
       <AppShell showTabBar={false}>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <p className="text-muted-foreground">Order not found</p>
+          <p className="text-muted-foreground">
+            {remoteError ? 'Order not found' : 'Loading order…'}
+          </p>
           <Button onClick={() => navigate(-1)}>Back to Home</Button>
         </div>
       </AppShell>
@@ -328,42 +385,54 @@ export default function OrderDetails() {
           transition={{ delay: 0.3 }}
           className="grid gap-3 sticky bottom-20 pb-4"
         >
-          <Button
-            className="w-full rounded-xl h-12 text-base font-medium"
-            onClick={handleAccept}
-            disabled={order.status !== 'new' && order.status !== 'open'}
-          >
-            <CheckCircle className="h-5 w-5 mr-2" />
-            Accept Order
-          </Button>
+          {isRemote ? (
+            <Button
+              className="w-full rounded-xl h-12 text-base font-medium"
+              onClick={() => navigate(`/manage-delivery/${order.id}`)}
+            >
+              <Package className="h-5 w-5 mr-2" />
+              Manage Delivery
+            </Button>
+          ) : (
+            <>
+              <Button
+                className="w-full rounded-xl h-12 text-base font-medium"
+                onClick={handleAccept}
+                disabled={order.status !== 'new' && order.status !== 'open'}
+              >
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Accept Order
+              </Button>
 
-          <Button
-            className="w-full rounded-xl h-12 text-base font-medium"
-            onClick={handlePickedUp}
-            disabled={order.status !== 'accepted'}
-          >
-            <Package className="h-5 w-5 mr-2" />
-            Mark as Picked Up
-          </Button>
+              <Button
+                className="w-full rounded-xl h-12 text-base font-medium"
+                onClick={handlePickedUp}
+                disabled={order.status !== 'accepted'}
+              >
+                <Package className="h-5 w-5 mr-2" />
+                Mark as Picked Up
+              </Button>
 
-          <Button
-            className="w-full rounded-xl h-12 text-base font-medium"
-            onClick={handleDelivered}
-            disabled={order.status !== 'picked_up'}
-          >
-            <CheckCircle className="h-5 w-5 mr-2" />
-            Mark as Delivered
-          </Button>
+              <Button
+                className="w-full rounded-xl h-12 text-base font-medium"
+                onClick={handleDelivered}
+                disabled={order.status !== 'picked_up'}
+              >
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Mark as Delivered
+              </Button>
 
-          <Button
-            variant="destructive"
-            className="w-full rounded-xl h-12 text-base font-medium"
-            onClick={handleCancel}
-            disabled={order.status === 'delivered' || order.status === 'cancelled'}
-          >
-            <XCircle className="h-5 w-5 mr-2" />
-            Cancel Order
-          </Button>
+              <Button
+                variant="destructive"
+                className="w-full rounded-xl h-12 text-base font-medium"
+                onClick={handleCancel}
+                disabled={order.status === 'delivered' || order.status === 'cancelled'}
+              >
+                <XCircle className="h-5 w-5 mr-2" />
+                Cancel Order
+              </Button>
+            </>
+          )}
         </motion.div>
       </motion.div>
     </AppShell>
