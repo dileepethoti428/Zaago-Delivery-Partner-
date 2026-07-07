@@ -29,7 +29,6 @@ export const OrderCard = memo(function OrderCard({
   currentAgentId,
   onAccept,
   onReject,
-  onView,
   onManage,
 }: OrderCardProps) {
   const handleAccept = useCallback((e: React.MouseEvent) => {
@@ -42,15 +41,6 @@ export const OrderCard = memo(function OrderCard({
     onReject(order.id);
   }, [order.id, onReject]);
   
-  const handleView = useCallback(() => {
-    // Only open details after the order is assigned to this agent.
-    // Before acceptance we intentionally do nothing so the user doesn't land
-    // on an "Order not found" screen.
-    if (order.agentId && order.agentId === currentAgentId) {
-      onView(order.id);
-    }
-  }, [order.id, order.agentId, currentAgentId, onView]);
-
   const handleManage = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (onManage) {
@@ -116,7 +106,7 @@ export const OrderCard = memo(function OrderCard({
   };
 
   return (
-    <AnimatedCard delay={index * 0.05} onClick={handleView}>
+    <AnimatedCard delay={index * 0.05}>
       <CardContent 
         className={cn(
           "p-4",
