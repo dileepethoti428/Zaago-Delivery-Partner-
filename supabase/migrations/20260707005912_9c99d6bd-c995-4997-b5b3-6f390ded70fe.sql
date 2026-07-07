@@ -1,0 +1,1 @@
+ALTER TABLE public.agent_earnings_tracking DROP CONSTRAINT IF EXISTS unique_order_tracking;
