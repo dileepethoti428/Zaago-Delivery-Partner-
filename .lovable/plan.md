@@ -1,37 +1,45 @@
+# Fix: "Order not found" when tapping middle of an order card
+
 ## Root cause
 
-The `public.agent_earnings_tracking` table has TWO unique constraints on it:
+Tapping the middle of an order card on Home navigates to `/order/:id` (`handleViewOrder` in `src/pages/Home.tsx`). `src/pages/OrderDetails.tsx` looks the order up ONLY in the in-memory Zustand cache:
 
-- `agent_earnings_tracking_order_agent_unique` — `UNIQUE (order_id, agent_id)` — this is the correct one and matches the `ON CONFLICT (order_id, agent_id)` clause used by the `complete_delivery_zepto` RPC.
-- `unique_order_tracking` — `UNIQUE (order_id)` alone — legacy, and the source of the 23505 error.
+```ts
+const order = getOrderById(id || '');
+if (!order) return <p>Order not found</p>;
+```
 
-Flow that breaks:
+`useOrdersStore` is populated by `fetchAvailableOrders` and filtered to statuses `['new','open','packed','assigned','picked_up']`. So the page shows "Order not found" whenever the id isn't in that list, which happens in normal flows:
 
-1. Agent A accepts the order → `accept-order` inserts an `agent_earnings_tracking` row `(order_id, agent A, pending)`.
-2. Agent A cancels → `cancel-delivery` marks A's row `cancelled` but the row is still there.
-3. Agent B accepts → a second `agent_earnings_tracking` row `(order_id, agent B, pending)` gets inserted (this survives only because some paths update in place; when it does insert, it can already fail here on the stale unique).
-4. Agent B taps "Delivered" → `complete_delivery_zepto` runs `INSERT ... ON CONFLICT (order_id, agent_id) DO UPDATE`. The `(order_id, agent_id)` conflict target is handled, but Postgres also checks the other unique index `unique_order_tracking (order_id)`, which fires against agent A's cancelled row → `23505 duplicate key value violates unique constraint "unique_order_tracking"`.
+- Order was just accepted/rejected and removed from the available list
+- Order belongs to a subscription/daily order (different id space)
+- Page opened via deep link / cold start (store not yet loaded)
+- Store was reset on agent switch or logout/login
+- The order is assigned to another agent and filtered out
 
-Because the RPC aborts, `orders.status` never flips to `delivered`, no `delivery_history` row is written, and no Zepto payout lands in earnings — which matches the second symptom ("history is not following regular payout").
+The OrderDetails page never asks the backend, so it can't recover.
 
 ## Fix
 
-One-line schema change: drop the stray legacy unique constraint, keeping the correct composite one.
+Fall back to a backend fetch when the store misses, using the existing `useOrderDetails` hook + `getOrderDetails` service. Keep the fast path (store hit) unchanged.
 
-```sql
-ALTER TABLE public.agent_earnings_tracking
-  DROP CONSTRAINT IF EXISTS unique_order_tracking;
-```
+### Changes (frontend only)
 
-Nothing else needs to change:
+1. `src/pages/OrderDetails.tsx`
+  - Keep `getOrderById(id)` as the fast path.
+  - When the store has no match, call `useOrderDetails(id)` and render from that payload.
+  - Show a small loading state while the query is pending; only show "Order not found" after the fetch actually fails (query `isError` or returns null).
+  - Map `OrderDetails` (from `services/orderDetails.ts`) into the same shape the page already renders: `pickup` = `seller.address`, `drop` = `customer.address`, `status`, `payout` = `delivery_charge`, `etaMin` fallback (e.g. 15 when unknown), `distanceKm` optional, `customerName` = `customer.name`.
+  - Action buttons (Accept / Picked up / Delivered / Cancel) already require the order to be in the store to mutate; when we hydrated from backend, hide those buttons and instead show a single "Manage Delivery" button that routes to `/manage-delivery/:id` (which has its own backend-driven state). This avoids touching business logic.
+2. No changes to `services/orders.ts`, `store/orders.ts`, edge functions, or DB.
 
-- `agent_earnings_tracking_order_agent_unique (order_id, agent_id)` continues to prevent the same agent from being double-credited for the same order.
-- `complete_delivery_zepto` already targets `(order_id, agent_id)` in its `ON CONFLICT`, so the RPC will now succeed for the reassigned agent.
-- `delivery_history` uses its own `(order_id, agent_id)` uniqueness, unaffected.
-- No frontend or edge-function code changes are needed. The earlier `agent_earnings_tracking` row belonging to the cancelled agent stays with `payout_status='cancelled'` (correct history), and a new `confirmed` row for the completing agent will now be inserted.
+### Technical details
 
-## Verification after apply
+- Reuse `useOrderDetails(id)` — already handles caching (`staleTime: 30s`), retries, and Auth.
+- `getOrderDetails` defaults to `type: 'order'`; if it throws "Order not found", retry once with `type: 'daily'` inside a small wrapper in the page (or extend the hook to accept a type and try both). Prefer a tiny local `tryFetchAnyOrder(id)` helper in `OrderDetails.tsx` that calls `getOrderDetails(id)` and on failure `getOrderDetails(id, { type: 'daily' })`, so the hook stays generic.
+- Loading UI: reuse the existing `AppShell` skeleton block (matches other pages) instead of the blank "Order not found" screen.
 
-1. Have Agent A accept then cancel the order.
-2. Have Agent B accept and mark delivered.
-3. Confirm: `orders.status = delivered`, one `delivery_history` row for Agent B, and two `agent_earnings_tracking` rows for that order — A `cancelled` / B `confirmed` with the Zepto payout.
+### Out of scope
+
+- Not touching the Zepto/duplicate-key completion flow (already fixed in the last migration).
+- Not changing what statuses populate the store or how Home filters. And note that order information should show after accepting the delivery not before that and if I click on it before it should not open anything page not found also 

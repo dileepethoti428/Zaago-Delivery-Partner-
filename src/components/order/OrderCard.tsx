@@ -43,8 +43,13 @@ export const OrderCard = memo(function OrderCard({
   }, [order.id, onReject]);
   
   const handleView = useCallback(() => {
-    onView(order.id);
-  }, [order.id, onView]);
+    // Only open details after the order is assigned to this agent.
+    // Before acceptance we intentionally do nothing so the user doesn't land
+    // on an "Order not found" screen.
+    if (order.agentId && order.agentId === currentAgentId) {
+      onView(order.id);
+    }
+  }, [order.id, order.agentId, currentAgentId, onView]);
 
   const handleManage = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
