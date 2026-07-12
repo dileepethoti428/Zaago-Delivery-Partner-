@@ -43,16 +43,17 @@ export function useLocationSyncController() {
     lastSyncedCoordsRef.current = { lat: coords.latitude, lng: coords.longitude };
     console.log('[LocationSync] Syncing:', coords.latitude.toFixed(4), coords.longitude.toFixed(4));
 
-    // Fix 1: Fire-and-forget — never block the GPS callback on network
-    supabase.functions.invoke('update-agent-location', {
-      body: {
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy: coords.accuracy,
-        heading: coords.heading ?? undefined,
-        speed: coords.speed ?? undefined,
-      },
-    }).catch((error) => console.warn('[LocationSync] Sync failed:', error));
+    // Fire-and-forget — never block the GPS callback on network.
+    // Uses RPC (edge function quota is exhausted; RPC is the reliable path).
+    supabase.rpc('update_agent_location', {
+      p_latitude: coords.latitude,
+      p_longitude: coords.longitude,
+      p_accuracy: coords.accuracy ?? null,
+      p_heading: coords.heading ?? null,
+      p_speed: coords.speed ?? null,
+    }).then(({ error }) => {
+      if (error) console.warn('[LocationSync] RPC failed:', error.message);
+    });
   }, [session?.access_token]);
 
   // Start watching location
