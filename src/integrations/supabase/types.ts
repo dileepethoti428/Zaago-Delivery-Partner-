@@ -11107,6 +11107,16 @@ export type Database = {
         Returns: Json
       }
       unlockrows: { Args: { "": string }; Returns: number }
+      update_agent_location: {
+        Args: {
+          p_accuracy?: number
+          p_heading?: number
+          p_latitude: number
+          p_longitude: number
+          p_speed?: number
+        }
+        Returns: Json
+      }
       update_order_status: {
         Args: {
           p_agent_id: string

@@ -150,18 +150,16 @@ export default function Profile() {
 
       console.log('[Profile] Using tracked location:', lastKnown);
 
-      const { data, error } = await supabase.functions.invoke('update-agent-location', {
-        body: {
-          latitude: lastKnown.lat,
-          longitude: lastKnown.lng,
-          accuracy: lastKnown.accuracy ?? undefined,
-        },
+      const { data, error } = await supabase.rpc('update_agent_location', {
+        p_latitude: lastKnown.lat,
+        p_longitude: lastKnown.lng,
+        p_accuracy: lastKnown.accuracy ?? null,
       });
 
-      if (error) {
+      if (error || (data as any)?.success === false) {
         toast({
           title: "Failed to save location",
-          description: error.message || "Please try again",
+          description: error?.message || (data as any)?.reason || "Please try again",
           variant: "destructive",
         });
         return;
