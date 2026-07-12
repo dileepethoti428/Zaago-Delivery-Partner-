@@ -47,25 +47,23 @@ export async function syncLocationAfterAuth(): Promise<void> {
     console.log('[PostAuthInit] Syncing location:', { latitude, longitude });
 
     try {
-      const { data, error } = await supabase.functions.invoke('update-agent-location', {
-        body: {
-          latitude,
-          longitude,
-          accuracy,
-          heading: heading ?? undefined,
-          speed: speed ?? undefined,
-        },
+      const { data, error } = await supabase.rpc('update_agent_location', {
+        p_latitude: latitude,
+        p_longitude: longitude,
+        p_accuracy: accuracy ?? null,
+        p_heading: heading ?? null,
+        p_speed: speed ?? null,
       });
 
       if (error) {
-        console.warn('[PostAuthInit] Location sync edge function error (non-blocking):', error);
-      } else if (data?.success === false) {
-        console.warn('[PostAuthInit] Location sync non-success (non-blocking):', data?.reason ?? 'unknown');
+        console.warn('[PostAuthInit] Location RPC error (non-blocking):', error.message);
+      } else if ((data as any)?.success === false) {
+        console.warn('[PostAuthInit] Location RPC non-success (non-blocking):', (data as any)?.reason ?? 'unknown');
       } else {
         console.log('[PostAuthInit] Location synced successfully');
       }
     } catch (invokeError) {
-      console.warn('[PostAuthInit] Location sync invoke failed (non-blocking):', invokeError);
+      console.warn('[PostAuthInit] Location RPC invoke failed (non-blocking):', invokeError);
     }
   } catch (unexpectedError) {
     console.warn('[PostAuthInit] Unexpected location sync error (non-blocking):', unexpectedError);
