@@ -1,45 +1,35 @@
-## Root Cause (confirmed)
+## Goal
+Show each product's unit/volume (e.g. "per litre", "500g") next to the product name everywhere it appears in the delivery partner app.
 
-I called the deployed `update-agent-location` directly with `{latitude, longitude}` and got back:
+## Where "product name" is currently rendered
+1. **Manage Delivery → Order Items** (`src/pages/ManageDelivery.tsx`, line ~461) — item cards with thumbnail + name.
+2. **Delivery History card → items list** (`src/components/delivery/DeliveryHistoryCard.tsx`, line ~146).
+3. **Orders page → assigned order card** (`src/components/order/AssignedOrderCard.tsx`, line ~113) — subscription/daily order name row.
+4. **Pickup Summary aggregation** (`src/components/delivery/PickupSummaryCard.tsx`) — "Onion — 5", one bullet per product.
 
-```
-500 {"success":false,"error":"Missing required fields: agent_id, latitude, longitude"}
-```
+Home page's `OrderCard` only shows an item count (no product names), so it's unchanged.
 
-That response shape (`error` field, HTTP 500, requiring `agent_id` in body) belongs to a **very old version** of the function. The current repo code (`supabase/functions/update-agent-location/index.ts`, v5) doesn't require `agent_id`, derives the user from the JWT, and returns `success:false, reason:...` at HTTP 200.
+## Data source
+`public.products.unit` (text) already stores values like "per litre", "per kg", "500g". It is exposed by the `products_with_sellers` view too. `daily_orders` RPCs currently omit it; regular `orders.items` JSON does not carry it.
 
-Every previous "redeploy" of this function appeared to succeed but the old build kept serving. The reason is almost certainly the top-level import:
+## Changes
 
-```ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
-```
+### 1. Backend data enrichment (no schema change)
+- `src/services/orderDetails.ts`
+  - `getDailyOrderDetails`: also `select ... , unit` from `products_with_sellers`; add `unit` to the returned item.
+  - `getRegularOrderDetails`: extend the existing product back-fill query (already fetching `image_url, images`) to also select `unit` and merge it onto items missing a unit.
 
-`esm.sh` floating imports intermittently fail to resolve during Supabase edge-runtime compilation. When the new build fails, the platform keeps serving the last-good older build — which is why "Save Location" works some times (cached) and fails other times, and why our redeploys never actually replaced the code.
+- `src/services/assignedOrders.ts`
+  - Add `productUnit: string | null` to `AssignedOrder`.
+  - After each `transformEnrichedOrders` / `transformDeliveredOrders` call, do one batched `supabase.from('products').select('id, unit').in('id', productIds)` and stamp `productUnit` onto each row. Delivered rows already have `product_unit` from the RPC — reuse that when present.
 
-The "works sometimes" behaviour is not a client-side race — the client always sends `{latitude, longitude}`; there's no code path anywhere in the repo that sends `agent_id`. It's purely which build of the function happens to be alive at that moment.
+### 2. UI (append unit as a subtle muted suffix, e.g. `Cow Milk · per litre`)
+- `src/pages/ManageDelivery.tsx` — render `item.unit` under or after the product name (small muted text).
+- `src/components/delivery/DeliveryHistoryCard.tsx` — same treatment beside `item.name`.
+- `src/components/order/AssignedOrderCard.tsx` — append `order.productUnit` after `order.productName`.
+- `src/components/delivery/PickupSummaryCard.tsx` — include unit in the aggregation key display (`"Onion (500g)"`) by carrying `productUnit` through the seller map. Quantities still sum per (name+unit).
 
-## Fix
-
-**File:** `supabase/functions/update-agent-location/index.ts`
-
-Replace the esm.sh import with the npm specifier (stable, no drift):
-
-```ts
-// before
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
-// after
-import { createClient } from 'npm:@supabase/supabase-js@2';
-```
-
-No other logic changes — the v5 auth-from-JWT flow is already correct.
-
-Then:
-1. Deploy `update-agent-location` via `supabase--deploy_edge_functions`.
-2. Verify with `supabase--curl_edge_functions` that POST `{latitude, longitude}` (no `agent_id`) no longer returns the "Missing required fields" 500 — the new build responds with `success:true` (or a proper `soft-fail` 200 like `invalid_token` when unauthenticated).
-3. Tail `supabase--edge_function_logs` for `update-agent-location` and confirm the `Missing required fields` line stops appearing.
-
-## Why this fixes the intermittency
-
-Once the function is running the v5 build, every call succeeds because the client already sends the right payload. There is no other place in the codebase that could produce this error message — it exists only in the stale deployed build.
-
-No frontend, DB, or other function changes are needed.
+## Technical notes
+- One extra lightweight query per screen load (id-list scoped). No RPC signature changes, so no risk with the memory rule about function overloading.
+- Fallback: if `unit` is null/empty, render only the product name (no separator).
+- No changes to Home order cards, earnings, or accept/reject flow.
