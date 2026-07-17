@@ -249,7 +249,7 @@ export async function fetchDeliveredOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformDeliveredOrders((data || []) as DeliveredOrderRow[]);
+  return enrichWithProductUnits(transformDeliveredOrders((data || []) as DeliveredOrderRow[]));
 }
 
 // Legacy function - kept for backward compatibility, now fetches all orders
