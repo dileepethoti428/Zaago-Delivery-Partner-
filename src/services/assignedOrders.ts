@@ -207,6 +207,7 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     deliveryLongitude: null,
     productId: row.product_id || null,
     productName: row.product_name || 'Unknown Product',
+    productUnit: row.product_unit || null,
     productPrice: 0,
     productImage: row.product_image || null,
     isSubscription: !!row.subscription_id,
