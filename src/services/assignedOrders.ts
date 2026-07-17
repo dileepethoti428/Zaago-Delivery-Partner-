@@ -111,6 +111,23 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
   }));
 }
 
+// Batch-fetch product units and stamp onto orders
+async function enrichWithProductUnits(orders: AssignedOrder[]): Promise<AssignedOrder[]> {
+  const missing = orders.filter(o => !o.productUnit && o.productId).map(o => o.productId!) as string[];
+  const ids = Array.from(new Set(missing));
+  if (ids.length === 0) return orders;
+  try {
+    const { data } = await supabase.from('products').select('id, unit').in('id', ids);
+    if (!data || data.length === 0) return orders;
+    const map = new Map<string, string>();
+    data.forEach((p: any) => { if (p.unit) map.set(p.id, p.unit); });
+    return orders.map(o => o.productUnit || !o.productId ? o : { ...o, productUnit: map.get(o.productId) || null });
+  } catch (e) {
+    console.warn('[AssignedOrders] unit enrichment failed', e);
+    return orders;
+  }
+}
+
 // Fetch TODAY's orders using Postgres RPC with enriched data
 export async function fetchTodayOrders(): Promise<AssignedOrder[]> {
   console.log('[AssignedOrders] Fetching TODAY orders via RPC...');
