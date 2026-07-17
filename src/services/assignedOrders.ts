@@ -97,6 +97,7 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     deliveryLongitude: row.delivery_longitude || null,
     productId: row.product_id || null,
     productName: row.product_name || 'Unknown Product',
+    productUnit: null,
     productPrice: row.product_price || 0,
     productImage: row.product_image_url || null,
     isSubscription: !!row.subscription_id,
