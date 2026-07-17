@@ -272,36 +272,36 @@ async function getRegularOrderDetails(orderId: string): Promise<OrderDetails> {
   }
 
 
-  // Backfill missing product images from products table
+  // Backfill missing product images/units from products table
   let items = (order.items as any[]) || [];
   try {
-    const missingIds = Array.from(new Set(
-      items
-        .filter((it) => !it?.image_url && !it?.image && !(Array.isArray(it?.images) && it.images[0]))
-        .map((it) => it?.id || it?.product_id)
-        .filter(Boolean)
+    const allIds = Array.from(new Set(
+      items.map((it) => it?.id || it?.product_id).filter(Boolean)
     ));
-    if (missingIds.length > 0) {
+    if (allIds.length > 0) {
       const { data: products } = await supabase
         .from('products')
-        .select('id, image_url, images')
-        .in('id', missingIds);
+        .select('id, image_url, images, unit')
+        .in('id', allIds);
       if (products && products.length > 0) {
-        const imgMap = new Map<string, string>();
+        const infoMap = new Map<string, { url?: string; unit?: string }>();
         products.forEach((p: any) => {
           const url = p.image_url || (Array.isArray(p.images) ? p.images[0] : null);
-          if (url) imgMap.set(p.id, url);
+          infoMap.set(p.id, { url: url || undefined, unit: p.unit || undefined });
         });
         items = items.map((it) => {
-          if (it?.image_url || it?.image) return it;
           const pid = it?.id || it?.product_id;
-          const url = pid ? imgMap.get(pid) : undefined;
-          return url ? { ...it, image_url: url } : it;
+          const info = pid ? infoMap.get(pid) : undefined;
+          if (!info) return it;
+          const next = { ...it };
+          if (!next.image_url && !next.image && info.url) next.image_url = info.url;
+          if (!next.unit && info.unit) next.unit = info.unit;
+          return next;
         });
       }
     }
   } catch (e) {
-    console.warn('Product image enrichment failed:', e);
+    console.warn('Product enrichment failed:', e);
   }
 
   return {
