@@ -8998,7 +8998,7 @@ export type Database = {
         }
         Returns: Json
       }
-      complete_delivery_zaago: {
+      complete_delivery_zepto: {
         Args: {
           p_agent_id: string
           p_live_distance_km?: number
