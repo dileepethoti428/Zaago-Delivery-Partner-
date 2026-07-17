@@ -143,7 +143,10 @@ export const DeliveryHistoryCard = memo(function DeliveryHistoryCard({
                       {items.map((item: any, idx: number) => (
                         <div key={idx} className="flex items-start justify-between text-sm">
                           <div className="flex-1">
-                            <p className="font-medium">{item.name || item.product_name || 'Item'}</p>
+                            <p className="font-medium">
+                              {item.name || item.product_name || 'Item'}
+                              {item.unit && <span className="text-muted-foreground font-normal"> · {item.unit}</span>}
+                            </p>
                             {item.type && (
                               <p className="text-xs text-muted-foreground">{item.type}</p>
                             )}
