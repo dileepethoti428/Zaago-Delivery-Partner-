@@ -24,6 +24,7 @@ export interface AssignedOrder {
   deliveryLongitude: number | null;
   productId: string | null;
   productName: string;
+  productUnit: string | null;
   productPrice: number;
   productImage: string | null;
   isSubscription: boolean;
