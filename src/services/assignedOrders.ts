@@ -24,6 +24,7 @@ export interface AssignedOrder {
   deliveryLongitude: number | null;
   productId: string | null;
   productName: string;
+  productUnit: string | null;
   productPrice: number;
   productImage: string | null;
   isSubscription: boolean;
@@ -96,6 +97,7 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
     deliveryLongitude: row.delivery_longitude || null,
     productId: row.product_id || null,
     productName: row.product_name || 'Unknown Product',
+    productUnit: null,
     productPrice: row.product_price || 0,
     productImage: row.product_image_url || null,
     isSubscription: !!row.subscription_id,
@@ -107,6 +109,23 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
       ? 'subscription'
       : 'immediate',
   }));
+}
+
+// Batch-fetch product units and stamp onto orders
+async function enrichWithProductUnits(orders: AssignedOrder[]): Promise<AssignedOrder[]> {
+  const missing = orders.filter(o => !o.productUnit && o.productId).map(o => o.productId!) as string[];
+  const ids = Array.from(new Set(missing));
+  if (ids.length === 0) return orders;
+  try {
+    const { data } = await supabase.from('products').select('id, unit').in('id', ids);
+    if (!data || data.length === 0) return orders;
+    const map = new Map<string, string>();
+    data.forEach((p: any) => { if (p.unit) map.set(p.id, p.unit); });
+    return orders.map(o => o.productUnit || !o.productId ? o : { ...o, productUnit: map.get(o.productId) || null });
+  } catch (e) {
+    console.warn('[AssignedOrders] unit enrichment failed', e);
+    return orders;
+  }
 }
 
 // Fetch TODAY's orders using Postgres RPC with enriched data
@@ -122,7 +141,7 @@ export async function fetchTodayOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
+  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
 }
 
 // Fetch TOMORROW's orders using Postgres RPC with enriched data
@@ -138,7 +157,7 @@ export async function fetchTomorrowOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
+  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
 }
 
 // Fetch UPCOMING orders using Postgres RPC with enriched data
@@ -154,7 +173,7 @@ export async function fetchUpcomingOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
+  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
 }
 
 // Interface for the delivered orders RPC response (simpler than EnrichedOrderRow)
@@ -205,6 +224,7 @@ function transformDeliveredOrders(rows: DeliveredOrderRow[]): AssignedOrder[] {
     deliveryLongitude: null,
     productId: row.product_id || null,
     productName: row.product_name || 'Unknown Product',
+    productUnit: row.product_unit || null,
     productPrice: 0,
     productImage: row.product_image || null,
     isSubscription: !!row.subscription_id,
@@ -229,7 +249,7 @@ export async function fetchDeliveredOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformDeliveredOrders((data || []) as DeliveredOrderRow[]);
+  return enrichWithProductUnits(transformDeliveredOrders((data || []) as DeliveredOrderRow[]));
 }
 
 // Legacy function - kept for backward compatibility, now fetches all orders

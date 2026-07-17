@@ -32,7 +32,9 @@ export function PickupSummaryCard({ orders, label = 'Today' }: PickupSummaryCard
         sellerMap[key] = { sellerName: key, products: {}, totalItems: 0 };
       }
 
-      const productKey = order.productName || 'Unknown Product';
+      const productKey = order.productUnit
+        ? `${order.productName || 'Unknown Product'} (${order.productUnit})`
+        : (order.productName || 'Unknown Product');
       sellerMap[key].products[productKey] = (sellerMap[key].products[productKey] || 0) + order.quantity;
       sellerMap[key].totalItems += order.quantity;
     }

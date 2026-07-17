@@ -458,7 +458,10 @@ export default function ManageDelivery() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{item.product_name || item.name}</p>
+                            <p className="font-medium text-sm truncate">
+                              {item.product_name || item.name}
+                              {item.unit && <span className="text-muted-foreground font-normal"> · {item.unit}</span>}
+                            </p>
                             <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
                           </div>
                           <p className="font-medium">₹{item.price * item.quantity}</p>
