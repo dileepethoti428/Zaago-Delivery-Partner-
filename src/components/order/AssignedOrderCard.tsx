@@ -110,7 +110,10 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
               {/* Product info */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                 <Package className="h-4 w-4" />
-                <span>{order.productName}</span>
+                <span>
+                  {order.productName}
+                  {order.productUnit && <span className="ml-1">· {order.productUnit}</span>}
+                </span>
                 <span className="text-foreground font-medium">× {order.quantity}</span>
               </div>
             </div>
