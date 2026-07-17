@@ -141,7 +141,7 @@ export async function fetchTodayOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
+  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
 }
 
 // Fetch TOMORROW's orders using Postgres RPC with enriched data
