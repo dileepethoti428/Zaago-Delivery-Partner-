@@ -173,7 +173,7 @@ export async function fetchUpcomingOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]);
+  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
 }
 
 // Interface for the delivered orders RPC response (simpler than EnrichedOrderRow)
