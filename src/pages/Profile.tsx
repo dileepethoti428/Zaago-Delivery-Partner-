@@ -280,43 +280,60 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="mt-3 p-4 bg-muted/50 rounded-xl">
-              <div className="flex items-center gap-3 mb-3">
+            <div className="mt-3 bg-muted/50 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsHoursExpanded((v) => !v)}
+                className="w-full p-4 flex items-center gap-3 text-left"
+                aria-expanded={isHoursExpanded}
+              >
                 <Clock className="h-5 w-5 text-primary" />
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="font-medium">Total Working Hours</p>
                   <p className="text-xs text-muted-foreground">
                     {isOnline ? 'Counting while online' : 'Resumes when you go online'}
                   </p>
                 </div>
-              </div>
-              <Select
-                value={periodFilter}
-                onValueChange={(v) => setPeriodFilter(v as typeof periodFilter)}
-              >
-                <SelectTrigger className="h-9 text-sm bg-background/60 mb-3">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="yesterday">Yesterday</SelectItem>
-                  <SelectItem value="week">Last 7 Days</SelectItem>
-                  <SelectItem value="month">Last 30 Days</SelectItem>
-                  <SelectItem value="allTime">All Time</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {periodFilter === 'today' && 'Today'}
-                  {periodFilter === 'yesterday' && 'Yesterday'}
-                  {periodFilter === 'week' && 'Last 7 Days'}
-                  {periodFilter === 'month' && 'Last 30 Days'}
-                  {periodFilter === 'allTime' && 'All Time'}
-                </span>
-                <span className="font-semibold text-foreground tabular-nums">
-                  {formatHours(hoursBreakdown[periodFilter])}
-                </span>
-              </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground tabular-nums text-sm hidden sm:inline">
+                    {formatHours(hoursBreakdown[periodFilter])}
+                  </span>
+                  <ChevronDown
+                    className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${isHoursExpanded ? 'rotate-180' : ''}`}
+                  />
+                </div>
+              </button>
+              {isHoursExpanded && (
+                <div className="px-4 pb-4">
+                  <Select
+                    value={periodFilter}
+                    onValueChange={(v) => setPeriodFilter(v as typeof periodFilter)}
+                  >
+                    <SelectTrigger className="h-9 text-sm bg-background/60 mb-3">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="yesterday">Yesterday</SelectItem>
+                      <SelectItem value="week">Last 7 Days</SelectItem>
+                      <SelectItem value="month">Last 30 Days</SelectItem>
+                      <SelectItem value="allTime">All Time</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {periodFilter === 'today' && 'Today'}
+                      {periodFilter === 'yesterday' && 'Yesterday'}
+                      {periodFilter === 'week' && 'Last 7 Days'}
+                      {periodFilter === 'month' && 'Last 30 Days'}
+                      {periodFilter === 'allTime' && 'All Time'}
+                    </span>
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {formatHours(hoursBreakdown[periodFilter])}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-3 p-4 bg-muted/50 rounded-xl">
