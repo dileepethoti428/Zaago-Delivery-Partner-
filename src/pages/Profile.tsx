@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
-import { LogOut, User, HelpCircle, ChevronRight, CheckCircle, Clock, MapPin, Loader2, MessageCircle, Star, Package, TrendingUp } from 'lucide-react';
+import { LogOut, User, HelpCircle, ChevronRight, ChevronDown, CheckCircle, Clock, MapPin, Loader2, MessageCircle, Star, Package, TrendingUp } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 
 import { motion as m } from 'framer-motion';
