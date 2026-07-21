@@ -17,10 +17,35 @@ import { PickupSummaryCard } from '@/components/delivery/PickupSummaryCard';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
+type TimeFilter = 'morning' | 'evening' | 'all';
+
+function getSlotStartHour(slot?: string | null): number | null {
+  if (!slot || typeof slot !== 'string') return null;
+  const match = slot.match(/(\d{1,2})\s*:?\s*(\d{0,2})/);
+  if (!match) return null;
+  const h = parseInt(match[1], 10);
+  return Number.isFinite(h) ? h : null;
+}
+
+function bucketOf(slot?: string | null): 'morning' | 'evening' | null {
+  const h = getSlotStartHour(slot);
+  if (h == null) return null;
+  if (h >= 5 && h < 12) return 'morning';
+  if (h >= 16 && h < 21) return 'evening';
+  return null;
+}
+
+function getDefaultTimeBucket(): TimeFilter {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 16) return 'morning';
+  if (h >= 16 && h < 22) return 'evening';
+  return 'all';
+}
 
 export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>(() => getDefaultTimeBucket());
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(5);
 
@@ -113,19 +138,35 @@ export default function MyDeliveries() {
     all: todayOrders.length + tomorrowOrders.length,
   }), [todayOrders, tomorrowOrders, deliveredOrders]);
 
-  // Client-side search filter
+  // Time-of-day filter applied on top of the date-tab list
+  const timeFilteredOrders = useMemo(() => {
+    if (timeFilter === 'all') return currentOrders;
+    return currentOrders.filter(o => bucketOf(o.deliveryTimeSlot) === timeFilter);
+  }, [currentOrders, timeFilter]);
+
+  const timeCounts = useMemo(() => {
+    let morning = 0, evening = 0;
+    for (const o of currentOrders) {
+      const b = bucketOf(o.deliveryTimeSlot);
+      if (b === 'morning') morning++;
+      else if (b === 'evening') evening++;
+    }
+    return { morning, evening, all: currentOrders.length };
+  }, [currentOrders]);
+
+  // Client-side search filter (applied on top of time filter)
   const filteredOrders = useMemo(() => {
-    if (!search.trim()) return currentOrders;
+    if (!search.trim()) return timeFilteredOrders;
     const q = search.trim().toLowerCase();
     const toStr = (v: unknown) => (typeof v === 'string' ? v : v ? JSON.stringify(v) : '');
-    return currentOrders.filter(order =>
+    return timeFilteredOrders.filter(order =>
       toStr(order.customerName).toLowerCase().includes(q) ||
       toStr(order.deliveryAddress).toLowerCase().includes(q) ||
       toStr(order.customerAddress).toLowerCase().includes(q) ||
       toStr(order.productName).toLowerCase().includes(q) ||
       toStr(order.sellerName).toLowerCase().includes(q)
     );
-  }, [currentOrders, search]);
+  }, [timeFilteredOrders, search]);
 
   const handleViewOrder = (order: typeof todayOrders[0]) => {
     const navId = order.dailyOrderId || order.id;
@@ -182,6 +223,23 @@ export default function MyDeliveries() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {/* Time-of-Day Filter */}
+        {dateFilter !== 'delivered' && (
+          <Tabs value={timeFilter} onValueChange={(v) => { setTimeFilter(v as TimeFilter); setVisibleCount(5); }}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="morning" className="text-xs">
+                Morning ({timeCounts.morning})
+              </TabsTrigger>
+              <TabsTrigger value="evening" className="text-xs">
+                Evening ({timeCounts.evening})
+              </TabsTrigger>
+              <TabsTrigger value="all" className="text-xs">
+                All ({timeCounts.all})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
         {/* Search Bar */}
         {!isLoading && !error && currentOrders.length > 0 && (
