@@ -1,38 +1,13 @@
-## Goal
-Add a time-of-day filter (Morning / Evening / All) to the My Deliveries page, defaulting to the current time of day.
+## Root cause
+`delivery_time_slot` in the DB is a label string — one of `morning`, `morning-early`, `morning-late`, `evening-early`, `evening-late` — not a `HH:MM-HH:MM` range. The current `bucketOf()` in `MyDeliveries.tsx` tries to parse an hour with a regex and always returns `null`, so Morning/Evening counts are always 0.
 
-## Buckets
-Parse the order's `timeSlot` start time (e.g. `"10:00-12:00"` → 10).
-- **Morning**: start hour 5–11 (5AM–12PM)
-- **Evening**: start hour 16–20 (4PM–9PM)
-- **All**: no time filter (default fallback)
+## Fix
+Update `bucketOf()` in `src/pages/MyDeliveries.tsx` to classify by label prefix:
 
-Orders without a parseable `timeSlot` show only in **All**.
+- Starts with `morning` → `morning`
+- Starts with `evening` → `evening`
+- Otherwise → `null` (only visible under "All")
 
-## Default
-On mount, pick default from device local time:
-- 5:00–15:59 → Morning
-- 16:00–21:59 → Evening
-- Otherwise → All
+Remove the now-unused `getSlotStartHour` helper. Keep `getDefaultTimeBucket()` unchanged (time-of-day based default).
 
-## UI (src/pages/MyDeliveries.tsx)
-Add a second row of filter chips below the existing Today/Tomorrow/Delivered/All tabs:
-
-```text
-[ Morning (n) ] [ Evening (n) ] [ All (n) ]
-```
-
-Segmented control style using existing `Tabs`/`TabsList`/`TabsTrigger` for consistency. Counts reflect the currently selected date tab.
-
-## Implementation
-Only edit `src/pages/MyDeliveries.tsx`:
-1. Add `type TimeFilter = 'morning' | 'evening' | 'all'` and `timeFilter` state initialized via a `getDefaultTimeBucket()` helper reading `new Date().getHours()`.
-2. Add helper `getSlotStartHour(order)` that splits `order.timeSlot` on `-` / `:` and returns a number or null.
-3. After the existing `filteredOrders` memo, add a `timeFilteredOrders` memo that applies the bucket filter.
-4. Compute `timeCounts` (morning/evening/all) from `currentOrders` (post-search but simpler: from `currentOrders`, so counts stay stable while typing — apply search on top).
-   - Final render list = `timeFilteredOrders` intersected with search results (compose both filters).
-5. Render a new `Tabs` row bound to `timeFilter` with three triggers showing counts.
-6. Reset `visibleCount` to 5 when `timeFilter` changes.
-7. Empty state copy: when a bucket has 0 orders, show "No morning deliveries" / "No evening deliveries".
-
-No backend, RPC, or service changes.
+No other files or backend changes needed.

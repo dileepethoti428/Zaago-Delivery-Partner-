@@ -19,19 +19,11 @@ import type { AssignedOrder } from '@/services/assignedOrders';
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 type TimeFilter = 'morning' | 'evening' | 'all';
 
-function getSlotStartHour(slot?: string | null): number | null {
-  if (!slot || typeof slot !== 'string') return null;
-  const match = slot.match(/(\d{1,2})\s*:?\s*(\d{0,2})/);
-  if (!match) return null;
-  const h = parseInt(match[1], 10);
-  return Number.isFinite(h) ? h : null;
-}
-
 function bucketOf(slot?: string | null): 'morning' | 'evening' | null {
-  const h = getSlotStartHour(slot);
-  if (h == null) return null;
-  if (h >= 5 && h < 12) return 'morning';
-  if (h >= 16 && h < 21) return 'evening';
+  if (!slot || typeof slot !== 'string') return null;
+  const s = slot.trim().toLowerCase();
+  if (s.startsWith('morning')) return 'morning';
+  if (s.startsWith('evening')) return 'evening';
   return null;
 }
 
