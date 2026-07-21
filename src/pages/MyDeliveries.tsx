@@ -224,6 +224,23 @@ export default function MyDeliveries() {
           </TabsList>
         </Tabs>
 
+        {/* Time-of-Day Filter */}
+        {dateFilter !== 'delivered' && (
+          <Tabs value={timeFilter} onValueChange={(v) => { setTimeFilter(v as TimeFilter); setVisibleCount(5); }}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="morning" className="text-xs">
+                Morning ({timeCounts.morning})
+              </TabsTrigger>
+              <TabsTrigger value="evening" className="text-xs">
+                Evening ({timeCounts.evening})
+              </TabsTrigger>
+              <TabsTrigger value="all" className="text-xs">
+                All ({timeCounts.all})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+
         {/* Search Bar */}
         {!isLoading && !error && currentOrders.length > 0 && (
           <div className="relative">
