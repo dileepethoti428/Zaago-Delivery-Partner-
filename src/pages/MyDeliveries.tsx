@@ -17,10 +17,35 @@ import { PickupSummaryCard } from '@/components/delivery/PickupSummaryCard';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
+type TimeFilter = 'morning' | 'evening' | 'all';
+
+function getSlotStartHour(slot?: string | null): number | null {
+  if (!slot || typeof slot !== 'string') return null;
+  const match = slot.match(/(\d{1,2})\s*:?\s*(\d{0,2})/);
+  if (!match) return null;
+  const h = parseInt(match[1], 10);
+  return Number.isFinite(h) ? h : null;
+}
+
+function bucketOf(slot?: string | null): 'morning' | 'evening' | null {
+  const h = getSlotStartHour(slot);
+  if (h == null) return null;
+  if (h >= 5 && h < 12) return 'morning';
+  if (h >= 16 && h < 21) return 'evening';
+  return null;
+}
+
+function getDefaultTimeBucket(): TimeFilter {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 16) return 'morning';
+  if (h >= 16 && h < 22) return 'evening';
+  return 'all';
+}
 
 export default function MyDeliveries() {
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>(() => getDefaultTimeBucket());
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(5);
 
