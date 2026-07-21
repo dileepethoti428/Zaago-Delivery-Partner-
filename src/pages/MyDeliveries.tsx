@@ -138,19 +138,35 @@ export default function MyDeliveries() {
     all: todayOrders.length + tomorrowOrders.length,
   }), [todayOrders, tomorrowOrders, deliveredOrders]);
 
-  // Client-side search filter
+  // Time-of-day filter applied on top of the date-tab list
+  const timeFilteredOrders = useMemo(() => {
+    if (timeFilter === 'all') return currentOrders;
+    return currentOrders.filter(o => bucketOf(o.timeSlot) === timeFilter);
+  }, [currentOrders, timeFilter]);
+
+  const timeCounts = useMemo(() => {
+    let morning = 0, evening = 0;
+    for (const o of currentOrders) {
+      const b = bucketOf(o.timeSlot);
+      if (b === 'morning') morning++;
+      else if (b === 'evening') evening++;
+    }
+    return { morning, evening, all: currentOrders.length };
+  }, [currentOrders]);
+
+  // Client-side search filter (applied on top of time filter)
   const filteredOrders = useMemo(() => {
-    if (!search.trim()) return currentOrders;
+    if (!search.trim()) return timeFilteredOrders;
     const q = search.trim().toLowerCase();
     const toStr = (v: unknown) => (typeof v === 'string' ? v : v ? JSON.stringify(v) : '');
-    return currentOrders.filter(order =>
+    return timeFilteredOrders.filter(order =>
       toStr(order.customerName).toLowerCase().includes(q) ||
       toStr(order.deliveryAddress).toLowerCase().includes(q) ||
       toStr(order.customerAddress).toLowerCase().includes(q) ||
       toStr(order.productName).toLowerCase().includes(q) ||
       toStr(order.sellerName).toLowerCase().includes(q)
     );
-  }, [currentOrders, search]);
+  }, [timeFilteredOrders, search]);
 
   const handleViewOrder = (order: typeof todayOrders[0]) => {
     const navId = order.dailyOrderId || order.id;
