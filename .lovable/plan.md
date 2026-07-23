@@ -1,21 +1,16 @@
-Update the empty state on the My Deliveries page to show context-aware messages based on the active time filter.
+## Problem
 
-## Change
+On the Delivered tab, the page shows "No evening orders / No deliveries scheduled for this evening" even though 4 delivered orders exist (Delivered (4)).
 
-In `src/pages/MyDeliveries.tsx`, replace the generic search-style empty state with a time-filter-aware empty state. When `filteredOrders.length === 0` but `currentOrders.length > 0`:
+## Root cause
 
-- If `timeFilter === 'morning'` → show "No orders for this morning"
-- If `timeFilter === 'evening'` → show "No orders for this evening"
-- If `timeFilter === 'all'` (and search is empty) → keep the existing tab-level empty state: "No deliveries assigned for today / tomorrow / ..."
-- If a search is active but returns nothing → keep the existing "No orders match '<search>'" message
+In `src/pages/MyDeliveries.tsx`, the time-of-day filter UI is hidden for the Delivered tab, but the underlying `timeFilter` state still applies to the list via `timeFilteredOrders`. Since the default bucket is auto-picked from current time (e.g. "evening"), delivered orders whose `deliveryTimeSlot` doesn't match get filtered out — producing the wrong empty state and hiding real delivered orders.
 
-## Why
+## Fix
 
-The current "No results" message is confusing when the time filter (Morning/Evening/All) is the only reason the list is empty. Riders should immediately understand that orders exist for the day, just not in the selected slot.
+In `src/pages/MyDeliveries.tsx`:
 
-## Implementation details
+1. Bypass the time filter when `dateFilter === 'delivered'` — `timeFilteredOrders` should return `currentOrders` as-is for that tab.
+2. In the "search/time filter returned nothing" empty state, guard the morning/evening branches so they only render when `dateFilter !== 'delivered'`. For delivered with no rows, fall back to the standard delivered empty message ("No deliveries completed today").
 
-- Add a new conditional empty block just above the existing search empty state in `MyDeliveries.tsx`.
-- Use the existing `timeFilter` and `currentOrders` state already available in the component.
-- No backend, state, or other component changes are needed.
-- Existing empty state illustrations (Search icon, Package icon) and motion can be reused.
+No backend or other component changes needed.
