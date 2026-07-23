@@ -132,9 +132,10 @@ export default function MyDeliveries() {
 
   // Time-of-day filter applied on top of the date-tab list
   const timeFilteredOrders = useMemo(() => {
+    if (dateFilter === 'delivered') return currentOrders;
     if (timeFilter === 'all') return currentOrders;
     return currentOrders.filter(o => bucketOf(o.deliveryTimeSlot) === timeFilter);
-  }, [currentOrders, timeFilter]);
+  }, [currentOrders, timeFilter, dateFilter]);
 
   const timeCounts = useMemo(() => {
     let morning = 0, evening = 0;
@@ -305,13 +306,13 @@ export default function MyDeliveries() {
                 <h3 className="font-semibold text-foreground mb-1">No results</h3>
                 <p className="text-sm text-muted-foreground">No orders match "{search}"</p>
               </>
-            ) : timeFilter === 'morning' ? (
+            ) : timeFilter === 'morning' && dateFilter !== 'delivered' ? (
               <>
                 <Sun className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
                 <h3 className="font-semibold text-foreground mb-1">No morning orders</h3>
                 <p className="text-sm text-muted-foreground">No deliveries scheduled for this morning</p>
               </>
-            ) : timeFilter === 'evening' ? (
+            ) : timeFilter === 'evening' && dateFilter !== 'delivered' ? (
               <>
                 <Moon className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
                 <h3 className="font-semibold text-foreground mb-1">No evening orders</h3>
