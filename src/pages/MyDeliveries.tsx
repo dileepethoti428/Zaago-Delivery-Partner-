@@ -292,16 +292,38 @@ export default function MyDeliveries() {
           </motion.div>
         )}
 
-        {/* Empty State — search returned nothing */}
+        {/* Empty State — search or time filter returned nothing */}
         {!isLoading && !error && currentOrders.length > 0 && filteredOrders.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center py-10"
           >
-            <Search className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-            <h3 className="font-semibold text-foreground mb-1">No results</h3>
-            <p className="text-sm text-muted-foreground">No orders match "{search}"</p>
+            {search.trim() ? (
+              <>
+                <Search className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground mb-1">No results</h3>
+                <p className="text-sm text-muted-foreground">No orders match "{search}"</p>
+              </>
+            ) : timeFilter === 'morning' ? (
+              <>
+                <Sun className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground mb-1">No morning orders</h3>
+                <p className="text-sm text-muted-foreground">No deliveries scheduled for this morning</p>
+              </>
+            ) : timeFilter === 'evening' ? (
+              <>
+                <Moon className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground mb-1">No evening orders</h3>
+                <p className="text-sm text-muted-foreground">No deliveries scheduled for this evening</p>
+              </>
+            ) : (
+              <>
+                <Search className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground mb-1">No results</h3>
+                <p className="text-sm text-muted-foreground">No orders match the current filters</p>
+              </>
+            )}
           </motion.div>
         )}
 
