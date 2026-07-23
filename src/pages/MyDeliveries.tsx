@@ -306,13 +306,13 @@ export default function MyDeliveries() {
                 <h3 className="font-semibold text-foreground mb-1">No results</h3>
                 <p className="text-sm text-muted-foreground">No orders match "{search}"</p>
               </>
-            ) : timeFilter === 'morning' ? (
+            ) : timeFilter === 'morning' && dateFilter !== 'delivered' ? (
               <>
                 <Sun className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
                 <h3 className="font-semibold text-foreground mb-1">No morning orders</h3>
                 <p className="text-sm text-muted-foreground">No deliveries scheduled for this morning</p>
               </>
-            ) : timeFilter === 'evening' ? (
+            ) : timeFilter === 'evening' && dateFilter !== 'delivered' ? (
               <>
                 <Moon className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
                 <h3 className="font-semibold text-foreground mb-1">No evening orders</h3>
