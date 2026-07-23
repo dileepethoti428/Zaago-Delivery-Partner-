@@ -1,13 +1,21 @@
-## Root cause
-`delivery_time_slot` in the DB is a label string — one of `morning`, `morning-early`, `morning-late`, `evening-early`, `evening-late` — not a `HH:MM-HH:MM` range. The current `bucketOf()` in `MyDeliveries.tsx` tries to parse an hour with a regex and always returns `null`, so Morning/Evening counts are always 0.
+Update the empty state on the My Deliveries page to show context-aware messages based on the active time filter.
 
-## Fix
-Update `bucketOf()` in `src/pages/MyDeliveries.tsx` to classify by label prefix:
+## Change
 
-- Starts with `morning` → `morning`
-- Starts with `evening` → `evening`
-- Otherwise → `null` (only visible under "All")
+In `src/pages/MyDeliveries.tsx`, replace the generic search-style empty state with a time-filter-aware empty state. When `filteredOrders.length === 0` but `currentOrders.length > 0`:
 
-Remove the now-unused `getSlotStartHour` helper. Keep `getDefaultTimeBucket()` unchanged (time-of-day based default).
+- If `timeFilter === 'morning'` → show "No orders for this morning"
+- If `timeFilter === 'evening'` → show "No orders for this evening"
+- If `timeFilter === 'all'` (and search is empty) → keep the existing tab-level empty state: "No deliveries assigned for today / tomorrow / ..."
+- If a search is active but returns nothing → keep the existing "No orders match '<search>'" message
 
-No other files or backend changes needed.
+## Why
+
+The current "No results" message is confusing when the time filter (Morning/Evening/All) is the only reason the list is empty. Riders should immediately understand that orders exist for the day, just not in the selected slot.
+
+## Implementation details
+
+- Add a new conditional empty block just above the existing search empty state in `MyDeliveries.tsx`.
+- Use the existing `timeFilter` and `currentOrders` state already available in the component.
+- No backend, state, or other component changes are needed.
+- Existing empty state illustrations (Search icon, Package icon) and motion can be reused.
