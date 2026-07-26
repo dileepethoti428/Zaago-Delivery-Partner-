@@ -62,8 +62,9 @@ export function RecentEarningsList({ earnings, type, delay = 0 }: RecentEarnings
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'confirmed':
-      case 'pending':
         return <Badge variant="default" className="bg-green-600 text-white text-xs">Delivered</Badge>;
+      case 'pending':
+        return <Badge variant="default" className="bg-amber-500 text-white text-xs">In Progress</Badge>;
       case 'cancelled':
         return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
       default:
