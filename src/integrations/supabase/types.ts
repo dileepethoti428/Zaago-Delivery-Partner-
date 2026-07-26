@@ -6792,6 +6792,7 @@ export type Database = {
           delivery_fee_per_delivery: number
           discount_1month: number | null
           discount_1week: number | null
+          discount_3months: number | null
           discount_6months: number | null
           discount_percentage: number
           id: string
@@ -6809,6 +6810,7 @@ export type Database = {
           delivery_fee_per_delivery?: number
           discount_1month?: number | null
           discount_1week?: number | null
+          discount_3months?: number | null
           discount_6months?: number | null
           discount_percentage?: number
           id?: string
@@ -6826,6 +6828,7 @@ export type Database = {
           delivery_fee_per_delivery?: number
           discount_1month?: number | null
           discount_1week?: number | null
+          discount_3months?: number | null
           discount_6months?: number | null
           discount_percentage?: number
           id?: string
@@ -9914,6 +9917,8 @@ export type Database = {
           customer_name: string
           customer_phone: string
           delivery_date: string
+          delivery_time: string
+          delivery_time_slot: string
           order_id: string
           order_status: string
           payment_status: string
