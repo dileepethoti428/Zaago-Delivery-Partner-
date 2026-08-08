@@ -7,6 +7,7 @@ interface SwipeToAcceptProps {
   disabled?: boolean;
   loading?: boolean;
   label?: string;
+  busyLabel?: string;
 }
 
 const THUMB_SIZE = 52;
@@ -17,6 +18,7 @@ export function SwipeToAccept({
   disabled,
   loading,
   label = 'Swipe to accept',
+  busyLabel = 'Accepting…',
 }: SwipeToAcceptProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragX, setDragX] = useState(0);
@@ -115,7 +117,7 @@ export function SwipeToAccept({
         className="absolute inset-0 flex items-center justify-center pointer-events-none text-primary font-semibold text-sm"
         style={{ opacity: 1 - progress * 0.9 }}
       >
-        {isBusy ? 'Accepting…' : label}
+        {isBusy ? busyLabel : label}
       </div>
       {/* Thumb */}
       <button
