@@ -534,6 +534,15 @@ export default function ManageDelivery() {
           {/* Action Buttons */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t-2 space-y-3">
             {!isTerminalState && (
+              <SwipeToAccept
+                onAccept={handleMarkAsDelivered}
+                loading={isCompleting || isGeneratingQR}
+                label="Swipe right to Deliver"
+                busyLabel={isGeneratingQR ? 'Generating…' : 'Completing…'}
+              />
+            )}
+
+            {!isTerminalState && (
               <div className="flex gap-3">
                 <Button
                   variant="outline"
@@ -554,30 +563,14 @@ export default function ManageDelivery() {
                 </Button>
 
                 <Button
+                  variant="destructive"
                   className="flex-1 rounded-xl h-12 text-sm font-medium"
-                  onClick={handleMarkAsDelivered}
-                  disabled={isCompleting || isGeneratingQR}
+                  onClick={handleCancel}
                 >
-                  {isCompleting ? (
-                    <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Completing...</>
-                  ) : isGeneratingQR ? (
-                    <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Generating...</>
-                  ) : (
-                    <><CheckCircle className="h-5 w-5 mr-2" />Delivered</>
-                  )}
+                  <XCircle className="h-5 w-5 mr-2" />
+                  Cancel Delivery
                 </Button>
               </div>
-            )}
-
-            {!isTerminalState && (
-              <Button
-                variant="destructive"
-                className="w-full rounded-xl h-12 text-sm font-medium"
-                onClick={handleCancel}
-              >
-                <XCircle className="h-5 w-5 mr-2" />
-                Cancel Delivery
-              </Button>
             )}
 
             {isTerminalState && (
