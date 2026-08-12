@@ -34,6 +34,8 @@ export interface AssignedOrder {
   sellerName: string | null;
   distanceFromShop?: number | null;
   deliveryType: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
+  isCompensation?: boolean;
+  originalMissedDate?: string | null;
 }
 
 // Interface for the enriched RPC response
