@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { AssignedOrderCard } from '@/components/order/AssignedOrderCard';
-import { useTodayOrders, useTomorrowOrders, useDeliveredOrders } from '@/hooks/useAssignedOrders';
+import { useTodayOrders, useTomorrowOrders, useDeliveredOrders, useCompensationOrders, istDateString } from '@/hooks/useAssignedOrders';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,8 @@ import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
 import { CodCollectionCard } from '@/components/delivery/CodCollectionCard';
 import { PickupSummaryCard } from '@/components/delivery/PickupSummaryCard';
-import type { AssignedOrder } from '@/services/assignedOrders';
+import { completeCompensationOrder, type AssignedOrder } from '@/services/assignedOrders';
+
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 type TimeFilter = 'morning' | 'evening' | 'all';
