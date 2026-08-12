@@ -136,11 +136,11 @@ export default function MyDeliveries() {
 
   // Counts from RPC results - NO FRONTEND DATE COMPARISON
   const counts = useMemo(() => ({
-    today: todayOrders.length,
-    tomorrow: tomorrowOrders.length,
+    today: todayOrders.length + todayComps.length,
+    tomorrow: tomorrowOrders.length + tomorrowComps.length,
     delivered: deliveredOrders.length,
-    all: todayOrders.length + tomorrowOrders.length,
-  }), [todayOrders, tomorrowOrders, deliveredOrders]);
+    all: todayOrders.length + todayComps.length + tomorrowOrders.length + tomorrowComps.length,
+  }), [todayOrders, tomorrowOrders, deliveredOrders, todayComps, tomorrowComps]);
 
   // Time-of-day filter applied on top of the date-tab list
   const timeFilteredOrders = useMemo(() => {
