@@ -173,7 +173,18 @@ export default function MyDeliveries() {
     );
   }, [timeFilteredOrders, search]);
 
-  const handleViewOrder = (order: typeof todayOrders[0]) => {
+  const handleViewOrder = async (order: AssignedOrder) => {
+    // Compensation deliveries aren't daily_orders — complete them in place
+    if (order.isCompensation) {
+      try {
+        await completeCompensationOrder(order.id);
+        toast.success('Compensation delivery marked as delivered');
+        queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to complete delivery');
+      }
+      return;
+    }
     const navId = order.dailyOrderId || order.id;
     if (!navId) {
       toast.error('Order details not available');
