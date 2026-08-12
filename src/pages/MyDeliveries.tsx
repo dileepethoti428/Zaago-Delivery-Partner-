@@ -85,21 +85,22 @@ export default function MyDeliveries() {
     });
   };
 
-  // Current orders based on selected tab - sorted by distance
+  // Current orders based on selected tab - sorted by distance (compensations merged in)
   const currentOrders = useMemo(() => {
     switch (dateFilter) {
       case 'today':
-        return sortByDistance(todayOrders);
+        return sortByDistance([...todayOrders, ...todayComps]);
       case 'tomorrow':
-        return sortByDistance(tomorrowOrders);
+        return sortByDistance([...tomorrowOrders, ...tomorrowComps]);
       case 'delivered':
         return deliveredOrders; // No sorting for delivered
       case 'all':
-        return sortByDistance([...todayOrders, ...tomorrowOrders]);
+        return sortByDistance([...todayOrders, ...todayComps, ...tomorrowOrders, ...tomorrowComps]);
       default:
-        return sortByDistance(todayOrders);
+        return sortByDistance([...todayOrders, ...todayComps]);
     }
-  }, [dateFilter, todayOrders, tomorrowOrders, deliveredOrders]);
+  }, [dateFilter, todayOrders, tomorrowOrders, deliveredOrders, todayComps, tomorrowComps]);
+
 
   // Loading state for current tab
   const isLoading = useMemo(() => {
