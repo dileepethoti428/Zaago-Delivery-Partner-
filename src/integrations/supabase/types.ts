@@ -8942,6 +8942,10 @@ export type Database = {
       cleanup_abandoned_payment_orders: { Args: never; Returns: number }
       cleanup_expired_otps: { Args: never; Returns: number }
       clear_user_cart: { Args: { cart_user_id: string }; Returns: undefined }
+      complete_agent_compensation: {
+        Args: { p_compensation_id: string }
+        Returns: Json
+      }
       complete_cod_delivery: {
         Args: {
           p_agent_id: string
@@ -9280,6 +9284,41 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_agent_compensations: {
+        Args: { p_date: string }
+        Returns: {
+          assigned_agent_id: string
+          assigned_by: string
+          created_at: string
+          customer_address: string
+          customer_city: string
+          customer_id: string
+          customer_latitude: number
+          customer_longitude: number
+          customer_name: string
+          customer_phone: string
+          customer_pincode: string
+          delivery_address: Json
+          delivery_latitude: number
+          delivery_longitude: number
+          delivery_time_slot: string
+          is_on_vacation: boolean
+          location_id: number
+          order_date: string
+          order_id: string
+          order_status: string
+          original_missed_date: string
+          product_id: string
+          product_image_url: string
+          product_name: string
+          product_price: number
+          quantity: number
+          seller_latitude: number
+          seller_longitude: number
+          seller_name: string
+          subscription_id: string
+        }[]
+      }
       get_agent_distance_breakdown: {
         Args: { agent_uuid: string }
         Returns: Json
