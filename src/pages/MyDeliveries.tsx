@@ -52,6 +52,15 @@ export default function MyDeliveries() {
   const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders(dateFilter === 'tomorrow' || dateFilter === 'all');
   const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders(dateFilter === 'delivered');
 
+  // Compensation (make-up) deliveries live in vacation_compensations, fetched separately
+  const todayISO = istDateString(0);
+  const tomorrowISO = istDateString(1);
+  const { data: todayComps = [] } = useCompensationOrders(todayISO, dateFilter === 'today' || dateFilter === 'all');
+  const { data: tomorrowComps = [] } = useCompensationOrders(tomorrowISO, dateFilter === 'tomorrow' || dateFilter === 'all');
+  const queryClient = useQueryClient();
+
+
+
   // Sort orders by distance from seller shop, vacation orders at end
   const sortByDistance = (orders: AssignedOrder[]): AssignedOrder[] => {
     return orders.map(order => {
