@@ -254,6 +254,40 @@ export async function fetchDeliveredOrders(): Promise<AssignedOrder[]> {
   return enrichWithProductUnits(transformDeliveredOrders((data || []) as DeliveredOrderRow[]));
 }
 
+/**
+ * Compensation deliveries (make-up deliveries the seller adds for a missed day).
+ * These live in vacation_compensations, NOT daily_orders, so they need their own RPC.
+ */
+export async function fetchCompensationOrders(dateISO: string): Promise<AssignedOrder[]> {
+  const { data, error } = await supabase.rpc('get_agent_compensations' as never, { p_date: dateISO } as never);
+
+  if (error) {
+    console.error('[AssignedOrders] COMPENSATION RPC error:', error);
+    throw error;
+  }
+
+  const rows = (data || []) as unknown as Array<EnrichedOrderRow & { original_missed_date: string | null }>;
+  const mapped = transformEnrichedOrders(rows).map((o, i) => ({
+    ...o,
+    isCompensation: true,
+    originalMissedDate: rows[i]?.original_missed_date ?? null,
+  }));
+
+  return enrichWithProductUnits(mapped);
+}
+
+/** Mark a compensation delivery as delivered */
+export async function completeCompensationOrder(compensationId: string): Promise<void> {
+  const { data, error } = await supabase.rpc(
+    'complete_agent_compensation' as never,
+    { p_compensation_id: compensationId } as never
+  );
+  if (error) throw error;
+  const res = data as unknown as { success?: boolean; error?: string } | null;
+  if (res && res.success === false) throw new Error(res.error || 'Failed to complete compensation delivery');
+}
+
+
 // Legacy function - kept for backward compatibility, now fetches all orders
 export async function fetchAssignedOrders(): Promise<AssignedOrder[]> {
   const [today, tomorrow, upcoming] = await Promise.all([
