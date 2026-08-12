@@ -5,9 +5,32 @@ import {
   fetchUpcomingOrders,
   fetchDeliveredOrders,
   fetchAssignedOrders,
+  fetchCompensationOrders,
   type AssignedOrder 
 } from '@/services/assignedOrders';
 import { useAuthStore } from '@/store/auth';
+
+/** IST date string (yyyy-mm-dd) offset by N days */
+export function istDateString(offsetDays = 0): string {
+  const now = new Date();
+  const ist = new Date(now.getTime() + (5.5 * 60 + now.getTimezoneOffset()) * 60000);
+  ist.setDate(ist.getDate() + offsetDays);
+  const m = `${ist.getMonth() + 1}`.padStart(2, '0');
+  const d = `${ist.getDate()}`.padStart(2, '0');
+  return `${ist.getFullYear()}-${m}-${d}`;
+}
+
+// Compensation deliveries for a given date (make-up deliveries for missed days)
+export function useCompensationOrders(dateISO: string, isScreenActive = false) {
+  const session = useAuthStore((s) => s.session);
+  return useQuery<AssignedOrder[], Error>({
+    queryKey: ['assigned-orders', 'compensations', dateISO],
+    queryFn: () => fetchCompensationOrders(dateISO),
+    enabled: !!session?.access_token && isScreenActive,
+    staleTime: 30 * 1000,
+  });
+}
+
 
 // Hook for TODAY's orders — only fetches when screen is active
 export function useTodayOrders(isScreenActive = false) {

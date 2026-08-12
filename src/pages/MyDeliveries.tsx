@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { AssignedOrderCard } from '@/components/order/AssignedOrderCard';
-import { useTodayOrders, useTomorrowOrders, useDeliveredOrders } from '@/hooks/useAssignedOrders';
+import { useTodayOrders, useTomorrowOrders, useDeliveredOrders, useCompensationOrders, istDateString } from '@/hooks/useAssignedOrders';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,8 @@ import { useScreenLocationSync } from '@/hooks/useScreenLocationSync';
 import { getDistanceKm } from '@/utils/geo';
 import { CodCollectionCard } from '@/components/delivery/CodCollectionCard';
 import { PickupSummaryCard } from '@/components/delivery/PickupSummaryCard';
-import type { AssignedOrder } from '@/services/assignedOrders';
+import { completeCompensationOrder, type AssignedOrder } from '@/services/assignedOrders';
+
 
 type DateFilter = 'today' | 'tomorrow' | 'delivered' | 'all';
 type TimeFilter = 'morning' | 'evening' | 'all';
@@ -50,6 +52,15 @@ export default function MyDeliveries() {
   const { data: tomorrowOrders = [], isLoading: loadingTomorrow, error: errorTomorrow } = useTomorrowOrders(dateFilter === 'tomorrow' || dateFilter === 'all');
   const { data: deliveredOrders = [], isLoading: loadingDelivered, error: errorDelivered } = useDeliveredOrders(dateFilter === 'delivered');
 
+  // Compensation (make-up) deliveries live in vacation_compensations, fetched separately
+  const todayISO = istDateString(0);
+  const tomorrowISO = istDateString(1);
+  const { data: todayComps = [] } = useCompensationOrders(todayISO, dateFilter === 'today' || dateFilter === 'all');
+  const { data: tomorrowComps = [] } = useCompensationOrders(tomorrowISO, dateFilter === 'tomorrow' || dateFilter === 'all');
+  const queryClient = useQueryClient();
+
+
+
   // Sort orders by distance from seller shop, vacation orders at end
   const sortByDistance = (orders: AssignedOrder[]): AssignedOrder[] => {
     return orders.map(order => {
@@ -74,21 +85,22 @@ export default function MyDeliveries() {
     });
   };
 
-  // Current orders based on selected tab - sorted by distance
+  // Current orders based on selected tab - sorted by distance (compensations merged in)
   const currentOrders = useMemo(() => {
     switch (dateFilter) {
       case 'today':
-        return sortByDistance(todayOrders);
+        return sortByDistance([...todayOrders, ...todayComps]);
       case 'tomorrow':
-        return sortByDistance(tomorrowOrders);
+        return sortByDistance([...tomorrowOrders, ...tomorrowComps]);
       case 'delivered':
         return deliveredOrders; // No sorting for delivered
       case 'all':
-        return sortByDistance([...todayOrders, ...tomorrowOrders]);
+        return sortByDistance([...todayOrders, ...todayComps, ...tomorrowOrders, ...tomorrowComps]);
       default:
-        return sortByDistance(todayOrders);
+        return sortByDistance([...todayOrders, ...todayComps]);
     }
-  }, [dateFilter, todayOrders, tomorrowOrders, deliveredOrders]);
+  }, [dateFilter, todayOrders, tomorrowOrders, deliveredOrders, todayComps, tomorrowComps]);
+
 
   // Loading state for current tab
   const isLoading = useMemo(() => {
@@ -124,11 +136,11 @@ export default function MyDeliveries() {
 
   // Counts from RPC results - NO FRONTEND DATE COMPARISON
   const counts = useMemo(() => ({
-    today: todayOrders.length,
-    tomorrow: tomorrowOrders.length,
+    today: todayOrders.length + todayComps.length,
+    tomorrow: tomorrowOrders.length + tomorrowComps.length,
     delivered: deliveredOrders.length,
-    all: todayOrders.length + tomorrowOrders.length,
-  }), [todayOrders, tomorrowOrders, deliveredOrders]);
+    all: todayOrders.length + todayComps.length + tomorrowOrders.length + tomorrowComps.length,
+  }), [todayOrders, tomorrowOrders, deliveredOrders, todayComps, tomorrowComps]);
 
   // Time-of-day filter applied on top of the date-tab list
   const timeFilteredOrders = useMemo(() => {
@@ -161,7 +173,18 @@ export default function MyDeliveries() {
     );
   }, [timeFilteredOrders, search]);
 
-  const handleViewOrder = (order: typeof todayOrders[0]) => {
+  const handleViewOrder = async (order: AssignedOrder) => {
+    // Compensation deliveries aren't daily_orders — complete them in place
+    if (order.isCompensation) {
+      try {
+        await completeCompensationOrder(order.id);
+        toast.success('Compensation delivery marked as delivered');
+        queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to complete delivery');
+      }
+      return;
+    }
     const navId = order.dailyOrderId || order.id;
     if (!navId) {
       toast.error('Order details not available');

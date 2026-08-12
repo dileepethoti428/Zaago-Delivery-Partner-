@@ -65,7 +65,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
   };
 
   return (
-    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation ? undefined : onManage} className={getBorderClass(order.deliveryType)}>
+    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation || order.isCompensation ? undefined : onManage} className={order.isCompensation ? 'border-l-4 border-l-amber-500' : getBorderClass(order.deliveryType)}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header with badges */}
@@ -91,6 +91,12 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                   <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs">
                     <Package className="h-3 w-3 mr-1" />
                     Book Now Get Later
+                  </Badge>
+                )}
+                {order.isCompensation && (
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs">
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Compensation
                   </Badge>
                 )}
                 {order.isOnVacation && (
