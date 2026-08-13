@@ -115,7 +115,7 @@ function transformEnrichedOrders(rows: EnrichedOrderRow[]): AssignedOrder[] {
 
 // Batch-fetch product units and stamp onto orders
 async function enrichWithProductUnits(orders: AssignedOrder[]): Promise<AssignedOrder[]> {
-  const missing = orders.filter(o => !o.productUnit && o.productId).map(o => o.productId!) as string[];
+  const missing = orders.flatMap((order) => !order.productUnit && order.productId ? [order.productId] : []);
   const ids = Array.from(new Set(missing));
   if (ids.length === 0) return orders;
   try {

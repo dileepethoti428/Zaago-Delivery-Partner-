@@ -3,7 +3,7 @@ import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CardContent } from '@/components/ui/card';
-import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree, Navigation } from 'lucide-react';
+import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree, Navigation, CheckCircle2 } from 'lucide-react';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 // Helper to safely extract address string from string or object
@@ -96,7 +96,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                 {order.isCompensation && (
                   <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs">
                     <RefreshCw className="h-3 w-3 mr-1" />
-                    Compensation
+                    Compensation{order.originalMissedDate ? ` · missed ${new Date(`${order.originalMissedDate}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}
                   </Badge>
                 )}
                 {order.isOnVacation && (
@@ -182,7 +182,8 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                 className="w-full"
                 onClick={handleManage}
               >
-                Manage Delivery
+                {order.isCompensation && <CheckCircle2 className="h-4 w-4 mr-2" />}
+                {order.isCompensation ? 'Mark as Delivered' : 'Manage Delivery'}
               </Button>
             )}
             {!order.isOnVacation && (order.deliveryLatitude || order.customerLatitude) && (
@@ -207,6 +208,8 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     prevProps.order.status === nextProps.order.status &&
     prevProps.order.quantity === nextProps.order.quantity &&
     prevProps.order.isOnVacation === nextProps.order.isOnVacation &&
+    prevProps.order.isCompensation === nextProps.order.isCompensation &&
+    prevProps.order.originalMissedDate === nextProps.order.originalMissedDate &&
     prevProps.order.distanceFromShop === nextProps.order.distanceFromShop &&
     prevProps.order.deliveryType === nextProps.order.deliveryType &&
     prevProps.dateLabel === nextProps.dateLabel &&

@@ -55,8 +55,16 @@ export default function MyDeliveries() {
   // Compensation (make-up) deliveries live in vacation_compensations, fetched separately
   const todayISO = istDateString(0);
   const tomorrowISO = istDateString(1);
-  const { data: todayComps = [] } = useCompensationOrders(todayISO, dateFilter === 'today' || dateFilter === 'all');
-  const { data: tomorrowComps = [] } = useCompensationOrders(tomorrowISO, dateFilter === 'tomorrow' || dateFilter === 'all');
+  const {
+    data: todayComps = [],
+    isLoading: loadingTodayComps,
+    error: errorTodayComps,
+  } = useCompensationOrders(todayISO, dateFilter === 'today' || dateFilter === 'all');
+  const {
+    data: tomorrowComps = [],
+    isLoading: loadingTomorrowComps,
+    error: errorTomorrowComps,
+  } = useCompensationOrders(tomorrowISO, dateFilter === 'tomorrow' || dateFilter === 'all');
   const queryClient = useQueryClient();
 
 
@@ -106,33 +114,33 @@ export default function MyDeliveries() {
   const isLoading = useMemo(() => {
     switch (dateFilter) {
       case 'today':
-        return loadingToday;
+        return loadingToday || loadingTodayComps;
       case 'tomorrow':
-        return loadingTomorrow;
+        return loadingTomorrow || loadingTomorrowComps;
       case 'delivered':
         return loadingDelivered;
       case 'all':
-        return loadingToday || loadingTomorrow;
+        return loadingToday || loadingTodayComps || loadingTomorrow || loadingTomorrowComps;
       default:
-        return loadingToday;
+        return loadingToday || loadingTodayComps;
     }
-  }, [dateFilter, loadingToday, loadingTomorrow, loadingDelivered]);
+  }, [dateFilter, loadingToday, loadingTodayComps, loadingTomorrow, loadingTomorrowComps, loadingDelivered]);
 
   // Error state for current tab
   const error = useMemo(() => {
     switch (dateFilter) {
       case 'today':
-        return errorToday;
+        return errorToday || errorTodayComps;
       case 'tomorrow':
-        return errorTomorrow;
+        return errorTomorrow || errorTomorrowComps;
       case 'delivered':
         return errorDelivered;
       case 'all':
-        return errorToday || errorTomorrow;
+        return errorToday || errorTodayComps || errorTomorrow || errorTomorrowComps;
       default:
-        return errorToday;
+        return errorToday || errorTodayComps;
     }
-  }, [dateFilter, errorToday, errorTomorrow, errorDelivered]);
+  }, [dateFilter, errorToday, errorTodayComps, errorTomorrow, errorTomorrowComps, errorDelivered]);
 
   // Counts from RPC results - NO FRONTEND DATE COMPARISON
   const counts = useMemo(() => ({
@@ -179,7 +187,14 @@ export default function MyDeliveries() {
       try {
         await completeCompensationOrder(order.id);
         toast.success('Compensation delivery marked as delivered');
-        queryClient.invalidateQueries({ queryKey: ['assigned-orders'] });
+        queryClient.setQueryData<AssignedOrder[]>(
+          ['assigned-orders', 'compensations', todayISO],
+          (current = []) => current.filter((item) => item.id !== order.id),
+        );
+        queryClient.setQueryData<AssignedOrder[]>(
+          ['assigned-orders', 'compensations', tomorrowISO],
+          (current = []) => current.filter((item) => item.id !== order.id),
+        );
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Failed to complete delivery');
       }
