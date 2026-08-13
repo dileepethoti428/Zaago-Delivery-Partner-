@@ -122,7 +122,7 @@ async function enrichWithProductUnits(orders: AssignedOrder[]): Promise<Assigned
     const { data } = await supabase.from('products').select('id, unit').in('id', ids);
     if (!data || data.length === 0) return orders;
     const map = new Map<string, string>();
-    data.forEach((p: any) => { if (p.unit) map.set(p.id, p.unit); });
+    data.forEach((product) => { if (product.unit) map.set(product.id, product.unit); });
     return orders.map(o => o.productUnit || !o.productId ? o : { ...o, productUnit: map.get(o.productId) || null });
   } catch (e) {
     console.warn('[AssignedOrders] unit enrichment failed', e);
