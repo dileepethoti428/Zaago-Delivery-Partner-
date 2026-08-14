@@ -8943,7 +8943,7 @@ export type Database = {
       cleanup_expired_otps: { Args: never; Returns: number }
       clear_user_cart: { Args: { cart_user_id: string }; Returns: undefined }
       complete_agent_compensation: {
-        Args: { p_compensation_id: string }
+        Args: { p_compensation_id: string; p_payment_method?: string }
         Returns: Json
       }
       complete_cod_delivery: {
@@ -9546,6 +9546,10 @@ export type Database = {
           partner_name: string
           partner_phone: string
         }[]
+      }
+      get_compensation_details: {
+        Args: { p_compensation_id: string }
+        Returns: Json
       }
       get_current_ist_date: { Args: never; Returns: string }
       get_current_user_category: { Args: never; Returns: Json }

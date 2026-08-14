@@ -36,7 +36,7 @@ export interface OrderDetails {
 }
 
 interface GetOrderDetailsOptions {
-  type?: 'order' | 'daily';
+  type?: 'order' | 'daily' | 'compensation';
 }
 
 export async function getOrderDetails(
@@ -45,6 +45,11 @@ export async function getOrderDetails(
 ): Promise<OrderDetails> {
   const { type = 'order' } = opts;
 
+  // Compensation (make-up) deliveries live in vacation_compensations
+  if (type === 'compensation') {
+    return getCompensationDetails(orderId);
+  }
+
   // For daily/subscription orders
   if (type === 'daily') {
     return getDailyOrderDetails(orderId);
@@ -52,6 +57,25 @@ export async function getOrderDetails(
 
   // For regular orders
   return getRegularOrderDetails(orderId);
+}
+
+async function getCompensationDetails(compensationId: string): Promise<OrderDetails> {
+  const { data, error } = await supabase.rpc(
+    'get_compensation_details' as never,
+    { p_compensation_id: compensationId } as never
+  );
+
+  if (error) {
+    console.error('Compensation details error:', error);
+    throw new Error('Order not found');
+  }
+
+  const res = data as unknown as (OrderDetails & { success?: boolean; error?: string }) | null;
+  if (!res || res.success === false) {
+    throw new Error(res?.error || 'Order not found');
+  }
+
+  return res as OrderDetails;
 }
 
 async function getDailyOrderDetails(orderId: string): Promise<OrderDetails> {

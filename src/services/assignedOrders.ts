@@ -276,11 +276,17 @@ export async function fetchCompensationOrders(dateISO: string): Promise<Assigned
   return enrichWithProductUnits(mapped);
 }
 
-/** Mark a compensation delivery as delivered */
-export async function completeCompensationOrder(compensationId: string): Promise<void> {
+/**
+ * Mark a compensation delivery as delivered.
+ * The RPC also writes delivery_history + agent_earnings_tracking (subscription-style, zero payout).
+ */
+export async function completeCompensationOrder(
+  compensationId: string,
+  paymentMethod: 'COD' | 'ONLINE' = 'COD'
+): Promise<void> {
   const { data, error } = await supabase.rpc(
     'complete_agent_compensation' as never,
-    { p_compensation_id: compensationId } as never
+    { p_compensation_id: compensationId, p_payment_method: paymentMethod } as never
   );
   if (error) throw error;
   const res = data as unknown as { success?: boolean; error?: string } | null;

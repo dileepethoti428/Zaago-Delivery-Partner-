@@ -10,6 +10,7 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrderDetails } from '@/services/orderDetails';
+import { completeCompensationOrder } from '@/services/assignedOrders';
 import { openGoogleMapsAddress, openGoogleMapsCoordinates } from '@/utils/maps';
 import { callPhone } from '@/utils/phone';
 import { useAuthStore } from '@/store/auth';
@@ -53,7 +54,10 @@ export default function ManageDelivery() {
     await completeDelivery('ONLINE');
   };
 
-  const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
+  const typeParam = searchParams.get('type');
+  const orderType: 'daily' | 'compensation' | 'order' =
+    typeParam === 'daily' ? 'daily' : typeParam === 'compensation' ? 'compensation' : 'order';
+  const isCompensation = orderType === 'compensation';
 
   // ✅ React Query replaces manual fetchOrder + retry loop — pause/resume safe
   const { data: order, isLoading: loading } = useQuery({
@@ -159,12 +163,21 @@ export default function ManageDelivery() {
     if (!order) return;
     setIsCompleting(true);
     try {
-      const { data, error } = await Promise.race([
-        supabase.functions.invoke('unified-complete-delivery', {
-          body: { order_id: order.id, payment_method: paymentMethod, order_type: orderType },
-        }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
-      ]);
+      let data: any;
+      let error: any;
+
+      if (isCompensation) {
+        // Compensation deliveries complete via RPC (records history + earnings)
+        await completeCompensationOrder(order.id, paymentMethod);
+        data = { success: true };
+      } else {
+        ({ data, error } = await Promise.race([
+          supabase.functions.invoke('unified-complete-delivery', {
+            body: { order_id: order.id, payment_method: paymentMethod, order_type: orderType },
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
+        ]));
+      }
 
       if (error || !data?.success) throw new Error(data?.error || 'Failed to complete delivery');
 
@@ -191,6 +204,10 @@ export default function ManageDelivery() {
 
   const handleQRPaymentComplete = async () => {
     setShowQRDialog(false);
+    if (isCompensation) {
+      await completeDelivery('ONLINE');
+      return;
+    }
     setIsCompleting(true);
     try {
       const { data, error } = await Promise.race([
