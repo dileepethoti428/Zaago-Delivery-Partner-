@@ -53,7 +53,10 @@ export default function ManageDelivery() {
     await completeDelivery('ONLINE');
   };
 
-  const orderType = searchParams.get('type') === 'daily' ? 'daily' : 'order';
+  const typeParam = searchParams.get('type');
+  const orderType: 'daily' | 'compensation' | 'order' =
+    typeParam === 'daily' ? 'daily' : typeParam === 'compensation' ? 'compensation' : 'order';
+  const isCompensation = orderType === 'compensation';
 
   // ✅ React Query replaces manual fetchOrder + retry loop — pause/resume safe
   const { data: order, isLoading: loading } = useQuery({
