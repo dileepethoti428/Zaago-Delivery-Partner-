@@ -10,6 +10,7 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrderDetails } from '@/services/orderDetails';
+import { completeCompensationOrder } from '@/services/assignedOrders';
 import { openGoogleMapsAddress, openGoogleMapsCoordinates } from '@/utils/maps';
 import { callPhone } from '@/utils/phone';
 import { useAuthStore } from '@/store/auth';
