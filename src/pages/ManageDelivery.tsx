@@ -204,6 +204,10 @@ export default function ManageDelivery() {
 
   const handleQRPaymentComplete = async () => {
     setShowQRDialog(false);
+    if (isCompensation) {
+      await completeDelivery('ONLINE');
+      return;
+    }
     setIsCompleting(true);
     try {
       const { data, error } = await Promise.race([
