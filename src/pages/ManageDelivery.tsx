@@ -162,12 +162,21 @@ export default function ManageDelivery() {
     if (!order) return;
     setIsCompleting(true);
     try {
-      const { data, error } = await Promise.race([
-        supabase.functions.invoke('unified-complete-delivery', {
-          body: { order_id: order.id, payment_method: paymentMethod, order_type: orderType },
-        }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
-      ]);
+      let data: any;
+      let error: any;
+
+      if (isCompensation) {
+        // Compensation deliveries complete via RPC (records history + earnings)
+        await completeCompensationOrder(order.id, paymentMethod);
+        data = { success: true };
+      } else {
+        ({ data, error } = await Promise.race([
+          supabase.functions.invoke('unified-complete-delivery', {
+            body: { order_id: order.id, payment_method: paymentMethod, order_type: orderType },
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000))
+        ]));
+      }
 
       if (error || !data?.success) throw new Error(data?.error || 'Failed to complete delivery');
 
