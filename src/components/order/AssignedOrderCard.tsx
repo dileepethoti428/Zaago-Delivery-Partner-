@@ -65,7 +65,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
   };
 
   return (
-    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation || order.isCompensation ? undefined : onManage} className={order.isCompensation ? 'border-l-4 border-l-amber-500' : getBorderClass(order.deliveryType)}>
+    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation ? undefined : onManage} className={order.isCompensation ? 'border-l-4 border-l-amber-500' : getBorderClass(order.deliveryType)}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header with badges */}

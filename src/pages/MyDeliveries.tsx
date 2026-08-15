@@ -182,22 +182,9 @@ export default function MyDeliveries() {
   }, [timeFilteredOrders, search]);
 
   const handleViewOrder = async (order: AssignedOrder) => {
-    // Compensation deliveries aren't daily_orders — complete them in place
+    // Compensation deliveries use the normal Manage Delivery flow
     if (order.isCompensation) {
-      try {
-        await completeCompensationOrder(order.id);
-        toast.success('Compensation delivery marked as delivered');
-        queryClient.setQueryData<AssignedOrder[]>(
-          ['assigned-orders', 'compensations', todayISO],
-          (current = []) => current.filter((item) => item.id !== order.id),
-        );
-        queryClient.setQueryData<AssignedOrder[]>(
-          ['assigned-orders', 'compensations', tomorrowISO],
-          (current = []) => current.filter((item) => item.id !== order.id),
-        );
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Failed to complete delivery');
-      }
+      navigate(`/manage-delivery/${order.id}?type=compensation`);
       return;
     }
     const navId = order.dailyOrderId || order.id;
@@ -207,6 +194,7 @@ export default function MyDeliveries() {
     }
     navigate(`/manage-delivery/${navId}?type=daily`);
   };
+
 
   // Format date label for "all" tab - uses IST timezone
   const formatDateLabel = (dateStr: string) => {
