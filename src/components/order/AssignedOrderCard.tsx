@@ -182,8 +182,8 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                 className="w-full"
                 onClick={handleManage}
               >
-                {order.isCompensation && <CheckCircle2 className="h-4 w-4 mr-2" />}
-                {order.isCompensation ? 'Mark as Delivered' : 'Manage Delivery'}
+                Manage Delivery
+
               </Button>
             )}
             {!order.isOnVacation && (order.deliveryLatitude || order.customerLatitude) && (
