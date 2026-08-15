@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
 import { AssignedOrderCard } from '@/components/order/AssignedOrderCard';
@@ -65,7 +64,7 @@ export default function MyDeliveries() {
     isLoading: loadingTomorrowComps,
     error: errorTomorrowComps,
   } = useCompensationOrders(tomorrowISO, dateFilter === 'tomorrow' || dateFilter === 'all');
-  const queryClient = useQueryClient();
+
 
 
 
