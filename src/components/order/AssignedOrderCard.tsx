@@ -3,7 +3,7 @@ import { AnimatedCard } from '@/components/ui/AnimatedCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CardContent } from '@/components/ui/card';
-import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree, Navigation, CheckCircle2 } from 'lucide-react';
+import { Clock, MapPin, Phone, Package, Calendar, RefreshCw, Palmtree, Navigation } from 'lucide-react';
 import type { AssignedOrder } from '@/services/assignedOrders';
 
 // Helper to safely extract address string from string or object
@@ -65,7 +65,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
   };
 
   return (
-    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation || order.isCompensation ? undefined : onManage} className={order.isCompensation ? 'border-l-4 border-l-amber-500' : getBorderClass(order.deliveryType)}>
+    <AnimatedCard delay={index * 0.05} onClick={order.isOnVacation ? undefined : onManage} className={order.isCompensation ? 'border-l-4 border-l-amber-500' : getBorderClass(order.deliveryType)}>
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Header with badges */}
@@ -182,8 +182,8 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                 className="w-full"
                 onClick={handleManage}
               >
-                {order.isCompensation && <CheckCircle2 className="h-4 w-4 mr-2" />}
-                {order.isCompensation ? 'Mark as Delivered' : 'Manage Delivery'}
+                Manage Delivery
+
               </Button>
             )}
             {!order.isOnVacation && (order.deliveryLatitude || order.customerLatitude) && (
