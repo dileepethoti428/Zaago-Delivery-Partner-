@@ -220,6 +220,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     prevProps.order.distanceFromShop === nextProps.order.distanceFromShop &&
     prevProps.order.deliveryType === nextProps.order.deliveryType &&
     prevProps.dateLabel === nextProps.dateLabel &&
+    prevProps.routeIndex === nextProps.routeIndex &&
     prevProps.index === nextProps.index
   );
 });
