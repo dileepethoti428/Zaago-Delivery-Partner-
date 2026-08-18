@@ -147,6 +147,11 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                   {order.customerCity}{order.customerPincode ? ` - ${order.customerPincode}` : ''}
                 </p>
               )}
+              {order.distanceFromShop != null && order.distanceFromShop > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatDistance(order.distanceFromShop)} from shop
+                </p>
+              )}
             </div>
           </div>
 
