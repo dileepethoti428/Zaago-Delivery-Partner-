@@ -74,6 +74,11 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-2">
+                {routeIndex != null && (
+                  <Badge variant="secondary" className="text-xs font-semibold tabular-nums">
+                    #{routeIndex}
+                  </Badge>
+                )}
                 <span className="font-semibold text-base text-foreground">
                   {order.customerName}
                 </span>
