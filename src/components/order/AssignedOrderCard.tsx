@@ -35,6 +35,7 @@ const getBorderClass = (type: AssignedOrder['deliveryType']): string => {
 interface AssignedOrderCardProps {
   order: AssignedOrder;
   index: number;
+  routeIndex?: number;
   dateLabel?: string;
   onManage: () => void;
 }
