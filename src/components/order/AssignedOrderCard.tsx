@@ -35,6 +35,7 @@ const getBorderClass = (type: AssignedOrder['deliveryType']): string => {
 interface AssignedOrderCardProps {
   order: AssignedOrder;
   index: number;
+  routeIndex?: number;
   dateLabel?: string;
   onManage: () => void;
 }
@@ -42,6 +43,7 @@ interface AssignedOrderCardProps {
 export const AssignedOrderCard = memo(function AssignedOrderCard({
   order,
   index,
+  routeIndex,
   dateLabel,
   onManage,
 }: AssignedOrderCardProps) {
@@ -72,6 +74,11 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-2">
+                {routeIndex != null && (
+                  <Badge variant="secondary" className="text-xs font-semibold tabular-nums">
+                    #{routeIndex}
+                  </Badge>
+                )}
                 <span className="font-semibold text-base text-foreground">
                   {order.customerName}
                 </span>
@@ -105,13 +112,8 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                     On Vacation
                   </Badge>
                 )}
-                {order.distanceFromShop != null && (
-                  <Badge variant="secondary" className="gap-1 text-xs font-medium">
-                    <MapPin className="h-3 w-3" />
-                    {formatDistance(order.distanceFromShop)}
-                  </Badge>
-                )}
               </div>
+
               
               {/* Product info */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
@@ -143,6 +145,11 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
               {order.customerCity && (
                 <p className="text-xs text-muted-foreground">
                   {order.customerCity}{order.customerPincode ? ` - ${order.customerPincode}` : ''}
+                </p>
+              )}
+              {order.distanceFromShop != null && order.distanceFromShop > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatDistance(order.distanceFromShop)} from shop
                 </p>
               )}
             </div>
@@ -213,6 +220,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     prevProps.order.distanceFromShop === nextProps.order.distanceFromShop &&
     prevProps.order.deliveryType === nextProps.order.deliveryType &&
     prevProps.dateLabel === nextProps.dateLabel &&
+    prevProps.routeIndex === nextProps.routeIndex &&
     prevProps.index === nextProps.index
   );
 });
