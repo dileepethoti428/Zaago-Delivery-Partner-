@@ -107,13 +107,8 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                     On Vacation
                   </Badge>
                 )}
-                {order.distanceFromShop != null && (
-                  <Badge variant="secondary" className="gap-1 text-xs font-medium">
-                    <MapPin className="h-3 w-3" />
-                    {formatDistance(order.distanceFromShop)}
-                  </Badge>
-                )}
               </div>
+
               
               {/* Product info */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
