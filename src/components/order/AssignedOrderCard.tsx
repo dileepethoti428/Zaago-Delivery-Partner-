@@ -43,6 +43,7 @@ interface AssignedOrderCardProps {
 export const AssignedOrderCard = memo(function AssignedOrderCard({
   order,
   index,
+  routeIndex,
   dateLabel,
   onManage,
 }: AssignedOrderCardProps) {
