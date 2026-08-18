@@ -365,6 +365,7 @@ export default function MyDeliveries() {
                     key={order.id}
                     order={order}
                     index={index}
+                    routeIndex={dateFilter === 'delivered' ? undefined : index + 1}
                     dateLabel={dateFilter === 'all' ? formatDateLabel(order.date) : undefined}
                     onManage={() => handleViewOrder(order)}
                   />
