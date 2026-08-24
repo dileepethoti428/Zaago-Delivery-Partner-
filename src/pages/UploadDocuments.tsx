@@ -55,6 +55,13 @@ export default function UploadDocuments() {
     resolver: zodResolver(documentUploadSchema),
   });
 
+  // Pre-fill phone from profile if collected during signup
+  useEffect(() => {
+    if (profile?.phone) {
+      form.setValue('phone', profile.phone);
+    }
+  }, [profile, form]);
+
   const uploadFile = async (file: File, bucket: string, path: string): Promise<string> => {
     const { error: uploadError } = await supabase.storage
       .from(bucket)
