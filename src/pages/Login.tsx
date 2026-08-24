@@ -56,7 +56,7 @@ export default function Login() {
 
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", confirmPassword: "" },
+    defaultValues: { email: "", phone: "", password: "", confirmPassword: "" },
   });
 
   // Redirect if already authenticated (e.g. browser back button)
@@ -208,6 +208,7 @@ export default function Login() {
 
         const { error: profileError } = await supabase.from("profiles").insert({
           user_id: newUserId,
+          phone: data.phone,
           approval_status: "pending",
           documents_submitted: false,
         });
