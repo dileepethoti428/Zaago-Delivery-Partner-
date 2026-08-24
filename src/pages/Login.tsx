@@ -56,7 +56,7 @@ export default function Login() {
 
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", confirmPassword: "" },
+    defaultValues: { email: "", phone: "", password: "", confirmPassword: "" },
   });
 
   // Redirect if already authenticated (e.g. browser back button)
@@ -208,18 +208,41 @@ export default function Login() {
 
         const { error: profileError } = await supabase.from("profiles").insert({
           user_id: newUserId,
+          phone: data.phone,
           approval_status: "pending",
           documents_submitted: false,
         });
 
         if (profileError) {
           console.error("Profile creation error:", profileError);
-        }
+          toast({
+            title: "Account created",
+            description: "Please upload your documents to continue",
+          });
+        } else {
+          // Ensure delivery_agents record also carries the phone number
+          const { error: agentError } = await supabase.from("delivery_agents").upsert({
+            agent_id: newUserId,
+            email: data.email,
+            name: data.email.split("@")[0] || "Agent",
+            phone: data.phone,
+            is_active: false,
+            verification_status: "pending",
+            documents_verified: false,
+          }, {
+            onConflict: "agent_id",
+            ignoreDuplicates: false,
+          });
 
-        toast({
-          title: "Account created",
-          description: "Please upload your documents to continue",
-        });
+          if (agentError) {
+            console.error("Agent phone sync error:", agentError);
+          }
+
+          toast({
+            title: "Account created",
+            description: "Please upload your documents to continue",
+          });
+        }
 
         await fetchProfileWithTimeout(fetchProfile);
 
@@ -333,6 +356,11 @@ export default function Login() {
                   <Label htmlFor="signup-email">Email</Label>
                   <Input id="signup-email" type="email" placeholder="partner@zaago.com" className="rounded-xl" {...signupForm.register("email")} />
                   {signupForm.formState.errors.email && <p className="text-sm text-destructive">{signupForm.formState.errors.email.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-phone">Phone Number</Label>
+                  <Input id="signup-phone" type="tel" placeholder="9876543210" maxLength={10} className="rounded-xl" {...signupForm.register("phone")} />
+                  {signupForm.formState.errors.phone && <p className="text-sm text-destructive">{signupForm.formState.errors.phone.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
