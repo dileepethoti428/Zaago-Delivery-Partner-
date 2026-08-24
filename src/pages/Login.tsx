@@ -224,6 +224,7 @@ export default function Login() {
           const { error: agentError } = await supabase.from("delivery_agents").upsert({
             agent_id: newUserId,
             email: data.email,
+            name: data.email.split("@")[0] || "Agent",
             phone: data.phone,
             is_active: false,
             verification_status: "pending",
