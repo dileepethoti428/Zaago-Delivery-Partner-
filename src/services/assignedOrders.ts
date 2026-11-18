@@ -36,6 +36,7 @@ export interface AssignedOrder {
   deliveryType: 'immediate' | 'scheduled' | 'subscription' | 'book_now_pay_later';
   isCompensation?: boolean;
   originalMissedDate?: string | null;
+  isFirstDelivery?: boolean;
 }
 
 // Interface for the enriched RPC response
@@ -130,6 +131,34 @@ async function enrichWithProductUnits(orders: AssignedOrder[]): Promise<Assigned
   }
 }
 
+/** Subscription ids that already have at least one delivered order. */
+export async function fetchDeliveredSubscriptionIds(ids: string[]): Promise<Set<string>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from('daily_orders')
+    .select('subscription_id')
+    .in('subscription_id', unique)
+    .eq('status', 'delivered');
+  if (error) throw error;
+  return new Set((data || []).map((r: any) => r.subscription_id as string));
+}
+
+// Mark subscription orders that are the customer's first-ever delivery
+async function enrichWithFirstDelivery(orders: AssignedOrder[]): Promise<AssignedOrder[]> {
+  const subIds = orders.flatMap(o => o.isSubscription && o.subscriptionId && o.status !== 'delivered' ? [o.subscriptionId] : []);
+  if (subIds.length === 0) return orders;
+  try {
+    const delivered = await fetchDeliveredSubscriptionIds(subIds);
+    return orders.map(o => o.isSubscription && o.subscriptionId && o.status !== 'delivered'
+      ? { ...o, isFirstDelivery: !delivered.has(o.subscriptionId) }
+      : o);
+  } catch (e) {
+    console.warn('[AssignedOrders] first-delivery check failed', e);
+    return orders;
+  }
+}
+
 // Fetch TODAY's orders using Postgres RPC with enriched data
 export async function fetchTodayOrders(): Promise<AssignedOrder[]> {
   console.log('[AssignedOrders] Fetching TODAY orders via RPC...');
@@ -143,7 +172,7 @@ export async function fetchTodayOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
+  return enrichWithFirstDelivery(await enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[])));
 }
 
 // Fetch TOMORROW's orders using Postgres RPC with enriched data
@@ -159,7 +188,7 @@ export async function fetchTomorrowOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
+  return enrichWithFirstDelivery(await enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[])));
 }
 
 // Fetch UPCOMING orders using Postgres RPC with enriched data
@@ -175,7 +204,7 @@ export async function fetchUpcomingOrders(): Promise<AssignedOrder[]> {
     throw error;
   }
   
-  return enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[]));
+  return enrichWithFirstDelivery(await enrichWithProductUnits(transformEnrichedOrders((data || []) as unknown as EnrichedOrderRow[])));
 }
 
 // Interface for the delivered orders RPC response (simpler than EnrichedOrderRow)

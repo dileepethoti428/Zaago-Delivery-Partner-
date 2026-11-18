@@ -106,6 +106,11 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
                     Compensation{order.originalMissedDate ? ` · missed ${new Date(`${order.originalMissedDate}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}
                   </Badge>
                 )}
+                {order.isFirstDelivery && (
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs font-semibold">
+                    ⭐ 1st Delivery
+                  </Badge>
+                )}
                 {order.isOnVacation && (
                   <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 text-xs">
                     <Palmtree className="h-3 w-3 mr-1" />
@@ -115,6 +120,11 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
               </div>
 
               
+              {order.isFirstDelivery && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                  Explain glass bottle handling &amp; cleaning. Hand over the bottle cleaner.
+                </p>
+              )}
               {/* Product info */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                 <Package className="h-4 w-4" />
@@ -216,6 +226,7 @@ export const AssignedOrderCard = memo(function AssignedOrderCard({
     prevProps.order.quantity === nextProps.order.quantity &&
     prevProps.order.isOnVacation === nextProps.order.isOnVacation &&
     prevProps.order.isCompensation === nextProps.order.isCompensation &&
+    prevProps.order.isFirstDelivery === nextProps.order.isFirstDelivery &&
     prevProps.order.originalMissedDate === nextProps.order.originalMissedDate &&
     prevProps.order.distanceFromShop === nextProps.order.distanceFromShop &&
     prevProps.order.deliveryType === nextProps.order.deliveryType &&

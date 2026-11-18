@@ -10,7 +10,7 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrderDetails } from '@/services/orderDetails';
-import { completeCompensationOrder } from '@/services/assignedOrders';
+import { completeCompensationOrder, fetchDeliveredSubscriptionIds } from '@/services/assignedOrders';
 import { openGoogleMapsAddress, openGoogleMapsCoordinates } from '@/utils/maps';
 import { callPhone } from '@/utils/phone';
 import { useAuthStore } from '@/store/auth';
@@ -66,6 +66,15 @@ export default function ManageDelivery() {
     enabled: !!id,
     retry: 2,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const firstSubId = !isCompensation && order?.subscription_id && order?.status !== 'delivered' ? order.subscription_id as string : null;
+  const firstDeliveryQuery = useQuery({
+    queryKey: ['first-delivery', firstSubId],
+    queryFn: async () => !(await fetchDeliveredSubscriptionIds([firstSubId!])).has(firstSubId!),
+    enabled: !!firstSubId,
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
@@ -443,6 +452,13 @@ export default function ManageDelivery() {
               </div>
             </CardContent>
           </Card>
+
+          {firstDeliveryQuery.data && (
+            <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3">
+              <p className="font-semibold text-amber-800 dark:text-amber-300">⭐ 1st Delivery for this customer</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300">Explain glass bottle handling &amp; cleaning. Hand over the bottle cleaner.</p>
+            </div>
+          )}
 
           {/* Order Items */}
           <Card className="rounded-2xl border-2">
